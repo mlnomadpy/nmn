@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nmn"
+version = "0.1.0"
+authors = [
+    { name="Taha Bouhsine", email="yat@mlnomads.com" },
+]
+description = "a neuron that matter"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU Affero General Public License Version 3",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/mlnomadpy/nmn"
+"Bug Tracker" = "https://github.com/mlnomadpy/my_package/issues"
+
