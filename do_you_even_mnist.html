@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive t-SNE with Draggable Neurons on MNIST Data</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f9f9f9;
+        }
+        #title {
+            font-size: 24px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        #abstract {
+            max-width: 700px;
+            text-align: center;
+            margin-bottom: 20px;
+            color: #555;
+            font-size: 16px;
+        }
+        #container {
+            position: relative;
+            width: 80vw;
+            height: 80vh;
+            max-width: 600px;
+            max-height: 600px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            padding: 10px;
+        }
+        .neuron {
+            fill-opacity: 0.8;
+            cursor: move;
+        }
+        .point {
+            fill-opacity: 0.7;
+            cursor: pointer;
+        }
+        #accuracy {
+            margin-top: 10px;
+            font-size: 16px;
+            color: #333;
+        }
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 6px;
+            border-radius: 4px;
+            pointer-events: none;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div id="title">Artificial Neurons that Matter: Reject Correlation, Embrace Orthogonality</div>
+    <div id="abstract">Explore the MNIST dataset in 2D with t-SNE and draggable neurons to see their influence on data points based on score calculations.</div>
+    <button id="toggleColorMode">Toggle Color Mode</button> <!-- Add this button -->
+    <div id="container">
+        <svg id="canvas" width="600" height="600"></svg>
+        <div class="tooltip" style="display: none;"></div>
+    </div>
+    <div id="accuracy">Accuracy: Calculating...</div>
+
+    <script>
+        const svg = d3.select("#canvas");
+        const tooltip = d3.select(".tooltip");
+        const width = 600;
+        const height = 600;
+        let colorMode = 'neuron'; // Initialize color mode
+
+        // Load t-SNE data
+        d3.csv("mnist_tsne.csv").then(data => {
+            const xExtent = d3.extent(data, d => +d.x);
+            const yExtent = d3.extent(data, d => +d.y);
+
+            const xScale = d3.scaleLinear().domain(xExtent).range([50, width - 50]);
+            const yScale = d3.scaleLinear().domain(yExtent).range([height - 50, 50]);
+
+            // Initialize neurons with a unique color and ID for each digit
+            const neurons = Array.from({ length: 10 }, (_, i) => ({
+                id: i,
+                x: Math.random() * width,
+                y: Math.random() * height,
+                color: d3.schemeCategory10[i],
+                label: i
+            }));
+
+            const calculateScore = (neuron, x, y) => {
+                const dx = x - neuron.x;
+                const dy = y - neuron.y;
+                const squaredDistance = dx * dx + dy * dy + 1e-8;
+                const dotProductSquared = (x * neuron.x + y * neuron.y) ** 2;
+                return dotProductSquared / squaredDistance;
+            };
+
+            // Draw points for each digit in the t-SNE space
+            svg.selectAll(".point")
+                .data(data)
+                .enter().append("circle")
+                .attr("class", "point")
+                .attr("r", 3)
+                .attr("cx", d => xScale(+d.x))
+                .attr("cy", d => yScale(+d.y))
+                .attr("data-label", d => d.label)  // Store the true label
+                .style("fill", "#666");
+
+            // Add draggable neurons
+            const neuronCircles = svg.selectAll(".neuron")
+                .data(neurons)
+                .enter().append("circle")
+                .attr("class", "neuron")
+                .attr("r", 10)
+                .attr("cx", d => d.x)
+                .attr("cy", d => d.y)
+                .attr("data-id", d => d.id)
+                .style("fill", d => d.color)
+                .call(d3.drag()
+                    .on("start", (event, d) => {
+                        d3.select(event.sourceElement).raise();
+                    })
+                    .on("drag", function(event, d) {
+                        d.x = Math.min(width, Math.max(0, event.x));
+                        d.y = Math.min(height, Math.max(0, event.y));
+                        d3.select(this)
+                            .attr("cx", d.x)
+                            .attr("cy", d.y);
+                        updateColors();
+                    }));
+
+            function updateColors() {
+                svg.selectAll(".point")
+                    .style("fill", function(d) {
+                        const x = xScale(+d.x);
+                        const y = yScale(+d.y);
+
+                        if (colorMode === 'true') {
+                            return d3.schemeCategory10[d.label];  // True color based on label
+                        } else {
+                            let maxScore = -Infinity;
+                            let bestNeuron = null;
+
+                            neurons.forEach(neuron => {
+                                const score = calculateScore(neuron, x, y);
+                                if (score > maxScore) {
+                                    maxScore = score;
+                                    bestNeuron = neuron;
+                                }
+                            });
+
+                            return bestNeuron ? bestNeuron.color : "#666";
+                        }
+                    });
+
+                calculateAccuracy();
+            }
+
+            function calculateAccuracy() {
+                let correctCount = 0;
+
+                svg.selectAll(".point")
+                    .each(function(d) {
+                        const x = xScale(+d.x);
+                        const y = yScale(+d.y);
+
+                        let maxScore = -Infinity;
+                        let bestNeuron = null;
+
+                        neurons.forEach(neuron => {
+                            const score = calculateScore(neuron, x, y);
+                            if (score > maxScore) {
+                                maxScore = score;
+                                bestNeuron = neuron;
+                            }
+                        });
+
+                        if (bestNeuron && bestNeuron.label == d.label) {
+                            correctCount++;
+                        }
+                    });
+
+                const accuracy = (correctCount / data.length) * 100;
+                d3.select("#accuracy").text(`Accuracy: ${accuracy.toFixed(2)}%`);
+            }
+
+            // Tooltip for displaying point details
+            svg.selectAll(".point")
+                .on("mousemove", (event, d) => {
+                    tooltip.style("display", "block")
+                        .style("left", `${event.pageX + 10}px`)
+                        .style("top", `${event.pageY - 20}px`)
+                        .html(`Label: ${d.label}`);
+                })
+                .on("mouseout", () => {
+                    tooltip.style("display", "none");
+                });
+
+            // Toggle button event listener
+            d3.select("#toggleColorMode").on("click", () => {
+                colorMode = colorMode === 'neuron' ? 'true' : 'neuron';
+                updateColors();
+            });
+
+            // Initial color update
+            updateColors();
+        });
+    </script>
+</body>
+
+</html>
