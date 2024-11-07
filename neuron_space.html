@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Heatmap with D3.js</title>
+    <title>Artificial Neurons that Matter: Reject Correlation, Embrace Orthogonality</title>
     <script src="https://d3js.org/d3.v6.min.js"></script>
     <style>
         body {
@@ -41,10 +41,6 @@
             padding: 10px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         }
-        .neuron {
-            fill: red;
-            cursor: pointer;
-        }
         .axis path, .axis line {
             fill: none;
             stroke: #888;
@@ -68,10 +64,7 @@
 <body>
     <div id="title">Artificial Neurons that Matter: Reject Correlation, Embrace Orthogonality</div>
     <div id="abstract">
-        In this interactive visualization, we explore a novel heatmap representation that illustrates the concept of orthogonality in artificial neurons. 
-        Unlike traditional correlation-based visualizations, this approach emphasizes the unique spatial relationships between neurons, 
-        providing insights into how orthogonality can enhance neuron interactions and improve model robustness. 
-        Move the red neuron around the canvas to observe how the heatmap changes in response to its position.
+        This interactive visualization shows how orthogonal relationships in artificial neurons can impact spatial positioning. Click to add new neurons and observe how each cell is colored based on the nearest neuron's influence.
     </div>
     <div id="container">
         <svg id="canvas" aria-labelledby="title" role="img"></svg>
@@ -91,6 +84,9 @@
         const numCells = 100;
         const cellSize = width / numCells;
 
+        const neurons = [];
+        const colorScale = d3.scaleSequential(d3.interpolateRainbow).domain([0, 1]);
+
         // Scales for positioning
         const xScale = d3.scaleLinear().domain([0, numCells]).range([0, width]);
         const yScale = d3.scaleLinear().domain([0, numCells]).range([height, 0]);
@@ -105,11 +101,6 @@
             .attr("class", "axis")
             .call(d3.axisLeft(yScale).ticks(10));
 
-        let neuron = { x: width / 2, y: height / 2 };
-
-        // Color scale
-        const colorScale = d3.scaleSequential(d3.interpolateViridis).domain([0, 1]);
-
         // Create cells and append to SVG
         const cells = svg.selectAll(".cell")
             .data(d3.range(numCells * numCells))
@@ -122,22 +113,54 @@
             .on("mousemove", (event, d) => showTooltip(event, d))
             .on("mouseout", () => tooltip.style("display", "none"));
 
-        // Calculate heatmap color for each cell
-        function calculateColor(d) {
-            const i = d % numCells;
-            const j = Math.floor(d / numCells);
-            const x = i * cellSize + cellSize / 2;
-            const y = j * cellSize + cellSize / 2;
+        // Add neuron by clicking
+        svg.on("click", (event) => {
+            const coords = d3.pointer(event);
+            const neuron = { x: coords[0], y: coords[1], color: colorScale(neurons.length / 10) };
+            neurons.push(neuron);
+
+            // Draw neuron circle
+            svg.append("circle")
+                .attr("class", "neuron")
+                .attr("cx", neuron.x)
+                .attr("cy", neuron.y)
+                .attr("r", 8)
+                .style("fill", neuron.color);
+
+            updateHeatmap();
+        });
+
+        function calculateScore(neuron, x, y) {
             const dx = x - neuron.x;
             const dy = y - neuron.y;
             const squaredDistance = dx * dx + dy * dy + 1e-8;
             const dotProductSquared = (x * neuron.x + y * neuron.y) ** 2;
-            const value = dotProductSquared / squaredDistance;
-            return colorScale(Math.min(value / 1e6, 1));
+            return dotProductSquared / squaredDistance;
         }
 
+        // Calculate and update heatmap
         function updateHeatmap() {
-            cells.style("fill", calculateColor);
+            cells.style("fill", (d) => {
+                const i = d % numCells;
+                const j = Math.floor(d / numCells);
+                const x = i * cellSize + cellSize / 2;
+                const y = j * cellSize + cellSize / 2;
+
+                if (neurons.length === 0) return "#fff";
+
+                let maxScore = -Infinity;
+                let winningNeuron = null;
+
+                neurons.forEach((neuron) => {
+                    const score = calculateScore(neuron, x, y);
+                    if (score > maxScore) {
+                        maxScore = score;
+                        winningNeuron = neuron;
+                    }
+                });
+
+                return winningNeuron ? winningNeuron.color : "#fff";
+            });
         }
 
         function showTooltip(event, d) {
@@ -146,36 +169,25 @@
             const x = i * cellSize + cellSize / 2;
             const y = j * cellSize + cellSize / 2;
 
-            const dx = x - neuron.x;
-            const dy = y - neuron.y;
-            const squaredDistance = dx * dx + dy * dy + 1e-8;
-            const dotProductSquared = (x * neuron.x + y * neuron.y) ** 2;
-            const value = dotProductSquared / squaredDistance;
+            if (neurons.length === 0) return;
 
-            const tooltipText = `X: ${x.toFixed(1)}, Y: ${y.toFixed(1)}<br>Value: ${value.toFixed(4)}`;
-            
-            tooltip.html(tooltipText)
+            let maxScore = -Infinity;
+            let winningNeuron = null;
+
+            neurons.forEach((neuron) => {
+                const score = calculateScore(neuron, x, y);
+                if (score > maxScore) {
+                    maxScore = score;
+                    winningNeuron = neuron;
+                }
+            });
+
+            tooltip.html(`X: ${x.toFixed(1)}, Y: ${y.toFixed(1)}<br>Winning Neuron Color: ${winningNeuron.color}`)
                 .style("display", "block")
                 .style("left", `${Math.min(event.pageX + 10, container.clientWidth - 100)}px`)
                 .style("top", `${event.pageY - 40}px`)
                 .attr("aria-hidden", "false");
         }
-
-        svg.append("circle")
-            .attr("class", "neuron")
-            .attr("r", 10)
-            .attr("cx", neuron.x)
-            .attr("cy", neuron.y)
-            .call(d3.drag().on("drag", (event) => {
-                neuron.x = Math.min(width, Math.max(0, event.x));
-                neuron.y = Math.min(height, Math.max(0, event.y));
-                d3.select(".neuron")
-                    .attr("cx", neuron.x)
-                    .attr("cy", neuron.y);
-                updateHeatmap();
-            }));
-
-        updateHeatmap();
     </script>
 </body>
 </html>
