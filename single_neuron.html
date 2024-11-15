@@ -1,3 +1,7 @@
+<!---
+TODOs
+[] give the ability to the user to change type of similarty metrics from dot product simple to my product and show him the results
+--->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -63,6 +67,22 @@
         .cell {
             stroke: #ddd;
         }
+        .button-container {
+            margin-bottom: 20px;
+        }
+        .button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            border-radius: 4px;
+        }
+        .button:hover {
+            background-color: #0056b3;
+        }
     </style>
 </head>
 <body>
@@ -72,6 +92,11 @@
         Unlike traditional correlation-based visualizations, this approach emphasizes the unique spatial relationships between neurons, 
         providing insights into how orthogonality can enhance neuron interactions and improve model robustness. 
         Move the red neuron around the canvas to observe how the heatmap changes in response to its position.
+    </div>
+    <div class="button-container">
+        <button class="button" onclick="setSimilarityMetric('dotProduct')">Dot Product</button>
+        <button class="button" onclick="setSimilarityMetric('euclidean')">Euclidean Distance</button>
+        <button class="button" onclick="setSimilarityMetric('myProduct')">My Product</button>
     </div>
     <div id="container">
         <svg id="canvas" aria-labelledby="title" role="img"></svg>
@@ -122,6 +147,13 @@
             .on("mousemove", (event, d) => showTooltip(event, d))
             .on("mouseout", () => tooltip.style("display", "none"));
 
+        let similarityMetric = 'dotProduct';
+
+        function setSimilarityMetric(metric) {
+            similarityMetric = metric;
+            updateHeatmap();
+        }
+
         // Calculate heatmap color for each cell
         function calculateColor(d) {
             const i = d % numCells;
@@ -131,8 +163,21 @@
             const dx = x - neuron.x;
             const dy = y - neuron.y;
             const squaredDistance = dx * dx + dy * dy + 1e-8;
-            const dotProductSquared = (x * neuron.x + y * neuron.y) ** 2;
-            const value = dotProductSquared / squaredDistance;
+            let value;
+
+            if (similarityMetric === 'dotProduct') {
+                const dotProductSquared = (x * neuron.x + y * neuron.y);
+                value = dotProductSquared;
+                return colorScale(Math.min(value / 2e5, 1));
+            } else if (similarityMetric === 'euclidean') {
+                value = Math.sqrt(squaredDistance);
+                return colorScale(Math.min(value / 2e2, 1));
+            } else if (similarityMetric === 'myProduct') {
+                const dotProductSquared = (x * neuron.x + y * neuron.y) ** 2;
+                value = dotProductSquared / squaredDistance; // Replace with your custom metric
+                return colorScale(Math.min(value / 1e6, 1));
+            }
+
             return colorScale(Math.min(value / 1e6, 1));
         }
 
