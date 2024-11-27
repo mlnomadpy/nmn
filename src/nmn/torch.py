@@ -1,89 +1,138 @@
 import torch
 import torch.nn as nn
-import torch.nn.init as init
 import torch.nn.functional as F
 import math
-from typing import Optional, Tuple, Any
 
 class YatDense(nn.Module):
-    """A custom transformation applied over the last dimension of the input using squared Euclidean distance.
-    
-    Args:
-        in_features: size of input features
-        out_features: size of output features
-        use_bias: whether to add a bias to the output (default: True)
-        dtype: the dtype of the computation (default: None)
-        epsilon: small constant added to avoid division by zero (default: 1e-6)
-        return_weights: whether to return the weight matrix along with output (default: False)
     """
-    
+    A PyTorch implementation of the Yat neuron with squared Euclidean distance transformation.
+
+    Attributes:
+        in_features (int): Size of each input sample
+        out_features (int): Size of each output sample
+        use_bias (bool): Whether to add a bias to the output
+        dtype (torch.dtype): Data type for computation
+        epsilon (float): Small constant to avoid division by zero
+        kernel_init (callable): Initializer for the weight matrix
+        bias_init (callable): Initializer for the bias
+        alpha_init (callable): Initializer for the scaling parameter
+    """
     def __init__(
         self,
         in_features: int,
         out_features: int,
         use_bias: bool = True,
-        dtype: Optional[torch.dtype] = None,
+        dtype: torch.dtype = torch.float32,
         epsilon: float = 1e-6,
-        return_weights: bool = False,
-        device: Optional[torch.device] = None,
-    ) -> None:
+        kernel_init: callable = None,
+        bias_init: callable = None,
+        alpha_init: callable = None
+    ):
         super().__init__()
+
+        # Store attributes
         self.in_features = in_features
         self.out_features = out_features
         self.use_bias = use_bias
+        self.dtype = dtype
         self.epsilon = epsilon
-        self.return_weights = return_weights
-        
-        # Initialize weights using orthogonal initialization
-        self.weight = nn.Parameter(
-            torch.empty((out_features, in_features), dtype=dtype, device=device)
-        )
-        init.orthogonal_(self.weight)
-        
+
+        # Weight initialization
+        if kernel_init is None:
+            kernel_init = nn.init.xavier_normal_
+
+        # Create weight parameter
+        self.weight = nn.Parameter(torch.empty(
+            (out_features, in_features),
+            dtype=dtype
+        ))
+
+        # Alpha scaling parameter
+        self.alpha = nn.Parameter(torch.ones(
+            (1,),
+            dtype=dtype
+        ))
+
+        # Bias parameter
         if use_bias:
-            self.bias = nn.Parameter(
-                torch.zeros(out_features, dtype=dtype, device=device)
-            )
+            self.bias = nn.Parameter(torch.empty(
+                (out_features,),
+                dtype=dtype
+            ))
         else:
             self.register_parameter('bias', None)
-            
-        # Initialize alpha parameter to 1.0
-        self.alpha = nn.Parameter(torch.ones(1, dtype=dtype, device=device))
 
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor]:
-        """Forward pass of the layer.
-        
-        Args:
-            inputs: Input tensor of shape (..., in_features)
-            
-        Returns:
-            Transformed tensor of shape (..., out_features) or
-            tuple of (transformed tensor, weight matrix) if return_weights is True
+        # Initialize parameters
+        self.reset_parameters(kernel_init, bias_init, alpha_init)
+
+    def reset_parameters(
+        self,
+        kernel_init: callable = None,
+        bias_init: callable = None,
+        alpha_init: callable = None
+    ):
         """
-        # Compute dot product between input and weight
-        y = F.linear(inputs, self.weight)  # equivalent to inputs @ weight.T
-        
-        # Compute squared Euclidean distances
-        inputs_squared_sum = torch.sum(inputs**2, dim=-1, keepdim=True)
-        weight_squared_sum = torch.sum(self.weight**2, dim=-1)
-        distances = inputs_squared_sum + weight_squared_sum - 2 * y
-        
-        # Apply transformation
-        y = y**2 / (distances + self.epsilon)
-        
-        # Apply scaling factor
+        Initialize network parameters with specified or default initializers.
+        """
+        # Kernel (weight) initialization
+        if kernel_init is None:
+            kernel_init = nn.init.orthogonal_
+        kernel_init(self.weight)
+
+        # Bias initialization
+        if self.use_bias:
+            if bias_init is None:
+                # Default: uniform initialization
+                fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
+                bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+                nn.init.uniform_(self.bias, -bound, bound)
+            else:
+                bias_init(self.bias)
+
+        # Alpha initialization (default to 1.0)
+        if alpha_init is None:
+            self.alpha.data.fill_(1.0)
+        else:
+            alpha_init(self.alpha)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass with squared Euclidean distance transformation.
+
+        Args:
+            x (torch.Tensor): Input tensor
+
+        Returns:
+            torch.Tensor: Transformed output
+        """
+        # Ensure input and weight are in the same dtype
+        x = x.to(self.dtype)
+
+        # Compute dot product
+        y = torch.matmul(x, self.weight.t())
+
+        # Compute squared distances
+        inputs_squared_sum = torch.sum(x**2, dim=-1, keepdim=True)
+        kernel_squared_sum = torch.sum(self.weight**2, dim=-1)
+        distances = inputs_squared_sum + kernel_squared_sum - 2 * y
+
+        # Apply squared Euclidean distance transformation
+        y = y ** 2 / (distances + self.epsilon)
+
+        # Dynamic scaling
         scale = (math.sqrt(self.out_features) / math.log(1 + self.out_features)) ** self.alpha
         y = y * scale
-        
+
         # Add bias if used
-        if self.bias is not None:
-            # Reshape bias to match output dimensions
-            bias_shape = (1,) * (y.dim() - 1) + (-1,)
-            y = y + self.bias.view(*bias_shape)
-            
-        if self.return_weights:
-            return y, self.weight
+        if self.use_bias:
+            y += self.bias
+
         return y
 
     def extra_repr(self) -> str:
-        return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}'
+        """
+        Extra representation of the module for print formatting.
+        """
+        return (f"in_features={self.in_features}, "
+                f"out_features={self.out_features}, "
+                f"bias={self.use_bias}")
