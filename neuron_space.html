@@ -59,6 +59,15 @@
         .cell {
             stroke: #ddd;
         }
+        .button-container {
+            margin-top: 20px;
+        }
+        .button {
+            margin: 5px;
+            padding: 10px 20px;
+            font-size: 14px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -69,6 +78,11 @@
     <div id="container">
         <svg id="canvas" aria-labelledby="title" role="img"></svg>
         <div class="tooltip" style="display: none;" aria-hidden="true"></div>
+    </div>
+    <div class="button-container">
+        <button class="button" onclick="setSimilarityMetric('dotProduct')">Dot Product</button>
+        <button class="button" onclick="setSimilarityMetric('euclidean')">Euclidean Distance</button>
+        <button class="button" onclick="setSimilarityMetric('myProduct')">My Product</button>
     </div>
 
     <script>
@@ -130,12 +144,30 @@
             updateHeatmap();
         });
 
+        let similarityMetric = 'dotProduct';
+
+        function setSimilarityMetric(metric) {
+            similarityMetric = metric;
+            updateHeatmap();
+        }
+
         function calculateScore(neuron, x, y) {
             const dx = x - neuron.x;
             const dy = y - neuron.y;
             const squaredDistance = dx * dx + dy * dy + 1e-8;
-            const dotProductSquared = (x * neuron.x + y * neuron.y) ** 2;
-            return dotProductSquared / squaredDistance;
+            let value;
+
+            if (similarityMetric === 'dotProduct') {
+                const dotProductSquared = (x * neuron.x + y * neuron.y);
+                value = dotProductSquared;
+            } else if (similarityMetric === 'euclidean') {
+                value = Math.sqrt(squaredDistance);
+            } else if (similarityMetric === 'myProduct') {
+                const dotProductSquared = (x * neuron.x + y * neuron.y) ** 2;
+                value = dotProductSquared / squaredDistance;
+            }
+
+            return value;
         }
 
         // Calculate and update heatmap
