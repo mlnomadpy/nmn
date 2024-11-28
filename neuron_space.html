@@ -31,15 +31,25 @@
             line-height: 1.5;
         }
         #container {
-            position: relative;
-            width: 80vw;
+            display: flex;
+            gap: 20px;
+            width: 95vw;
             height: 80vh;
-            max-width: 600px;
+            max-width: 1200px;
             max-height: 600px;
             background-color: #fff;
             border: 1px solid #ddd;
             padding: 10px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        #main-canvas {
+            flex: 2;
+            border-right: 1px solid #ddd;
+        }
+        #metrics-canvas {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
         }
         .axis path, .axis line {
             fill: none;
@@ -75,14 +85,20 @@
     <div id="abstract">
         This interactive visualization shows how orthogonal relationships in artificial neurons can impact spatial positioning. Click to add new neurons and observe how each cell is colored based on the nearest neuron's influence.
     </div>
+        <div class="button-container">
+            <button class="button" onclick="setSimilarityMetric('dotProduct')">Dot Product</button>
+            <button class="button" onclick="setSimilarityMetric('euclidean')">Euclidean Distance</button>
+            <button class="button" onclick="setSimilarityMetric('myProduct')">My Product</button>
+        </div>
     <div id="container">
-        <svg id="canvas" aria-labelledby="title" role="img"></svg>
+        <div id="main-canvas">
+            <svg id="canvas" aria-labelledby="title" role="img"></svg>
+        </div>
+        <div id="metrics-canvas">
+            <svg id="metrics" aria-labelledby="metrics" role="img"></svg>
+            <svg id="barplot" aria-labelledby="neuron-magnitudes" role="img"></svg>
+        </div>
         <div class="tooltip" style="display: none;" aria-hidden="true"></div>
-    </div>
-    <div class="button-container">
-        <button class="button" onclick="setSimilarityMetric('dotProduct')">Dot Product</button>
-        <button class="button" onclick="setSimilarityMetric('euclidean')">Euclidean Distance</button>
-        <button class="button" onclick="setSimilarityMetric('myProduct')">My Product</button>
     </div>
 
     <script>
@@ -102,8 +118,8 @@
         const colorScale = d3.scaleSequential(d3.interpolateRainbow).domain([0, 1]);
 
         // Scales for positioning
-        const xScale = d3.scaleLinear().domain([0, numCells]).range([0, width]);
-        const yScale = d3.scaleLinear().domain([0, numCells]).range([height, 0]);
+        const xScale = d3.scaleLinear().domain([-numCells/2, numCells/2]).range([0, width]);
+        const yScale = d3.scaleLinear().domain([-numCells/2, numCells/2]).range([height, 0]);
 
         // Axes
         svg.append("g")
@@ -152,22 +168,94 @@
         }
 
         function calculateScore(neuron, x, y) {
-            const dx = x - neuron.x;
-            const dy = y - neuron.y;
+            // Convert pixel coordinates to scaled coordinates
+            const scaledX = xScale.invert(x);
+            const scaledY = yScale.invert(y);
+            const scaledNeuronX = xScale.invert(neuron.x);
+            const scaledNeuronY = yScale.invert(neuron.y);
+            
+            const dx = scaledX - scaledNeuronX;
+            const dy = scaledY - scaledNeuronY;
             const squaredDistance = dx * dx + dy * dy + 1e-8;
             let value;
 
             if (similarityMetric === 'dotProduct') {
-                const dotProductSquared = (x * neuron.x + y * neuron.y);
+                const dotProductSquared = (scaledX * scaledNeuronX + scaledY * scaledNeuronY);
                 value = dotProductSquared;
             } else if (similarityMetric === 'euclidean') {
                 value = Math.sqrt(squaredDistance);
             } else if (similarityMetric === 'myProduct') {
-                const dotProductSquared = (x * neuron.x + y * neuron.y) ** 2;
+                const dotProductSquared = (scaledX * scaledNeuronX + scaledY * scaledNeuronY) ** 2;
                 value = dotProductSquared / squaredDistance;
             }
 
             return value;
+        }
+
+        // Setup metrics SVG
+        const metricsWidth = 300;
+        const metricsHeight = 300;
+        const barplotHeight = 200;
+
+        const metricsSvg = d3.select("#metrics")
+            .attr("width", "100%")
+            .attr("height", metricsHeight);
+
+        const barplotSvg = d3.select("#barplot")
+            .attr("width", "100%")
+            .attr("height", barplotHeight);
+
+        // Add function to calculate region areas
+        function calculateNeuronMetrics() {
+            const metrics = neurons.map((neuron, idx) => {
+                const controlledCells = cells.filter(function() {
+                    const cellData = d3.select(this).datum();
+                    const i = cellData % numCells;
+                    const j = Math.floor(cellData / numCells);
+                    const x = (i - numCells/2) * cellSize;
+                    const y = (j - numCells/2) * cellSize;
+                    
+                    let maxScore = -Infinity;
+                    let winningNeuron = null;
+                    neurons.forEach(n => {
+                        const score = calculateScore(n, x, y);
+                        if (score > maxScore) {
+                            maxScore = score;
+                            winningNeuron = n;
+                        }
+                    });
+                    return winningNeuron === neuron;
+                });
+                
+                return {
+                    neuron,
+                    area: controlledCells.size(),
+                    magnitude: Math.sqrt(neuron.x * neuron.x + neuron.y * neuron.y)
+                };
+            });
+
+            // Update bar plot
+            const bars = barplotSvg.selectAll(".bar")
+                .data(metrics)
+                .join("rect")
+                .attr("class", "bar")
+                .attr("x", (d, i) => i * (metricsWidth / metrics.length))
+                .attr("y", d => barplotHeight - (d.area / (numCells * numCells) * barplotHeight))
+                .attr("width", metricsWidth / metrics.length - 2)
+                .attr("height", d => (d.area / (numCells * numCells) * barplotHeight))
+                .style("fill", d => d.neuron.color);
+
+            // Update area plot
+            metricsSvg.selectAll(".area-line")
+                .data(metrics)
+                .join("circle")
+                .attr("class", "area-line")
+                .attr("cx", d => Math.abs(d.neuron.x / width * metricsWidth))
+                .attr("cy", d => Math.abs(d.neuron.y / height * metricsHeight))
+                .attr("r", d => Math.sqrt(d.area) / 2)
+                .style("fill", "none")
+                .style("stroke", d => d.neuron.color)
+                .style("stroke-width", 2);
         }
 
         // Calculate and update heatmap
@@ -193,6 +281,7 @@
 
                 return winningNeuron ? winningNeuron.color : "#fff";
             });
+            calculateNeuronMetrics();
         }
 
         function showTooltip(event, d) {
@@ -200,6 +289,10 @@
             const j = Math.floor(d / numCells);
             const x = i * cellSize + cellSize / 2;
             const y = j * cellSize + cellSize / 2;
+            
+            // Convert pixel coordinates to scaled coordinates
+            const scaledX = xScale.invert(x);
+            const scaledY = yScale.invert(y);
 
             if (neurons.length === 0) return;
 
@@ -214,7 +307,7 @@
                 }
             });
 
-            tooltip.html(`X: ${x.toFixed(1)}, Y: ${y.toFixed(1)}<br>Winning Neuron Color: ${winningNeuron.color}`)
+            tooltip.html(`X: ${scaledX.toFixed(1)}, Y: ${scaledY.toFixed(1)}<br>Score: ${maxScore.toFixed(1)}<br>Winning Neuron Color: ${winningNeuron.color}`)
                 .style("display", "block")
                 .style("left", `${Math.min(event.pageX + 10, container.clientWidth - 100)}px`)
                 .style("top", `${event.pageY - 40}px`)
