@@ -1,3 +1,13 @@
+<!--
+TODOs
+[] give the ability to the user to change type of similarty metrics from dot product simple to my product and show him the results
+[] add a button to toggle color mode between true color and neuron color
+[] calculate and display the accuracy of the neuron placements
+[] add a tooltip to show the true label of each point when hovering over it
+[] add a title and abstract to describe the visualization
+[] style the elements to improve readability and aesthetics
+[] 
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,6 +15,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interactive t-SNE with Draggable Neurons on MNIST Data</title>
     <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -57,12 +68,57 @@
             pointer-events: none;
             font-size: 13px;
         }
+        .similarityMetric, #toggleColorMode {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .similarityMetric:hover, #toggleColorMode:hover {
+            background-color: #0056b3;
+        }
+        .similarityMetric:focus, #toggleColorMode:focus {
+            outline: none;
+            box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+        }
+        #optimizeButton {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        #optimizeButton:hover {
+            background-color: #218838;
+        }
+        #optimizeButton:focus {
+            outline: none;
+            box-shadow: 0 0 5px rgba(40, 167, 69, 0.5);
+        }
     </style>
 </head>
 <body>
     <div id="title">Artificial Neurons that Matter: Reject Correlation, Embrace Orthogonality</div>
     <div id="abstract">Explore the MNIST dataset in 2D with t-SNE and draggable neurons to see their influence on data points based on score calculations.</div>
-    <button id="toggleColorMode">Toggle Color Mode</button> <!-- Add this button -->
+    <div>
+        <button class="similarityMetric" data-metric="dotProduct">Dot Product</button>
+        <button class="similarityMetric" data-metric="myProduct">My Product</button>
+        <button class="similarityMetric" data-metric="euclidean">Euclidean Distance</button>
+    </div>
+    <div>
+        <button class="colorMode" data-mode="true">True Label</button>
+        <button class="colorMode" data-mode="neuron">Predicted Label</button>
+    </div>
+    <div>
+        <button id="optimizeButton">Optimize Neurons</button>
+    </div>
     <div id="container">
         <svg id="canvas" width="600" height="600"></svg>
         <div class="tooltip" style="display: none;"></div>
@@ -75,6 +131,7 @@
         const width = 600;
         const height = 600;
         let colorMode = 'neuron'; // Initialize color mode
+        let similarityMetric = 'dotProduct'; // Initialize similarity metric
 
         // Load t-SNE data
         d3.csv("mnist_tsne.csv").then(data => {
@@ -98,7 +155,14 @@
                 const dy = y - neuron.y;
                 const squaredDistance = dx * dx + dy * dy + 1e-8;
                 const dotProductSquared = (x * neuron.x + y * neuron.y) ** 2;
-                return dotProductSquared / squaredDistance;
+
+                if (similarityMetric === 'dotProduct') {
+                    return Math.sqrt(dotProductSquared);
+                } else if (similarityMetric === 'myProduct') {
+                    return dotProductSquared / squaredDistance;
+                } else if (similarityMetric === 'euclidean') {
+                    return Math.sqrt(squaredDistance);
+                }
             };
 
             // Draw points for each digit in the t-SNE space
@@ -207,6 +271,68 @@
                 colorMode = colorMode === 'neuron' ? 'true' : 'neuron';
                 updateColors();
             });
+
+            // Button event listeners
+            d3.selectAll(".similarityMetric").on("click", function() {
+                similarityMetric = d3.select(this).attr("data-metric");
+                updateColors();
+            });
+
+            // Button event listeners for color mode
+            d3.selectAll(".colorMode").on("click", function() {
+                colorMode = d3.select(this).attr("data-mode");
+                updateColors();
+            });
+
+            // Button event listener for optimization
+            d3.select("#optimizeButton").on("click", () => {
+                const iterations = prompt("Enter the number of iterations for optimization:", "100");
+                if (iterations !== null) {
+                    optimizeNeurons(parseInt(iterations));
+                }
+            });
+
+            function optimizeNeurons(iterations) {
+                const learningRate = 0.01;
+                const optimizer = tf.train.adam(learningRate);
+                const batchSize = 100; // Process data in batches
+
+                const neuronPositions = tf.variable(tf.tensor2d(neurons.map(n => [n.x, n.y])));
+
+                function loss(batch) {
+                    return tf.tidy(() => {
+                        const losses = batch.map(d => {
+                            const x = xScale(+d.x);
+                            const y = yScale(+d.y);
+                            const point = tf.tensor2d([[x, y]]);
+                            const distances = tf.norm(tf.sub(neuronPositions, point), 'euclidean', 1);
+                            const minDistance = distances.min();
+                            return minDistance;
+                        });
+                        return tf.addN(losses).mean();
+                    });
+                }
+
+                async function train() {
+                    for (let i = 0; i < iterations; i++) {
+                        for (let j = 0; j < data.length; j += batchSize) {
+                            const batch = data.slice(j, j + batchSize);
+                            optimizer.minimize(() => loss(batch));
+                            await tf.nextFrame();
+                        }
+                    }
+                    const optimizedPositions = neuronPositions.arraySync();
+                    neurons.forEach((neuron, i) => {
+                        neuron.x = optimizedPositions[i][0];
+                        neuron.y = optimizedPositions[i][1];
+                    });
+                    updateColors();
+                }
+
+                train().then(() => {
+                    neuronPositions.dispose();
+                });
+            }
 
             // Initial color update
             updateColors();
