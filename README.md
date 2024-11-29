@@ -1,9 +1,9 @@
 # nmn
 Not the neurons we want, but the neurons we need
 
-# My Package
+# Package
 
-The neuron as brought to you by the paper "Artificial Neurons that Matter: Reject Correlation, Embrace Orthogonality"
+The neuron as brought to you by the paper "Deep Learning 2.0: Artificial Neurons that Matter: Reject Correlation - Embrace Orthogonality"
 
 ## Installation
 
