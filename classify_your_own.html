@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Artificial Neurons that Matter: Reject Correlation, Embrace Orthogonality</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        #title {
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        #abstract {
+            max-width: 700px;
+            text-align: center;
+            color: #555;
+            margin-bottom: 20px;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+        #container {
+            display: flex;
+            gap: 20px;
+            width: 95vw;
+            height: 80vh;
+            max-width: 1200px;
+            max-height: 600px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            padding: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        #main-canvas {
+            flex: 2;
+            border-right: 1px solid #ddd;
+        }
+        #metrics-canvas {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .axis path, .axis line {
+            fill: none;
+            stroke: #888;
+            shape-rendering: crispEdges;
+        }
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 6px;
+            border-radius: 4px;
+            pointer-events: none;
+            font-size: 13px;
+            max-width: 200px;
+        }
+        .cell {
+            stroke: #ddd;
+        }
+        .button-container {
+            margin-top: 20px;
+        }
+        .button {
+            margin: 5px;
+            padding: 10px 20px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .data-point {
+            fill-opacity: 0.7;
+            stroke: #333;
+            stroke-width: 1;
+        }
+        .file-input {
+            margin: 10px 0;
+        }
+        .accuracy-display {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .class-toggle {
+            margin: 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+            border: 2px solid;
+            border-radius: 4px;
+            color: white;
+            text-shadow: 0 0 2px #000;
+        }
+        .class-toggle.active {
+            filter: brightness(100%);
+        }
+        .class-toggle:not(.active) {
+            filter: brightness(50%);
+        }
+    </style>
+</head>
+<body>
+    <div id="title">Artificial Neurons that Matter: Reject Correlation, Embrace Orthogonality</div>
+    <div id="abstract">
+        Upload your data that contains x, y, and label, than create your own neural network by clicking on the canvas to add neurons. Load a CSV file with data points to see how the neurons classify the data. Change the similarity metric to see how it affects the classification. Click on a class to toggle its visibility.
+    </div>
+    <div class="file-input">
+        <input type="file" id="csvFile" accept=".csv" />
+        <button class="button" onclick="loadCSV()">Load Data</button>
+    </div>
+    <div class="button-container">
+        <button class="button" onclick="setSimilarityMetric('dotProduct')">Dot Product</button>
+        <button class="button" onclick="setSimilarityMetric('euclidean')">Euclidean Distance</button>
+        <button class="button" onclick="setSimilarityMetric('myProduct')">My Product</button>
+        <button class="button" id="colorModeToggle" onclick="toggleColorMode()">Show Actual Colors</button>
+        <button class="button" onclick="removeLastNeuron()">Remove Last Neuron</button>
+        <button class="button" id="boundaryToggle" onclick="toggleBoundaries()">Show Boundaries</button>
+    </div>
+    <div id="class-toggle-container" class="button-container"></div>
+    <div id="container">
+        <div id="main-canvas">
+            <div class="accuracy-display">
+                Accuracy: <span id="accuracy-value">-</span><br>
+                Classes: <span id="class-count">-</span><br>
+                Neurons: <span id="neuron-count">-</span>
+            </div>
+            <svg id="canvas" aria-labelledby="title" role="img"></svg>
+        </div>
+        <div id="metrics-canvas">
+            <svg id="metrics" aria-labelledby="metrics" role="img"></svg>
+            <svg id="barplot" aria-labelledby="neuron-magnitudes" role="img"></svg>
+        </div>
+        <div class="tooltip" style="display: none;" aria-hidden="true"></div>
+    </div>
+
+    <script>
+        const container = document.getElementById('container');
+        const svg = d3.select("#canvas")
+            .attr("width", "100%")
+            .attr("height", "100%")
+            .attr("viewBox", "0 0 600 600");
+
+        const tooltip = d3.select(".tooltip");
+        const width = 600;
+        const height = 600;
+        const numCells = 100;
+        const cellSize = width / numCells;
+
+        const neurons = [];
+        const colorScale = d3.scaleSequential(d3.interpolateRainbow).domain([0, 10]);  // Changed domain to 10 for better color distribution
+
+        // Scales for positioning
+        const xScale = d3.scaleLinear().domain([-numCells/2, numCells/2]).range([0, width]);
+        const yScale = d3.scaleLinear().domain([-numCells/2, numCells/2]).range([height, 0]);
+
+        // Add after other constant declarations in the script
+        const scoreScale = d3.scaleLinear()
+            .domain([-1, 1])  // Adjust domain based on your score range
+            .range([0, 1]);   // For opacity/intensity
+
+        // Axes
+        svg.append("g")
+            .attr("transform", `translate(0, ${height})`)
+            .attr("class", "axis")
+            .call(d3.axisBottom(xScale).ticks(10));
+        
+        svg.append("g")
+            .attr("class", "axis")
+            .call(d3.axisLeft(yScale).ticks(10));
+
+        // Create cells and append to SVG
+        const cells = svg.selectAll(".cell")
+            .data(d3.range(numCells * numCells))
+            .enter().append("rect")
+            .attr("class", "cell")
+            .attr("width", cellSize)
+            .attr("height", cellSize)
+            .attr("x", d => (d % numCells) * cellSize)
+            .attr("y", d => Math.floor(d / numCells) * cellSize)
+            .on("mousemove", (event, d) => showTooltip(event, d))
+            .on("mouseout", () => tooltip.style("display", "none"));
+
+        // Add neuron by clicking
+        svg.on("click", (event) => {
+            const coords = d3.pointer(event);
+            const neuronIndex = neurons.length;
+            const neuron = {
+                x: coords[0],
+                y: coords[1],
+                color: colorScale(neuronIndex),  // Use same index for color
+                index: neuronIndex
+            };
+            neurons.push(neuron);
+
+            // Draw neuron circle
+            svg.append("circle")
+                .attr("class", "neuron")
+                .attr("cx", neuron.x)
+                .attr("cy", neuron.y)
+                .attr("r", 8)
+                .style("fill", neuron.color);
+
+            document.getElementById('neuron-count').textContent = neurons.length;
+
+            updateVisualization();
+            updateAccuracyDisplay();
+        });
+
+        let similarityMetric = 'dotProduct';
+        let showPredictedColors = true;
+        const classColorScale = d3.scaleOrdinal(d3.schemeCategory10);
+        let showBoundaries = false;
+
+        function setSimilarityMetric(metric) {
+            similarityMetric = metric;
+            updateHeatmap();
+            updateAccuracyDisplay(); // Add this line to update accuracy when metric changes
+        }
+
+        function toggleColorMode() {
+            showPredictedColors = !showPredictedColors;
+            document.getElementById('colorModeToggle').textContent = 
+                showPredictedColors ? 'Show Actual Colors' : 'Show Predicted Colors';
+            updateVisualization();
+        }
+
+        function toggleBoundaries() {
+            showBoundaries = !showBoundaries;
+            document.getElementById('boundaryToggle').textContent = 
+                showBoundaries ? 'Hide Boundaries' : 'Show Boundaries';
+            updateHeatmap();
+        }
+
+        function calculateScore(neuron, x, y) {
+            // Convert pixel coordinates to scaled coordinates
+            const scaledX = xScale.invert(x);
+            const scaledY = yScale.invert(y);
+            const scaledNeuronX = xScale.invert(neuron.x);
+            const scaledNeuronY = yScale.invert(neuron.y);
+            
+            const dx = scaledX - scaledNeuronX;
+            const dy = scaledY - scaledNeuronY;
+            const squaredDistance = dx * dx + dy * dy + 1e-8;
+            let value;
+
+            if (similarityMetric === 'dotProduct') {
+                const dotProductSquared = (scaledX * scaledNeuronX + scaledY * scaledNeuronY);
+                value = dotProductSquared;
+            } else if (similarityMetric === 'euclidean') {
+                value = Math.sqrt(squaredDistance);
+            } else if (similarityMetric === 'myProduct') {
+                const dotProductSquared = (scaledX * scaledNeuronX + scaledY * scaledNeuronY) ** 2;
+                value = dotProductSquared / squaredDistance;
+            }
+
+            return value;
+        }
+
+        // Setup metrics SVG
+        const metricsWidth = 300;
+        const metricsHeight = 300;
+        const barplotHeight = 200;
+
+        const metricsSvg = d3.select("#metrics")
+            .attr("width", "100%")
+            .attr("height", metricsHeight);
+
+        const barplotSvg = d3.select("#barplot")
+            .attr("width", "100%")
+            .attr("height", barplotHeight);
+
+        // Add function to calculate region areas
+        function calculateNeuronMetrics() {
+            const metrics = neurons.map((neuron, idx) => {
+                const controlledCells = cells.filter(function() {
+                    const cellData = d3.select(this).datum();
+                    const i = cellData % numCells;
+                    const j = Math.floor(cellData / numCells);
+                    const x = (i - numCells/2) * cellSize;
+                    const y = (j - numCells/2) * cellSize;
+                    
+                    let maxScore = -Infinity;
+                    let winningNeuron = null;
+                    neurons.forEach(n => {
+                        const score = calculateScore(n, x, y);
+                        if (score > maxScore) {
+                            maxScore = score;
+                            winningNeuron = n;
+                        }
+                    });
+                    return winningNeuron === neuron;
+                });
+                
+                return {
+                    neuron,
+                    area: controlledCells.size(),
+                    magnitude: Math.sqrt(neuron.x * neuron.x + neuron.y * neuron.y)
+                };
+            });
+
+            // Update bar plot
+            const bars = barplotSvg.selectAll(".bar")
+                .data(metrics)
+                .join("rect")
+                .attr("class", "bar")
+                .attr("x", (d, i) => i * (metricsWidth / metrics.length))
+                .attr("y", d => barplotHeight - (d.area / (numCells * numCells) * barplotHeight))
+                .attr("width", metricsWidth / metrics.length - 2)
+                .attr("height", d => (d.area / (numCells * numCells) * barplotHeight))
+                .style("fill", d => d.neuron.color);
+
+            // Update area plot
+            metricsSvg.selectAll(".area-line")
+                .data(metrics)
+                .join("circle")
+                .attr("class", "area-line")
+                .attr("cx", d => Math.abs(d.neuron.x / width * metricsWidth))
+                .attr("cy", d => Math.abs(d.neuron.y / height * metricsHeight))
+                .attr("r", d => Math.sqrt(d.area) / 2)
+                .style("fill", "none")
+                .style("stroke", d => d.neuron.color)
+                .style("stroke-width", 2);
+        }
+
+        // Calculate and update heatmap
+        function updateHeatmap() {
+            cells.style("fill", (d) => {
+                const i = d % numCells;
+                const j = Math.floor(d / numCells);
+                const x = i * cellSize + cellSize / 2;
+                const y = j * cellSize + cellSize / 2;
+
+                if (neurons.length === 0) return "#fff";
+
+                let maxScore = -Infinity;
+                let secondBestScore = -Infinity;
+                let winningNeuron = null;
+
+                neurons.forEach((neuron) => {
+                    const score = calculateScore(neuron, x, y);
+                    if (score > maxScore) {
+                        secondBestScore = maxScore;
+                        maxScore = score;
+                        winningNeuron = neuron;
+                    } else if (score > secondBestScore) {
+                        secondBestScore = score;
+                    }
+                });
+
+                if (!showBoundaries) {
+                    return winningNeuron ? winningNeuron.color : "#fff";
+                } else {
+                    // For boundary visualization, calculate confidence
+                    let confidence;
+                    if (similarityMetric === 'euclidean') {
+                        // For euclidean, lower scores are better, invert the ratio
+                        confidence = Math.max(0, 1 - (maxScore / (secondBestScore + 1e-8)));
+                    } else {
+                        // For dot product and myProduct, higher scores are better
+                        confidence = Math.max(0, 1 - (secondBestScore / (maxScore + 1e-8)));
+                    }
+                    
+                    return winningNeuron ? 
+                        d3.color(winningNeuron.color).copy({opacity: confidence}) : 
+                        "#fff";
+                }
+            });
+
+            // Rest of updateHeatmap function remains the same
+            // ...existing code...
+            svg.selectAll('.data-point')
+                .style('fill', d => {
+                    if (showPredictedColors) {
+                        if (neurons.length === 0) return '#999';
+                        
+                        let maxScore = -Infinity;
+                        let winningNeuron = null;
+                        
+                        neurons.forEach(neuron => {
+                            const score = calculateScore(neuron, d.x, d.y);
+                            if (score > maxScore) {
+                                maxScore = score;
+                                winningNeuron = neuron;
+                            }
+                        });
+                        
+                        const normalizedScore = scoreScale(maxScore);
+                        return winningNeuron ? 
+                            d3.color(winningNeuron.color).copy({opacity: normalizedScore}) : 
+                            '#999';
+                    } else {
+                        return colorScale(d.originalLabel);
+                    }
+                });
+
+            calculateNeuronMetrics();
+        }
+
+        function showTooltip(event, d) {
+            const i = d % numCells;
+            const j = Math.floor(d / numCells);
+            const x = i * cellSize + cellSize / 2;
+            const y = j * cellSize + cellSize / 2;
+            
+            // Convert pixel coordinates to scaled coordinates
+            const scaledX = xScale.invert(x);
+            const scaledY = yScale.invert(y);
+
+            if (neurons.length === 0) return;
+
+            let maxScore = -Infinity;
+            let winningNeuron = null;
+
+            neurons.forEach((neuron) => {
+                const score = calculateScore(neuron, x, y);
+                if (score > maxScore) {
+                    maxScore = score;
+                    winningNeuron = neuron;
+                }
+            });
+
+            let scores = neurons.map(neuron => ({
+                neuron: neuron,
+                score: calculateScore(neuron, x, y)
+            })).sort((a, b) => b.score - a.score);
+
+            let scoreText = scores.map(s => 
+                `<span style="color: ${s.neuron.color}">Neuron ${s.neuron.index}: ${s.score.toFixed(3)}</span>`
+            ).join('<br>');
+
+            tooltip.html(`X: ${scaledX.toFixed(1)}, Y: ${scaledY.toFixed(1)}<br>${scoreText}`)
+                .style("display", "block")
+                .style("left", `${Math.min(event.pageX + 10, container.clientWidth - 100)}px`)
+                .style("top", `${event.pageY - 40}px`)
+                .attr("aria-hidden", "false");
+        }
+
+        const dataPoints = [];
+        let activeClasses = new Set();
+        let allClasses = new Set();
+
+        function loadCSV() {
+            const file = document.getElementById('csvFile').files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const csvData = event.target.result;
+                    const rows = csvData.split('\n');
+                    dataPoints.length = 0; // Clear existing data
+                    allClasses.clear();
+                    activeClasses.clear();
+                    
+                    rows.forEach(row => {
+                        const [x, y, label] = row.split(',').map(v => parseFloat(v.trim()));
+                        if (!isNaN(x) && !isNaN(y)) {
+                            allClasses.add(label);
+                            activeClasses.add(label);
+                            dataPoints.push({ x: xScale(x), y: yScale(y), originalLabel: label });
+                        }
+                    });
+                    
+                    document.getElementById('class-count').textContent = allClasses.size;
+                    createClassToggles();
+                    updateVisualization();
+                    updateAccuracyDisplay();
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        function createClassToggles() {
+            const container = document.getElementById('class-toggle-container');
+            container.innerHTML = '';
+            
+            allClasses.forEach(classLabel => {
+                const button = document.createElement('button');
+                button.className = `class-toggle ${activeClasses.has(classLabel) ? 'active' : ''}`;
+                button.textContent = `Class ${classLabel}`;
+                const classColor = colorScale(classLabel);
+                button.style.backgroundColor = classColor;
+                button.style.borderColor = classColor;
+                button.onclick = () => toggleClass(classLabel);
+                container.appendChild(button);
+            });
+        }
+
+        function toggleClass(classLabel) {
+            if (activeClasses.has(classLabel)) {
+                activeClasses.delete(classLabel);
+            } else {
+                activeClasses.add(classLabel);
+            }
+            
+            document.querySelectorAll('.class-toggle').forEach(btn => {
+                if (btn.textContent === `Class ${classLabel}`) {
+                    btn.classList.toggle('active');
+                }
+            });
+            
+            updateVisualization();
+            updateAccuracyDisplay();
+        }
+
+        function updateVisualization() {
+            // Clear existing data points
+            svg.selectAll('.data-point').remove();
+            
+            const filteredPoints = dataPoints.filter(d => activeClasses.has(d.originalLabel));
+            
+            // Add data points
+            svg.selectAll('.data-point')
+                .data(filteredPoints)
+                .enter()
+                .append('circle')
+                .attr('class', 'data-point')
+                .attr('cx', d => d.x)
+                .attr('cy', d => d.y)
+                .attr('r', 5)
+                .style('fill', d => {
+                    if (showPredictedColors) {
+                        if (neurons.length === 0) {
+                            return '#999'; // Default color when no neurons
+                        }
+                        // Color based on winning neuron
+                        let maxScore = -Infinity;
+                        let winningNeuron = null;
+                        neurons.forEach(neuron => {
+                            const score = calculateScore(neuron, d.x, d.y);
+                            if (score > maxScore) {
+                                maxScore = score;
+                                winningNeuron = neuron;
+                            }
+                        });
+                        return winningNeuron ? winningNeuron.color : '#999';
+                    } else {
+                        return colorScale(d.originalLabel);  // Use same colorScale
+                    }
+                });
+            
+            updateAccuracyDisplay();
+            updateHeatmap();
+        }
+
+        function calculateAccuracy() {
+            if (dataPoints.length === 0 || neurons.length === 0) return 0;
+
+            const filteredPoints = dataPoints.filter(d => activeClasses.has(d.originalLabel));
+            if (filteredPoints.length === 0) return 0;
+
+            let totalScore = 0;
+            filteredPoints.forEach(point => {
+                let maxScore = -Infinity;
+                let predictedNeuron = null;
+                let correctNeuronScore = -Infinity;
+
+                neurons.forEach(neuron => {
+                    const score = calculateScore(neuron, point.x, point.y);
+                    if (score > maxScore) {
+                        maxScore = score;
+                        predictedNeuron = neuron;
+                    }
+                    // Track score of the correct neuron
+                    if (neuron.index === point.originalLabel) {
+                        correctNeuronScore = score;
+                    }
+                });
+
+                if (similarityMetric === 'euclidean') {
+                    // For euclidean, lower score is better
+                    totalScore += (predictedNeuron && predictedNeuron.index === point.originalLabel) ? 1 : 0;
+                } else {
+                    // For dot product and myProduct, higher score is better
+                    if (correctNeuronScore >= maxScore) {
+                        totalScore += 1;
+                    }
+                }
+            });
+
+            return (totalScore / filteredPoints.length) * 100;
+        }
+
+        function updateAccuracyDisplay() {
+            const accuracy = calculateAccuracy();
+            const activePointCount = dataPoints.filter(d => activeClasses.has(d.originalLabel)).length;
+            document.getElementById('accuracy-value').textContent = 
+                `${accuracy.toFixed(1)}% (${activePointCount} points) - ${similarityMetric}`;
+        }
+
+        function removeLastNeuron() {
+            if (neurons.length > 0) {
+                neurons.pop();
+                // Remove last neuron circle
+                svg.selectAll('.neuron').filter((d, i, nodes) => i === nodes.length - 1).remove();
+                
+                document.getElementById('neuron-count').textContent = neurons.length;
+                updateVisualization();
+                updateAccuracyDisplay();
+            }
+        }
+
+    </script>
+</body>
+</html>
