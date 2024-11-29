@@ -77,6 +77,45 @@
             border-left: 4px solid #1abc9c;
             margin-top: 20px;
         }
+        /* Button Container Styles */
+        .button-container {
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+        
+        .action-button {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background-color: #2c3e50;
+            color: white;
+            text-decoration: none;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+        }
+
+        .action-button:hover {
+            background-color: #34495e;
+            transform: translateY(-2px);
+        }
+
+        .action-button img {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+        }
+
+        .action-button.kaggle {
+            background-color: #20BEFF;
+        }
+        .action-button.kaggle:hover {
+            background-color: #1a9bd1;
+        }
     </style>
 </head>
 <body>
@@ -84,6 +123,24 @@
     <header>
         <h1>Deep Learning 2.0: Artificial Neurons That Matter - Reject Correlation, Embrace Orthogonality</h1>
         <p><strong>Authors:</strong> Taha Bouhsine</p>
+        <div class="button-container">
+            <a href="https://github.com/mlnomadpy/nmn" class="action-button">
+                <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub">
+                GitHub Repository
+            </a>
+            <a href="#" class="action-button">
+                <img src="https://cdn.hashnode.com/res/hashnode/image/upload/v1611902473383/CDyAuTy75.png" alt="Blog">
+                Read Blog Post
+            </a>
+            <a href="https://github.com/sponsors/mlnomadpy" class="action-button">
+                <img src="https://github.githubassets.com/images/modules/site/sponsors/heart-explosion.png" alt="Sponsor">
+                Sponsor Project
+            </a>
+            <a href="https://www.kaggle.com/code/yournotebook" class="action-button kaggle">
+                <img src="https://www.kaggle.com/static/images/site-logo.svg" alt="Kaggle">
+                Kaggle Notebook
+            </a>
+        </div>
     </header>
 
     <!-- Abstract Section -->
@@ -112,11 +169,27 @@
         </ul>
     </section>
 
+    <section>
+        <h2>Blog Posts</h2>
+        <ul>
+            <li><a href="./single_neuron.html" title="What is missing in Deep Learning and why is it a black box?">A Topological Tale of Everything Wrong with Deep Learning</a></li>
+            <li><a href="./neuron_space.html" title="What is being learned by gradient descent?">Deep Learning 2.0: What is being learned by gradient descent?</a></li>
+        </ul>
+    </section>
+
     <!-- Acknowledgments Section -->
     <section id="acknowledgments">
         <h2>Acknowledgments</h2>
         <p>
             The Google Developer Expert program and Google AI/ML Developer Programs team supported this work by providing Google Cloud Credit. I want to extend my gratitude to the staff at High Grounds Coffee Roasters for their excellent coffee and peaceful atmosphere. I would also like to thank Dr. Andrew Ng for creating the Deep Learning course that introduced me to this field, without his efforts to democratize access to knowledge, this work would not have been possible. Additionally, I want to express my appreciation to all the communities I have been part of, especially MLNomads, Google Developers, and MLCollective communities        </p>
     </section>
+
+    <section id="license">
+        <h2>License</h2>
+        <p>
+            The source code, algorithms, and all contributions presented in this work are licensed under the GNU Affero General Public License (AGPL) v3.0. This license ensures that any use, modification, or distribution of the code and any adaptations or applications of the underlying models and methods must be made publicly available under the same license. This applies whether the work is used for personal, academic, or commercial purposes, including services provided over a network.
+        </p>
+    </section>
+
 </body>
 </html>
