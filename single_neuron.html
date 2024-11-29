@@ -1,13 +1,9 @@
-<!---
-TODOs
-[] give the ability to the user to change type of similarty metrics from dot product simple to my product and show him the results
---->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Heatmap with D3.js</title>
+    <title>Single Neurons in your Embedding Space</title>
     <script src="https://d3js.org/d3.v6.min.js"></script>
     <style>
         body {
@@ -83,6 +79,33 @@ TODOs
         .button:hover {
             background-color: #0056b3;
         }
+        .legend-container {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            background: white;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .legend-label {
+            font-size: 12px;
+            text-align: center;
+            margin-bottom: 5px;
+        }
+        .select {
+            padding: 9px 20px;
+            margin: 5px;
+            border: 1px solid #007bff;
+            background-color: white;
+            color: #007bff;
+            cursor: pointer;
+            font-size: 14px;
+            border-radius: 4px;
+        }
+        .select:hover {
+            background-color: #f8f9fa;
+        }
     </style>
 </head>
 <body>
@@ -97,8 +120,16 @@ TODOs
         <button class="button" onclick="setSimilarityMetric('dotProduct')">Dot Product</button>
         <button class="button" onclick="setSimilarityMetric('euclidean')">Euclidean Distance</button>
         <button class="button" onclick="setSimilarityMetric('myProduct')">My Product</button>
+        <select class="select" onchange="setActivationFunction(this.value)">
+            <option value="none">No Activation</option>
+            <option value="relu">ReLU</option>
+            <option value="leakyRelu">Leaky ReLU</option>
+            <option value="gelu">GELU</option>
+            <option value="sigmoid">Sigmoid</option>
+        </select>
     </div>
     <div id="container">
+        **don't worry drag the red neuron to see the changes in the heatmap**
         <svg id="canvas" aria-labelledby="title" role="img"></svg>
         <div class="tooltip" style="display: none;" aria-hidden="true"></div>
     </div>
@@ -116,24 +147,73 @@ TODOs
         const numCells = 100;
         const cellSize = width / numCells;
 
-        // Scales for positioning
-        const xScale = d3.scaleLinear().domain([0, numCells]).range([0, width]);
-        const yScale = d3.scaleLinear().domain([0, numCells]).range([height, 0]);
+        // Updated scales for -30 to 30 range
+        const xScale = d3.scaleLinear().domain([-30, 30]).range([0, width]);
+        const yScale = d3.scaleLinear().domain([-30, 30]).range([height, 0]);
 
-        // Axes
+        // Updated axes with more ticks
         svg.append("g")
-            .attr("transform", `translate(0, ${height})`)
+            .attr("transform", `translate(0, ${height/2})`)
             .attr("class", "axis")
-            .call(d3.axisBottom(xScale).ticks(10));
+            .call(d3.axisBottom(xScale).ticks(12));
         
         svg.append("g")
+            .attr("transform", `translate(${width/2}, 0)`)
             .attr("class", "axis")
-            .call(d3.axisLeft(yScale).ticks(10));
+            .call(d3.axisLeft(yScale).ticks(12));
 
         let neuron = { x: width / 2, y: height / 2 };
 
         // Color scale
-        const colorScale = d3.scaleSequential(d3.interpolateViridis).domain([0, 1]);
+        const colorScale = d3.scaleSequential()
+            .interpolator(d3.interpolateRdBu);
+
+        // Add color legend
+        const legendWidth = 200;
+        const legendHeight = 20;
+        
+        const legendContainer = svg.append("g")
+            .attr("class", "legend-container")
+            .attr("transform", `translate(${width - legendWidth - 20}, 20)`);
+
+        // Create gradient
+        const defs = svg.append("defs");
+        const gradient = defs.append("linearGradient")
+            .attr("id", "legend-gradient")
+            .attr("x1", "0%")
+            .attr("x2", "100%");
+
+        // Add gradient stops
+        gradient.append("stop")
+            .attr("offset", "0%")
+            .attr("stop-color", colorScale(0));
+        
+        gradient.append("stop")
+            .attr("offset", "50%")
+            .attr("stop-color", colorScale(0.5));
+            
+        gradient.append("stop")
+            .attr("offset", "100%")
+            .attr("stop-color", colorScale(1));
+
+        // Add legend rectangle
+        legendContainer.append("rect")
+            .attr("width", legendWidth)
+            .attr("height", legendHeight)
+            .style("fill", "url(#legend-gradient)");
+
+        // Add legend labels
+        legendContainer.append("text")
+            .attr("class", "legend-label")
+            .attr("x", 0)
+            .attr("y", -5)
+            .text("Negative");
+
+        legendContainer.append("text")
+            .attr("class", "legend-label")
+            .attr("x", legendWidth - 50)
+            .attr("y", -5)
+            .text("Positive");
 
         // Create cells and append to SVG
         const cells = svg.selectAll(".cell")
@@ -148,37 +228,68 @@ TODOs
             .on("mouseout", () => tooltip.style("display", "none"));
 
         let similarityMetric = 'dotProduct';
+        let activationFunction = 'none';
 
         function setSimilarityMetric(metric) {
             similarityMetric = metric;
             updateHeatmap();
         }
 
+        function setActivationFunction(func) {
+            activationFunction = func;
+            updateHeatmap();
+        }
+
+        function applyActivation(x) {
+            switch (activationFunction) {
+                case 'relu':
+                    return Math.max(0, x);
+                case 'leakyRelu':
+                    return x > 0 ? x : 0.01 * x;
+                case 'gelu':
+                    return x * 0.5 * (1 + Math.tanh(Math.sqrt(2 / Math.PI) * (x + 0.044715 * Math.pow(x, 3))));
+                case 'sigmoid':
+                    return 1 / (1 + Math.exp(-x));
+                default:
+                    return x;
+            }
+        }
+
         // Calculate heatmap color for each cell
         function calculateColor(d) {
             const i = d % numCells;
             const j = Math.floor(d / numCells);
-            const x = i * cellSize + cellSize / 2;
-            const y = j * cellSize + cellSize / 2;
-            const dx = x - neuron.x;
-            const dy = y - neuron.y;
+            
+            // Convert grid positions to -30 to 30 range
+            const x = xScale.invert(i * cellSize + cellSize / 2);
+            const y = yScale.invert(j * cellSize + cellSize / 2);
+            
+            // Convert neuron position to -30 to 30 range
+            const neuronX = xScale.invert(neuron.x);
+            const neuronY = yScale.invert(neuron.y);
+            
+            const dx = x - neuronX;
+            const dy = y - neuronY;
             const squaredDistance = dx * dx + dy * dy + 1e-8;
             let value;
 
             if (similarityMetric === 'dotProduct') {
-                const dotProductSquared = (x * neuron.x + y * neuron.y);
-                value = dotProductSquared;
-                return colorScale(Math.min(value / 2e5, 1));
+                const dotProduct = (x * neuronX + y * neuronY);
+                value = dotProduct;
+                value = applyActivation(value);
+                return colorScale(Math.min(Math.max((value + 900) / 1800, 0), 1));
             } else if (similarityMetric === 'euclidean') {
                 value = Math.sqrt(squaredDistance);
-                return colorScale(Math.min(value / 2e2, 1));
+                value = applyActivation(value);
+                return colorScale(Math.min(value / 60, 1));
             } else if (similarityMetric === 'myProduct') {
-                const dotProductSquared = (x * neuron.x + y * neuron.y) ** 2;
-                value = dotProductSquared / squaredDistance; // Replace with your custom metric
-                return colorScale(Math.min(value / 1e6, 1));
+                const dotProduct = (x * neuronX + y * neuronY);
+                value = dotProduct * dotProduct / squaredDistance;
+                value = applyActivation(value);
+                return colorScale(Math.min(Math.max((value + 30) / 60, 0), 1));
             }
 
-            return colorScale(Math.min(value / 1e6, 1));
+            return colorScale(0.5); // default middle value
         }
 
         function updateHeatmap() {
@@ -188,16 +299,27 @@ TODOs
         function showTooltip(event, d) {
             const i = d % numCells;
             const j = Math.floor(d / numCells);
-            const x = i * cellSize + cellSize / 2;
-            const y = j * cellSize + cellSize / 2;
+            const x = xScale.invert(i * cellSize + cellSize / 2);
+            const y = yScale.invert(j * cellSize + cellSize / 2);
+            const neuronX = xScale.invert(neuron.x);
+            const neuronY = yScale.invert(neuron.y);
 
-            const dx = x - neuron.x;
-            const dy = y - neuron.y;
+            const dx = x - neuronX;
+            const dy = y - neuronY;
             const squaredDistance = dx * dx + dy * dy + 1e-8;
-            const dotProductSquared = (x * neuron.x + y * neuron.y) ** 2;
-            const value = dotProductSquared / squaredDistance;
+            let value;
 
-            const tooltipText = `X: ${x.toFixed(1)}, Y: ${y.toFixed(1)}<br>Value: ${value.toFixed(4)}`;
+            if (similarityMetric === 'dotProduct') {
+                value = x * neuronX + y * neuronY;
+            } else if (similarityMetric === 'euclidean') {
+                value = Math.sqrt(squaredDistance);
+            } else if (similarityMetric === 'myProduct') {
+                value = (x * neuronX + y * neuronY) / Math.sqrt(squaredDistance);
+            }
+            
+            const rawValue = value;
+            const activatedValue = applyActivation(value);
+            const tooltipText = `X: ${x.toFixed(1)}, Y: ${y.toFixed(1)}<br>Raw: ${rawValue.toFixed(4)}<br>Activated: ${activatedValue.toFixed(4)}`;
             
             tooltip.html(tooltipText)
                 .style("display", "block")
