@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Deep Learning 2.0: Artificial Neurons that Matter - Reject Correlation, Embrace Orthogonalithy</title>
+    <title>Deep Learning 2.0: Artificial Neurons that Matter</title>
     <style>
         /* Basic Reset */
         * {
@@ -116,6 +116,7 @@
         .action-button.kaggle:hover {
             background-color: #1a9bd1;
         }
+
         .action-button.arxiv {
             background-color: #B31B1B;
         }
@@ -123,6 +124,31 @@
             background-color: #8B1414;
         }
 
+        /* Citation Section Styles */
+        .citation-box {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #dee2e6;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .copy-button {
+            padding: 5px 10px;
+            background-color: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            float: right;
+        }
+
+        .copy-button:hover {
+            background-color: #34495e;
+        }
     </style>
 </head>
 <body>
@@ -147,11 +173,10 @@
                 <img src="https://www.kaggle.com/static/images/site-logo.svg" alt="Kaggle">
                 Kaggle Notebook
             </a>
-            <a href="https://arxiv.org/abs/2411.08085" class="action-button arxiv">
+            <a href="https://arxiv.org/abs/yourpaper" class="action-button arxiv">
                 <img src="https://static.arxiv.org/static/browse/0.3.2.8/images/arxiv-logo-one-color-white.svg" alt="arXiv">
                 Read Paper
             </a>
-
         </div>
     </header>
 
@@ -172,12 +197,13 @@
 
     <!-- Demos Section -->
     <section>
-        <h2>Demos</h2>
+        <h2>Demos and Tools</h2>
         <ul>
             <li><a href="./single_neuron.html" title="Explore a single artificial neuron">Single Neuron in Your Area</a></li>
             <li><a href="./neuron_space.html" title="Explore neuron space visualization">Neurons in Your Space</a></li>
             <li><a href="./do_you_even_mnist.html" title="View the MNIST dataset demonstration">Do You Even MNIST, Bro?</a></li>
-            <li><a href="./classify_your_own.html" title="View the Classify Your Own Dataset">CYOD: Classify your Own Dataset</a></li>
+            <li><a href="./classify_your_own.html" title="View the Classify Your Own Dataset">NNMap and CYOD: Classify your Own Dataset</a></li>
+
         </ul>
     </section>
 
@@ -185,6 +211,8 @@
         <h2>Blog Posts</h2>
         <ul>
             <li><a href="./single_neuron.html" title="What is missing in Deep Learning and why is it a black box?">A Topological Tale of Everything Wrong with Deep Learning</a></li>
+            <li><a href="./neuron_space.html" title="What is being learned by gradient descent?">Deep Learning 2.0: What is being learned by gradient descent?</a></li>
+            <li><a href="./do_you_even_mnist.html" title="Deep Learning 3.0">Deep Learning 3.0: into the COSMOS</a></li>
         </ul>
     </section>
 
@@ -193,6 +221,32 @@
         <h2>Acknowledgments</h2>
         <p>
             The Google Developer Expert program and Google AI/ML Developer Programs team supported this work by providing Google Cloud Credit. I want to extend my gratitude to the staff at High Grounds Coffee Roasters for their excellent coffee and peaceful atmosphere. I would also like to thank Dr. Andrew Ng for creating the Deep Learning course that introduced me to this field, without his efforts to democratize access to knowledge, this work would not have been possible. Additionally, I want to express my appreciation to all the communities I have been part of, especially MLNomads, Google Developers, and MLCollective communities        </p>
+    </section>
+
+    <!-- Citation Section -->
+    <section>
+        <h2>Cite This Work</h2>
+        <p>If you use this work in your research, please cite:</p>
+        
+        <h3>BibTeX</h3>
+        <div class="citation-box">
+            <button class="copy-button" onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent)">Copy</button>
+            <code>
+@article{bouhsine2024deep,
+    title={Deep Learning 2.0: Artificial Neurons That Matter - Reject Correlation, Embrace Orthogonality},
+    author={Bouhsine, Taha},
+    journal={arXiv preprint arXiv:2024.xxxxx},
+    year={2024}
+}
+</code>
+        </div>
+
+        <h3>Plain Text Citation</h3>
+        <div class="citation-box">
+            <button class="copy-button" onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent)">Copy</button>
+            <code>
+Bouhsine, T. (2024). Deep Learning 2.0: Artificial Neurons That Matter - Reject Correlation, Embrace Orthogonality. arXiv preprint arXiv:2024.xxxxx.</code>
+        </div>
     </section>
 
     <section id="license">
