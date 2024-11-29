@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Artificial Neurons that Matter: Reject Correlation, Embrace Orthogonality</title>
+    <title>NNMap and CYOD: Classify your Own Dataset </title>
     <script src="https://d3js.org/d3.v6.min.js"></script>
     <style>
         body {
@@ -33,10 +33,10 @@
         #container {
             display: flex;
             gap: 20px;
-            width: 95vw;
-            height: 80vh;
+            width: 100vw;
+            height: 85vh;
             max-width: 1200px;
-            max-height: 600px;
+            max-height: 700px;
             background-color: #fff;
             border: 1px solid #ddd;
             padding: 10px;
@@ -87,13 +87,11 @@
             margin: 10px 0;
         }
         .accuracy-display {
-            position: absolute;
-            top: 20px;
-            right: 20px;
             padding: 10px;
             background: rgba(255, 255, 255, 0.9);
             border: 1px solid #ddd;
             border-radius: 4px;
+            width: fit-content;
         }
         .class-toggle {
             margin: 5px;
@@ -110,40 +108,118 @@
         .class-toggle:not(.active) {
             filter: brightness(50%);
         }
+        .button.selected {
+            background-color: #4CAF50;
+            color: white;
+            border: 2px solid #45a049;
+        }
+        .similarity-button {
+            margin: 5px;
+            padding: 10px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            background-color: white;
+            transition: all 0.3s ease;
+            opacity: 0.7;
+        }
+        .similarity-button:hover {
+            opacity: 0.9;
+        }
+        .similarity-button.selected {
+            background-color: #4CAF50;
+            color: white;
+            border-color: #45a049;
+            opacity: 1;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .similarity-button:not(.selected) {
+            background-color: #f5f5f5;
+            color: #666;
+        }
     </style>
 </head>
 <body>
     <div id="title">Artificial Neurons that Matter: Reject Correlation, Embrace Orthogonality</div>
     <div id="abstract">
         Upload your data that contains x, y, and label, than create your own neural network by clicking on the canvas to add neurons. Load a CSV file with data points to see how the neurons classify the data. Change the similarity metric to see how it affects the classification. Click on a class to toggle its visibility.
+        <br><br>
+        Features:
+        <ul>
+            <li>Upload CSV data containing x, y, and label.</li>
+            <li>Create a neural network by clicking on the canvas to add neurons.</li>
+            <li>Load and save neuron weights from/to a CSV file.</li>
+            <li>Choose different similarity metrics: Dot Product, Euclidean Distance, My Product.</li>
+            <li>Toggle between actual and predicted colors for data points.</li>
+            <li>Show or hide decision boundaries.</li>
+            <li>Select activation functions: None, Softmax, Softermax, Sigmoid, ReLU, GELU.</li>
+        </ul>
     </div>
     <div class="file-input">
         <input type="file" id="csvFile" accept=".csv" />
         <button class="button" onclick="loadCSV()">Load Data</button>
+        <input type="file" id="neuronFile" accept=".csv" />
+        <button class="button" onclick="loadNeurons()">Load Neurons</button>
+        <button class="button" onclick="saveNeurons()">Save Neurons</button>
     </div>
     <div class="button-container">
-        <button class="button" onclick="setSimilarityMetric('dotProduct')">Dot Product</button>
-        <button class="button" onclick="setSimilarityMetric('euclidean')">Euclidean Distance</button>
-        <button class="button" onclick="setSimilarityMetric('myProduct')">My Product</button>
+        <button class="similarity-button selected" data-metric="dotProduct" onclick="setSimilarityMetric('dotProduct')">Dot Product</button>
+        <button class="similarity-button" data-metric="euclidean" onclick="setSimilarityMetric('euclidean')">Euclidean Distance</button>
+        <button class="similarity-button" data-metric="myProduct" onclick="setSimilarityMetric('myProduct')">My Product</button>
         <button class="button" id="colorModeToggle" onclick="toggleColorMode()">Show Actual Colors</button>
         <button class="button" onclick="removeLastNeuron()">Remove Last Neuron</button>
         <button class="button" id="boundaryToggle" onclick="toggleBoundaries()">Show Boundaries</button>
+        <select id="activationFunction" class="button" onchange="setActivationFunction(this.value)">
+            <option value="none">None</option>
+            <option value="softmax">Softmax</option>
+            <option value="softermax">Softermax</option>
+            <option value="sigmoid">Sigmoid</option>
+            <option value="xmoid">xmoid</option>
+            <option value="logmoid">logmoid</option>
+            <option value="relu">ReLU</option>
+            <option value="gelu">GELU</option>
+        </select>
     </div>
     <div id="class-toggle-container" class="button-container"></div>
     <div id="container">
         <div id="main-canvas">
+            <svg id="canvas" aria-labelledby="title" role="img"></svg>
             <div class="accuracy-display">
                 Accuracy: <span id="accuracy-value">-</span><br>
                 Classes: <span id="class-count">-</span><br>
                 Neurons: <span id="neuron-count">-</span>
             </div>
-            <svg id="canvas" aria-labelledby="title" role="img"></svg>
         </div>
         <div id="metrics-canvas">
             <svg id="metrics" aria-labelledby="metrics" role="img"></svg>
             <svg id="barplot" aria-labelledby="neuron-magnitudes" role="img"></svg>
         </div>
         <div class="tooltip" style="display: none;" aria-hidden="true"></div>
+    </div>
+
+    <div id="math-formulas">
+        <h3>Math Formulas for Activation Functions</h3>
+        <p><strong>Softmax:</strong></p>
+        <p>\[
+        \text{softmax}(x_i) = \frac{e^{x_i}}{\sum_{j} e^{x_j}}
+        \]</p>
+        <p><strong>Softermax:</strong></p>
+        <p>\[
+        \text{softermax}(x_i) = \frac{1 + x_i}{\sum_{j} (1 + x_j)}
+        \]</p>
+        <p><strong>Sigmoid:</strong></p>
+        <p>\[
+        \text{sigmoid}(x) = \frac{1}{1 + e^{-x}}
+        \]</p>
+        <p><strong>ReLU:</strong></p>
+        <p>\[
+        \text{ReLU}(x) = \max(0, x)
+        \]</p>
+        <p><strong>GELU:</strong></p>
+        <p>\[
+        \text{GELU}(x) = 0.5 \cdot x \cdot \left(1 + \tanh\left(\sqrt{\frac{2}{\pi}} \left(x + 0.044715 \cdot x^3\right)\right)\right)
+        \]</p>
     </div>
 
     <script>
@@ -223,11 +299,47 @@
         let showPredictedColors = true;
         const classColorScale = d3.scaleOrdinal(d3.schemeCategory10);
         let showBoundaries = false;
+        let activationFunction = 'none';
 
         function setSimilarityMetric(metric) {
             similarityMetric = metric;
+            // Update button styles
+            document.querySelectorAll('.similarity-button').forEach(btn => {
+                btn.classList.toggle('selected', btn.dataset.metric === metric);
+            });
             updateHeatmap();
-            updateAccuracyDisplay(); // Add this line to update accuracy when metric changes
+            updateAccuracyDisplay();
+        }
+
+        function setActivationFunction(func) {
+            activationFunction = func;
+            updateHeatmap();
+            updateAccuracyDisplay();
+        }
+
+        function applyActivationFunction(scores) {
+            if (activationFunction === 'softmax') {
+                const maxScore = Math.max(...scores);
+                const expScores = scores.map(score => Math.exp(score - maxScore));
+                const sumExpScores = expScores.reduce((a, b) => a + b, 0);
+                return expScores.map(score => score / sumExpScores);
+            } else if (activationFunction === 'softermax') {
+                const transformedScores = scores.map(score => 1 + score);
+                const sumTransformedScores = transformedScores.reduce((a, b) => a + b, 0);
+                return transformedScores.map(score => score / sumTransformedScores);
+            } else if (activationFunction === 'sigmoid') {
+                return scores.map(score => 1 / (1 + Math.exp(-score)));
+            } else if (activationFunction === 'xmoid') {
+                return scores.map(score => 1 / (1 + score));
+            } else if (activationFunction === 'logmoid') {
+                return scores.map(score => 1 / (1 + Math.log(score)));
+            } else if (activationFunction === 'relu') {
+                return scores.map(score => Math.max(0, score));
+            } else if (activationFunction === 'gelu') {
+                return scores.map(score => 0.5 * score * (1 + Math.tanh(Math.sqrt(2 / Math.PI) * (score + 0.044715 * Math.pow(score, 3)))));
+            } else {
+                return scores; // None
+            }
         }
 
         function toggleColorMode() {
@@ -307,7 +419,7 @@
                 return {
                     neuron,
                     area: controlledCells.size(),
-                    magnitude: Math.sqrt(neuron.x * neuron.x + neuron.y * neuron.y)
+                    magnitude: neuron.x * neuron.x + neuron.y * neuron.y  // Squared magnitude
                 };
             });
 
@@ -345,57 +457,34 @@
 
                 if (neurons.length === 0) return "#fff";
 
-                let maxScore = -Infinity;
-                let secondBestScore = -Infinity;
-                let winningNeuron = null;
+                let scores = neurons.map(neuron => calculateScore(neuron, x, y));
+                scores = applyActivationFunction(scores);
 
-                neurons.forEach((neuron) => {
-                    const score = calculateScore(neuron, x, y);
-                    if (score > maxScore) {
-                        secondBestScore = maxScore;
-                        maxScore = score;
-                        winningNeuron = neuron;
-                    } else if (score > secondBestScore) {
-                        secondBestScore = score;
-                    }
-                });
+                let maxScore = Math.max(...scores);
+                let secondBestScore = scores.reduce((max, score) => 
+                    score < maxScore && score > max ? score : max, -Infinity);
+                let winningNeuron = neurons[scores.indexOf(maxScore)];
 
                 if (!showBoundaries) {
                     return winningNeuron ? winningNeuron.color : "#fff";
                 } else {
-                    // For boundary visualization, calculate confidence
-                    let confidence;
-                    if (similarityMetric === 'euclidean') {
-                        // For euclidean, lower scores are better, invert the ratio
-                        confidence = Math.max(0, 1 - (maxScore / (secondBestScore + 1e-8)));
-                    } else {
-                        // For dot product and myProduct, higher scores are better
-                        confidence = Math.max(0, 1 - (secondBestScore / (maxScore + 1e-8)));
-                    }
-                    
+                    // For boundary visualization, use activated scores directly
+                    const confidence = Math.max(0, 1 - (secondBestScore / (maxScore + 1e-8)));
                     return winningNeuron ? 
                         d3.color(winningNeuron.color).copy({opacity: confidence}) : 
                         "#fff";
                 }
             });
 
-            // Rest of updateHeatmap function remains the same
-            // ...existing code...
             svg.selectAll('.data-point')
                 .style('fill', d => {
                     if (showPredictedColors) {
                         if (neurons.length === 0) return '#999';
                         
-                        let maxScore = -Infinity;
-                        let winningNeuron = null;
-                        
-                        neurons.forEach(neuron => {
-                            const score = calculateScore(neuron, d.x, d.y);
-                            if (score > maxScore) {
-                                maxScore = score;
-                                winningNeuron = neuron;
-                            }
-                        });
+                        let scores = neurons.map(neuron => calculateScore(neuron, d.x, d.y));
+                        scores = applyActivationFunction(scores);
+                        let maxScore = Math.max(...scores);
+                        let winningNeuron = neurons[scores.indexOf(maxScore)];
                         
                         const normalizedScore = scoreScale(maxScore);
                         return winningNeuron ? 
@@ -421,24 +510,17 @@
 
             if (neurons.length === 0) return;
 
-            let maxScore = -Infinity;
-            let winningNeuron = null;
-
-            neurons.forEach((neuron) => {
-                const score = calculateScore(neuron, x, y);
-                if (score > maxScore) {
-                    maxScore = score;
-                    winningNeuron = neuron;
-                }
-            });
-
-            let scores = neurons.map(neuron => ({
+            let rawScores = neurons.map(neuron => calculateScore(neuron, x, y));
+            let activatedScores = applyActivationFunction(rawScores);
+            
+            let scores = neurons.map((neuron, idx) => ({
                 neuron: neuron,
-                score: calculateScore(neuron, x, y)
-            })).sort((a, b) => b.score - a.score);
+                raw: rawScores[idx],
+                activated: activatedScores[idx]
+            })).sort((a, b) => b.activated - a.activated);
 
             let scoreText = scores.map(s => 
-                `<span style="color: ${s.neuron.color}">Neuron ${s.neuron.index}: ${s.score.toFixed(3)}</span>`
+                `<span style="color: ${s.neuron.color}">Neuron ${s.neuron.index}: ${s.activated.toFixed(3)} (raw: ${s.raw.toFixed(3)})</span>`
             ).join('<br>');
 
             tooltip.html(`X: ${scaledX.toFixed(1)}, Y: ${scaledY.toFixed(1)}<br>${scoreText}`)
@@ -479,6 +561,73 @@
                 };
                 reader.readAsText(file);
             }
+        }
+
+        function loadNeurons() {
+            const file = document.getElementById('neuronFile').files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const csvData = event.target.result;
+                    const rows = csvData.split('\n');
+                    
+                    // Clear existing neurons
+                    neurons.length = 0;
+                    svg.selectAll('.neuron').remove();
+                    
+                    rows.forEach(row => {
+                        const [x, y, id] = row.split(',').map(v => parseFloat(v.trim()));
+                        if (!isNaN(x) && !isNaN(y) && !isNaN(id)) {
+                            const neuron = {
+                                x: xScale(x),
+                                y: yScale(y),
+                                color: colorScale(neurons.length),
+                                index: id
+                            };
+                            neurons.push(neuron);
+
+                            // Draw neuron circle
+                            svg.append("circle")
+                                .attr("class", "neuron")
+                                .attr("cx", neuron.x)
+                                .attr("cy", neuron.y)
+                                .attr("r", 8)
+                                .style("fill", neuron.color);
+                        }
+                    });
+                    
+                    document.getElementById('neuron-count').textContent = neurons.length;
+                    updateVisualization();
+                    updateAccuracyDisplay();
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        function saveNeurons() {
+            if (neurons.length === 0) {
+                alert('No neurons to save!');
+                return;
+            }
+
+            // Convert neurons to CSV format
+            const csvContent = neurons.map(neuron => {
+                // Convert back from screen coordinates to data coordinates
+                const x = xScale.invert(neuron.x);
+                const y = yScale.invert(neuron.y);
+                return `${x},${y},${neuron.index}`;
+            }).join('\n');
+
+            // Create a blob and download link
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'neurons.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
 
         function createClassToggles() {
@@ -562,30 +711,13 @@
 
             let totalScore = 0;
             filteredPoints.forEach(point => {
-                let maxScore = -Infinity;
-                let predictedNeuron = null;
-                let correctNeuronScore = -Infinity;
+                let scores = neurons.map(neuron => calculateScore(neuron, point.x, point.y));
+                scores = applyActivationFunction(scores);
+                let maxScore = Math.max(...scores);
+                let predictedNeuronIndex = scores.indexOf(maxScore);
 
-                neurons.forEach(neuron => {
-                    const score = calculateScore(neuron, point.x, point.y);
-                    if (score > maxScore) {
-                        maxScore = score;
-                        predictedNeuron = neuron;
-                    }
-                    // Track score of the correct neuron
-                    if (neuron.index === point.originalLabel) {
-                        correctNeuronScore = score;
-                    }
-                });
-
-                if (similarityMetric === 'euclidean') {
-                    // For euclidean, lower score is better
-                    totalScore += (predictedNeuron && predictedNeuron.index === point.originalLabel) ? 1 : 0;
-                } else {
-                    // For dot product and myProduct, higher score is better
-                    if (correctNeuronScore >= maxScore) {
-                        totalScore += 1;
-                    }
+                if (neurons[predictedNeuronIndex].index === point.originalLabel) {
+                    totalScore += 1;
                 }
             });
 
