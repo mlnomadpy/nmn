@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DL 2.0: A Topological Tale of Everything wrong with Deep Learning</title>
+    <style>
+        /* Basic Reset */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f9;
+            padding: 20px;
+            max-width: 800px;
+            margin: auto;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        h1 {
+            font-size: 2em;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        p {
+            margin-bottom: 1em;
+            color: #555;
+        }
+        /* Author List Style */
+        header p {
+            font-size: 1em;
+            color: #777;
+            font-style: italic;
+        }
+        /* Section Titles */
+        h2 {
+            font-size: 1.5em;
+            color: #34495e;
+            margin-top: 20px;
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 5px;
+        }
+        /* Abstract and Acknowledgments Sections */
+        section p {
+            margin-bottom: 1em;
+            line-height: 1.7;
+        }
+        /* Demo Links */
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            margin: 8px 0;
+        }
+        a {
+            text-decoration: none;
+            color: #3498db;
+            font-weight: bold;
+            transition: color 0.2s;
+        }
+        a:hover {
+            color: #1abc9c;
+        }
+        /* Acknowledgments Section */
+        #acknowledgments {
+            background-color: #e8f6f3;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #1abc9c;
+            margin-top: 20px;
+        }
+        /* Button Container Styles */
+        .button-container {
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+        
+        .action-button {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background-color: #2c3e50;
+            color: white;
+            text-decoration: none;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+        }
+
+        .action-button:hover {
+            background-color: #34495e;
+            transform: translateY(-2px);
+        }
+
+        .action-button img {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+        }
+
+        .action-button.kaggle {
+            background-color: #20BEFF;
+        }
+        .action-button.kaggle:hover {
+            background-color: #1a9bd1;
+        }
+
+        .action-button.arxiv {
+            background-color: #B31B1B;
+        }
+        .action-button.arxiv:hover {
+            background-color: #8B1414;
+        }
+
+        /* Citation Section Styles */
+        .citation-box {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #dee2e6;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .copy-button {
+            padding: 5px 10px;
+            background-color: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            float: right;
+        }
+
+        .copy-button:hover {
+            background-color: #34495e;
+        }
+
+        /* Styles for rendered content */
+        .markdown-body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+        .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4, .markdown-body h5, .markdown-body h6 {
+            color: #2c3e50;
+        }
+        .markdown-body a {
+            color: #3498db;
+        }
+        .markdown-body a:hover {
+            color: #1abc9c;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex/dist/contrib/auto-render.min.js"></script>
+</head>
+<body>
+    <!-- Main Title and Author List -->
+    <header>
+        <h1>1/ DL 2.0: A Topological Tale of Everything wrong with Deep Learning</h1>
+        <h2><strong>Not the Metrics We Want, But the Metrics We Need</strong> </h2>
+        <p><strong>Authors:</strong> Taha Bouhsine</p>
+        <div class="button-container">
+            <a href="https://github.com/mlnomadpy/nmn" class="action-button">
+                <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub">
+                GitHub Repo
+            </a>
+            <a href="./blog.html" class="action-button">
+                <img src="https://cdn.hashnode.com/res/hashnode/image/upload/v1611902473383/CDyAuTy75.png" alt="Blog">
+                Blog Post
+            </a>
+            <a href="https://github.com/sponsors/mlnomadpy" class="action-button">
+                <img src="https://github.githubassets.com/images/modules/site/sponsors/heart-explosion.png" alt="Sponsor">
+                Sponsor Project
+            </a>
+            <a href="https://www.kaggle.com/code/yournotebook" class="action-button kaggle">
+                <img src="https://www.kaggle.com/static/images/site-logo.svg" alt="Kaggle">
+                Kaggle Notebook
+            </a>
+            <a href="https://arxiv.org/abs/2411.08085" class="action-button arxiv">
+                <img src="https://static.arxiv.org/static/browse/0.3.2.8/images/arxiv-logo-one-color-white.svg" alt="arXiv">
+                DL 2.0 Paper
+            </a>
+        </div>
+    </header>
+
+    <!-- Blog Content Container -->
+    <div id="blog-content" class="markdown-body"></div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const markdownContent = `
+# Abstract
+
+Deep learning operates on a foundation of axioms that have proven effective in practice, yet their underlying mechanisms remain largely unexplained. Despite breaking many principles of metric spaces, deep learning paradoxically relies on these same notions to train models, evaluate their performance, and interpret their behavior. In this blog post, we revisit the fundamental concepts of topology and argue that many of the issues plaguing deep learning—such as its opaque "black-box" nature and phenomena like hallucinations—stem from uncritically adhering to these flawed axioms. We also explore a promising alternative from the literature, inverse-square-based, that addresses these shortcomings and offers a new perspective for rethinking the metrics underpinning deep learning.
+
+<center>
+    <img src="assets/yatneurons.jpg" align="center" width=555>
+</center>
+
+All visualization used in this paper and blog were created with tools that can be found here: [https://www.tahabouhsine.com/nmn/](https://www.tahabouhsine.com/nmn/)
+
+If you hate this blog post you can cite it as:
+
+\`\`\`plaintext
+
+@article{bouhsine2024deep,
+    title={Deep Learning 2.0: Artificial Neurons That Matter - Reject Correlation, Embrace Orthogonality},
+    author={Bouhsine, Taha},
+    journal={arXiv preprint arXiv:2411.08085},
+    year={2024}
+}
+@miscs{bouhsine2024topologicaltale,
+    title={DL 2.0: A Topological Tale of Everything wrong with Deep Learning},
+    author={Bouhsine, Taha},
+    year={2024}
+}
+\`\`\`
+
+# Introduction
+
+Let me start with a story from my long-forgotten childhood. Don’t worry, I won’t use this as an excuse to unload all my childhood trauma—just the good memories, I promise.
+
+Back in elementary school, we were introduced to the basics of geometry. Naturally, we started with the Euclidean space, the kind of geometry an elementary kid can wrap their head around. Our teacher walked us through the postulates of Euclidean space, like how two parallel lines never intersect, or how two lines can intersect at most once. Then there was the classic rule that two points can’t occupy the same place—if the distance between them is zero, they’re the same point. Oh, and let’s not forget: distances are never negative. In fact, if you ever calculated a negative distance, you could expect a sharp rebuke (and yes, I got “rebuked” a lot—fun times, lol).
+
+But my tiny brain had questions. Why was it that when I drew lines with my pen on my football (or as our americans like to call it, SocCEr, bruh!), they crossed multiple times? Why was it so hard to draw two parallel lines on the ball, even though it was already a bit squished from me sitting on it? These questions bugged me endlessly, keeping me awake at night. Of course, they shared brain space with much more critical worries, like whether Captain Tsubasa would win his next game or if Ash would ever actually “*catch ‘em all.*” Let’s just say insomnia and childhood anxiety had me in a chokehold back then (lol).
+
+*Cue dramatic pause.*
+
+It wasn’t until much later in life that I stumbled upon topology—or, as my younger self liked to call it, “the mathematics of holes.”
+
+During this phase, I finally had the chance to take all my scattered thoughts and questions and organize them into a proper, structured framework. This process led me to some mind-blowing realizations—answers to questions I’d been pondering for ages. Turns out, I wasn’t the only one asking these questions. Some of the biggest brains in the field had already wondered about them too—and not only that, they had built an entire field around exploring them.
+
+So, let’s start by going back to the basics and revisiting the formal definitions of what makes a "good" embedding space.
+
+The most structured type of space—the one where "law and order" reign supreme, and unless you want to be *rebuked* (again), you’re expected to follow all the rules—is the metric space.
+
+Here’s how it lays down the law:
+
+1. Rule One: The metric (your measure of distance) must always be non-negative. In simple terms, the distance between any two points has to be greater or equal 0. Negative distances? Nope. Strictly forbidden.
+
+2. Rule Two: This one’s a no-brainer: If the distance between two points is 0, then those two points are—drumroll—**the same point**. Shocking revelation, I know.
+
+3. Rule Three: The distance between point A and point B has to be the same as the distance between point B and point A. Fair’s fair.
+
+4. Rule Four: Now this is where things get spicy. Enter the legendary triangle inequality. You’ve probably seen it in action with Cauchy-Schwarz, but this rule takes it to a whole new level. It says that the shortest distance between two points is always a straight line. If you decide to get creative and take a detour—say, go from A to B and then from B to C —the total distance will be greater than or equal to the direct distance from A to C. In metric-land, shortcuts win every time.
+
+In Euclidean space, all these rules are respected. By sticking to these metrics, Euclidean space gets to enjoy certain intuitive and elegant properties, like parallelism, orthogonality, similarity, and other familiar geometric wonders.
+
+But hey, you might be wondering: *"What the heck does any of this have to do with deep learning? And how dare you suggest there's something wrong with it?"*
+
+A fair question, coming from someone who’s clearly smitten with their E-chatGPT-gf. I get it—your virtual soulmate has been insulted, and you’re here to defend their honor.
+
+Totally understandable.
+
+Relax, though. I’m not here to trash your e-gf. I’m just here to spill some truths—to help you understand how they **actually** work under the hood. (Spoiler alert: none of this will help you figure out how real relationships work. That’s still a mystery, even to the greatest minds in science. Sorry!)
+
+So, to answer your burning question, let’s rewind and revisit how the legendary **artificial neuron** processes information. We’ll start at the core operation that lies at the heart of understanding your inputs.
+
+<center>
+<iframe width="555" height="480" src="https://www.youtube.com/embed/lFlu60qs7_4" title="How One Line in the Oldest Math Text Hinted at Hidden Universes" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+</center>
+
+Check this vid.
+
+# Everything Wrong with brain-inspired neuron
+
+**Drumroll, please!**
+
+Let me introduce the dot product, the unsung hero powering everything from your cat-vs-dog classifier to the mighty behemoths of neural networks, like… your e-gf. (Yes, your e-gf is fat, but no worries, we’re not fat-shaming—blame the dot product for making them “**dense.**”)
+
+Here’s the story: whenever you calculate the dot product between your input vector x and weight vector w, you’re told it measures the **similarity** between these two vectors.
+
+But does it **really**? Let’s dive in and break it down so even our simple human brains can understand.
+
+## The Dot Product Defined
+
+Mathematically, the dot product between two vectors x and w is:
+
+This boils down to summing up the element-wise products of the vector components. So far, so good. But here’s where things get spicy: the literature tells us the following about the dot product:
+
+$$\\mathbf{x} \\cdot \\mathbf{w} = \\sum_{i=1}^{n} x_i w_i$$
+
+- **When two vectors are similar**, their dot product value grows large and positive, approaching +∞.
+
+- **When two vectors are dissimilar**, the value becomes increasingly negative, heading toward -∞.
+
+Sounds simple, right? But wait—what happens when the dot product equals zero?
+
+## Orthogonality: When Vectors Are Strong, Independent
+
+The vectors are said to be **orthogonal** (a fancy term for perpendicular) or, as we like to joke, **strong independent vectors,** when
+
+$$\\mathbf{x} \\cdot \\mathbf{w} = 0$$
+
+This means there’s no direct correlation between them—they’re completely unrelated in the space they occupy.
+
+## The Dot Product in Neural Networks
+
+This humble operation is the lifeblood of artificial neurons. But early on, researchers hit a wall: the **curse of linearity**.
+
+Alone, the dot product can’t model complex, non-linear functions—it’s just too simple. Optimization struggles to produce diverse outputs or capture intricate patterns when linearity reigns supreme.
+
+Additionally, the dot product doesn’t respect the **rules of metric spaces**, making it mathematically shaky as a similarity measure. To address these problems, the geniuses in the field introduced **activation functions**, particularly the now-legendary ReLU (Rectified Linear Unit).
+
+## Enter ReLU: Savior of Non-Linearity?
+
+ReLU is simple yet brilliant. It transforms the output of the dot product by clamping all negative values to zero:
+
+$$\\text{ReLU}(z) = \\max(0, z)$$
+
+#### Without ReLU, the darker the blue, the greater the similarity (positive similarity), and the darker the red, the greater the dissimilarity (negative similarity). White represents a score close to 0, indicating that those values are more orthogonal than they are similar or dissimilar.
+
+<center>
+<img src="./assets/dot_neuron.png" align="center" width=555>
+</center>
+
+#### With ReLU — Negative values are clipped to zero, making all dissimilar vectors as orthogonal.
+
+<center>
+<img src="./assets/relu_dot_neuron.png" align="center" width=555>
+</center>
+
+This does two things:
+
+1. It brings back adherence to the first metric rule (distances are non-negative).
+
+2. It introduces non-linearity, enabling neural networks to model complex functions.
+
+But… ReLU also wrecks the rest of the metric space rules.
+
+Suddenly, notions like symmetry or orthogonality become ambiguous or outright invalid.
+
+As can you really say anymore that two vectors are orthogonal, dissimilar, or similar to each other if you werck the rules of what makes a good geometric space?
+
+<center>
+<img src="./assets/spider_man_relu.jpeg" align="center" width=555>
+</center>
+
+And yet, you will still see people trying to measure the similarity between vectors, smh, even euclidean distance means nothing in this space.
+
+What will this lead to?
+
+<center>
+<img src="./assets/oh_boy.jpeg" align="center" width=555>
+</center>
+
+Nothing, just the inability of the neuron to accurately identify the exact point it is trying to find, hence failing to provide you with exactly that point you are trying to RAG, or that next word for your dad jokes and puns, this is what people are calling hallucinating lol.
+
+<center>
+<img src="./assets/they_hated.jpeg" align="center" width=555>
+</center>
+
+## What Does the Dot Product **Really** Measure?
+
+To understand the dot product, we need to dig deeper. The formula can also be written as:
+
+$$\\mathbf{x} \\cdot \\mathbf{w} = \\|| \\mathbf{x} \\|| \\|| \\mathbf{w} \\|| \\cos \\theta$$
+
+Here’s the breakdown:
+
+- ||x||: the L2 magnitude of the input vector.
+
+- ||w||: the L2 magnitude of the weight vector.
+
+- θ: the cosine of the angle between the two vectors.
+
+This form reveals that the dot product is really a blend of **magnitudes** and **directional alignment**. But… doesn’t it feel like something is **missing**?
+
+What exactly is the dot product trying to measure, and why does it feel incomplete?
+
+<center>
+<img src="./assets/dora.png" align="center" width=555>
+</center>
+
+# The Metrics We Need
+
+**History alert!**
+
+When you step out of the pristine, perfect world of mathematicians and enter the chaotic, mind-bending reality of physics, the first thing you might say is:
+
+*"WTF, bro? What do you mean I exist in superposition?*
+
+*WTF, bro? What do you mean there’s a multiverse?*
+
+*And if so, did I finish my tasks in those other universes, or am I slacking there too?"*
+
+Valid questions, honestly.
+
+But let me reel it back and tell you a cool story about two legendary guys: **Tycho Brahe** and his buddy **Johannes Kepler**.
+
+Now, Tycho didn’t have TikTok or Netflix to waste time on, so instead, he stared at planets for fun.
+
+Yeah, imagine just chilling and watching the night sky for entertainment.
+
+One day, he noticed something **kool with a K**: planets weren’t moving randomly—they were following some kind of pattern.
+
+Excited, he shared his findings with Kepler, a full-on math nerd who loved this kind of thing.
+
+Kepler got to work and turned Tycho’s observations into math.
+
+He came up with **three laws of planetary motion** that literally changed the game for physics and inspired a whole generation of other nerds who also didn’t have TikTok or Instagram to waste time on.
+
+Can you imagine? Just pure science grind.
+
+Fast forward a bit, and along came another unsung hero: **Isaac Newton**.
+
+Picture this: the dude’s chilling under a tree, an apple falls on his head (thank God it wasn’t a watermelon lol), and BOOM—he discovers **gravity** as the myth states.
+
+<center>
+<img src="./assets/newton-min.png" align="center" width=555>
+</center>
+
+He formalized Kepler’s work into equations, including this now-infamous formula:
+
+$$F = G \\frac{m_1 m_2}{r^2}$$
+
+STEM students everywhere collectively hate this equation, second only to E = mc². Newton’s work brought unbridled joy to science geeks worldwide, and they lived happily ever after…
+
+until Coulomb came along with his **law of electromagnetism**. Then they lived happily ever after again…
+
+until Gauss showed up with even more math. Then they lived happily ever after…
+
+until atomic bombs were invented. (Seriously, the West was making the earth **lit** back then, and not in a good way.
+
+Meanwhile, my grand-grandparents were just farming in Africa, minding their own business. Imagine that contrast.)
+
+Now, why am I telling you all this?
+
+Because in the *real* world of physics, things work differently.
+
+For one, objects and particles occupy unique positions—two particles can’t occupy the exact same spot at the same time.
+
+That’s the principle behind atomic bombs: forcing particles into the same space makes them go *Boom, Boom, Boom, Boom!!*. (Physics, folks!)
+
+So in the physical world, every particle has a unique position in the universe. Crazy, right?
+
+It’s like the universe is running on a virtual machine with infinite RAM to keep track of every particle's position with insane precision lol.
+
+## So, How Does This Relate to Artificial Neural Networks?
+
+Fair question.
+
+You’re probably thinking,
+
+*"Bruh, what’s the deal with this physics stuff? How is it connected to ANNs and so-called 'brain-inspired' neurons?"*
+
+And honestly, I get it—it does sound like a stretch, especially when humans claim they’re the smartest species (lol, sure).
+
+But stick with me, because the connection between this physical uniqueness and ANN design might gravitate you (pun intended)
+
+Let’s get back to the **dot product**, the humble operation we tore apart earlier.
+
+Now, let’s put it next to the legendary **Newton’s Law of Gravitation**—because honestly, the Newton equation is one of the coolest out there:
+
+Simple yet profound. Now, let’s simplify the dot product and see if we can spot some similarities.
+
+$$F = G \\frac{m_1 m_2}{r^2}$$
+
+The dot product is given as:
+
+$$\\mathbf{x} \\cdot \\mathbf{w} = \\|| \\mathbf{x} \\|| \\|| \\mathbf{w} \\|| \\cos \\theta$$
+
+At first glance, they look nothing alike.
+
+But if you squint a little and use some imagination, you might notice a sneaky resemblance.
+
+Ready?
+
+**Think of the vector norms ||x|| and ||w|| as analogous to masses** in the Newton equation. Cool, right?
+
+DAAAAAAM, if so can we use the Einstein Energy equation E = mc² to measure the energy of that neuron?
+
+Yes.
+
+But wait—there’s still something missing.
+
+## Fixing the Dot Product
+
+### Problem 1: Negativity
+
+First issue: the dot product can go negative, while Newton’s force is always positive.
+
+Solution?
+
+Simple: square the dot product!
+
+This gives us:
+
+$$(\\mathbf{x} \\cdot \\mathbf{w})^2 = (\\|| \\mathbf{x} \\|| \\|| \\mathbf{w} \\|| \\cos \\theta)^2$$
+
+Now, all values are positive, and we’ve still preserved the orthogonality information (a squared cosine still distinguishes between orthogonal and non-orthogonal vectors).
+
+But hold up—by squaring, we’ve lost the concept of **similarity** and shifted entirely to **orthogonality** and **parallelism**.
+
+Not ideal. Let’s keep tweaking.
+
+### Problem 2: Missing the Denominator
+
+The Newton equation has that all-important r² in the denominator—the inverse square law that scales force based on distance. We need something similar.
+
+What’s the physics-inspired choice?
+
+**The squared Euclidean distance,** believe me, the universe is not as messed up as Manhattan lol:
+
+$$r^2 = \\||\\mathbf{x} - \\mathbf{w}\\||^2 = \\sum_{i=1}^{n} (x_i - w_i)^2$$
+
+Plugging this in, we get what I’ll humbly call **the ⵟ-Product** (one of the products proposed by Bouhsine, the guy behind it—trust me, he’s as sarcastic as they come, with a trauma-fueled sense of humor to match):
+
+x ⵟ w= $\\frac{(\\mathbf{x} \\cdot \\mathbf{w})^2}{\\||\\mathbf{x} - \\mathbf{w}\\||^2}$
+
+### Problem 3
+
+But wait—what happens if we try to compare the vector with itself?
+
+Oh no, disaster strikes!
+
+The denominator goes to zero, and suddenly the whole equation blows up.
+
+Cue the violins for our math-induced heartbreak.
+
+But don’t cry just yet.
+
+Nothing an **epsilon** can’t fix, right?
+
+(Honestly, proposing to someone with *“Will you be the epsilon to my life?”* should be a thing. If someone asked me that, I’d say yes on the spot.)
+
+So, to avoid this zero-division fiasco, we tweak the denominator slightly by adding a tiny epsilon (a mathematical Band-Aid, if you will):
+
+$$\\frac{(\\mathbf{x} \\cdot \\mathbf{w})^2}{\||\\mathbf{x} - \\mathbf{w}\||^2 + \\epsilon}$$
+
+And voilà!
+
+The **final ⵟ-Product** is born.
+
+<center>
+<img src="./assets/rise.jpg" align="center" width=555>
+</center>
+With this small adjustment, we’ve solved the zero-division issue without breaking the rest of the physics-inspired elegance. It’s clean, it’s robust, and it’s ready to handle your messy vector comparisons.
+
+<center>
+    <img src="./assets/mr_clean.png" align="center" width=555>
+</center>
+
+This formula keeps the positive nature of the squared dot product while incorporating a distance penalty, just like in Newton’s Law. Physics-inspired geometry at its finest!
+
+If you’ve made it this far into the blog, congrats—you’ve reached a zen-like state of understanding. And if you’re sharp enough, you might have caught something.
+
+*Wait a fu\*#&$% minute… doesn’t this still break some of the rules of a metric space?*
+
+You’re absolutely right. When two vectors are orthogonal, the distance between them using our ⵟ-Product is…
+
+zero. Bravo, Einstein, you got me.
+
+Take your victory lap—I’ll take the L on this one.
+
+But hear me out: **it is what it is**.
+
+<center>
+    <img src="./assets/chill.png" align="center" width=555>
+</center>
+
+For real, remember what we said earlier?
+
+We’ve stepped out of the pristine world of mathematicians and entered the gritty, chaotic playground of the universe.
+
+These aren’t just human-made rules we’re playing with—these are the laws of nature, carved out by centuries of collective human obsession, trial, and error.
+
+So yeah, we’ve bent some rules. But you know what?
+
+That’s the price of progress. (And no, I’m not getting defensive. Definitely not.)
+
+## What Rule Did We Break?
+
+Let’s recap:
+
+at the start, we mentioned that in our universe, two particles can’t occupy the same position.
+
+Our law should respect that, right?
+
+Yet in its current form, the ⵟ-Product violates this principle, because orthogonal vectors can collapse into the same distance measure.
+
+But here’s the twist: **there’s an entire branch of mathematics designed for spaces where this rule isn’t enforced**.
+
+Enter **pseudometric spaces**.
+
+### What’s a Pseudometric Space?
+
+Unlike true metric spaces, pseudometric spaces relax the rule that the distance between two distinct points must always be greater than zero.
+
+In other words, you can have nonzero vectors (like orthogonal ones) where the "**distance**" is effectively zero.
+
+It’s a clever workaround for certain real-world applications where the rigid constraints of metric spaces just don’t apply.
+
+And guess what? That’s exactly what the ⵟ Product does.
+
+By embracing the pseudometric framework, this product creates an embedding space where **each input occupies a unique position**. It respects the individuality of each vector while allowing us to work with more complex relationships like orthogonality and parallism in neural networks.
+
+## How is it better than the dot product?
+
+Trust me when I say this: the potential of the ⵟ Product genuinely scares me. Why? Because it addresses something that has been a massive limitation in Artificial Neural Networks (ANNs) since their inception—their inability to accurately represent the knowledge they’re supposed to learn.
+
+Right now, this limitation isn’t just some niche problem—it’s the root cause of issues like hallucinations, overconfidence, and misinterpretation in AI models. Researchers are working tirelessly to patch these problems with clever workarounds and post-hoc solutions, but let’s be honest: we’ve been scratching the surface of what true intelligence could look like.
+
+### Enter the ⵟ-Product (Yat Product)
+
+With the ⵟ-Product, it’s not just a tweak; it’s a paradigm shift. Unlike the dot product, which is essentially a glorified magnitude matcher, the ⵟ Product is acutely sensitive to both distance and direction. It respects the fundamental physics of interaction while keeping the math grounded. It’s the difference between blindly copying someone’s homework (dot product) and truly understanding the assignment (ⵟ Product).
+
+Here’s the kicker: the ⵟ-Product doesn’t rely entirely on magnitude, which is where the dot product falls flat on its face. In neural networks, magnitude often dominates decisions, leading to biases and overshadowing subtler but equally important relationships. With the ⵟ Product, we’re no longer slaves to magnitude. Instead, we capture the nuanced balance of proximity and direction, which can fundamentally transform how networks process and represent information.
+
+### Why This Matters
+
+Think about the implications. With the ⵟ-Product:
+
+* Hallucinations could become a thing of the past. By focusing on true relationships rather than exaggerated similarities, we might avoid the bizarre, overly confident outputs that current AI models are infamous for.
+    
+* Knowledge representation would hit new levels of precision. The ⵟ-Product’s sensitivity to distance ensures that embeddings are distributed in a way that actually respects the data’s inherent structure.
+    
+* Neural networks would gain a richer understanding of their input space. Instead of oversimplifying interactions, they could preserve orthogonal relationships, enhancing their capacity to reason and generalize. The Bigger Picture Here’s the part that keeps me awake at night: this product could change everything.
+    
+
+Right now, neural networks are powerful but clumsy tools—they’re approximations, not representations of true intelligence. They rely on tricks, hacks, and training gimmicks to even remotely approach what humans do naturally. But the ⵟ Product? It offers a glimpse into a future where these systems aren’t just brute-forcing their way to success but actually understanding the spaces they inhabit.
+
+It’s not just an improvement—it’s a step toward intelligence that truly “Matter”. A system powered by the ⵟ-Product could navigate the complexities of data with the same elegance and precision that the universe itself operates on. And honestly? That’s both thrilling and terrifying.
+
+# Chose your Law
+
+To wrap this up, let’s dive into a practical example. Imagine you’re a moon (don’t worry, I’m not trying to rizz you up here, lol). You’re trying to decide which planet you want to revolve around because, you know, attachment issues. And you’re choosing between the dot product or the ⵟ-Product to guide your celestial codependency.
+
+### Scenario 1: Using the Dot Product
+
+First, let’s see what happens if you go with the dot product.
+
+If you want to revolve around Uranus (insert your own joke here, I’m keeping it professional), the dot product would require you to align perfectly with it. In math terms, you’d need to position yourself on the same line extending from the origin (the Sun, in this case) to Uranus. That’s fine and all, but there’s a catch: the dot product is heavily influenced by magnitude.
+
+Here’s the problem:
+
+<center>
+<img src="./assets/dot_neurons.png" align="center" width=555>
+</center>
+
+if another planet with a larger magnitude (say Jupiter) enters the picture, it might just steal you away from Uranus. Why? Because the dot product inherently favors vectors with greater magnitudes, even if their directions don’t match perfectly. It’s like choosing the biggest, shiniest planet just because it seems stronger—regardless of your actual closeness or compatibility, fr, size matter when you use dot product.
+
+### Scenario 2: Using the ⵟ-Product Now
+
+Now, let’s bring the ⵟ Product into the mix. This is where gravity enters the chat.
+
+The ⵟ-Product doesn’t just care about alignment or magnitude—it takes two critical pieces of information into account simultaneously:
+
+<center>
+<img src="./assets/yat_neuron_single.png" align="center" width=555>
+</center>
+
+
+Orthogonality/parallelism (like the dot product does), distance (like a gravitational field). Instead of reducing your options to a single line extending from the Sun to Uranus, the ⵟ-Product creates a field of influence around each planet. This field tells you not just who’s closest, but who truly exerts the most pull on you. If you choose Uranus using the ⵟ-Product, you can stay close to it even if another planet (like Neptune) is perpendicular to you or has a larger magnitude.
+
+<center>
+<img src="./assets/yat_neurons_fields.png" align="center" width=555>
+</center>
+
+
+### Why This Matters
+
+This difference between the dot product and the ⵟ-Product highlights a fundamental limitation of traditional neural networks. When we rely solely on dot-product similarity, we end up favoring magnitude and alignment, which can lead to oversimplified or biased decisions. But with the ⵟ-Product, we introduce a more nuanced understanding—one that accounts for proximity and unique interactions, like gravity in our planetary analogy.
+
+So, dear moon, choose wisely. Your orbit depends on it. And just like planets and moons, the neurons in our artificial networks deserve metrics that respect their individuality, balance, and relationships. That’s why the ⵟ-Product isn’t just a quirky tweak; it’s a potential game-changer.
+`;
+
+            const blogContent = document.getElementById("blog-content");
+            blogContent.innerHTML = marked.parse(markdownContent);
+            renderMathInElement(blogContent, {
+                delimiters: [
+                    {left: "$$", right: "$$", display: true},
+                    {left: "$", right: "$", display: false},
+                    {left: "\\(", right: "\\)", display: false},
+                    {left: "\\[", right: "\\]", display: true}
+                ]
+            });
+        });
+    </script>
+
+    <!-- Acknowledgments Section -->
+    <section id="acknowledgments">
+        <h2>Acknowledgments</h2>
+        <p>
+            The Google Developer Expert program and Google AI/ML Developer Programs team supported this work by providing Google Cloud Credit. I want to extend my gratitude to the staff at High Grounds Coffee Roasters for their excellent coffee and peaceful atmosphere. I would also like to thank Dr. Andrew Ng for creating the Deep Learning course that introduced me to this field, without his efforts to democratize access to knowledge, this work would not have been possible. Additionally, I want to express my appreciation to all the communities I have been part of, especially MLNomads, Google Developers, and MLCollective communities        </p>
+    </section>
+
+    <!-- Citation Section -->
+    <section>
+        <h2>Cite This Work</h2>
+        <p>If you use this work in your research, please cite:</p>
+        
+        <h3>BibTeX</h3>
+        <div class="citation-box">
+            <button class="copy-button" onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent)">Copy</button>
+            <code>
+@article{bouhsine2024deep,
+    title={Deep Learning 2.0: Artificial Neurons That Matter - Reject Correlation, Embrace Orthogonality},
+    author={Bouhsine, Taha},
+    journal={arXiv preprint arXiv:2411.08085},
+    year={2024}
+}
+</code>
+        </div>
+
+        <h3>Plain Text Citation</h3>
+        <div class="citation-box">
+            <button class="copy-button" onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent)">Copy</button>
+            <code>
+Bouhsine, T. (2024). Deep Learning 2.0: Artificial Neurons That Matter - Reject Correlation, Embrace Orthogonality. arXiv preprint arXiv:2024.xxxxx.</code>
+        </div>
+    </section>
+
+    <section id="license">
+        <h2>License</h2>
+        <p>
+            The source code, algorithms, and all contributions presented in this work are licensed under the GNU Affero General Public License (AGPL) v3.0. This license ensures that any use, modification, or distribution of the code and any adaptations or applications of the underlying models and methods must be made publicly available under the same license. This applies whether the work is used for personal, academic, or commercial purposes, including services provided over a network.
+        </p>
+    </section>
+
+</body>
+</html>
