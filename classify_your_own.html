@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NNMap and CYOD: Classify your Own Dataset </title>
     <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -211,6 +213,14 @@
         <p><strong>Sigmoid:</strong></p>
         <p>\[
         \text{sigmoid}(x) = \frac{1}{1 + e^{-x}}
+        \]</p>
+        <p><strong>xmoid:</strong></p>
+        <p>\[
+        \text{xmoid}(x) = \frac{1}{1 + x}
+        \]</p>
+        <p><strong>logmoid:</strong></p>
+        <p>\[
+        \text{logmoid}(x) = \frac{1}{1 + log(1+x)}
         \]</p>
         <p><strong>ReLU:</strong></p>
         <p>\[
