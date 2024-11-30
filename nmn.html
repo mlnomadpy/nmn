@@ -329,13 +329,13 @@ $$\\text{ReLU}(z) = \\max(0, z)$$
 #### Without ReLU, the darker the blue, the greater the similarity (positive similarity), and the darker the red, the greater the dissimilarity (negative similarity). White represents a score close to 0, indicating that those values are more orthogonal than they are similar or dissimilar.
 
 <center>
-<img src="./assets/dot_neuron.png" align="center" width=555>
+<img src="assets/dot_neuron.png" align="center" width=555>
 </center>
 
 #### With ReLU — Negative values are clipped to zero, making all dissimilar vectors as orthogonal.
 
 <center>
-<img src="./assets/relu_dot_neuron.png" align="center" width=555>
+<img src="assets/relu_dot_neuron.png" align="center" width=555>
 </center>
 
 This does two things:
@@ -351,7 +351,7 @@ Suddenly, notions like symmetry or orthogonality become ambiguous or outright in
 As can you really say anymore that two vectors are orthogonal, dissimilar, or similar to each other if you werck the rules of what makes a good geometric space?
 
 <center>
-<img src="./assets/spider_man_relu.jpeg" align="center" width=555>
+<img src="assets/spider_man_relu.jpeg" align="center" width=555>
 </center>
 
 And yet, you will still see people trying to measure the similarity between vectors, smh, even euclidean distance means nothing in this space.
@@ -359,13 +359,13 @@ And yet, you will still see people trying to measure the similarity between vect
 What will this lead to?
 
 <center>
-<img src="./assets/oh_boy.jpeg" align="center" width=555>
+<img src="assets/oh_boy.jpeg" align="center" width=555>
 </center>
 
 Nothing, just the inability of the neuron to accurately identify the exact point it is trying to find, hence failing to provide you with exactly that point you are trying to RAG, or that next word for your dad jokes and puns, this is what people are calling hallucinating lol.
 
 <center>
-<img src="./assets/they_hated.jpeg" align="center" width=555>
+<img src="assets/they_hated.jpeg" align="center" width=555>
 </center>
 
 ## What Does the Dot Product **Really** Measure?
@@ -387,7 +387,7 @@ This form reveals that the dot product is really a blend of **magnitudes** and *
 What exactly is the dot product trying to measure, and why does it feel incomplete?
 
 <center>
-<img src="./assets/dora.png" align="center" width=555>
+<img src="assets/dora.png" align="center" width=555>
 </center>
 
 # The Metrics We Need
@@ -425,7 +425,7 @@ Fast forward a bit, and along came another unsung hero: **Isaac Newton**.
 Picture this: the dude’s chilling under a tree, an apple falls on his head (thank God it wasn’t a watermelon lol), and BOOM—he discovers **gravity** as the myth states.
 
 <center>
-<img src="./assets/newton-min.png" align="center" width=555>
+<img src="assets/newton-min.png" align="center" width=555>
 </center>
 
 He formalized Kepler’s work into equations, including this now-infamous formula:
@@ -551,12 +551,12 @@ And voilà!
 The **final ⵟ-Product** is born.
 
 <center>
-<img src="./assets/rise.jpg" align="center" width=555>
+<img src="assets/rise.jpg" align="center" width=555>
 </center>
 With this small adjustment, we’ve solved the zero-division issue without breaking the rest of the physics-inspired elegance. It’s clean, it’s robust, and it’s ready to handle your messy vector comparisons.
 
 <center>
-    <img src="./assets/mr_clean.png" align="center" width=555>
+    <img src="assets/mr_clean.png" align="center" width=555>
 </center>
 
 This formula keeps the positive nature of the squared dot product while incorporating a distance penalty, just like in Newton’s Law. Physics-inspired geometry at its finest!
@@ -574,7 +574,7 @@ Take your victory lap—I’ll take the L on this one.
 But hear me out: **it is what it is**.
 
 <center>
-    <img src="./assets/chill.png" align="center" width=555>
+    <img src="assets/chill.png" align="center" width=555>
 </center>
 
 For real, remember what we said earlier?
@@ -653,7 +653,7 @@ If you want to revolve around Uranus (insert your own joke here, I’m keeping i
 Here’s the problem:
 
 <center>
-<img src="./assets/dot_neurons.png" align="center" width=555>
+<img src="assets/dot_neurons.png" align="center" width=555>
 </center>
 
 if another planet with a larger magnitude (say Jupiter) enters the picture, it might just steal you away from Uranus. Why? Because the dot product inherently favors vectors with greater magnitudes, even if their directions don’t match perfectly. It’s like choosing the biggest, shiniest planet just because it seems stronger—regardless of your actual closeness or compatibility, fr, size matter when you use dot product.
@@ -665,14 +665,14 @@ Now, let’s bring the ⵟ Product into the mix. This is where gravity enters th
 The ⵟ-Product doesn’t just care about alignment or magnitude—it takes two critical pieces of information into account simultaneously:
 
 <center>
-<img src="./assets/yat_neuron_single.png" align="center" width=555>
+<img src="assets/yat_neuron_single.png" align="center" width=555>
 </center>
 
 
 Orthogonality/parallelism (like the dot product does), distance (like a gravitational field). Instead of reducing your options to a single line extending from the Sun to Uranus, the ⵟ-Product creates a field of influence around each planet. This field tells you not just who’s closest, but who truly exerts the most pull on you. If you choose Uranus using the ⵟ-Product, you can stay close to it even if another planet (like Neptune) is perpendicular to you or has a larger magnitude.
 
 <center>
-<img src="./assets/yat_neurons_fields.png" align="center" width=555>
+<img src="assets/yat_neurons_fields.png" align="center" width=555>
 </center>
 
 
