@@ -93,11 +93,13 @@ class YatDense(Module):
 
         # # Element-wise operation
         y = y ** 2 /  (distances + self.epsilon)
-        scale = (jnp.sqrt(self.features) / jnp.log(1 + self.features)) ** alpha
-        y = y * scale
-        # Normalize y
         if bias is not None:
             y += jnp.reshape(bias, (1,) * (y.ndim - 1) + (-1,))
+
+        scale = (jnp.sqrt(self.features) / jnp.log(1 + self.features)) ** alpha
+
+        y = y * scale
+        # Normalize y
         if self.return_weights:
            return y, kernel
         return y
