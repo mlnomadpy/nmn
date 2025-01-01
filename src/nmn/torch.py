@@ -119,13 +119,14 @@ class YatDense(nn.Module):
         # Apply squared Euclidean distance transformation
         y = y ** 2 / (distances + self.epsilon)
 
+        # Add bias if used
+        if self.use_bias:
+            y += self.bias
+            
         # Dynamic scaling
         scale = (math.sqrt(self.out_features) / math.log(1 + self.out_features)) ** self.alpha
         y = y * scale
 
-        # Add bias if used
-        if self.use_bias:
-            y += self.bias
 
         return y
 
