@@ -21,9 +21,9 @@ class YatDense(nn.Module):
         self,
         in_features: int,
         out_features: int,
-        use_bias: bool = True,
+        bias: bool = True,
         dtype: torch.dtype = torch.float32,
-        epsilon: float = 1e-6,
+        epsilon: float = 1e-4, # 1/epsilon is the maximum score per neuron, setting it low increase the precision but the scores explode 
         kernel_init: callable = None,
         bias_init: callable = None,
         alpha_init: callable = None
@@ -33,10 +33,8 @@ class YatDense(nn.Module):
         # Store attributes
         self.in_features = in_features
         self.out_features = out_features
-        self.use_bias = use_bias
         self.dtype = dtype
         self.epsilon = epsilon
-
         # Weight initialization
         if kernel_init is None:
             kernel_init = nn.init.xavier_normal_
@@ -54,7 +52,7 @@ class YatDense(nn.Module):
         ))
 
         # Bias parameter
-        if use_bias:
+        if bias:
             self.bias = nn.Parameter(torch.empty(
                 (out_features,),
                 dtype=dtype
@@ -80,7 +78,7 @@ class YatDense(nn.Module):
         kernel_init(self.weight)
 
         # Bias initialization
-        if self.use_bias:
+        if self.bias is not None:
             if bias_init is None:
                 # Default: uniform initialization
                 fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
@@ -120,7 +118,7 @@ class YatDense(nn.Module):
         y = y ** 2 / (distances + self.epsilon)
 
         # Add bias if used
-        if self.use_bias:
+        if self.bias is not None:
             y += self.bias
             
         # Dynamic scaling
