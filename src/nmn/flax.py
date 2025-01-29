@@ -32,6 +32,7 @@ class YatDense(Module):
     """
     features: int
     use_bias: bool = True
+    use_alpha: bool = True
     dtype: Optional[Any] = None
     param_dtype: Any = jnp.float32
     precision: Any = None
@@ -60,12 +61,16 @@ class YatDense(Module):
             (self.features, jnp.shape(inputs)[-1]),
             self.param_dtype,
         )
-        alpha = self.param(
-            'alpha',
-            self.alpha_init,
-            (1,),  # Single scalar parameter
-            self.param_dtype,
-        )
+        if self.use_alpha:
+            alpha = self.param(
+                'alpha',
+                self.alpha_init,
+                (1,),  # Single scalar parameter
+                self.param_dtype,
+            )
+        else:
+            alpha = None
+
         if self.use_bias:
             bias = self.param(
                 'bias', self.bias_init, (self.features,), self.param_dtype
@@ -73,7 +78,8 @@ class YatDense(Module):
         else:
             bias = None
 
-        inputs, kernel, bias = promote_dtype(inputs, kernel, bias, dtype=self.dtype)
+        inputs, kernel, bias, alpha = promote_dtype(inputs, kernel, bias, alpha, dtype=self.dtype)
+
         # Compute dot product between input and kernel
         if self.dot_general_cls is not None:
           dot_general = self.dot_general_cls()
@@ -96,9 +102,10 @@ class YatDense(Module):
         if bias is not None:
             y += jnp.reshape(bias, (1,) * (y.ndim - 1) + (-1,))
 
-        scale = (jnp.sqrt(self.features) / jnp.log(1 + self.features)) ** alpha
+        if alpha is not None:
+          scale = (jnp.sqrt(self.features) / jnp.log(1 + self.features)) ** alpha
+          y = y * scale
 
-        y = y * scale
         # Normalize y
         if self.return_weights:
            return y, kernel

@@ -22,6 +22,7 @@ class YatDense(nn.Module):
         in_features: int,
         out_features: int,
         bias: bool = True,
+        alpha: bool = True,
         dtype: torch.dtype = torch.float32,
         epsilon: float = 1e-4, # 1/epsilon is the maximum score per neuron, setting it low increase the precision but the scores explode 
         kernel_init: callable = None,
@@ -46,10 +47,13 @@ class YatDense(nn.Module):
         ))
 
         # Alpha scaling parameter
-        self.alpha = nn.Parameter(torch.ones(
-            (1,),
-            dtype=dtype
-        ))
+        if alpha:
+            self.alpha = nn.Parameter(torch.ones(
+                (1,),
+                dtype=dtype
+            ))
+        else:
+            self.register_parameter('alpha', None)
 
         # Bias parameter
         if bias:
@@ -88,10 +92,11 @@ class YatDense(nn.Module):
                 bias_init(self.bias)
 
         # Alpha initialization (default to 1.0)
-        if alpha_init is None:
-            self.alpha.data.fill_(1.0)
-        else:
-            alpha_init(self.alpha)
+        if self.alpha is not None:
+            if alpha_init is None:
+                self.alpha.data.fill_(1.0)
+            else:
+                alpha_init(self.alpha)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -122,8 +127,9 @@ class YatDense(nn.Module):
             y += self.bias
             
         # Dynamic scaling
-        scale = (math.sqrt(self.out_features) / math.log(1 + self.out_features)) ** self.alpha
-        y = y * scale
+        if self.alpha is not None:
+            scale = (math.sqrt(self.out_features) / math.log(1 + self.out_features)) ** self.alpha
+            y = y * scale
 
 
         return y
@@ -134,4 +140,5 @@ class YatDense(nn.Module):
         """
         return (f"in_features={self.in_features}, "
                 f"out_features={self.out_features}, "
-                f"bias={self.use_bias}")
+                f"bias={self.bias}")
+                f"alpha={self.alpha}")
