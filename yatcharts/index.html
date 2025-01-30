@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Vector Products Visualization</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="charts">
+            <div class="chart-container">
+                <h2 class="chart-title">Products Comparison</h2>
+                <div class="svg-container">
+                    <div id="lineChart" class="svg-content"></div>
+                </div>
+            </div>
+            <div class="chart-container">
+                <h2 class="chart-title">Vector Space</h2>
+                <div class="svg-container">
+                    <div id="scatterPlot" class="svg-content"></div>
+                </div>
+            </div>
+        </div>
+        <div class="controls">
+            <div class="control-group">
+                <label for="radiusSlider">Circle Radius:</label>
+                <input 
+                    type="range" 
+                    id="radiusSlider" 
+                    min="10" 
+                    max="300" 
+                    value="100"
+                    step="1"
+                >
+                <span id="radiusValue">100</span>
+            </div>
+        </div>
+        <div id="valuesDisplay" class="values-display">
+            <div class="values-grid">
+                Drag the purple point to explore different vectors
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
