@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Neural Network Comparison</title>
+    <link rel="stylesheet" type="text/css" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script type="module" src="js/main.js"></script>
+    <script type="module" src="js/navigation.js"></script>
+  </head>
+  <body>
+  <body>
+    <nav class="nav">
+      <div class="nav-items">
+        <div class="nav-item active" data-view="single">Single View</div>
+        <div class="nav-item" data-view="comparison">Compare</div>
+      </div>
+      <button class="theme-toggle" aria-label="Toggle Theme">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"></circle>
+          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+        </svg>
+      </button>
+    </nav>
+
+    <div class="container">
+      <!-- Single View -->
+      <div class="view active" id="single-view">
+        <div class="nav-items">
+          <div class="nav-item active" data-neuron="dot">Dot Product</div>
+          <div class="nav-item" data-neuron="yat">ⵟ-Neuron</div>
+          <div class="nav-item" data-neuron="posi">Posi-ⵟ</div>
+        </div>
+        
+        <div class="grid">
+          <div class="neuron-card" id="dot-card">
+            <div class="title">Traditional Dot Product Neuron</div>
+            <div class="plots-container">
+              <div id="dot-plot"></div>
+              <div id="dot-weight-plot"></div>
+            </div>
+            <div class="controls">
+              <div class="input-group">
+                <label>Method:</label>
+                <select class="optimization-method" id="dot-optimization-method">
+                  <option value="gradient">Gradient Descent</option>
+                  <option value="newton">Newton's Method</option>
+                  <option value="momentum">Momentum</option>
+                  <option value="adam">Adam</option>
+                  <option value="rmsprop">RMSprop</option>
+                  <option value="nag">Nesterov Accelerated Gradient</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label>Iterations:</label>
+                <input type="number" id="dot-iterations" value="100" min="10" max="500" step="10" class="iteration-input"/>
+              </div>
+              <div class="input-group">
+                <label>Learning Rate:</label>
+                <input type="number" id="dot-learning-rate" value="0.1" min="0.001" max="1" step="0.001" class="learning-rate-input"/>
+              </div>
+              <button onclick="optimizeDot()">Optimize</button>
+              <button onclick="resetDot()">Reset</button>
+            </div>
+            <div id="dot-loss" class="loss-display">Loss: 0.25</div>
+            <div class="history-plots">
+              <div class="history-plot">
+                <div class="history-title">Loss History</div>
+                <div id="dot-loss-history"></div>
+              </div>
+              <div class="history-plot">
+                <div class="history-title">Accuracy History</div>
+                <div id="dot-accuracy-history"></div>
+              </div>
+              <div class="history-plot">
+                <div class="history-title">Magnitude History</div>
+                <div id="dot-magnitude-history"></div>
+              </div>
+            </div>
+          </div>
+          <div class="neuron-card" id="yat-card">
+            <div class="title">ⵟ-Neuron</div>
+            <div class="plots-container">
+              <div id="yat-plot"></div>
+              <div id="yat-weight-plot"></div>
+            </div>
+            <div class="controls">
+              <div class="input-group">
+                <label>Method:</label>
+                <select class="optimization-method" id="yat-optimization-method">
+                  <option value="gradient">Gradient Descent</option>
+                  <option value="newton">Newton's Method</option>
+                  <option value="momentum">Momentum</option>
+                  <option value="adam">Adam</option>
+                  <option value="rmsprop">RMSprop</option>
+                  <option value="nag">Nesterov Accelerated Gradient</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label>Iterations:</label>
+                <input type="number" id="yat-iterations" value="100" min="10" max="500" step="10" class="iteration-input"/>
+              </div>
+              <div class="input-group">
+                <label>Learning Rate:</label>
+                <input type="number" id="yat-learning-rate" value="0.1" min="0.001" max="1" step="0.001" class="learning-rate-input"/>
+              </div>
+              <button onclick="optimizeYat()">Optimize</button>
+              <button onclick="resetYat()">Reset</button>
+            </div>
+            <div id="yat-loss" class="loss-display">Loss: 0.25</div>
+            <div class="history-plots">
+              <div class="history-plot">
+                <div class="history-title">Loss History</div>
+                <div id="yat-loss-history"></div>
+              </div>
+              <div class="history-plot">
+                <div class="history-title">Accuracy History</div>
+                <div id="yat-accuracy-history"></div>
+              </div>
+              <div class="history-plot">
+                <div class="history-title">Magnitude History</div>
+                <div id="yat-magnitude-history"></div>
+              </div>
+            </div>
+          </div>
+          <div class="neuron-card" id="posi-card">
+            <div class="title">Posi-ⵟ Neuron</div>
+            <div class="plots-container">
+              <div id="posi-plot"></div>
+              <div id="posi-weight-plot"></div>
+            </div>
+            <div class="controls">
+              <div class="input-group">
+                <label>Method:</label>
+                <select class="optimization-method" id="posi-optimization-method">
+                  <option value="gradient">Gradient Descent</option>
+                  <option value="newton">Newton's Method</option>
+                  <option value="momentum">Momentum</option>
+                  <option value="adam">Adam</option>
+                  <option value="rmsprop">RMSprop</option>
+                  <option value="nag">Nesterov Accelerated Gradient</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label>Iterations:</label>
+                <input type="number" id="posi-iterations" value="100" min="10" max="500" step="10" class="iteration-input"/>
+              </div>
+              <div class="input-group">
+                <label>Learning Rate:</label>
+                <input type="number" id="posi-learning-rate" value="0.1" min="0.001" max="1" step="0.001" class="learning-rate-input"/>
+              </div>
+              <button onclick="optimizePosi()">Optimize</button>
+              <button onclick="resetPosi()">Reset</button>
+            </div>
+            <div id="posi-loss" class="loss-display">Loss: 0.25</div>
+            <div class="history-plots">
+              <div class="history-plot">
+                <div class="history-title">Loss History</div>
+                <div id="posi-loss-history"></div>
+              </div>
+              <div class="history-plot">
+                <div class="history-title">Accuracy History</div>
+                <div id="posi-accuracy-history"></div>
+              </div>
+              <div class="history-plot">
+                <div class="history-title">Magnitude History</div>
+                <div id="posi-magnitude-history"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Comparison View -->
+      <div class="view" id="comparison-view">
+        <div class="comparison-controls">
+          <div class="neuron-selector">
+            <label>Compare:</label>
+            <select id="neuron1-select">
+              <option value="dot">Dot Product</option>
+              <option value="yat">ⵟ-Neuron</option>
+              <option value="posi">Posi-ⵟ</option>
+            </select>
+            <label>vs</label>
+            <select id="neuron2-select">
+              <option value="yat">ⵟ-Neuron</option>
+              <option value="dot">Dot Product</option>
+              <option value="posi">Posi-ⵟ</option>
+            </select>
+          </div>
+          <button onclick="runComparison()">Run Comparison</button>
+        </div>
+        
+        <div class="comparison-view">
+          <!-- Neurons will be cloned here for comparison -->
+        </div>
+        
+        <div class="combined-view">
+          <div class="comparison-legend">
+            <div class="legend-item">
+              <div class="legend-color" style="background: #ff4444"></div>
+              <span class="legend-label">Dot Product</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #44ff44"></div>
+              <span class="legend-label">ⵟ-Neuron</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #4444ff"></div>
+              <span class="legend-label">Posi-ⵟ</span>
+            </div>
+          </div>
+
+          <div class="comparison-grid">
+            <div class="decision-boundary-plot">
+              <div class="title">Decision Boundaries</div>
+              <div id="combined-plot"></div>
+            </div>
+            <div class="weights-plot">
+              <div class="title">Weight Trajectories</div>
+              <div id="combined-weight-plot"></div>
+            </div>
+          </div>
+          
+          <div class="neuron-stats">
+            <div class="stat-card">
+              <div class="stat-title">Dot Product Neuron</div>
+              <div id="dot-combined-loss" class="stat-value"></div>
+              <div id="dot-combined-weights" class="stat-value"></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">ⵟ-Neuron</div>
+              <div id="yat-combined-loss" class="stat-value"></div>
+              <div id="yat-combined-weights" class="stat-value"></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">Posi-ⵟ Neuron</div>
+              <div id="posi-combined-loss" class="stat-value"></div>
+              <div id="posi-combined-weights" class="stat-value"></div>
+            </div>
+          </div>
+
+          <div class="combined-controls">
+            <div class="input-group">
+              <label>Method:</label>
+              <select class="optimization-method" id="combined-optimization-method">
+                <option value="gradient">Gradient Descent</option>
+                <option value="newton">Newton's Method</option>
+                <option value="momentum">Momentum</option>
+                <option value="adam">Adam</option>
+                <option value="rmsprop">RMSprop</option>
+                <option value="nag">Nesterov Accelerated Gradient</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label>Learning Rate:</label>
+              <input type="number" id="combined-learning-rate" value="0.1" min="0.001" max="1" step="0.001" class="learning-rate-input"/>
+            </div>
+            <button onclick="optimizeAllNeurons()">Optimize All</button>
+            <button onclick="resetAllNeurons()">Reset All</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      // Remove old click handler
+      // document.querySelector('.theme-toggle').addEventListener('click', toggleTheme);
+      
+      // Use theme controller instead
+      const themeToggle = document.querySelector('.theme-toggle');
+      themeToggle.addEventListener('click', () => {
+        window.themeController.toggleTheme();
+      });
+    </script>
+  </body>
+</html>
