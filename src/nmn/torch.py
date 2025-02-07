@@ -140,5 +140,5 @@ class YatDense(nn.Module):
         """
         return (f"in_features={self.in_features}, "
                 f"out_features={self.out_features}, "
-                f"bias={self.bias}")
+                f"bias={self.bias}, "
                 f"alpha={self.alpha}")
