@@ -17,7 +17,7 @@ from flax import linen as nn
 from flax.linen.initializers import zeros_init, lecun_normal
 from typing import Any, Optional
 
-class YatDense(Module):
+class YatNMN(Module):
     """A custom transformation applied over the last dimension of the input using squared Euclidean distance.
 
     Attributes:
