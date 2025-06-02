@@ -6,7 +6,7 @@ from keras.src import ops
 import math
 
 @keras_export("keras.layers.YatDense")
-class YatDense(Layer):
+class YatNMN(Layer):
     """A YAT densely-connected NN layer.
 
     This layer implements the operation:
