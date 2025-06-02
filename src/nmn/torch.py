@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
-class YatDense(nn.Module):
+class YatNMN(nn.Module):
     """
     A PyTorch implementation of the Yat neuron with squared Euclidean distance transformation.
 
