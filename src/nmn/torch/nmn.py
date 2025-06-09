@@ -10,7 +10,8 @@ class YatNMN(nn.Module):
     Attributes:
         in_features (int): Size of each input sample
         out_features (int): Size of each output sample
-        use_bias (bool): Whether to add a bias to the output
+        bias (bool): Whether to add a bias to the output
+        alpha (bool): Whether to multiply with alpha
         dtype (torch.dtype): Data type for computation
         epsilon (float): Small constant to avoid division by zero
         kernel_init (callable): Initializer for the weight matrix
