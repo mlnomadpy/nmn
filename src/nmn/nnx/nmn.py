@@ -109,7 +109,7 @@ class YatNMN(Module):
     self.alpha: nnx.Param[jax.Array] | None
     if use_alpha:
       alpha_key = rngs.params()
-      self.alpha = nnx.Param(alpha_init(bias_key, (1,), param_dtype))
+      self.alpha = nnx.Param(alpha_init(alpha_key, (1,), param_dtype))
     else:
       self.alpha = None
 
