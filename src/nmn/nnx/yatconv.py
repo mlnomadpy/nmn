@@ -24,6 +24,7 @@ Array = jax.Array
 # Default initializers
 default_kernel_init = initializers.lecun_normal()
 default_bias_init = initializers.zeros_init()
+default_alpha_init = initializers.ones_init()
 
 # Helper functions
 def canonicalize_padding(padding: PaddingLike, rank: int) -> LaxPadding:
@@ -138,13 +139,17 @@ class YatConv(Module):
     input_dilation: tp.Union[None, int, tp.Sequence[int]] = 1,
     kernel_dilation: tp.Union[None, int, tp.Sequence[int]] = 1,
     feature_group_count: int = 1,
+    
     use_bias: bool = True,
+    use_alpha: bool = True,
+    kernel_init: Initializer = default_kernel_init,
+    bias_init: Initializer = default_bias_init,
+    alpha_init: Initializer = default_alpha_init,
+
     mask: tp.Optional[Array] = None,
     dtype: tp.Optional[Dtype] = None,
     param_dtype: Dtype = jnp.float32,
     precision: PrecisionLike = None,
-    kernel_init: Initializer = default_kernel_init,
-    bias_init: Initializer = default_bias_init,
     conv_general_dilated: ConvGeneralDilatedT = lax.conv_general_dilated,
     promote_dtype: PromoteDtypeFn = dtypes.promote_dtype,
     epsilon: float = 1e-5,
@@ -179,6 +184,8 @@ class YatConv(Module):
     self.kernel_dilation = kernel_dilation
     self.feature_group_count = feature_group_count
     self.use_bias = use_bias
+    self.use_alpha = use_alpha
+
     self.mask = mask 
     self.dtype = dtype
     self.param_dtype = param_dtype
@@ -188,6 +195,13 @@ class YatConv(Module):
     self.conv_general_dilated = conv_general_dilated
     self.promote_dtype = promote_dtype
     self.epsilon = epsilon
+
+    if use_alpha:
+      alpha_key = rngs.params()
+      self.alpha = nnx.Param(alpha_init(alpha_key, (1,), param_dtype))
+    else:
+      self.alpha = None
+
 
   def __call__(self, inputs: Array) -> Array:
     assert isinstance(self.kernel_size, tuple)
@@ -257,6 +271,7 @@ class YatConv(Module):
       kernel_val *= current_mask
 
     bias_val = self.bias.value if self.bias is not None else None
+    alpha = self.alpha.value if self.alpha is not None else None
 
     inputs_promoted, kernel_promoted, bias_promoted = self.promote_dtype(
       (inputs_flat, kernel_val, bias_val), dtype=self.dtype
@@ -313,6 +328,11 @@ class YatConv(Module):
     if self.use_bias and bias_val is not None:
       bias_reshape_dims = (1,) * (y.ndim - 1) + (-1,)
       y += jnp.reshape(bias_val, bias_reshape_dims)
+
+    assert self.use_alpha == (alpha is not None)
+    if alpha is not None:
+      scale = (jnp.sqrt(self.out_features) / jnp.log(1 + self.out_features)) ** alpha
+      y = y * scale
 
     if num_batch_dimensions != 1:
       output_shape = input_batch_shape + y.shape[1:]
