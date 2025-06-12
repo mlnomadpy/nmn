@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+      body {
+        margin: 0;
+        font-family: -apple-system, system-ui, sans-serif;
+        background: #f0f2f5;
+      }
+      .container {
+        display: flex;
+        padding: 40px;
+        gap: 30px;
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+      .controls {
+        width: 320px;
+        padding: 24px;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      }
+      .visualization {
+        flex-grow: 1;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        padding: 24px;
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .control-group {
+        margin-bottom: 24px;
+        padding-bottom: 24px;
+        border-bottom: 1px solid #eee;
+      }
+      .control-group h4 {
+        margin: 0 0 16px 0;
+        color: #1a1a1a;
+        font-size: 16px;
+      }
+      input[type="range"] {
+        width: 100%;
+        margin: 12px 0;
+        accent-color: #4a90e2;
+      }
+      select {
+        width: 100%;
+        padding: 8px;
+        border-radius: 6px;
+        border: 1px solid #ddd;
+        margin: 8px 0;
+      }
+      .metric {
+        display: flex;
+        justify-content: space-between;
+        margin: 8px 0;
+        padding: 8px;
+        background: #f8f9fa;
+        border-radius: 6px;
+      }
+      .vector-label {
+        font-size: 12px;
+        fill: #666;
+        font-weight: 500;
+      }
+      .legend {
+        display: flex;
+        gap: 20px;
+        margin: 16px 0;
+        justify-content: center;
+        background: #f8f9fa;
+        padding: 12px;
+        border-radius: 8px;
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+      }
+      .legend-color {
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+      }
+      .grid line {
+        stroke: #e0e0e0;
+        shape-rendering: crispEdges;
+      }
+      .axis line {
+        stroke: #ccc;
+      }
+      .axis text {
+        fill: #666;
+        font-size: 12px;
+      }
+      .axis path {
+        stroke: #ccc;
+      }
+      .angle-arc {
+        fill: rgba(0, 0, 0, 0.05);
+        stroke: rgba(0, 0, 0, 0.2);
+      }
+      .tooltip {
+        position: absolute;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        pointer-events: none;
+      }
+      .vector {
+        transition: stroke-width 0.2s;
+      }
+      .vector:hover {
+        stroke-width: 3;
+      }
+      .color-legend {
+        width: 30px;
+        height: 200px;
+        background: linear-gradient(to bottom, #4575b4, #ffffbf, #d73027);
+        border-radius: 4px;
+      }
+      .legend-label {
+        font-size: 12px;
+        color: #666;
+      }
+      .legend-max {
+        margin-bottom: 5px;
+      }
+      .legend-min {
+        margin-top: 5px;
+      }
+      .legend-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+      .heatmap-container {
+        flex-grow: 1;
+        position: relative;
+      }
+      .metric-line {
+        transition: all 0.2s ease;
+        stroke-opacity: 0.7;
+      }
+      .metric-line:hover {
+        stroke-opacity: 1;
+        stroke-width: 3;
+      }
+      .metric-line.dimmed {
+        stroke-opacity: 0.2;
+      }
+      .plot-tooltip {
+        position: absolute;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        pointer-events: none;
+        z-index: 100;
+      }
+      .plot-legend .legend-item {
+        cursor: pointer;
+        opacity: 0.7;
+        transition: opacity 0.2s;
+      }
+      .plot-legend .legend-item:hover {
+        opacity: 1;
+      }
+      .plot-legend text {
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .axis-label {
+        font-size: 12px;
+        font-weight: 500;
+        fill: #666;
+      }
+      .plot-title {
+        font-size: 14px;
+        font-weight: 600;
+        fill: #333;
+      }
+      .grid line {
+        stroke: #e0e0e0;
+        stroke-dasharray: 2,2;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="controls">
+        <div class="control-group">
+          <h4>Vector 1</h4>
+          <div>Angle: <span id="v1-angle">0°</span></div>
+          <input
+            type="range"
+            id="v1-angle-slider"
+            min="0"
+            max="360"
+            value="0"
+          />
+          <div>Magnitude: <span id="v1-mag">1.0</span></div>
+          <input
+            type="range"
+            id="v1-mag-slider"
+            min="0"
+            max="100"
+            value="100"
+          />
+        </div>
+
+        <div class="control-group">
+          <h4>Vector 2</h4>
+          <div>Angle: <span id="v2-angle">45°</span></div>
+          <input
+            type="range"
+            id="v2-angle-slider"
+            min="0"
+            max="360"
+            value="45"
+          />
+          <div>Magnitude: <span id="v2-mag">1.0</span></div>
+          <input
+            type="range"
+            id="v2-mag-slider"
+            min="0"
+            max="100"
+            value="100"
+          />
+        </div>
+
+        <div class="control-group">
+          <h4>Display Options</h4>
+          <div>
+            <label>Heatmap Metric:</label>
+            <select id="heatmap-metric">
+              <option value="dot">Dot Product</option>
+              <option value="euclidean">Euclidean Distance</option>
+              <option value="yat">Log(1+Yat)</option>
+            </select>
+          </div>
+          <div>
+            <label><input type="checkbox" id="show-grid" checked /> Grid</label>
+          </div>
+          <div>
+            <label
+              ><input type="checkbox" id="show-components" checked />
+              Components</label
+            >
+          </div>
+        </div>
+
+        <div class="control-group">
+          <h4>Metrics</h4>
+          <div class="metric">
+            <span>Dot Product:</span>
+            <span id="dot-product">0.0</span>
+          </div>
+          <div class="metric">
+            <span>Euclidean:</span>
+            <span id="euclidean">0.0</span>
+          </div>
+          <div class="metric">
+            <span>Log(1+Yat):</span>
+            <span id="yat">0.0</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="visualization">
+        <div class="heatmap-container" style="width: 100%">
+          <svg id="vector-space"></svg>
+          <div class="legend">
+            <div class="legend-item">
+              <div class="legend-color" style="background: blue"></div>
+              <span>Vector 1</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: red"></div>
+              <span>Vector 2</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: green"></div>
+              <span>Components</span>
+            </div>
+          </div>
+          <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
+            <div class="legend-container">
+              <div class="color-legend"></div>
+              <div class="legend-label legend-max" id="legend-max">1.0</div>
+              <div class="legend-label legend-min" id="legend-min">-1.0</div>
+            </div>
+          </div>
+        </div>
+        <div style="width: 100%; margin-top: 30px;">
+          <svg id="metrics-plot"></svg>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const width = 600;
+      const height = 600;
+      const margin = 50;
+      const radius = (Math.min(width, height) - 2 * margin) / 2;
+
+      const svg = d3
+        .select("#vector-space")
+        .attr("width", width)
+        .attr("height", height);
+
+      // Arrow markers
+      const defs = svg.append("defs");
+      defs
+        .append("marker")
+        .attr("id", "arrow")
+        .attr("viewBox", "0 -5 10 10")
+        .attr("refX", 8)
+        .attr("refY", 0)
+        .attr("markerWidth", 6)
+        .attr("markerHeight", 6)
+        .attr("orient", "auto")
+        .append("path")
+        .attr("d", "M0,-5L10,0L0,5")
+        .attr("fill", "black");
+
+      const g = svg
+        .append("g")
+        .attr("transform", `translate(${width / 2},${height / 2})`);
+
+      // Create groups in correct order
+      const heatmapGroup = g.append("g").attr("class", "heatmap");
+      const gridGroup = g.append("g").attr("class", "grid");
+      const componentsGroup = g.append("g").attr("class", "components");
+      const vectorGroup = g.append("g").attr("class", "vectors");
+
+      // Background circle
+      g.append("circle")
+        .attr("r", radius)
+        .attr("fill", "none")
+        .attr("stroke", "#ddd")
+        .attr("stroke-width", 1);
+
+      // Grid setup
+      function setupGrid() {
+        // Radial lines
+        const angles = d3.range(0, 360, 30);
+        gridGroup
+          .selectAll("line.radial")
+          .data(angles)
+          .join("line")
+          .attr("class", "radial")
+          .attr("x1", 0)
+          .attr("y1", 0)
+          .attr("x2", (d) => radius * Math.cos((d * Math.PI) / 180))
+          .attr("y2", (d) => radius * Math.sin((d * Math.PI) / 180))
+          .attr("stroke", "#eee")
+          .attr("stroke-width", 1);
+
+        // Concentric circles
+        const circles = d3.range(radius / 4, radius, radius / 4);
+        gridGroup
+          .selectAll("circle.concentric")
+          .data(circles)
+          .join("circle")
+          .attr("class", "concentric")
+          .attr("r", (d) => d)
+          .attr("fill", "none")
+          .attr("stroke", "#eee")
+          .attr("stroke-width", 1);
+      }
+
+      // Axes
+      g.append("line")
+        .attr("class", "axis")
+        .attr("x1", -radius)
+        .attr("x2", radius)
+        .attr("y1", 0)
+        .attr("y2", 0)
+        .attr("stroke", "#aaa");
+
+      g.append("line")
+        .attr("class", "axis")
+        .attr("x1", 0)
+        .attr("x2", 0)
+        .attr("y1", -radius)
+        .attr("y2", radius)
+        .attr("stroke", "#aaa");
+
+      // Vectors
+      const v1 = vectorGroup
+        .append("line")
+        .attr("class", "vector")
+        .attr("stroke", "blue")
+        .attr("stroke-width", 2)
+        .attr("marker-end", "url(#arrow)");
+
+      const v2 = vectorGroup
+        .append("line")
+        .attr("class", "vector")
+        .attr("stroke", "red")
+        .attr("stroke-width", 2)
+        .attr("marker-end", "url(#arrow)");
+
+      const angleArc = vectorGroup
+        .append("path")
+        .attr("class", "angle-arc")
+        .attr("fill", "none")
+        .attr("stroke", "#aaa")
+        .attr("stroke-dasharray", "3,3");
+
+      // Vector labels
+      const v1Label = vectorGroup
+        .append("text")
+        .attr("class", "vector-label")
+        .attr("text-anchor", "middle");
+
+      const v2Label = vectorGroup
+        .append("text")
+        .attr("class", "vector-label")
+        .attr("text-anchor", "middle");
+
+      // Draggable endpoints
+      const v1End = vectorGroup
+        .append("circle")
+        .attr("r", 6)
+        .attr("fill", "blue")
+        .attr("cursor", "pointer")
+        .call(d3.drag().on("drag", dragV1));
+
+      const v2End = vectorGroup
+        .append("circle")
+        .attr("r", 6)
+        .attr("fill", "red")
+        .attr("cursor", "pointer")
+        .call(d3.drag().on("drag", dragV2));
+
+      // Plot setup
+      const plotHeight = 300; // Increased height
+      const plotWidth = width;
+      const plotSvg = d3
+        .select("#metrics-plot")
+        .attr("width", plotWidth)
+        .attr("height", plotHeight);
+
+      // Adjust margins for better visibility
+      const plotMargin = {
+        top: 40,
+        right: 100,
+        bottom: 50,
+        left: 60
+      };
+
+      const x = d3
+        .scaleLinear()
+        .domain([0, 360])
+        .range([plotMargin.left, plotWidth - plotMargin.right]);
+
+      const y = d3
+        .scaleLinear()
+        .domain([-1, 1])
+        .range([plotHeight - plotMargin.bottom, plotMargin.top]);
+
+      // Plot axes
+      plotSvg
+        .append("g")
+        .attr("class", "x-axis")
+        .attr("transform", `translate(0,${plotHeight - plotMargin.bottom})`)
+        .call(d3.axisBottom(x).ticks(12));
+
+      plotSvg
+        .append("g")
+        .attr("class", "y-axis")
+        .attr("transform", `translate(${plotMargin.left},0)`)
+        .call(d3.axisLeft(y));
+
+      // Add axis labels
+      plotSvg.append("text")
+        .attr("x", plotWidth / 2)
+        .attr("y", plotHeight - 10)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "12px")
+        .text("Angle (degrees)");
+
+      plotSvg.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -(plotHeight / 2))
+        .attr("y", plotMargin.left / 2)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "12px")
+        .text("Value");
+
+      // Plot lines with improved styling
+      const plotTooltip = d3.select("body")
+        .append("div")
+        .attr("class", "plot-tooltip")
+        .style("opacity", 0);
+
+      // Add grid lines
+      plotSvg.append("g")
+        .attr("class", "grid")
+        .attr("transform", `translate(0,${plotHeight - plotMargin.bottom})`)
+        .call(d3.axisBottom(x)
+          .tickSize(-plotHeight + 2*plotMargin.bottom)
+          .tickFormat("")
+        );
+
+      plotSvg.append("g")
+        .attr("class", "grid")
+        .attr("transform", `translate(${plotMargin.left},0)`)
+        .call(d3.axisLeft(y)
+          .tickSize(-plotWidth + 2*plotMargin.left)
+          .tickFormat("")
+        );
+
+      // Enhanced line generator with smoother curves
+      const plotLine = d3.line()
+        .x(d => x(d.angle))
+        .y(d => y(d.value))
+        .curve(d3.curveCardinal.tension(0.5));
+
+      // Create container for lines
+      const linesContainer = plotSvg.append("g")
+        .attr("class", "lines-container");
+
+      // Create container for current angle indicators
+      const dotsContainer = plotSvg.append("g")
+        .attr("class", "dots-container");
+
+      // Function to create interactive lines
+      function createInteractiveLine(className, color, valueAccessor) {
+        return linesContainer.append("path")
+          .attr("class", `metric-line ${className}`)
+          .attr("fill", "none")
+          .attr("stroke", color)
+          .attr("stroke-width", 2)
+          .on("mouseover", function(event) {
+            d3.selectAll(".metric-line").classed("dimmed", true);
+            d3.select(this).classed("dimmed", false);
+          })
+          .on("mouseout", function() {
+            d3.selectAll(".metric-line").classed("dimmed", false);
+          });
+      }
+
+      const dotLine = createInteractiveLine("dot-line", "blue", d => d.dot);
+      const eucLine = createInteractiveLine("euc-line", "red", d => d.euclidean);
+      const yatLine = createInteractiveLine("yat-line", "green", d => d.yat);
+
+      // Add dots for current angle indicators with larger size and z-index
+      const dotDot = dotsContainer.append("circle")
+        .attr("r", 6)
+        .attr("fill", "blue")
+        .attr("stroke", "white")
+        .attr("stroke-width", 2)
+        .style("pointer-events", "none");
+
+      const eucDot = dotsContainer.append("circle")
+        .attr("r", 6)
+        .attr("fill", "red")
+        .attr("stroke", "white")
+        .attr("stroke-width", 2)
+        .style("pointer-events", "none");
+
+      const yatDot = dotsContainer.append("circle")
+        .attr("r", 6)
+        .attr("fill", "green")
+        .attr("stroke", "white")
+        .attr("stroke-width", 2)
+        .style("pointer-events", "none");
+
+      // Enhanced legend with interactivity
+      const legendData = [
+        { label: "Dot Product", color: "blue" },
+        { label: "Euclidean", color: "red" },
+        { label: "Log(1+Yat)", color: "green" }
+      ];
+
+      const plotLegend = plotSvg.append("g")
+        .attr("class", "plot-legend")
+        .attr("transform", `translate(${plotWidth - plotMargin.right + 20}, ${plotMargin.top})`);
+
+      const legendItems = plotLegend.selectAll(".legend-item")
+        .data(legendData)
+        .enter()
+        .append("g")
+        .attr("class", "legend-item")
+        .attr("transform", (d, i) => `translate(0, ${i * 20})`);
+
+      legendItems.append("rect")
+        .attr("width", 10)
+        .attr("height", 10)
+        .attr("fill", d => d.color);
+
+      legendItems.append("text")
+        .attr("x", 15)
+        .attr("y", 10)
+        .attr("font-size", "12px")
+        .text(d => d.label);
+
+      // State
+      let v1Angle = 0;
+      let v2Angle = 45;
+      let v1Mag = 1;
+      let v2Mag = 1;
+
+      function updateHeatmap() {
+        const metric = d3.select("#heatmap-metric").property("value");
+        const resolution = 50;
+        const step = (2 * radius) / resolution;
+        const data = [];
+
+        for (let i = 0; i < resolution; i++) {
+          for (let j = 0; j < resolution; j++) {
+            const x = -radius + i * step;
+            const y = -radius + j * step;
+
+            if (x * x + y * y <= radius * radius) {
+              const v2Test = [x / radius, y / radius];
+              const v1 = [
+                v1Mag * Math.cos((v1Angle * Math.PI) / 180),
+                v1Mag * Math.sin((v1Angle * Math.PI) / 180),
+              ];
+
+              const dot = v1[0] * v2Test[0] + v1[1] * v2Test[1];
+              const dist = Math.sqrt(
+                (v1[0] - v2Test[0]) ** 2 + (v1[1] - v2Test[1]) ** 2
+              );
+              const yat = Math.log1p(dot ** 2 / (dist ** 2 + 1e-6));
+
+              let value;
+              switch (metric) {
+                case "dot":
+                  value = dot;
+                  break;
+                case "euclidean":
+                  value = -dist;
+                  break; // Negative for color scale consistency
+                case "yat":
+                  value = yat;
+                  break;
+              }
+
+              data.push({ x, y, value });
+            }
+          }
+        }
+
+        // Update legend labels with actual min/max values
+        const [min, max] = d3.extent(data, (d) => d.value);
+        d3.select("#legend-max").text(max.toFixed(2));
+        d3.select("#legend-min").text(min.toFixed(2));
+
+        // Define the color scale
+        const color = d3
+          .scaleSequential()
+          .domain([min, max])
+          .interpolator(d3.interpolateRdYlBu);
+
+        // Update color legend gradient
+        const legendGradient = `linear-gradient(to bottom, 
+          ${color(max)}, 
+          ${color((max + min) / 2)}, 
+          ${color(min)})`;
+        d3.select(".color-legend").style("background", legendGradient);
+
+        // Reverse the color scale for Euclidean distance
+        if (metric === "euclidean") {
+          color.domain(color.domain().reverse());
+        }
+
+        // Update heatmap
+        heatmapGroup
+          .selectAll("rect")
+          .data(data)
+          .join("rect")
+          .attr("x", (d) => d.x - step / 2)
+          .attr("y", (d) => d.y - step / 2)
+          .attr("width", step)
+          .attr("height", step)
+          .attr("fill", (d) => color(d.value))
+          .attr("opacity", 0.5);
+      }
+
+      function updateComponents() {
+        if (!d3.select("#show-components").property("checked")) {
+          componentsGroup.selectAll("*").remove();
+          return;
+        }
+
+        const v1x = v1Mag * Math.cos((v1Angle * Math.PI) / 180) * radius;
+        const v1y = v1Mag * Math.sin((v1Angle * Math.PI) / 180) * radius;
+        const v2x = v2Mag * Math.cos((v2Angle * Math.PI) / 180) * radius;
+        const v2y = v2Mag * Math.sin((v2Angle * Math.PI) / 180) * radius;
+
+        // V1 components
+        componentsGroup
+          .selectAll("line.v1-component")
+          .data([
+            { x1: 0, y1: 0, x2: v1x, y2: 0 },
+            { x1: v1x, y1: 0, x2: v1x, y2: -v1y },
+          ])
+          .join("line")
+          .attr("class", "v1-component")
+          .attr("x1", (d) => d.x1)
+          .attr("y1", (d) => d.y1)
+          .attr("x2", (d) => d.x2)
+          .attr("y2", (d) => d.y2)
+          .attr("stroke", "blue")
+          .attr("stroke-width", 1)
+          .attr("stroke-dasharray", "3,3");
+
+        // V2 components
+        componentsGroup
+          .selectAll("line.v2-component")
+          .data([
+            { x1: 0, y1: 0, x2: v2x, y2: 0 },
+            { x1: v2x, y1: 0, x2: v2x, y2: -v2y },
+          ])
+          .join("line")
+          .attr("class", "v2-component")
+          .attr("x1", (d) => d.x1)
+          .attr("y1", (d) => d.y1)
+          .attr("x2", (d) => d.x2)
+          .attr("y2", (d) => d.y2)
+          .attr("stroke", "red")
+          .attr("stroke-width", 1)
+          .attr("stroke-dasharray", "3,3");
+      }
+
+      function updateVectors() {
+        const v1x = v1Mag * Math.cos((v1Angle * Math.PI) / 180) * radius;
+        const v1y = v1Mag * Math.sin((v1Angle * Math.PI) / 180) * radius;
+        const v2x = v2Mag * Math.cos((v2Angle * Math.PI) / 180) * radius;
+        const v2y = v2Mag * Math.sin((v2Angle * Math.PI) / 180) * radius;
+
+        // Update vectors
+        v1.attr("x2", v1x).attr("y2", -v1y);
+        v2.attr("x2", v2x).attr("y2", -v2y);
+        v1End.attr("cx", v1x).attr("cy", -v1y);
+        v2End.attr("cx", v2x).attr("cy", -v2y);
+
+        // Update labels
+        v1Label
+          .attr("x", v1x * 1.1)
+          .attr("y", -v1y * 1.1)
+          .text(`(${(v1x / radius).toFixed(2)}, ${(v1y / radius).toFixed(2)})`);
+
+        v2Label
+          .attr("x", v2x * 1.1)
+          .attr("y", -v2y * 1.1)
+          .text(`(${(v2x / radius).toFixed(2)}, ${(v2y / radius).toFixed(2)})`);
+
+        // Update angle arc
+        const startAngle = Math.min(v1Angle, v2Angle);
+        const endAngle = Math.max(v1Angle, v2Angle);
+        const arcRadius = radius / 3;
+
+        const arc = d3
+          .arc()
+          .innerRadius(arcRadius)
+          .outerRadius(arcRadius)
+          .startAngle((startAngle * Math.PI) / 180)
+          .endAngle((endAngle * Math.PI) / 180);
+
+        angleArc.attr("d", arc());
+
+        // Calculate metrics
+        const dot = (v1x * v2x + v1y * v2y) / (radius * radius);
+        const euclidean =
+          Math.sqrt((v2x - v1x) ** 2 + (v2y - v1y) ** 2) / radius;
+        const yat = Math.log1p(dot ** 2 / (euclidean ** 2 + 1e-6));
+
+        // Update metrics display
+        d3.select("#dot-product").text(dot.toFixed(3));
+        d3.select("#euclidean").text(euclidean.toFixed(3));
+        d3.select("#yat").text(yat.toFixed(3));
+
+        updateComponents();
+        updateHeatmap();
+        updatePlot();
+      }
+
+      function updatePlot() {
+        const data = d3.range(0, 361, 2).map((angle) => {
+          const rad = (angle * Math.PI) / 180;
+          const testX = Math.cos(rad);  // Remove v2Mag here
+          const testY = Math.sin(rad);  // Remove v2Mag here
+          const v1x = v1Mag * Math.cos((v1Angle * Math.PI) / 180);
+          const v1y = v1Mag * Math.sin((v1Angle * Math.PI) / 180);
+
+          const dot = v1x * testX + v1y * testY;
+          const euclidean = Math.sqrt((testX - v1x) ** 2 + (testY - v1y) ** 2);
+          const yat = Math.log1p(dot ** 2 / (euclidean ** 2 + 1e-6));
+
+          return { angle, dot, euclidean, yat };
+        });
+
+        // Update y-scale domain based on actual data range
+        const yExtent = d3.extent([
+          ...data.map((d) => d.dot),
+          ...data.map((d) => -d.euclidean), // Negate euclidean for consistent direction
+          ...data.map((d) => d.yat),
+        ]);
+        const yPadding = (yExtent[1] - yExtent[0]) * 0.1;
+        y.domain([yExtent[0] - yPadding, yExtent[1] + yPadding]);
+
+        // Update lines
+        dotLine.datum(data).attr("d", plotLine.y(d => y(d.dot)));
+        eucLine.datum(data).attr("d", plotLine.y(d => y(-d.euclidean))); // Negate euclidean
+        yatLine.datum(data).attr("d", plotLine.y(d => y(d.yat)));
+
+        // Update y-axis
+        plotSvg.select(".y-axis").call(d3.axisLeft(y));
+
+        // Calculate current metrics
+        const v2rad = (v2Angle * Math.PI) / 180;
+        const currentTestX = Math.cos(v2rad);
+        const currentTestY = Math.sin(v2rad);
+        const v1x = v1Mag * Math.cos((v1Angle * Math.PI) / 180);
+        const v1y = v1Mag * Math.sin((v1Angle * Math.PI) / 180);
+
+        const currentDot = v1x * currentTestX + v1y * currentTestY;
+        const currentEuc = Math.sqrt((currentTestX - v1x) ** 2 + (currentTestY - v1y) ** 2);
+        const currentYat = Math.log1p(currentDot ** 2 / (currentEuc ** 2 + 1e-6));
+
+        // Update dots position
+        dotDot
+          .attr("cx", x(v2Angle))
+          .attr("cy", y(currentDot));
+
+        eucDot
+          .attr("cx", x(v2Angle))
+          .attr("cy", y(-currentEuc));  // Negate euclidean
+
+        yatDot
+          .attr("cx", x(v2Angle))
+          .attr("cy", y(currentYat));
+      }
+
+      function dragV1(event) {
+        const [x, y] = d3.pointer(event);
+        v1Angle = (Math.atan2(-y, x) * 180) / Math.PI;
+        if (v1Angle < 0) v1Angle += 360;
+        v1Mag = Math.min(Math.sqrt(x * x + y * y) / radius, 1);
+
+        d3.select("#v1-angle-slider").property("value", v1Angle);
+        d3.select("#v1-mag-slider").property("value", v1Mag * 100);
+        d3.select("#v1-angle").text(Math.round(v1Angle) + "°");
+        d3.select("#v1-mag").text(v1Mag.toFixed(2));
+
+        updateVectors();
+      }
+
+      function dragV2(event) {
+        const [x, y] = d3.pointer(event);
+        v2Angle = (Math.atan2(-y, x) * 180) / Math.PI;
+        if (v2Angle < 0) v2Angle += 360;
+        v2Mag = Math.min(Math.sqrt(x * x + y * y) / radius, 1);
+
+        d3.select("#v2-angle-slider").property("value", v2Angle);
+        d3.select("#v2-mag-slider").property("value", v2Mag * 100);
+        d3.select("#v2-angle").text(Math.round(v2Angle) + "°");
+        d3.select("#v2-mag").text(v2Mag.toFixed(2));
+
+        updateVectors();
+      }
+
+      // Event listeners
+      d3.select("#heatmap-metric").on("change", updateVectors);
+      d3.select("#v1-angle-slider").on("input", function () {
+        v1Angle = +this.value;
+        d3.select("#v1-angle").text(Math.round(v1Angle) + "°");
+        updateVectors();
+      });
+
+      d3.select("#v1-mag-slider").on("input", function () {
+        v1Mag = +this.value / 100;
+        d3.select("#v1-mag").text(v1Mag.toFixed(2));
+        updateVectors();
+      });
+
+      d3.select("#v2-angle-slider").on("input", function () {
+        v2Angle = +this.value;
+        d3.select("#v2-angle").text(Math.round(v2Angle) + "°");
+        updateVectors();
+      });
+
+      d3.select("#v2-mag-slider").on("input", function () {
+        v2Mag = +this.value / 100;
+        d3.select("#v2-mag").text(v2Mag.toFixed(2));
+        updateVectors();
+      });
+
+      d3.select("#show-heatmap").on("change", updateVectors);
+      d3.select("#show-grid").on("change", function () {
+        gridGroup.style("display", this.checked ? "block" : "none");
+      });
+      d3.select("#show-components").on("change", updateVectors);
+
+      // Initialize
+      setupGrid();
+      updateVectors();
+    </script>
+  </body>
+</html>

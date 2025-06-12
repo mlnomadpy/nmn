@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Neural Network Visualization</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="sidenav">
+      <div class="control-section">
+        <h3>Network Structure</h3>
+        <div class="form-group">
+          <label>Input Dimension</label>
+          <input type="number" id="inputDimension" value="3" min="2" max="10" />
+        </div>
+        <div id="layerConfigs"></div>
+        <button id="addLayerBtn">Add Hidden Layer</button>
+        <div class="form-group">
+          <label>Output Layer Size</label>
+          <input type="number" id="outputSize" value="2" min="1" max="10" />
+        </div>
+      </div>
+
+      <div class="control-section">
+        <h3>Training Parameters</h3>
+        <div class="form-group">
+          <label>Learning Rate</label>
+          <input
+            type="number"
+            id="learningRate"
+            value="0.1"
+            step="0.01"
+            min="0.01"
+            max="1"
+          />
+        </div>
+        <div class="form-group">
+          <label>Batch Size</label>
+          <input type="number" id="batchSize" value="1" min="1" max="32" />
+        </div>
+        <div class="form-group">
+          <label>Training Speed</label>
+          <input type="range" id="trainingSpeed" min="1" max="100" value="50" />
+        </div>
+      </div>
+
+      <div class="control-section">
+        <h3>Visualization</h3>
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="showVectors" checked /> Show Vectors
+          </label>
+        </div>
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="showForces" checked /> Show Forces
+          </label>
+        </div>
+        <button id="centerViewButton">Center View</button>
+      </div>
+
+      <div class="control-section">
+        <h3>Dataset</h3>
+        <div class="file-input">
+          <label for="csvFile" class="file-label">Upload Dataset (CSV)</label>
+          <input type="file" id="csvFile" accept=".csv" style="display: none" />
+        </div>
+        <div class="dataset-info" style="display: none">
+          <span>Dataset: </span>
+          <span id="datasetInfo"></span>
+        </div>
+      </div>
+
+      <div class="control-section">
+        <h3>Training Control</h3>
+        <div class="metric">Epoch: <span id="epoch">0</span></div>
+        <div class="metric">Error: <span id="error">0.0000</span></div>
+        <button id="trainButton">Start Training</button>
+        <button id="resetButton">Reset Network</button>
+      </div>
+    </div>
+
+    <div class="main-content" id="mainContent">
+      <div class="network-view" id="network"></div>
+      <div class="vector-view" id="vectorSpace"></div>
+    </div>
+
+    <script type="module" src="main.js"></script>
+  </body>
+</html>

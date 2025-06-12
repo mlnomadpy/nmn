@@ -1,0 +1,328 @@
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #1a1a1a;
+  color: #fff;
+  min-height: 100vh;
+  display: flex;
+}
+
+.sidenav {
+  width: 300px;
+  height: 100vh;
+  background-color: #242424;
+  padding: 20px;
+  overflow-y: auto;
+  border-right: 1px solid #333;
+  flex-shrink: 0;
+}
+
+.neuron-details {
+  position: absolute;
+  background: rgba(30, 30, 30, 0.95);
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 15px;
+  z-index: 1000;
+  min-width: 200px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.neuron-details h4 {
+  margin: 0 0 10px 0;
+  color: #fff;
+}
+
+.weight-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0;
+}
+
+.weight-input label {
+  flex: 1;
+  color: #ccc;
+}
+
+.weight-input input {
+  width: 80px;
+  background: #333;
+  border: 1px solid #444;
+  color: #fff;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.control-section {
+  background: #2a2a2a;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 15px;
+}
+
+.control-section h3 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.control-section .form-group:last-of-type {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #444;
+}
+
+.form-group {
+  margin-bottom: 10px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  color: #ccc;
+}
+
+.form-group input[type="number"] {
+  width: 60px;
+  background: #333;
+  border: 1px solid #444;
+  color: #fff;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.layer-config {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  background: #333;
+  padding: 8px 12px;
+  border-radius: 4px;
+  position: relative;
+  transition: background-color 0.2s;
+}
+
+.layer-config label {
+  min-width: 60px;
+  color: #ccc;
+}
+
+.layer-config input {
+  width: 60px;
+  background: #444;
+  border: 1px solid #555;
+  color: #fff;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.layer-info {
+  color: #888;
+  font-size: 0.9em;
+  margin-left: auto;
+  padding-right: 30px;
+}
+
+.layer-config select {
+  background: #444;
+  border: 1px solid #555;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  min-width: 100px;
+}
+
+.activation-type {
+  width: 100px;
+  background: #444;
+  border: 1px solid #555;
+  color: #fff;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.remove-layer {
+  background: #dc2626;
+  color: white;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  padding: 0;
+  margin: 0;
+}
+
+.remove-layer:hover {
+  background: #ef4444;
+}
+
+button {
+  background: #2196f3;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: 8px;
+  margin-bottom: 8px;
+  transition: background 0.3s;
+}
+
+button:hover {
+  background: #1976d2;
+}
+
+button.danger {
+  background: #dc2626;
+}
+
+.main-content {
+  flex: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.network-view {
+  flex: 1;
+  min-height: 600px;
+  background: #1a1a1a;
+}
+
+.vector-view {
+  height: 300px;
+  border-top: 1px solid #333;
+  background: rgba(30, 30, 30, 0.8);
+}
+
+.vector-editor {
+  margin: 10px 0;
+  padding: 8px;
+  background: #333;
+  border-radius: 4px;
+}
+
+.vector-editor label {
+  display: block;
+  color: #ccc;
+  margin-bottom: 8px;
+}
+
+input[type="range"] {
+  width: 100%;
+  margin: 10px 0;
+}
+
+.file-label {
+  display: inline-block;
+  background: #4caf50;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.dataset-info {
+  background: #333;
+  padding: 8px;
+  border-radius: 4px;
+  margin-top: 10px;
+  font-size: 0.9em;
+}
+
+.metric {
+  background: #333;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.layer-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #242424;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 20px;
+  z-index: 2000;
+  min-width: 300px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.layer-dialog h3 {
+  margin: 0 0 15px 0;
+  color: #fff;
+}
+
+.layer-type-btn {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  margin: 5px 0;
+  text-align: left;
+  background: #333;
+  border: 1px solid #444;
+  color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.layer-type-btn:hover {
+  background: #444;
+}
+
+.layer-dialog-options {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #444;
+}
+
+.layer-dialog-options select {
+  width: 100%;
+  padding: 8px;
+  background: #333;
+  border: 1px solid #444;
+  color: #fff;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+
+.dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.layer-config.sortable-chosen {
+  background: #444;
+  cursor: move;
+}
+
+.layer-config.sortable-ghost {
+  opacity: 0.5;
+}
+
+.layer-config.sortable-drag {
+  background: #555;
+}
+
+#sortableLayers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

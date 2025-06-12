@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Network Visualization</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+        }
+
+        .sidenav {
+            width: 300px;
+            height: 100vh;
+            background-color: #242424;
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 1px solid #333;
+            flex-shrink: 0;
+        }
+
+        .neuron-details {
+            position: absolute;
+            background: rgba(30, 30, 30, 0.95);
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            z-index: 1000;
+            min-width: 200px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .neuron-details h4 {
+            margin: 0 0 10px 0;
+            color: #fff;
+        }
+
+        .weight-input {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 5px 0;
+        }
+
+        .weight-input label {
+            flex: 1;
+            color: #ccc;
+        }
+
+        .weight-input input {
+            width: 80px;
+            background: #333;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .control-section {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .control-section h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-group {
+            margin-bottom: 10px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #ccc;
+        }
+
+        .form-group input[type="number"] {
+            width: 60px;
+            background: #333;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .layer-config {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+            background: #333;
+            padding: 8px;
+            border-radius: 4px;
+        }
+
+        button {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 8px;
+            margin-bottom: 8px;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #1976d2;
+        }
+
+        button.danger {
+            background: #dc2626;
+        }
+
+        .main-content {
+            flex: 1;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .network-view {
+            flex: 1;
+            min-height: 600px;
+            background: #1a1a1a;
+        }
+
+        .vector-view {
+            height: 300px;
+            border-top: 1px solid #333;
+            background: rgba(30, 30, 30, 0.8);
+        }
+
+        input[type="range"] {
+            width: 100%;
+            margin: 10px 0;
+        }
+
+        .file-label {
+            display: inline-block;
+            background: #4caf50;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .dataset-info {
+            background: #333;
+            padding: 8px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+
+        .metric {
+            background: #333;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidenav">
+        <div class="control-section">
+            <h3>Network Structure</h3>
+            <div id="layerConfigs"></div>
+            <button id="addLayerBtn">Add Hidden Layer</button>
+        </div>
+
+        <div class="control-section">
+            <h3>Training Parameters</h3>
+            <div class="form-group">
+                <label>Learning Rate</label>
+                <input type="number" id="learningRate" value="0.1" step="0.01" min="0.01" max="1">
+            </div>
+            <div class="form-group">
+                <label>Batch Size</label>
+                <input type="number" id="batchSize" value="1" min="1" max="32">
+            </div>
+            <div class="form-group">
+                <label>Training Speed</label>
+                <input type="range" id="trainingSpeed" min="1" max="100" value="50">
+            </div>
+        </div>
+
+        <div class="control-section">
+            <h3>Visualization</h3>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="showVectors" checked> Show Vectors
+                </label>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="showForces" checked> Show Forces
+                </label>
+            </div>
+            <button id="centerViewButton">Center View</button>
+        </div>
+
+        <div class="control-section">
+            <h3>Dataset</h3>
+            <div class="file-input">
+                <label for="csvFile" class="file-label">Upload Dataset (CSV)</label>
+                <input type="file" id="csvFile" accept=".csv" style="display: none">
+            </div>
+            <div class="dataset-info" style="display: none">
+                <span>Dataset: </span>
+                <span id="datasetInfo"></span>
+            </div>
+        </div>
+
+        <div class="control-section">
+            <h3>Training Control</h3>
+            <div class="metric">Epoch: <span id="epoch">0</span></div>
+            <div class="metric">Error: <span id="error">0.0000</span></div>
+            <button id="trainButton">Start Training</button>
+            <button id="resetButton">Reset Network</button>
+        </div>
+    </div>
+
+    <div class="main-content" id="mainContent">
+        <div class="network-view" id="network"></div>
+        <div class="vector-view" id="vectorSpace"></div>
+    </div>
+
+    <script>
+        // Network configuration
+        const config = {
+            inputSize: 3,
+            hiddenLayers: [4],
+            outputSize: 2,
+            learningRate: 0.1,
+            batchSize: 1,
+            trainingSpeed: 50
+        };
+
+        // Network state
+        let network = {
+            nodes: [],
+            links: [],
+            weights: []
+        };
+
+        let isTraining = false;
+        let epoch = 0;
+        let error = 0;
+        let trainingData = [];
+
+        // Helper functions
+        const sigmoid = x => 1 / (1 + Math.exp(-x));
+        const dotProduct = (vec1, vec2) => vec1.reduce((sum, v, i) => sum + v * vec2[i], 0);
+
+        // Layer management functions
+        function addLayer() {
+            const layerConfigs = document.getElementById('layerConfigs');
+            const newLayerDiv = document.createElement('div');
+            newLayerDiv.className = 'layer-config';
+            
+            const layerIndex = layerConfigs.children.length;
+            
+            newLayerDiv.innerHTML = `
+                <label>Layer ${layerIndex + 1}</label>
+                <input type="number" class="layer-size" value="4" min="1" max="10"/>
+                <button class="remove-layer" onclick="removeLayer(this)">×</button>
+            `;
+            
+            layerConfigs.appendChild(newLayerDiv);
+            updateNetwork();
+        }
+
+        function removeLayer(button) {
+            const layerDiv = button.parentElement;
+            layerDiv.remove();
+            updateLayerConfigs();
+            updateNetwork();
+        }
+
+        function updateLayerConfigs() {
+            const layers = Array.from(document.getElementsByClassName('layer-config'));
+            layers.forEach((layer, index) => {
+                const label = layer.querySelector('label');
+                label.textContent = `Layer ${index + 1}`;
+            });
+        }
+
+        // Network initialization
+        function initializeNetwork() {
+            const nodes = [];
+            const links = [];
+            let nodeIndex = 0;
+
+            // Input layer
+            for (let i = 0; i < config.inputSize; i++) {
+                nodes.push({
+                    id: `input-${i}`,
+                    layer: 0,
+                    index: i,
+                    type: 'input',
+                    vector: Array(3).fill(0).map(() => Math.random() * 2 - 1),
+                    value: Math.random() * 2 - 1 // Default input value
+                });
+            }
+
+            // Hidden layers
+            config.hiddenLayers.forEach((layerSize, layerIndex) => {
+                const layerNum = layerIndex + 1;
+                for (let i = 0; i < layerSize; i++) {
+                    nodes.push({
+                        id: `hidden-${layerNum}-${i}`,
+                        layer: layerNum,
+                        index: i,
+                        type: 'hidden',
+                        vector: Array(3).fill(0).map(() => Math.random() * 2 - 1),
+                        output: Math.random()
+                    });
+
+                    // Connect to previous layer
+                    const prevLayerSize = layerIndex === 0 ? config.inputSize : config.hiddenLayers[layerIndex - 1];
+                    for (let j = 0; j < prevLayerSize; j++) {
+                        const sourceId = layerIndex === 0 ? `input-${j}` : `hidden-${layerNum-1}-${j}`;
+                        links.push({
+                            source: sourceId,
+                            target: `hidden-${layerNum}-${i}`,
+                            weight: Math.random() * 2 - 1
+                        });
+                    }
+                }
+            });
+
+            // Output layer
+            for (let i = 0; i < config.outputSize; i++) {
+                nodes.push({
+                    id: `output-${i}`,
+                    layer: config.hiddenLayers.length + 1,
+                    index: i,
+                    type: 'output',
+                    vector: Array(2).fill(0).map(() => Math.random() * 2 - 1)
+                });
+
+                // Connect to last hidden layer
+                const lastHiddenSize = config.hiddenLayers[config.hiddenLayers.length - 1];
+                for (let j = 0; j < lastHiddenSize; j++) {
+                    links.push({
+                        source: `hidden-${config.hiddenLayers.length}-${j}`,
+                        target: `output-${i}`,
+                        weight: Math.random() * 2 - 1
+                    });
+                }
+            }
+
+            network = { nodes, links };
+            updateVisualization();
+        }
+
+        // D3 visualization setup
+        const networkSvg = d3.select('#network')
+            .append('svg')
+            .attr('width', '100%')
+            .attr('height', '100%');
+
+        const networkZoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on('zoom', (event) => {
+                networkContainer.attr('transform', event.transform);
+            });
+
+        networkSvg.call(networkZoom);
+
+        const networkContainer = networkSvg.append('g');
+
+        const vectorSpaceSvg = d3.select('#vectorSpace')
+            .append('svg')
+            .attr('width', '100%')
+            .attr('height', '100%');
+
+        // Force simulation setup
+        const simulation = d3.forceSimulation()
+            .force('link', d3.forceLink().id(d => d.id))
+            .force('charge', d3.forceManyBody().strength(-300))
+            .force('x', d3.forceX().x(d => {
+                const width = document.getElementById('network').clientWidth;
+                const totalLayers = config.hiddenLayers.length + 2;
+                return width * ((d.layer + 1) / (totalLayers + 1));
+            }))
+            .force('y', d3.forceY().y(d => {
+                const height = document.getElementById('network').clientHeight;
+                const layerSize = d.type === 'input' ? config.inputSize :
+                    d.type === 'output' ? config.outputSize :
+                    config.hiddenLayers[d.layer - 1];
+                return height * (0.3 + (d.index / (layerSize - 1)) * 0.4);
+            }));
+
+        function updateVisualization() {
+            networkContainer.selectAll('*').remove();
+            vectorSpaceSvg.selectAll('*').remove();
+
+            // Reset zoom
+            networkSvg.call(networkZoom.transform, d3.zoomIdentity);
+
+            // Create color gradients
+            const defs = networkContainer.append('defs');
+            const colors = {
+                input: '#10B981',
+                hidden: '#F59E0B',
+                output: '#3B82F6'
+            };
+
+            Object.entries(colors).forEach(([type, color]) => {
+                const gradient = defs.append('radialGradient')
+                    .attr('id', `${type}-gradient`);
+                
+                gradient.append('stop')
+                    .attr('offset', '0%')
+                    .attr('stop-color', color)
+                    .attr('stop-opacity', 0.8);
+
+                gradient.append('stop')
+                    .attr('offset', '100%')
+                    .attr('stop-color', color)
+                    .attr('stop-opacity', 0);
+            });
+
+            // Update force simulation
+            simulation.nodes(network.nodes)
+                .force('link').links(network.links);
+
+            // Draw links
+            const links = networkContainer.append('g')
+                .selectAll('line')
+                .data(network.links)
+                .enter()
+                .append('line')
+                .attr('stroke', '#ffffff20')
+                .attr('stroke-width', d => Math.abs(d.weight) * 3);
+
+            // Draw nodes
+            const nodes = networkContainer.append('g')
+                .selectAll('g')
+                .data(network.nodes)
+                .enter()
+                .append('g')
+                .on('click', (event, d) => showNeuronDetails(event, d));
+
+            // Node glow
+            nodes.append('circle')
+                .attr('r', 30)
+                .attr('fill', d => `url(#${d.type}-gradient)`);
+
+            // Node circle
+            nodes.append('circle')
+                .attr('r', 15)
+                .attr('fill', d => colors[d.type])
+                .attr('stroke', 'white')
+                .attr('stroke-width', 2);
+
+            // Vector labels
+            if (document.getElementById('showVectors').checked) {
+                nodes.append('text')
+                    .attr('y', -20)
+                    .attr('text-anchor', 'middle')
+                    .attr('fill', 'white')
+                    .attr('font-family', 'monospace')
+                    .attr('font-size', '12px')
+                    .text(d => `[${d.vector.map(v => v.toFixed(1)).join(',')}]`);
+
+                nodes.filter(d => d.type === 'hidden')
+                    .append('text')
+                    .attr('y', 25)
+                    .attr('text-anchor', 'middle')
+                    .attr('fill', 'white')
+                    .attr('font-size', '12px')
+                    .text(d => `out: ${d.output?.toFixed(2)}`);
+            }
+
+            // Update positions
+            simulation.on('tick', () => {
+                links
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                nodes.attr('transform', d => `translate(${d.x},${d.y})`);
+            });
+
+            // Vector space visualization
+            const margin = 40;
+            const width = document.getElementById('vectorSpace').clientWidth;
+            const height = document.getElementById('vectorSpace').clientHeight;
+
+            // Draw background and grid
+            vectorSpaceSvg.append('rect')
+                .attr('width', width)
+                .attr('height', height)
+                .attr('fill', 'rgba(30, 30, 30, 0.8)');
+
+            // Draw grid
+            for (let i = -2; i <= 2; i++) {
+                vectorSpaceSvg.append('line')
+                    .attr('x1', margin + ((width - 2 * margin) * (i + 2)) / 4)
+                    .attr('y1', margin)
+                    .attr('x2', margin + ((width - 2 * margin) * (i + 2)) / 4)
+                    .attr('y2', height - margin)
+                    .attr('stroke', '#ffffff20')
+                    .attr('stroke-dasharray', '2,2');
+
+                vectorSpaceSvg.append('line')
+                    .attr('x1', margin)
+                    .attr('y1', margin + ((height - 2 * margin) * (i + 2)) / 4)
+                    .attr('x2', width - margin)
+                    .attr('y2', margin + ((height - 2 * margin) * (i + 2)) / 4)
+                    .attr('stroke', '#ffffff20')
+                    .attr('stroke-dasharray', '2,2');
+            }
+
+            // Draw axes
+            vectorSpaceSvg.append('line')
+                .attr('x1', margin)
+                .attr('y1', height/2)
+                .attr('x2', width - margin)
+                .attr('y2', height/2)
+                .attr('stroke', '#ffffff40')
+                .attr('stroke-width', 1);
+
+            vectorSpaceSvg.append('line')
+                .attr('x1', width/2)
+                .attr('y1', margin)
+                .attr('x2', width/2)
+                .attr('y2', height - margin)
+                .attr('stroke', '#ffffff40')
+                .attr('stroke-width', 1);
+
+            // Plot vectors
+            network.nodes.forEach(node => {
+                if (!node.vector) return;
+
+                const x = margin + ((width - 2 * margin) * (node.vector[0] + 2)) / 4;
+                const y = margin + ((height - 2 * margin) * (2 - node.vector[1])) / 4;
+
+                vectorSpaceSvg.append('circle')
+                    .attr('cx', x)
+                    .attr('cy', y)
+                    .attr('r', 4)
+                    .attr('fill', colors[node.type])
+                    .attr('stroke', 'white')
+                    .attr('stroke-width', 1);
+
+                if (node.type === 'hidden') {
+                    vectorSpaceSvg.append('line')
+                        .attr('x1', width/2)
+                        .attr('y1', height/2)
+                        .attr('x2', x)
+                        .attr('y2', y)
+                        .attr('stroke', `${colors[node.type]}40`)
+                        .attr('stroke-width', 1);
+                }
+            });
+        }
+
+        // Neuron details panel
+        function showNeuronDetails(event, neuron) {
+            // Remove any existing details panel
+            hideNeuronDetails();
+
+            const detailsPanel = document.createElement('div');
+            detailsPanel.className = 'neuron-details';
+            detailsPanel.id = 'neuron-details';
+
+            // Position panel near the clicked neuron
+            detailsPanel.style.left = `${event.pageX + 10}px`;
+            detailsPanel.style.top = `${event.pageY + 10}px`;
+
+            // Create content based on neuron type
+            let content = `<h4>${neuron.type.charAt(0).toUpperCase() + neuron.type.slice(1)} Neuron</h4>`;
+
+            if (neuron.type === 'input') {
+                content += `
+                    <div class="weight-input">
+                        <label>Input Value:</label>
+                        <input type="number" step="0.1" value="${neuron.value || 0}" 
+                               onchange="updateNeuronValue('${neuron.id}', this.value)" />
+                    </div>
+                `;
+            } else {
+                // Get incoming connections
+                const incomingLinks = network.links.filter(l => l.target === neuron.id);
+                content += '<div style="margin-bottom: 10px;"><strong>Input Weights:</strong></div>';
+                
+                incomingLinks.forEach(link => {
+                    const sourceNode = network.nodes.find(n => n.id === link.source);
+                    content += `
+                        <div class="weight-input">
+                            <label>From ${sourceNode.type} ${sourceNode.index}:</label>
+                            <input type="number" step="0.1" value="${link.weight}" 
+                                   onchange="updateWeight('${link.source}', '${link.target}', this.value)" />
+                        </div>
+                    `;
+                });
+
+                if (neuron.type === 'hidden') {
+                    content += `
+                        <div class="weight-input" style="margin-top: 10px;">
+                            <label>Output:</label>
+                            <input type="number" step="0.01" value="${neuron.output || 0}" disabled />
+                        </div>
+                    `;
+                }
+            }
+
+            detailsPanel.innerHTML = content;
+            document.body.appendChild(detailsPanel);
+
+            // Add click handler to hide panel when clicking outside
+            setTimeout(() => {
+                document.addEventListener('click', hideNeuronDetailsOnClickOutside);
+            }, 0);
+        }
+
+        function hideNeuronDetails() {
+            const existingPanel = document.getElementById('neuron-details');
+            if (existingPanel) {
+                existingPanel.remove();
+                document.removeEventListener('click', hideNeuronDetailsOnClickOutside);
+            }
+        }
+
+        function hideNeuronDetailsOnClickOutside(event) {
+            const panel = document.getElementById('neuron-details');
+            if (panel && !panel.contains(event.target)) {
+                hideNeuronDetails();
+            }
+        }
+
+        function updateNeuronValue(neuronId, value) {
+            const neuron = network.nodes.find(n => n.id === neuronId);
+            neuron.value = parseFloat(value);
+            forwardPass();
+            updateVisualization();
+        }
+
+        function updateWeight(sourceId, targetId, value) {
+            const link = network.links.find(l => l.source === sourceId && l.target === targetId);
+            link.weight = parseFloat(value);
+            forwardPass();
+            updateVisualization();
+        }
+
+        function centerView() {
+            const bounds = networkContainer.node().getBBox();
+            const fullWidth = document.getElementById('network').clientWidth;
+            const fullHeight = document.getElementById('network').clientHeight;
+
+            const scale = Math.min(
+                (0.8 * fullWidth) / bounds.width,
+                (0.8 * fullHeight) / bounds.height
+            );
+
+            const transform = d3.zoomIdentity
+                .translate(
+                    (fullWidth - bounds.width * scale) / 2 - bounds.x * scale,
+                    (fullHeight - bounds.height * scale) / 2 - bounds.y * scale
+                )
+                .scale(scale);
+
+            networkSvg.transition()
+                .duration(750)
+                .call(networkZoom.transform, transform);
+        }
+
+        function updateConfig() {
+            config.learningRate = parseFloat(document.getElementById('learningRate').value);
+            config.batchSize = parseInt(document.getElementById('batchSize').value);
+            config.trainingSpeed = parseInt(document.getElementById('trainingSpeed').value);
+        }
+
+        function forwardPass() {
+            // Get input values from input neurons
+            const inputValues = network.nodes
+                .filter(n => n.type === 'input')
+                .map(n => n.value || 0);
+
+            let currentInput = inputValues;
+            const layerOutputs = [];
+
+            // Process each hidden layer
+            config.hiddenLayers.forEach((layerSize, layerIndex) => {
+                const layerOutput = [];
+                for (let i = 0; i < layerSize; i++) {
+                    const weights = network.links
+                        .filter(l => l.target === `hidden-${layerIndex+1}-${i}`)
+                        .map(l => l.weight);
+                    layerOutput.push(sigmoid(dotProduct(currentInput, weights)));
+                }
+                layerOutputs.push(layerOutput);
+                currentInput = layerOutput;
+            });
+
+            // Process output layer
+            const outputs = [];
+            for (let i = 0; i < config.outputSize; i++) {
+                const weights = network.links
+                    .filter(l => l.target === `output-${i}`)
+                    .map(l => l.weight);
+                outputs.push(sigmoid(dotProduct(currentInput, weights)));
+            }
+
+            return {
+                hiddenOutputs: layerOutputs,
+                outputs
+            };
+        }
+
+        function trainStep() {
+            if (!trainingData.length) return;
+
+            const sample = trainingData[Math.floor(Math.random() * trainingData.length)];
+            const { hiddenOutputs, outputs } = forwardPass(sample.input);
+
+            // Calculate output layer error
+            const outputErrors = outputs.map(
+                (output, i) => (sample.output[i] - output) * output * (1 - output)
+            );
+
+            let totalError = outputErrors.reduce((sum, err) => sum + Math.abs(err), 0);
+
+            // Update weights
+            network.links.forEach(link => {
+                if (link.target.startsWith('output')) {
+                    const outputIndex = parseInt(link.target.split('-')[1]);
+                    const hiddenIndex = parseInt(link.source.split('-')[1]);
+                    const lastHiddenOutput = hiddenOutputs[hiddenOutputs.length - 1];
+                    link.weight += config.learningRate * outputErrors[outputIndex] * lastHiddenOutput[hiddenIndex];
+                }
+            });
+
+            // Update display
+            document.getElementById('epoch').textContent = ++epoch;
+            document.getElementById('error').textContent = totalError.toFixed(4);
+
+            updateVisualization();
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // Make sure all elements exist before adding event listeners
+            const addLayerBtn = document.getElementById('addLayerBtn');
+            const trainButton = document.getElementById('trainButton');
+            const resetButton = document.getElementById('resetButton');
+            const centerViewButton = document.getElementById('centerViewButton');
+            const showVectorsCheckbox = document.getElementById('showVectors');
+            const showForcesCheckbox = document.getElementById('showForces');
+            const learningRateInput = document.getElementById('learningRate');
+            const batchSizeInput = document.getElementById('batchSize');
+            const trainingSpeedInput = document.getElementById('trainingSpeed');
+
+            if (addLayerBtn) {
+                addLayerBtn.addEventListener('click', addLayer);
+            }
+            
+            if (trainButton) {
+                trainButton.addEventListener('click', function() {
+                    isTraining = !isTraining;
+                    this.textContent = isTraining ? 'Stop Training' : 'Start Training';
+                    this.style.background = isTraining ? '#dc2626' : '#2196f3';
+                    
+                    if (isTraining) {
+                        updateConfig();
+                        function train() {
+                            if (isTraining) {
+                                trainStep();
+                                setTimeout(train, 1000 / config.trainingSpeed);
+                            }
+                        }
+                        train();
+                    }
+                });
+            }
+
+            if (resetButton) {
+                resetButton.addEventListener('click', () => {
+                    epoch = 0;
+                    error = 0;
+                    const epochElement = document.getElementById('epoch');
+                    const errorElement = document.getElementById('error');
+                    if (epochElement) epochElement.textContent = '0';
+                    if (errorElement) errorElement.textContent = '0.0000';
+                    initializeNetwork();
+                });
+            }
+
+            if (centerViewButton) {
+                centerViewButton.addEventListener('click', centerView);
+            }
+
+            if (showVectorsCheckbox) {
+                showVectorsCheckbox.addEventListener('change', updateVisualization);
+            }
+
+            if (showForcesCheckbox) {
+                showForcesCheckbox.addEventListener('change', updateVisualization);
+            }
+
+            if (learningRateInput) {
+                learningRateInput.addEventListener('change', updateConfig);
+            }
+
+            if (batchSizeInput) {
+                batchSizeInput.addEventListener('change', updateConfig);
+            }
+
+            if (trainingSpeedInput) {
+                trainingSpeedInput.addEventListener('change', updateConfig);
+            }
+
+            // Initialize the network
+            initializeNetwork();
+            
+            // Center the view after a short delay to ensure proper sizing
+            setTimeout(centerView, 100);
+
+            window.addEventListener('resize', () => {
+                const networkView = document.getElementById('network');
+                const vectorSpace = document.getElementById('vectorSpace');
+
+                networkSvg
+                    .attr('width', networkView.clientWidth)
+                    .attr('height', networkView.clientHeight);
+
+                vectorSpaceSvg
+                    .attr('width', vectorSpace.clientWidth)
+                    .attr('height', vectorSpace.clientHeight);
+
+                setTimeout(updateVisualization, 100);
+            });
+
+            // Initialize
+            initializeNetwork();
+            setTimeout(centerView, 100);
+        });
+    </script>
+</body>
+</html>
