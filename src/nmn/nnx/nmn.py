@@ -128,7 +128,7 @@ class YatNMN(Module):
     self.drop_rate = drop_rate
 
     if use_dropconnect:
-      self.dropconnect_key = nnx.Param(rngs.params())
+      self.dropconnect_key = rngs.params()
     else:
       self.dropconnect_key = None
 
@@ -148,8 +148,7 @@ class YatNMN(Module):
 
     if self.use_dropconnect and not deterministic and self.drop_rate > 0.0:
       keep_prob = 1.0 - self.drop_rate
-      rng = self.dropconnect_key.value
-      mask = jax.random.bernoulli(rng, p=keep_prob, shape=kernel.shape)
+      mask = jax.random.bernoulli(self.dropconnect_key, p=keep_prob, shape=kernel.shape)
       kernel = (kernel * mask) / keep_prob
 
     inputs, kernel, bias, alpha = self.promote_dtype(

@@ -210,7 +210,7 @@ class YatConv(Module):
       self.alpha = None
 
     if use_dropconnect:
-      self.dropconnect_key = nnx.Param(rngs.params())
+      self.dropconnect_key = rngs.params()
     else:
       self.dropconnect_key = None
 
@@ -275,8 +275,7 @@ class YatConv(Module):
     # Apply DropConnect if enabled and not in deterministic mode
     if self.use_dropconnect and not deterministic and self.drop_rate > 0.0:
       keep_prob = 1.0 - self.drop_rate
-      rng = self.dropconnect_key.value
-      mask = jax.random.bernoulli(rng, p=keep_prob, shape=kernel_val.shape)
+      mask = jax.random.bernoulli(self.dropconnect_key, p=keep_prob, shape=kernel_val.shape)
       kernel_val = (kernel_val * mask) / keep_prob
     
     current_mask = self.mask 
