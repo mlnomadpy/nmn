@@ -4,26 +4,18 @@ import typing as tp
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 from jax import lax
-import opt_einsum
 
-from flax.core.frozen_dict import FrozenDict
 from flax import nnx
-from flax.nnx import rnglib, variablelib
-from flax.nnx.module import Module, first_from
+from flax.nnx import rnglib
+from flax.nnx.module import Module
 from flax.nnx.nn import dtypes, initializers
 from flax.typing import (
   Dtype,
-  Shape,
   Initializer,
   PrecisionLike,
   DotGeneralT,
-  ConvGeneralDilatedT,
-  PaddingLike,
-  LaxPadding,
   PromoteDtypeFn,
-  EinsumT,
 )
 
 Array = jax.Array
@@ -60,21 +52,26 @@ class YatNMN(Module):
     in_features: the number of input features.
     out_features: the number of output features.
     use_bias: whether to add a bias to the output (default: True).
+    use_alpha: whether to use alpha scaling (default: True).
+    use_dropconnect: whether to use DropConnect (default: False).
     dtype: the dtype of the computation (default: infer from input and params).
     param_dtype: the dtype passed to parameter initializers (default: float32).
     precision: numerical precision of the computation see ``jax.lax.Precision``
       for details.
     kernel_init: initializer function for the weight matrix.
     bias_init: initializer function for the bias.
+    alpha_init: initializer function for the alpha.
     dot_general: dot product function.
     promote_dtype: function to promote the dtype of the arrays to the desired
       dtype. The function should accept a tuple of ``(inputs, kernel, bias)``
       and a ``dtype`` keyword argument, and return a tuple of arrays with the
       promoted dtype.
+    epsilon: A small float added to the denominator to prevent division by zero.
+    drop_rate: dropout rate for DropConnect (default: 0.0).
     rngs: rng key.
   """
 
-  __data__ = ('kernel', 'bias')
+  __data__ = ('kernel', 'bias', 'alpha', 'dropconnect_key')
 
   def __init__(
     self,
@@ -83,6 +80,7 @@ class YatNMN(Module):
     *,
     use_bias: bool = True,
     use_alpha: bool = True,
+    use_dropconnect: bool = False,
     dtype: tp.Optional[Dtype] = None,
     param_dtype: Dtype = jnp.float32,
     precision: PrecisionLike = None,
@@ -91,8 +89,9 @@ class YatNMN(Module):
     alpha_init: Initializer = default_alpha_init,
     dot_general: DotGeneralT = lax.dot_general,
     promote_dtype: PromoteDtypeFn = dtypes.promote_dtype,
-    rngs: rnglib.Rngs,
     epsilon: float = 1e-5,
+    drop_rate: float = 0.0,
+    rngs: rnglib.Rngs,
   ):
 
     kernel_key = rngs.params()
@@ -117,6 +116,7 @@ class YatNMN(Module):
     self.out_features = out_features
     self.use_bias = use_bias
     self.use_alpha = use_alpha
+    self.use_dropconnect = use_dropconnect
     self.dtype = dtype
     self.param_dtype = param_dtype
     self.precision = precision
@@ -125,12 +125,19 @@ class YatNMN(Module):
     self.dot_general = dot_general
     self.promote_dtype = promote_dtype
     self.epsilon = epsilon
+    self.drop_rate = drop_rate
 
-  def __call__(self, inputs: Array) -> Array:
+    if use_dropconnect:
+      self.dropconnect_key = nnx.Param(rngs.params())
+    else:
+      self.dropconnect_key = None
+
+  def __call__(self, inputs: Array, *, deterministic: bool = False) -> Array:
     """Applies a linear transformation to the inputs along the last dimension.
 
     Args:
       inputs: The nd-array to be transformed.
+      deterministic: If true, DropConnect is not applied (e.g., during inference).
 
     Returns:
       The transformed input.
@@ -138,6 +145,12 @@ class YatNMN(Module):
     kernel = self.kernel.value
     bias = self.bias.value if self.bias is not None else None
     alpha = self.alpha.value if self.alpha is not None else None
+
+    if self.use_dropconnect and not deterministic and self.drop_rate > 0.0:
+      keep_prob = 1.0 - self.drop_rate
+      rng = self.dropconnect_key.value
+      mask = jax.random.bernoulli(rng, p=keep_prob, shape=kernel.shape)
+      kernel = (kernel * mask) / keep_prob
 
     inputs, kernel, bias, alpha = self.promote_dtype(
       (inputs, kernel, bias, alpha), dtype=self.dtype
@@ -165,6 +178,5 @@ class YatNMN(Module):
     if alpha is not None:
       scale = (jnp.sqrt(self.out_features) / jnp.log(1 + self.out_features)) ** alpha
       y = y * scale
-
 
     return y

@@ -110,6 +110,8 @@ class YatConv(Module):
     feature_group_count: integer, default 1. If specified divides the input
       features into groups.
     use_bias: whether to add a bias to the output (default: True).
+    use_alpha: whether to use alpha scaling (default: True).
+    use_dropconnect: whether to use DropConnect (default: False).
     mask: Optional mask for the weights during masked convolution. The mask must
           be the same shape as the convolution weight matrix.
     dtype: the dtype of the computation (default: infer from input and params).
@@ -123,10 +125,11 @@ class YatConv(Module):
       and a ``dtype`` keyword argument, and return a tuple of arrays with the
       promoted dtype.
     epsilon: A small float added to the denominator to prevent division by zero.
+    drop_rate: dropout rate for DropConnect (default: 0.0).
     rngs: rng key.
   """
 
-  __data__ = ('kernel', 'bias', 'mask')
+  __data__ = ('kernel', 'bias', 'mask', 'dropconnect_key')
 
   def __init__(
     self,
@@ -142,6 +145,7 @@ class YatConv(Module):
     
     use_bias: bool = True,
     use_alpha: bool = True,
+    use_dropconnect: bool = False,
     kernel_init: Initializer = default_kernel_init,
     bias_init: Initializer = default_bias_init,
     alpha_init: Initializer = default_alpha_init,
@@ -153,6 +157,7 @@ class YatConv(Module):
     conv_general_dilated: ConvGeneralDilatedT = lax.conv_general_dilated,
     promote_dtype: PromoteDtypeFn = dtypes.promote_dtype,
     epsilon: float = 1e-5,
+    drop_rate: float = 0.0,
     rngs: rnglib.Rngs,
   ):
     if isinstance(kernel_size, int):
@@ -185,6 +190,7 @@ class YatConv(Module):
     self.feature_group_count = feature_group_count
     self.use_bias = use_bias
     self.use_alpha = use_alpha
+    self.use_dropconnect = use_dropconnect
 
     self.mask = mask 
     self.dtype = dtype
@@ -195,6 +201,7 @@ class YatConv(Module):
     self.conv_general_dilated = conv_general_dilated
     self.promote_dtype = promote_dtype
     self.epsilon = epsilon
+    self.drop_rate = drop_rate
 
     if use_alpha:
       alpha_key = rngs.params()
@@ -202,8 +209,12 @@ class YatConv(Module):
     else:
       self.alpha = None
 
+    if use_dropconnect:
+      self.dropconnect_key = nnx.Param(rngs.params())
+    else:
+      self.dropconnect_key = None
 
-  def __call__(self, inputs: Array) -> Array:
+  def __call__(self, inputs: Array, *, deterministic: bool = False) -> Array:
     assert isinstance(self.kernel_size, tuple)
 
     def maybe_broadcast(
@@ -260,6 +271,13 @@ class YatConv(Module):
     assert self.in_features % self.feature_group_count == 0
 
     kernel_val = self.kernel.value
+    
+    # Apply DropConnect if enabled and not in deterministic mode
+    if self.use_dropconnect and not deterministic and self.drop_rate > 0.0:
+      keep_prob = 1.0 - self.drop_rate
+      rng = self.dropconnect_key.value
+      mask = jax.random.bernoulli(rng, p=keep_prob, shape=kernel_val.shape)
+      kernel_val = (kernel_val * mask) / keep_prob
     
     current_mask = self.mask 
     if current_mask is not None:
