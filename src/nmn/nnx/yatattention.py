@@ -26,7 +26,8 @@ from flax.typing import (
   DotGeneralT,
 )
 
-
+from nmn.nnx.nmn import YatNMN
+from jax import Array
 
 def yat_attention_weights(
   query: Array,
@@ -153,91 +154,6 @@ def yat_attention(
     '...hqk,...khd->...qhd', attn_weights, value, precision=precision
   )
 
-Array = jax.Array
-
-# Add YatNMN class implementation
-default_bias_init = initializers.zeros_init()
-default_alpha_init = initializers.ones_init()
-
-class YatNMN(Module):
-  """A linear transformation with custom distance-based computation."""
-
-  def __init__(
-    self,
-    in_features: int,
-    out_features: int,
-    *,
-    use_bias: bool = True,
-    use_alpha: bool = True,
-    dtype: Optional[Dtype] = None,
-    param_dtype: Dtype = jnp.float32,
-    precision: PrecisionLike = None,
-    kernel_init: Initializer = default_kernel_init,
-    bias_init: Initializer = default_bias_init,
-    alpha_init: Initializer = default_alpha_init,
-    dot_general: DotGeneralT = lax.dot_general,
-    rngs: rnglib.Rngs,
-    epsilon: float = 1e-5,
-  ):
-
-    kernel_key = rngs.params()
-    self.kernel = nnx.Param(
-      kernel_init(kernel_key, (in_features, out_features), param_dtype)
-    )
-    self.bias: nnx.Param[jax.Array] | None
-    if use_bias:
-      bias_key = rngs.params()
-      self.bias = nnx.Param(bias_init(bias_key, (out_features,), param_dtype))
-    else:
-      self.bias = None
-
-    self.alpha: nnx.Param[jax.Array] | None
-    if use_alpha:
-      alpha_key = rngs.params()
-      self.alpha = nnx.Param(alpha_init(alpha_key, (1,), param_dtype))
-    else:
-      self.alpha = None
-
-    self.in_features = in_features
-    self.out_features = out_features
-    self.use_bias = use_bias
-    self.use_alpha = use_alpha
-    self.dtype = dtype
-    self.param_dtype = param_dtype
-    self.precision = precision
-    self.kernel_init = kernel_init
-    self.bias_init = bias_init
-    self.dot_general = dot_general
-    self.epsilon = epsilon
-
-  def __call__(self, inputs: Array) -> Array:
-    """Applies YatNMN transformation to inputs."""
-    kernel = self.kernel.value
-    bias = self.bias.value if self.bias is not None else None
-    alpha = self.alpha.value if self.alpha is not None else None
-
-    y = self.dot_general(
-      inputs,
-      kernel,
-      (((inputs.ndim - 1,), (0,)), ((), ())),
-      precision=self.precision,
-    )
-
-    inputs_squared_sum = jnp.sum(inputs**2, axis=-1, keepdims=True)
-    kernel_squared_sum = jnp.sum(kernel**2, axis=0, keepdims=True)
-    distances = inputs_squared_sum + kernel_squared_sum - 2 * y
-
-    # Element-wise operation
-    y = y ** 2 / (distances + self.epsilon)
-
-    if bias is not None:
-      y += jnp.reshape(bias, (1,) * (y.ndim - 1) + (-1,))
-
-    if alpha is not None:
-      scale = (jnp.sqrt(self.out_features) / jnp.log(1 + self.out_features)) ** alpha
-      y = y * scale
-
-    return y
 
 
 def dot_product_attention_weights(
@@ -435,6 +351,10 @@ class MultiHeadAttention(Module):
     attention_fn: Callable[..., Array] = yat_attention,
     decode: bool | None = None,
     normalize_qk: bool = False,
+    use_alpha: bool = True,
+    alpha_init: Initializer = initializers.ones_init(),
+    use_dropconnect: bool = False,
+    dropconnect_rate: float = 0.0,
     # Deprecated, will be removed.
     qkv_dot_general: DotGeneralT | None = None,
     out_dot_general: DotGeneralT | None = None,
@@ -470,6 +390,10 @@ class MultiHeadAttention(Module):
     self.qkv_dot_general_cls = qkv_dot_general_cls
     self.out_dot_general_cls = out_dot_general_cls
     self.epsilon = epsilon
+    self.use_alpha = use_alpha
+    self.alpha_init = alpha_init
+    self.use_dropconnect = use_dropconnect
+    self.dropconnect_rate = dropconnect_rate
 
     if self.qkv_features % self.num_heads != 0:
       raise ValueError(
@@ -491,6 +415,10 @@ class MultiHeadAttention(Module):
       use_bias=self.use_bias,
       precision=self.precision,
       epsilon=self.epsilon,
+      use_alpha=self.use_alpha,
+      alpha_init=self.alpha_init,
+      use_dropconnect=self.use_dropconnect,
+      drop_rate=self.dropconnect_rate,
     )
 
     # project inputs_q to multi-headed q/k/v
@@ -590,10 +518,23 @@ class MultiHeadAttention(Module):
         f'but module expects {self.in_features}.'
       )
 
+    is_deterministic: bool = False
+    if self.dropout_rate > 0.0 or (
+      self.use_dropconnect and self.dropconnect_rate > 0.0
+    ):
+      is_deterministic = first_from(
+        deterministic,
+        self.deterministic,
+        error_msg="""No `deterministic` argument was provided to MultiHeadAttention
+          as either a __call__ argument, class attribute, or nnx.flag.""",
+      )
+    else:
+      is_deterministic = True
+
     # Apply YatNMN transformations and reshape to multi-head format
-    query = squash(self.query(inputs_q))
-    key = squash(self.key(inputs_k))
-    value = squash(self.value(inputs_v))
+    query = self.query(inputs_q, deterministic=is_deterministic)
+    key = self.key(inputs_k, deterministic=is_deterministic)
+    value = self.value(inputs_v, deterministic=is_deterministic)
 
     # Reshape from [batch..., length, qkv_features] to [batch..., length, num_heads, head_dim]
     query = query.reshape(query.shape[:-1] + (self.num_heads, self.head_dim))
@@ -660,26 +601,11 @@ class MultiHeadAttention(Module):
         ),
       )
 
-    if (
-      self.dropout_rate > 0.0
-    ):  # Require `deterministic` only if using dropout.
-      deterministic = first_from(
-        deterministic,
-        self.deterministic,
-        error_msg="""No `deterministic` argument was provided to MultiHeadAttention
-          as either a __call__ argument, class attribute, or nnx.flag.""",
-      )
-      if not deterministic:
-        if rngs is None:
-          raise ValueError(
-            "'rngs' must be provided if 'dropout_rng' is not given."
-          )
-        dropout_rng = rngs.dropout()
-      else:
-        dropout_rng = None
-    else:
-      deterministic = True
-      dropout_rng = None
+    dropout_rng = None
+    if self.dropout_rate > 0.0 and not is_deterministic:
+      if rngs is None:
+        raise ValueError("'rngs' must be provided for dropout.")
+      dropout_rng = rngs.dropout()
 
     # apply attention with epsilon parameter for YatNMN
     x = self.attention_fn(
@@ -690,7 +616,7 @@ class MultiHeadAttention(Module):
       dropout_rng=dropout_rng,
       dropout_rate=self.dropout_rate,
       broadcast_dropout=self.broadcast_dropout,
-      deterministic=deterministic,
+      deterministic=is_deterministic,
       dtype=self.dtype,
       precision=self.precision,
       module=self if sow_weights else None,
