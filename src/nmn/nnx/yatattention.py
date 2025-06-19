@@ -460,8 +460,6 @@ class MultiHeadAttention(Module):
       self.key_ln = None
 
     # Remove the output layer - no more self.out
-    self.rngs = rngs if dropout_rate > 0.0 else None
-
     self.cached_key: nnx.Cache[Array] | None = None
     self.cached_value: nnx.Cache[Array] | None = None
     self.cache_index: nnx.Cache[Array] | None = None
@@ -507,8 +505,6 @@ class MultiHeadAttention(Module):
     Returns:
       output of shape `[batch_sizes..., length, features]`.
     """
-    if rngs is None:
-      rngs = self.rngs
 
     if inputs_k is None:
       if inputs_v is not None:
