@@ -1,7 +1,12 @@
-import jax.numpy as jnp
-from jax import Array
+from functools import partial
 from typing import Optional
 
+import jax
+import jax.numpy as jnp
+from jax import Array
+
+
+@partial(jax.jit, static_argnames=("n", "axis"))
 def softermax(
     x: Array,
     n: float = 1.0,
