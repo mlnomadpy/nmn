@@ -44,6 +44,8 @@ def yat_attention_weights(
   module: Optional[Module] = None,
   epsilon: float = 1e-5,
   use_softermax: bool = False,
+  power: float = 1.0,
+
 ):
   """Computes attention weights using YatNMN distance-based calculation."""
   query, key = promote_dtype((query, key), dtype=dtype)
@@ -89,7 +91,7 @@ def yat_attention_weights(
 
   # normalize the attention weights
   if use_softermax:
-    attn_weights = softermax(attn_weights).astype(dtype)
+    attn_weights = softermax(attn_weights, n=power).astype(dtype)
   else:
     attn_weights = jax.nn.softmax(attn_weights).astype(dtype)
 
@@ -126,6 +128,7 @@ def yat_attention(
   module: Optional[Module] = None,
   epsilon: float = 1e-5,
   use_softermax: bool = False,
+  power: float = 1.0,
 ):
   """Computes attention using YatNMN distance-based calculation."""
   query, key, value = promote_dtype((query, key, value), dtype=dtype)
@@ -154,6 +157,7 @@ def yat_attention(
     module,
     epsilon,
     use_softermax,
+    power,
   )
 
   # return weighted sum over values for each query position
@@ -370,6 +374,7 @@ class MultiHeadAttention(Module):
     rngs: rnglib.Rngs,
     epsilon: float = 1e-5,
     use_softermax: bool = False,
+    power: float = 1.0,
   ):
     self.num_heads = num_heads
     self.in_features = in_features
@@ -399,6 +404,7 @@ class MultiHeadAttention(Module):
     self.out_dot_general_cls = out_dot_general_cls
     self.epsilon = epsilon
     self.use_softermax = use_softermax
+    self.power = power
     self.use_alpha = use_alpha
     self.alpha_init = alpha_init
     self.use_dropconnect = use_dropconnect
@@ -627,6 +633,7 @@ class MultiHeadAttention(Module):
       module=self if sow_weights else None,
       epsilon=self.epsilon,  # Pass epsilon to yat_attention
       use_softermax=self.use_softermax,
+      power= self.power,
     )
     # Reshape attention output back to original embedding dimension
     # from [batch..., length, num_heads, head_dim] to [batch..., length, qkv_features]
