@@ -1,2 +1,3 @@
 - add support to masked kernels
 - explain attention [directed graph]
+- add support to optax softermax
