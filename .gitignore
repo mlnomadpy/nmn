@@ -69,3 +69,4 @@ Thumbs.db
 
 # GitHub workflows artifacts
 .github/workflows/*.log
+dist/

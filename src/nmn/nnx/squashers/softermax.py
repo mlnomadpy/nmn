@@ -6,7 +6,7 @@ import jax.numpy as jnp
 from jax import Array
 
 
-@partial(jax.jit, static_argnames=("n", "axis"))
+@partial(jax.jit, static_argnames=("n", "axis", "epsilon"))
 def softermax(
     x: Array,
     n: float = 1.0,
