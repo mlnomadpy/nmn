@@ -10,6 +10,7 @@ from flax.typing import (
 import typing as tp
 from nmn.nnx.nmn import YatNMN
 from nmn.nnx.rnn.rnn_utils import RNNCellBase, default_kernel_init, modified_orthogonal, default_bias_init
+from typing import Any
 
 
 class YatGRUCell(RNNCellBase):
