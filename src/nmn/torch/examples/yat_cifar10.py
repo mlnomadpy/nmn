@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 YAT Convolution CIFAR-10 Training Example
 
@@ -32,8 +31,8 @@ import torchvision
 import torchvision.transforms as transforms
 
 # Add the parent directory to path to import YAT convolutions
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 from nmn.torch.conv import YatConv2d
+from nmn.torch.nmn import YatNMN
 
 
 class YATConvNet(nn.Module):
@@ -43,27 +42,16 @@ class YATConvNet(nn.Module):
         super(YATConvNet, self).__init__()
         
         # First YAT conv block
-        self.conv1 = YatConv2d(
+        self.conv1 = nn.Conv2d(
             in_channels=3, 
             out_channels=32, 
             kernel_size=3, 
             padding=1,
-            use_alpha=use_alpha,
-            use_dropconnect=use_dropconnect,
-            drop_rate=drop_rate
+            bias=False
         )
-        self.bn1 = nn.BatchNorm2d(32)
         
-        self.conv2 = YatConv2d(
-            in_channels=32, 
-            out_channels=32, 
-            kernel_size=3, 
-            padding=1,
-            use_alpha=use_alpha,
-            use_dropconnect=use_dropconnect,
-            drop_rate=drop_rate
-        )
-        self.bn2 = nn.BatchNorm2d(32)
+        
+        
         self.pool1 = nn.MaxPool2d(2, 2)  # 32x32 -> 16x16
         
         # Second YAT conv block
@@ -72,22 +60,20 @@ class YATConvNet(nn.Module):
             out_channels=64, 
             kernel_size=3, 
             padding=1,
-            use_alpha=use_alpha,
-            use_dropconnect=use_dropconnect,
-            drop_rate=drop_rate
+            use_alpha=True,
+            use_dropconnect=False,
+            bias=False
         )
-        self.bn3 = nn.BatchNorm2d(64)
+            
         
-        self.conv4 = YatConv2d(
+        self.lin_conv3 = nn.Conv2d(
             in_channels=64, 
             out_channels=64, 
             kernel_size=3, 
             padding=1,
-            use_alpha=use_alpha,
-            use_dropconnect=use_dropconnect,
-            drop_rate=drop_rate
+            bias=False
         )
-        self.bn4 = nn.BatchNorm2d(64)
+        
         self.pool2 = nn.MaxPool2d(2, 2)  # 16x16 -> 8x8
         
         # Third YAT conv block
@@ -96,51 +82,44 @@ class YATConvNet(nn.Module):
             out_channels=128, 
             kernel_size=3, 
             padding=1,
-            use_alpha=use_alpha,
-            use_dropconnect=use_dropconnect,
-            drop_rate=drop_rate
+            use_alpha=True,
+            use_dropconnect=False,
+            bias=False
         )
-        self.bn5 = nn.BatchNorm2d(128)
         
-        self.conv6 = YatConv2d(
+        self.lin_conv5 = nn.Conv2d(
             in_channels=128, 
             out_channels=128, 
             kernel_size=3, 
             padding=1,
-            use_alpha=use_alpha,
-            use_dropconnect=use_dropconnect,
-            drop_rate=drop_rate
+            bias=False
         )
-        self.bn6 = nn.BatchNorm2d(128)
+        
         self.pool3 = nn.MaxPool2d(2, 2)  # 8x8 -> 4x4
         
         # Classifier
         self.dropout = nn.Dropout(0.5)
-        self.fc1 = nn.Linear(128 * 4 * 4, 512)
-        self.fc2 = nn.Linear(512, num_classes)
+        self.fc1 = nn.Linear(128 * 4 * 4, num_classes, bias=False)
         
     def forward(self, x):
         # First block
-        x = F.relu(self.bn1(self.conv1(x, deterministic=not self.training)))
-        x = F.relu(self.bn2(self.conv2(x, deterministic=not self.training)))
+        x = self.conv1(x)
         x = self.pool1(x)
         
         # Second block
-        x = F.relu(self.bn3(self.conv3(x, deterministic=not self.training)))
-        x = F.relu(self.bn4(self.conv4(x, deterministic=not self.training)))
+        x = self.conv3(x, deterministic=not self.training)
+        x = self.lin_conv3(x)
         x = self.pool2(x)
         
         # Third block
-        x = F.relu(self.bn5(self.conv5(x, deterministic=not self.training)))
-        x = F.relu(self.bn6(self.conv6(x, deterministic=not self.training)))
+        x = self.conv5(x, deterministic=not self.training)
+        x = self.lin_conv5(x)
         x = self.pool3(x)
         
         # Classifier
         x = x.view(-1, 128 * 4 * 4)
         x = self.dropout(x)
-        x = F.relu(self.fc1(x))
-        x = self.dropout(x)
-        x = self.fc2(x)
+        x = self.fc1(x)
         
         return x
 
@@ -312,7 +291,7 @@ def main():
                         help='Random seed (default: 42)')
     parser.add_argument('--use-alpha', action='store_true', default=True,
                         help='Use alpha scaling in YAT convolutions')
-    parser.add_argument('--use-dropconnect', action='store_true', default=True,
+    parser.add_argument('--use-dropconnect', action='store_true', default=False,
                         help='Use DropConnect in YAT convolutions')
     parser.add_argument('--drop-rate', type=float, default=0.1,
                         help='DropConnect rate for YAT layers (default: 0.1)')
