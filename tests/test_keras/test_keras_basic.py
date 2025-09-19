@@ -9,7 +9,7 @@ def test_keras_import():
     try:
         from nmn.keras import nmn
         from nmn.keras import conv
-        assert hasattr(nmn, 'YatDense')
+        assert hasattr(nmn, 'YatNMN')
         assert hasattr(conv, 'YatConv1D')
         assert hasattr(conv, 'YatConv2D')
     except ImportError as e:
@@ -20,14 +20,14 @@ def test_keras_import():
     True,
     reason="TensorFlow not available in test environment"
 )
-def test_yat_dense_basic():
-    """Test basic YatDense functionality."""
+def test_yat_nmn_basic():
+    """Test basic YatNMN functionality."""
     try:
         import tensorflow as tf
-        from nmn.keras.nmn import YatDense
+        from nmn.keras.nmn import YatNMN
         
         # Create layer
-        layer = YatDense(units=10)
+        layer = YatNMN(units=10)
         
         # Build layer with input shape
         layer.build((None, 8))
@@ -127,14 +127,14 @@ def test_yat_conv2d_same_padding():
     True,
     reason="TensorFlow not available in test environment"
 )
-def test_yat_dense_with_activation():
-    """Test YatDense with activation function."""
+def test_yat_nmn_with_activation():
+    """Test YatNMN with activation function."""
     try:
         import tensorflow as tf
-        from nmn.keras.nmn import YatDense
+        from nmn.keras.nmn import YatNMN
         
         # Create layer with ReLU activation
-        layer = YatDense(units=10, activation='relu')
+        layer = YatNMN(units=10, activation='relu')
         
         # Build layer with input shape
         layer.build((None, 8))
@@ -155,14 +155,14 @@ def test_yat_dense_with_activation():
     True,
     reason="TensorFlow not available in test environment"
 )
-def test_yat_dense_no_bias():
-    """Test YatDense without bias."""
+def test_yat_nmn_no_bias():
+    """Test YatNMN without bias."""
     try:
         import tensorflow as tf
-        from nmn.keras.nmn import YatDense
+        from nmn.keras.nmn import YatNMN
         
         # Create layer without bias
-        layer = YatDense(units=10, use_bias=False)
+        layer = YatNMN(units=10, use_bias=False)
         
         # Build layer with input shape
         layer.build((None, 8))
@@ -184,20 +184,20 @@ def test_yat_dense_no_bias():
     True,
     reason="TensorFlow not available in test environment"
 )
-def test_yat_dense_no_alpha():
-    """Test YatDense without alpha scaling."""
+def test_yat_nmn_epsilon():
+    """Test YatNMN with custom epsilon."""
     try:
         import tensorflow as tf
-        from nmn.keras.nmn import YatDense
+        from nmn.keras.nmn import YatNMN
         
-        # Create layer without alpha scaling
-        layer = YatDense(units=10, use_alpha=False)
+        # Create layer with custom epsilon
+        layer = YatNMN(units=10, epsilon=1e-4)
         
         # Build layer with input shape
         layer.build((None, 8))
         
-        # Check that alpha is None
-        assert layer.alpha is None
+        # Check that epsilon is set
+        assert layer.epsilon == 1e-4
         
         # Test forward pass
         dummy_input = tf.constant(np.random.randn(4, 8).astype(np.float32))

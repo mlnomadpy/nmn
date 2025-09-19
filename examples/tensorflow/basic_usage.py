@@ -4,7 +4,7 @@ import numpy as np
 
 try:
     import tensorflow as tf
-    from nmn.tf.nmn import YatDense
+    from nmn.tf.nmn import YatNMN
     
     print("NMN TensorFlow Basic Example")
     print("=" * 35)
@@ -15,7 +15,7 @@ try:
     output_dim = 10
     
     # Create YAT dense layer
-    yat_layer = YatDense(units=output_dim, use_alpha=True, alpha=1.2)
+    yat_layer = YatNMN(features=output_dim)
     
     # Create dummy input
     dummy_input = tf.random.normal((batch_size, input_dim))
@@ -25,14 +25,14 @@ try:
     
     print(f"Input shape: {dummy_input.shape}")
     print(f"Output shape: {output.shape}")
-    print(f"Layer parameters: {yat_layer.count_params()}")
+    print(f"Layer built: {yat_layer.is_built}")
     
-    # Test with different alpha values
-    print("\nTesting different alpha values:")
-    for alpha_val in [0.5, 1.0, 1.5, 2.0]:
-        test_layer = YatDense(units=5, use_alpha=True, alpha=alpha_val)
+    # Test with different epsilon values
+    print("\nTesting different epsilon values:")
+    for epsilon_val in [1e-4, 1e-5, 1e-6, 1e-7]:
+        test_layer = YatNMN(features=5, epsilon=epsilon_val)
         test_output = test_layer(dummy_input[:4, :8])  # Smaller input
-        print(f"Alpha {alpha_val}: output range [{tf.reduce_min(test_output):.3f}, {tf.reduce_max(test_output):.3f}]")
+        print(f"Epsilon {epsilon_val}: output range [{tf.reduce_min(test_output):.3f}, {tf.reduce_max(test_output):.3f}]")
     
     print("\n✅ TensorFlow example completed successfully!")
     
