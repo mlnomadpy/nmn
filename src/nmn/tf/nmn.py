@@ -17,7 +17,7 @@ def create_orthogonal_matrix(shape: Tuple[int, ...], dtype: tf.DType = tf.float3
         q = tf.transpose(q)
     return q
 
-class YatNMN(tf.Module):
+class YatDense(tf.Module):
     """A custom transformation applied over the last dimension of the input using squared Euclidean distance.
 
     Args:
@@ -177,3 +177,7 @@ class YatNMN(tf.Module):
         self.alpha.assign(weights[1])
         if self.use_bias:
             self.bias.assign(weights[2])
+
+
+# Alias for backward compatibility
+YatNMN = YatDense
