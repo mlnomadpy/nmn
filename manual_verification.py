@@ -147,19 +147,19 @@ def test_yat_properties():
     # Test 1: YAT should be positive
     inputs = np.array([[1.0, 0.0], [0.0, 1.0]])
     kernel = np.array([[1.0, 0.0], [0.0, 1.0]])
-    output = yat_dense_manual(inputs, kernel)
+    output = yat_nmn_manual(inputs, kernel)
     assert np.all(output >= 0), "YAT output should be non-negative"
     print("  ✅ Non-negativity property verified")
     
     # Test 2: Perfect match should give high activation
     inputs = np.array([[1.0, 0.0]])
     kernel = np.array([[1.0], [0.0]])  # Perfect match for first input
-    output = yat_dense_manual(inputs, kernel)
+    output = yat_nmn_manual(inputs, kernel)
     print(f"  Perfect match activation: {output[0, 0]:.3f}")
     
     # Test 3: Orthogonal vectors should give lower activation
     kernel_orth = np.array([[0.0], [1.0]])  # Orthogonal to first input
-    output_orth = yat_dense_manual(inputs, kernel_orth)
+    output_orth = yat_nmn_manual(inputs, kernel_orth)
     print(f"  Orthogonal activation: {output_orth[0, 0]:.3f}")
     
     # Perfect match should give higher activation than orthogonal
