@@ -8,7 +8,7 @@ version = "0.1.12"
 authors = [
     { name="Taha Bouhsine", email="yat@mlnomads.com" },
 ]
-description = "a neuron that matter"
+description = "Neural-Matter Network (NMN) - Advanced neural network layers with attention mechanisms"
 readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
@@ -19,5 +19,44 @@ classifiers = [
 
 [project.urls]
 "Homepage" = "https://github.com/mlnomadpy/nmn"
-"Bug Tracker" = "https://github.com/mlnomadpy/my_package/issues"
+"Bug Tracker" = "https://github.com/mlnomadpy/nmn/issues"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.0.0",
+]
+nnx = [
+    "jax>=0.4.0",
+    "flax>=0.7.0",
+]
+torch = [
+    "torch>=1.11.0",
+    "torchvision>=0.12.0",
+]
+keras = [
+    "tensorflow>=2.10.0",
+]
+tf = [
+    "tensorflow>=2.10.0",
+]
+linen = [
+    "jax>=0.4.0",
+    "flax>=0.7.0",
+]
+all = [
+    "nmn[nnx,torch,keras,tf,linen]"
+]
+test = [
+    "nmn[dev,all]",
+    "tensorflow-datasets>=4.8.0",
+    "optax>=0.1.4",
+    "matplotlib>=3.5.0",
+    "seaborn>=0.11.0",
+    "scikit-learn>=1.1.0",
+]
 
