@@ -6,7 +6,7 @@ from keras.src import ops
 import math
 
 @keras_export("keras.layers.YatDense")
-class YatNMN(Layer):
+class YatDense(Layer):
     """A YAT densely-connected NN layer.
 
     This layer implements the operation:
@@ -151,3 +151,7 @@ class YatNMN(Layer):
             "bias_constraint": constraints.serialize(self.bias_constraint),
         })
         return config
+
+
+# Alias for backward compatibility
+YatNMN = YatDense
