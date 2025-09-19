@@ -9,6 +9,8 @@ Not the neurons we want, but the neurons we need
 [![GitHub issues](https://img.shields.io/github/issues/mlnomadpy/nmn)](https://github.com/mlnomadpy/nmn/issues)
 [![PyPI - License](https://img.shields.io/pypi/l/nmn)](https://pypi.org/project/nmn/)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/nmn)](https://pypi.org/project/nmn/)
+[![Test Suite](https://github.com/mlnomadpy/nmn/actions/workflows/test.yml/badge.svg)](https://github.com/mlnomadpy/nmn/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/mlnomadpy/nmn/branch/master/graph/badge.svg)](https://codecov.io/gh/mlnomadpy/nmn)
 
 ## Features
 
@@ -75,8 +77,39 @@ The `YatNMN` layer (for dense operations) and `YatConv` (for convolutional opera
 
 ## Installation
 
+### Basic Installation
 ```bash
 pip install nmn
+```
+
+### Framework-Specific Installation
+
+For optimal performance and full feature access, install with framework-specific dependencies:
+
+```bash
+# For JAX/Flax (NNX and Linen)
+pip install "nmn[nnx]"      # or "nmn[linen]"
+
+# For PyTorch 
+pip install "nmn[torch]"
+
+# For TensorFlow/Keras
+pip install "nmn[keras]"    # or "nmn[tf]"
+
+# For all frameworks
+pip install "nmn[all]"
+
+# For development and testing
+pip install "nmn[dev]"      # Basic dev tools
+pip install "nmn[test]"     # All dependencies for testing
+```
+
+### Development Installation
+
+```bash
+git clone https://github.com/mlnomadpy/nmn.git
+cd nmn
+pip install -e ".[dev]"
 ```
 
 ## Usage Example (Flax NNX)
@@ -111,22 +144,90 @@ conv_output = conv_layer(dummy_conv_input)
 print("YatConv Output Shape:", conv_output.shape)
 
 ```
-*Note: Examples for other frameworks (Keras, PyTorch, TensorFlow, Flax Linen) can be found in their respective `nmn.<framework>` modules and upcoming documentation.*
+*Note: Examples for other frameworks can be found in the [`examples/`](examples/) directory. Each framework has its own subdirectory with comprehensive examples and documentation.*
+
+## Examples and Documentation
+
+The [`examples/`](examples/) directory contains comprehensive examples for all supported frameworks:
+
+- **[`examples/nnx/`](examples/nnx/)** - Flax NNX examples (vision, language tasks)
+- **[`examples/torch/`](examples/torch/)** - PyTorch examples (CIFAR-10, basic usage)
+- **[`examples/keras/`](examples/keras/)** - Keras examples 
+- **[`examples/tensorflow/`](examples/tensorflow/)** - TensorFlow examples
+- **[`examples/linen/`](examples/linen/)** - Flax Linen examples
+- **[`examples/comparative/`](examples/comparative/)** - Cross-framework comparisons
+
+### Quick Start Examples
+
+```bash
+# Test framework availability
+python examples/comparative/framework_comparison.py
+
+# PyTorch YAT convolution example
+python examples/torch/yat_examples.py
+
+# Keras dense layer example  
+python examples/keras/basic_usage.py
+```
+
+## Testing
+
+Run the test suite to verify installation:
+
+```bash
+# Install test dependencies
+pip install "nmn[test]"
+
+# Run all tests
+pytest tests/
+
+# Run tests with coverage
+pytest tests/ --cov=nmn --cov-report=html
+
+# Run specific framework tests
+pytest tests/test_torch/
+pytest tests/integration/
+```
 
 ## Roadmap
 
--   [ ] Implement recurrent layers (`YatRNN`, `YatLSTM`, `YatGRU`) for all supported frameworks.
--   [ ] Develop Ternary Network versions of Yat layers for NNX.
--   [ ] Add more comprehensive examples and benchmark scripts for various tasks (vision, language).
--   [ ] Publish detailed documentation and API references.
--   [ ] Conduct and publish thorough performance benchmarks against traditional layers.
+-   [x] ✅ **Comprehensive Examples** - Added framework-specific examples in `examples/` directory
+-   [x] ✅ **Testing Infrastructure** - Implemented test suite with CI/CD
+-   [x] ✅ **Production Package Structure** - Organized codebase for production use
+-   [ ] 🚧 Implement recurrent layers (`YatRNN`, `YatLSTM`, `YatGRU`) for all supported frameworks
+-   [ ] 🚧 Develop Ternary Network versions of Yat layers for NNX
+-   [ ] 🚧 Add more comprehensive benchmark scripts for various tasks (vision, language)
+-   [ ] 🚧 Publish detailed documentation and API references
+-   [ ] 🚧 Conduct and publish thorough performance benchmarks against traditional layers
 
 ## Contributing
 
-Contributions are welcome! If you'd like to contribute, please feel free to:
--   Open an issue on the [Bug Tracker](https://github.com/mlnomadpy/nmn/issues) to report bugs or suggest features.
--   Submit a pull request with your improvements.
--   Help expand the documentation or add more examples.
+Contributions are welcome! Please follow these steps:
+
+1. **Development Setup**:
+   ```bash
+   git clone https://github.com/mlnomadpy/nmn.git
+   cd nmn
+   pip install -e ".[dev]"
+   ```
+
+2. **Code Quality**: We use automated formatting and linting:
+   ```bash
+   black src/ tests/ examples/
+   flake8 src/
+   isort src/ tests/ examples/
+   ```
+
+3. **Testing**: Ensure all tests pass:
+   ```bash
+   pytest tests/ -v
+   ```
+
+4. **Contributing**:
+   - Open an issue on the [Bug Tracker](https://github.com/mlnomadpy/nmn/issues) to report bugs or suggest features
+   - Submit a pull request with your improvements  
+   - Help expand the documentation or add more examples
+   - Add tests for any new functionality
 
 ## License
 
