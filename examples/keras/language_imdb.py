@@ -35,7 +35,7 @@ try:
     EPOCHS = 15
     NUM_CLASSES = 2
     VALIDATION_SPLIT = 0.2
-    MODEL_SAVE_PATH = "/tmp/keras_imdb_yat_model"
+    MODEL_SAVE_PATH = "/tmp/keras_imdb_yat_model.keras"
     VOCAB_SIZE = 10000
     SEQUENCE_LENGTH = 200
     EMBEDDING_DIM = 128
