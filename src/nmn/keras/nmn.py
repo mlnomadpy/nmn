@@ -5,8 +5,8 @@ from keras.src.layers.layer import Layer
 from keras.src import ops
 import math
 
-@keras_export("keras.layers.YatDense")
-class YatDense(Layer):
+@keras_export("keras.layers.YatNMN")
+class YatNMN(Layer):
     """A YAT densely-connected NN layer.
 
     This layer implements the operation:
@@ -154,4 +154,4 @@ class YatDense(Layer):
 
 
 # Alias for backward compatibility
-YatNMN = YatDense
+YatDense = YatNMN
