@@ -4,18 +4,28 @@ from typing import Optional, Any, Tuple, Union, List, Callable
 import numpy as np
 
 def create_orthogonal_matrix(shape: Tuple[int, ...], dtype: tf.DType = tf.float32) -> tf.Tensor:
-    """Creates an orthogonal matrix using QR decomposition."""
+    """Creates an orthogonal matrix using the standard approach for rectangular matrices."""
     num_rows, num_cols = shape
-    random_matrix = tf.random.normal([num_rows, num_cols], dtype=dtype)
-    q, r = tf.linalg.qr(random_matrix)
-    # Make it uniform
-    d = tf.linalg.diag_part(r)
-    ph = tf.cast(tf.sign(d), dtype)
-    q *= ph[None, :]
     
-    if num_rows < num_cols:
-        q = tf.transpose(q)
-    return q
+    # Standard approach: sample from normal distribution and apply orthogonal transformation
+    if num_rows >= num_cols:
+        # Tall or square matrix
+        random_matrix = tf.random.normal([num_rows, num_cols], dtype=dtype)
+        q, r = tf.linalg.qr(random_matrix)
+        # Make it uniform by adjusting signs
+        d = tf.linalg.diag_part(r)
+        ph = tf.cast(tf.sign(d), dtype)
+        q *= ph[None, :]
+        return q
+    else:
+        # Wide matrix: transpose approach
+        random_matrix = tf.random.normal([num_cols, num_rows], dtype=dtype)
+        q, r = tf.linalg.qr(random_matrix)
+        # Make it uniform
+        d = tf.linalg.diag_part(r)
+        ph = tf.cast(tf.sign(d), dtype)
+        q *= ph[None, :]
+        return tf.transpose(q)
 
 class YatNMN(tf.Module):
     """A custom transformation applied over the last dimension of the input using squared Euclidean distance.
