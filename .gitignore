@@ -70,3 +70,62 @@ Thumbs.db
 # GitHub workflows artifacts
 .github/workflows/*.log
 dist/
+
+# Additional production files
+# IDE files
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# ML/Data files
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.joblib
+checkpoints/
+logs/
+wandb/
+*.pt
+*.pth
+*.ckpt
+
+# Framework specific
+# JAX
+*.jax_cache/
+
+# TensorFlow
+*.pb
+*.tflite
+events.out.tfevents.*
+
+# PyTorch
+lightning_logs/
+
+# Model artifacts
+models/
+artifacts/
+outputs/
+
+# Environment files
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
