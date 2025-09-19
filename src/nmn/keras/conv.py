@@ -140,7 +140,7 @@ class YatConv1D(Layer):
                 f"divisible by the number of groups ({self.groups})."
             )
 
-        kernel_shape = self.kernel_size + (input_dim // self.groups, self.filters)
+        kernel_shape = tuple(self.kernel_size) + (input_dim // self.groups, self.filters)
 
         self.kernel = self.add_weight(
             name="kernel",
@@ -192,7 +192,7 @@ class YatConv1D(Layer):
         
         # Create ones kernel for computing patch squared sums
         input_channels_per_group = self.kernel.shape[-2]
-        ones_kernel_shape = self.kernel_size + (input_channels_per_group, 1)
+        ones_kernel_shape = tuple(self.kernel_size) + (input_channels_per_group, 1)
         ones_kernel = ops.ones(ones_kernel_shape, dtype=self.kernel.dtype)
         
         patch_sq_sum_map_raw = ops.conv(
@@ -421,7 +421,7 @@ class YatConv2D(Layer):
                 f"divisible by the number of groups ({self.groups})."
             )
 
-        kernel_shape = self.kernel_size + (input_dim // self.groups, self.filters)
+        kernel_shape = tuple(self.kernel_size) + (input_dim // self.groups, self.filters)
 
         self.kernel = self.add_weight(
             name="kernel",
@@ -473,7 +473,7 @@ class YatConv2D(Layer):
         
         # Create ones kernel for computing patch squared sums
         input_channels_per_group = self.kernel.shape[-2]
-        ones_kernel_shape = self.kernel_size + (input_channels_per_group, 1)
+        ones_kernel_shape = tuple(self.kernel_size) + (input_channels_per_group, 1)
         ones_kernel = ops.ones(ones_kernel_shape, dtype=self.kernel.dtype)
         
         patch_sq_sum_map_raw = ops.conv(
