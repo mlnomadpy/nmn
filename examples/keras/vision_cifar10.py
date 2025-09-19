@@ -35,7 +35,7 @@ try:
     EPOCHS = 10
     NUM_CLASSES = 10
     VALIDATION_SPLIT = 0.1
-    MODEL_SAVE_PATH = "/tmp/keras_cifar10_yat_model"
+    MODEL_SAVE_PATH = "/tmp/keras_cifar10_yat_model.keras"
     
     # CIFAR-10 class names
     CLASS_NAMES = ['airplane', 'automobile', 'bird', 'cat', 'deer',
