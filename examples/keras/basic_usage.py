@@ -4,16 +4,16 @@ import numpy as np
 
 try:
     import tensorflow as tf
-    from nmn.keras.nmn import YatDense
+    from nmn.keras.nmn import YatNMN
     
     print("NMN Keras/TensorFlow Basic Example")
     print("=" * 40)
     
     # Create a simple model with YAT dense layers
     model = tf.keras.Sequential([
-        YatDense(64, activation='relu', input_shape=(10,)),
-        YatDense(32, activation='relu'),
-        YatDense(1, activation='sigmoid')
+        YatNMN(64, activation='relu', input_shape=(10,)),
+        YatNMN(32, activation='relu'),
+        YatNMN(1, activation='sigmoid')
     ])
     
     # Compile the model
