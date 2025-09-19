@@ -10,8 +10,8 @@ import numpy as np
 import math
 
 
-def yat_dense_manual(inputs, kernel, bias=None, alpha=1.0, epsilon=1e-5):
-    """Manual implementation of YAT Dense layer for verification."""
+def yat_nmn_manual(inputs, kernel, bias=None, alpha=1.0, epsilon=1e-5):
+    """Manual implementation of YAT NMN layer for verification."""
     # Step 1: Compute dot product
     dot_product = np.dot(inputs, kernel)
     
@@ -81,9 +81,9 @@ def yat_conv1d_manual(inputs, kernel, bias=None, alpha=1.0, epsilon=1e-5, stride
     return outputs
 
 
-def test_yat_dense_logic():
-    """Test YAT Dense logic."""
-    print("🧮 Testing YAT Dense Logic")
+def test_yat_nmn_logic():
+    """Test YAT NMN logic."""
+    print("🧮 Testing YAT NMN Logic")
     
     # Create test data
     batch_size, input_dim, output_dim = 2, 4, 3
@@ -92,7 +92,7 @@ def test_yat_dense_logic():
     bias = np.random.randn(output_dim).astype(np.float32)
     
     # Test the algorithm
-    output = yat_dense_manual(inputs, kernel, bias, alpha=1.0)
+    output = yat_nmn_manual(inputs, kernel, bias, alpha=1.0)
     
     print(f"  Input shape: {inputs.shape}")
     print(f"  Kernel shape: {kernel.shape}")
@@ -104,7 +104,7 @@ def test_yat_dense_logic():
     assert np.all(np.isfinite(output))
     assert not np.any(np.isnan(output))
     
-    print("  ✅ YAT Dense logic verified")
+    print("  ✅ YAT NMN logic verified")
     return True
 
 
@@ -147,19 +147,19 @@ def test_yat_properties():
     # Test 1: YAT should be positive
     inputs = np.array([[1.0, 0.0], [0.0, 1.0]])
     kernel = np.array([[1.0, 0.0], [0.0, 1.0]])
-    output = yat_dense_manual(inputs, kernel)
+    output = yat_nmn_manual(inputs, kernel)
     assert np.all(output >= 0), "YAT output should be non-negative"
     print("  ✅ Non-negativity property verified")
     
     # Test 2: Perfect match should give high activation
     inputs = np.array([[1.0, 0.0]])
     kernel = np.array([[1.0], [0.0]])  # Perfect match for first input
-    output = yat_dense_manual(inputs, kernel)
+    output = yat_nmn_manual(inputs, kernel)
     print(f"  Perfect match activation: {output[0, 0]:.3f}")
     
     # Test 3: Orthogonal vectors should give lower activation
     kernel_orth = np.array([[0.0], [1.0]])  # Orthogonal to first input
-    output_orth = yat_dense_manual(inputs, kernel_orth)
+    output_orth = yat_nmn_manual(inputs, kernel_orth)
     print(f"  Orthogonal activation: {output_orth[0, 0]:.3f}")
     
     # Perfect match should give higher activation than orthogonal
@@ -176,7 +176,7 @@ def main():
     
     try:
         # Test the core algorithms
-        test_yat_dense_logic()
+        test_yat_nmn_logic()
         print()
         test_yat_conv1d_logic()
         print()

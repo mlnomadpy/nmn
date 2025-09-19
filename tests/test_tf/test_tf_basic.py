@@ -9,7 +9,7 @@ def test_tf_import():
     try:
         from nmn.tf import nmn
         from nmn.tf import conv
-        assert hasattr(nmn, 'YatDense')
+        assert hasattr(nmn, 'YatNMN')
         assert hasattr(conv, 'YatConv1D')
         assert hasattr(conv, 'YatConv2D')
         assert hasattr(conv, 'YatConv3D')
@@ -21,14 +21,14 @@ def test_tf_import():
     True,
     reason="TensorFlow not available in test environment"
 )
-def test_yat_dense_basic():
-    """Test basic TensorFlow YatDense functionality."""
+def test_yat_nmn_basic():
+    """Test basic TensorFlow YatNMN functionality."""
     try:
         import tensorflow as tf
-        from nmn.tf.nmn import YatDense
+        from nmn.tf.nmn import YatNMN
         
         # Create layer
-        layer = YatDense(features=10)
+        layer = YatNMN(features=10)
         
         # Test forward pass
         dummy_input = tf.constant(np.random.randn(4, 8).astype(np.float32))
@@ -140,14 +140,14 @@ def test_yat_conv2d_same_padding():
     True,
     reason="TensorFlow not available in test environment"
 )
-def test_yat_dense_no_bias():
-    """Test YatDense without bias."""
+def test_yat_nmn_no_bias():
+    """Test YatNMN without bias."""
     try:
         import tensorflow as tf
-        from nmn.tf.nmn import YatDense
+        from nmn.tf.nmn import YatNMN
         
         # Create layer without bias
-        layer = YatDense(features=10, use_bias=False)
+        layer = YatNMN(features=10, use_bias=False)
         
         # Test forward pass
         dummy_input = tf.constant(np.random.randn(4, 8).astype(np.float32))
@@ -165,22 +165,22 @@ def test_yat_dense_no_bias():
     True,
     reason="TensorFlow not available in test environment"
 )
-def test_yat_dense_no_alpha():
-    """Test YatDense without alpha scaling."""
+def test_yat_nmn_custom_epsilon():
+    """Test YatNMN with custom epsilon."""
     try:
         import tensorflow as tf
-        from nmn.tf.nmn import YatDense
+        from nmn.tf.nmn import YatNMN
         
-        # Create layer without alpha scaling
-        layer = YatDense(features=10, use_alpha=False)
+        # Create layer with custom epsilon
+        layer = YatNMN(features=10, epsilon=1e-4)
         
         # Test forward pass
         dummy_input = tf.constant(np.random.randn(4, 8).astype(np.float32))
         output = layer(dummy_input)
         
         assert output.shape == (4, 10)
-        # Check that alpha is None
-        assert layer.alpha is None
+        # Check that epsilon is set
+        assert layer.epsilon == 1e-4
         
     except ImportError:
         pytest.skip("TensorFlow dependencies not available")
