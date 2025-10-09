@@ -3,11 +3,12 @@
 # To run this script, you'll need to install the following packages:
 # pip install torch torchvision torchaudio
 # pip install datasets nmn-pytorch # For the original YAT models and TinyImageNet
-# pip install wandb opencv-python matplotlib seaborn scikit-learn
+# pip install wandb matplotlib seaborn scikit-learn
 #
 # Example usage:
 # python main.py --model standard --dataset CIFAR10 --num-blocks 2 2 2 2 --epochs 50 --lr 0.003 --use-wandb
-# python main.py --model yat --dataset CIFAR10 --num-blocks 2 2 2 2 --epochs 50 --lr 0.003 --use-wandb
+# python main.py --model yat --dataset TinyImageNet --num-blocks 2 2 2 2 --epochs 50 --lr 0.003 --use-wandb --image-size 64
+# python main.py --model standard --hf-dataset food101 --num-blocks 2 2 2 2 --epochs 10 --lr 0.003 --use-wandb --image-size 224
 #
 # To login to W&B, run `wandb login` in your terminal.
 
@@ -23,7 +24,6 @@ from datasets import load_dataset
 from PIL import Image
 from io import BytesIO
 import numpy as np
-import cv2
 import matplotlib.pyplot as plt
 import wandb
 from sklearn.metrics import confusion_matrix
@@ -45,81 +45,109 @@ except ImportError:
 
 
 # ---------- Dataset Handling ----------
-class TinyImageNetDataset(torch.utils.data.IterableDataset):
-    """Wrapper for streaming Tiny ImageNet from Hugging Face."""
-    def __init__(self, split, transform=None):
-        self.dataset = load_dataset("zh-plus/tiny-imagenet", split=split, streaming=True)
+class HuggingFaceDataset(torch.utils.data.IterableDataset):
+    """Generic wrapper for streaming image classification datasets from Hugging Face Hub."""
+    def __init__(self, dataset_name, split, transform=None, shuffle_buffer_size=50000):
+        self.dataset = load_dataset(dataset_name, split=split, streaming=True)
+        if split == 'train':
+            # Shuffle the training data with a large buffer for better randomness
+            self.dataset = self.dataset.shuffle(buffer_size=shuffle_buffer_size, seed=int(time.time()))
         self.transform = transform
-        self.split = split
+        self.info = load_dataset(dataset_name, split=split).info
 
     def __iter__(self):
         for sample in self.dataset:
-            img_data = sample["image"]
+            # Common column names for image and label in HF datasets
+            image_key = 'image' if 'image' in sample else 'img'
+            label_key = 'label' if 'label' in sample else 'labels'
+            
+            if image_key not in sample or label_key not in sample:
+                raise KeyError(f"Dataset sample missing required key. Found: {list(sample.keys())}")
+
+            img_data = sample[image_key]
             if not isinstance(img_data, Image.Image):
-                img = Image.open(BytesIO(img_data)).convert("RGB")
+                 img = img_data.convert("RGB")
             else:
-                img = img_data.convert("RGB")
+                 img = img_data
+            
             if self.transform:
                 img = self.transform(img)
-            yield img, sample["label"]
+            
+            yield img, sample[label_key]
 
-    def __len__(self):
-        return 100000 if self.split == "train" else 10000
-
-def get_data_loaders(dataset_name, batch_size, data_dir='./data'):
+def get_data_loaders(dataset_name, hf_dataset, batch_size, image_size, data_dir='./data'):
     """Creates train and validation data loaders for specified dataset."""
-    if dataset_name == 'TinyImageNet':
-        train_transform = transforms.Compose([
-            transforms.RandomResizedCrop(64, scale=(0.8, 1.0)),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize((0.4802, 0.4481, 0.3975), (0.2770, 0.2691, 0.2821)),
-        ])
-        val_transform = transforms.Compose([
-            transforms.Resize(64),
-            transforms.CenterCrop(64),
-            transforms.ToTensor(),
-            transforms.Normalize((0.4802, 0.4481, 0.3975), (0.2770, 0.2691, 0.2821)),
-        ])
-        train_dataset = TinyImageNetDataset("train", train_transform)
-        val_dataset = TinyImageNetDataset("valid", val_transform)
-        num_classes = 200
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=0)
-        val_loader = DataLoader(val_dataset, batch_size=batch_size, num_workers=0)
+    
+    # Define more powerful data augmentations
+    train_transform = transforms.Compose([
+        transforms.RandomResizedCrop(image_size),
+        transforms.RandomHorizontalFlip(),
+        transforms.TrivialAugmentWide(), # More advanced augmentation
+        transforms.ToTensor(),
+        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)), # ImageNet stats as a general default
+        transforms.RandomErasing(p=0.1, scale=(0.02, 0.2)),
+    ])
+    
+    val_transform = transforms.Compose([
+        transforms.Resize(image_size + 32), # Resize to a slightly larger size
+        transforms.CenterCrop(image_size),
+        transforms.ToTensor(),
+        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+    ])
+
+    if hf_dataset:
+        print(f"Using Hugging Face dataset: {hf_dataset}")
+        train_dataset = HuggingFaceDataset(hf_dataset, "train", train_transform)
+        # Try common validation split names
+        try:
+            val_dataset = HuggingFaceDataset(hf_dataset, "validation", val_transform)
+        except Exception:
+            try:
+                val_dataset = HuggingFaceDataset(hf_dataset, "test", val_transform)
+            except Exception as e:
+                raise ValueError(f"Could not load 'validation' or 'test' split for {hf_dataset}: {e}")
+
+        num_classes = train_dataset.info.features['label'].num_classes
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=2)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, num_workers=2)
         return train_loader, val_loader, num_classes
 
-    elif dataset_name == 'CIFAR10':
+    # Adjust transforms for specific well-known datasets if needed
+    if 'CIFAR' in dataset_name:
+        # Use specific normalization stats for CIFAR
+        if dataset_name == 'CIFAR10':
+            norm_mean, norm_std = (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
+        else: # CIFAR100
+            norm_mean, norm_std = (0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)
+        
         train_transform = transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
+            transforms.RandomCrop(image_size, padding=4),
             transforms.RandomHorizontalFlip(),
+            transforms.AutoAugment(transforms.AutoAugmentPolicy.CIFAR10),
             transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+            transforms.Normalize(norm_mean, norm_std),
+            transforms.RandomErasing(),
         ])
         val_transform = transforms.Compose([
+            transforms.Resize(image_size),
             transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+            transforms.Normalize(norm_mean, norm_std),
         ])
+    
+    if dataset_name == 'CIFAR10':
         train_dataset = torchvision_datasets.CIFAR10(root=data_dir, train=True, download=True, transform=train_transform)
         val_dataset = torchvision_datasets.CIFAR10(root=data_dir, train=False, download=True, transform=val_transform)
         num_classes = 10
-
     elif dataset_name == 'CIFAR100':
-        train_transform = transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
-        ])
-        val_transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
-        ])
         train_dataset = torchvision_datasets.CIFAR100(root=data_dir, train=True, download=True, transform=train_transform)
         val_dataset = torchvision_datasets.CIFAR100(root=data_dir, train=False, download=True, transform=val_transform)
         num_classes = 100
-
+    elif dataset_name == 'TinyImageNet':
+         train_dataset = HuggingFaceDataset("zh-plus/tiny-imagenet", "train", train_transform)
+         val_dataset = HuggingFaceDataset("zh-plus/tiny-imagenet", "valid", val_transform)
+         num_classes = 200
     else:
-        raise ValueError(f"Unknown dataset: {dataset_name}")
+        raise ValueError(f"Unknown dataset: {dataset_name}. Use --hf-dataset for Hugging Face datasets.")
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
@@ -180,7 +208,7 @@ class BasicYATBlock(nn.Module):
 
 class StandardConvNet(nn.Module):
     """A standard CNN with a ResNet-like architecture."""
-    def __init__(self, block, num_blocks, num_classes=10, input_size=32):
+    def __init__(self, block, num_blocks, num_classes=10):
         super(StandardConvNet, self).__init__()
         self.in_planes = 64
 
@@ -213,7 +241,7 @@ class StandardConvNet(nn.Module):
 
 class YATConvNet(nn.Module):
     """A YAT-based CNN with a ResNet-like architecture."""
-    def __init__(self, block, num_blocks, num_classes=200, use_alpha=True, use_dropconnect=False, drop_rate=0.1, input_size=64):
+    def __init__(self, block, num_blocks, num_classes=200, use_alpha=True, use_dropconnect=False, drop_rate=0.1):
         super(YATConvNet, self).__init__()
         self.in_planes = 64
         self.use_alpha = use_alpha
@@ -253,90 +281,6 @@ class YATConvNet(nn.Module):
 
 
 # ---------- Analysis and Visualization ----------
-class GradCAM:
-    """Computes Grad-CAM for a given model and target layer."""
-    def __init__(self, model, target_layer):
-        self.model = model
-        self.target_layer = target_layer
-        self.feature_maps = None
-        self.gradients = None
-        self.hooks = []
-        self._register_hooks()
-
-    def _hook_features(self, module, input, output):
-        self.feature_maps = output.detach()
-
-    def _hook_gradients(self, module, grad_in, grad_out):
-        self.gradients = grad_out[0].detach()
-
-    def _register_hooks(self):
-        forward_hook = self.target_layer.register_forward_hook(self._hook_features)
-        backward_hook = self.target_layer.register_full_backward_hook(self._hook_gradients)
-        self.hooks.append(forward_hook)
-        self.hooks.append(backward_hook)
-
-    def remove_hooks(self):
-        for hook in self.hooks:
-            hook.remove()
-
-    def __call__(self, x, index=None):
-        self.model.zero_grad()
-        output = self.model(x)
-        if index is None:
-            index = output.argmax(dim=1)
-
-        one_hot = torch.zeros_like(output)
-        one_hot.scatter_(1, index.view(-1, 1), 1)
-        output.backward(gradient=one_hot, retain_graph=True)
-
-        pooled_gradients = torch.mean(self.gradients, dim=[2, 3])
-        for i in range(self.feature_maps.size(0)):
-            for j in range(self.feature_maps.size(1)):
-                self.feature_maps[i, j, :, :] *= pooled_gradients[i, j]
-
-        heatmap = torch.mean(self.feature_maps, dim=1).squeeze()
-        heatmap = F.relu(heatmap)
-        heatmap /= torch.max(heatmap)
-        return heatmap.cpu().numpy()
-
-def plot_gradcam(model, target_layer, images, use_wandb=False):
-    """
-    Generates and logs Grad-CAM images.
-    FIX: Creates and removes GradCAM instance locally to avoid hook conflicts.
-    """
-    grad_cam_instance = None
-    try:
-        grad_cam_instance = GradCAM(model, target_layer)
-        heatmaps = grad_cam_instance(images)
-
-        gradcam_images = []
-        for i in range(len(images)):
-            img = images[i].cpu().numpy().transpose(1, 2, 0)
-            # Un-normalize for visualization
-            mean = np.array([0.4914, 0.4822, 0.4465])
-            std = np.array([0.2023, 0.1994, 0.2010])
-            img = std * img + mean
-            img = np.clip(img, 0, 1)
-
-            heatmap = cv2.resize(heatmaps[i], (img.shape[1], img.shape[0]))
-            heatmap = np.uint8(255 * heatmap)
-            heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-
-            superimposed_img = heatmap * 0.4 + np.uint8(255 * img)
-            superimposed_img = np.clip(superimposed_img, 0, 255).astype(np.uint8)
-
-            gradcam_images.append(wandb.Image(superimposed_img))
-
-        if use_wandb:
-            wandb.log({"Grad-CAM": gradcam_images})
-
-    except Exception as e:
-        print(f"Could not generate Grad-CAM: {e}")
-    finally:
-        if grad_cam_instance:
-            grad_cam_instance.remove_hooks()
-
-
 def log_weight_histograms(model, epoch, use_wandb=False):
     """Logs histograms of model weights to W&B."""
     if not use_wandb:
@@ -385,10 +329,10 @@ def train_epoch(model, trainloader, optimizer, criterion, device, use_wandb, glo
         total_samples += targets.size(0)
         total_correct += predicted.eq(targets).sum().item()
 
-        if batch_idx % 100 == 99:
+        if batch_idx > 0 and batch_idx % 100 == 0:
             batch_loss = running_loss / 100
             batch_acc = 100. * total_correct / total_samples
-            print(f'  Batch {batch_idx+1}/{len(trainloader)} | Loss: {batch_loss:.4f} | Acc: {batch_acc:.2f}%')
+            print(f'  Batch {batch_idx}/{len(trainloader)} | Loss: {batch_loss:.4f} | Acc: {batch_acc:.2f}%')
             if use_wandb:
                 wandb.log({
                     'train/batch_loss': batch_loss,
@@ -434,8 +378,10 @@ def main():
     parser = argparse.ArgumentParser(description='YAT/Standard ConvNet Training')
     # Model and Data
     parser.add_argument('--model', type=str, choices=['yat', 'standard'], default='yat', help='Model architecture')
-    parser.add_argument('--dataset', type=str, choices=['CIFAR10', 'CIFAR100', 'TinyImageNet'], default='CIFAR10', help='Dataset to use')
+    parser.add_argument('--dataset', type=str, choices=['CIFAR10', 'CIFAR100', 'TinyImageNet'], default='CIFAR10', help='Built-in dataset to use')
+    parser.add_argument('--hf-dataset', type=str, default=None, help='Hugging Face dataset name (e.g., "food101", "beans")')
     parser.add_argument('--num-blocks', type=int, nargs='+', default=[2, 2, 2, 2], help='Number of blocks in each of the 4 ResNet stages')
+    parser.add_argument('--image-size', type=int, default=32, help='Input image size')
     # Training
     parser.add_argument('--batch-size', type=int, default=128, help='Input batch size for training')
     parser.add_argument('--epochs', type=int, default=50, help='Number of epochs to train')
@@ -454,6 +400,11 @@ def main():
     parser.add_argument('--wandb-entity', type=str, default=None, help='W&B entity (username or team)')
 
     args = parser.parse_args()
+    
+    if args.hf_dataset and args.dataset != 'CIFAR10':
+        print(f"Warning: --hf-dataset ('{args.hf_dataset}') is provided, ignoring --dataset ('{args.dataset}').")
+        args.dataset = None
+
 
     torch.manual_seed(args.seed)
     use_cuda = not args.no_cuda and torch.cuda.is_available()
@@ -462,33 +413,36 @@ def main():
 
     # --- W&B Setup ---
     if args.use_wandb:
+        run_name = f"{args.model}-{args.hf_dataset or args.dataset}-sz{args.image_size}-lr{args.lr}"
         wandb.init(
             project=args.wandb_project,
             entity=args.wandb_entity,
             config=args,
-            name=f"{args.model}-{args.dataset}-blocks{''.join(map(str, args.num_blocks))}-lr{args.lr}"
+            name=run_name
         )
 
     # --- Data Loading ---
-    print(f'Loading {args.dataset} dataset...')
-    train_loader, val_loader, num_classes = get_data_loaders(args.dataset, args.batch_size, args.data_dir)
+    print(f'Loading data...')
+    train_loader, val_loader, num_classes = get_data_loaders(
+        dataset_name=args.dataset,
+        hf_dataset=args.hf_dataset,
+        batch_size=args.batch_size,
+        image_size=args.image_size,
+        data_dir=args.data_dir
+    )
     print(f'Dataset loaded. Num classes: {num_classes}')
 
-    fixed_val_batch, _ = next(iter(val_loader))
-
     # --- Model Initialization ---
-    input_size = 32 if 'CIFAR' in args.dataset else 64
     if len(args.num_blocks) != 4:
         raise ValueError("The --num-blocks argument must have 4 integers for the 4 stages.")
 
     if args.model == 'yat':
         print(f'Creating YAT ResNet with blocks: {args.num_blocks}')
         model = YATConvNet(BasicYATBlock, args.num_blocks, num_classes=num_classes, use_alpha=args.use_alpha,
-                           use_dropconnect=args.use_dropconnect, drop_rate=args.drop_rate,
-                           input_size=input_size)
+                           use_dropconnect=args.use_dropconnect, drop_rate=args.drop_rate)
     else:
         print(f'Creating Standard ResNet with blocks: {args.num_blocks}')
-        model = StandardConvNet(BasicStandardBlock, args.num_blocks, num_classes=num_classes, input_size=input_size)
+        model = StandardConvNet(BasicStandardBlock, args.num_blocks, num_classes=num_classes)
 
     if use_cuda and torch.cuda.device_count() > 1:
         print(f"Using {torch.cuda.device_count()} GPUs!")
@@ -530,18 +484,10 @@ def main():
             }, step=global_step)
             log_weight_histograms(model, epoch, args.use_wandb)
 
-            if (epoch + 1) % 5 == 0:
-                actual_model = model.module if isinstance(model, nn.DataParallel) else model
-                if args.model == 'yat':
-                    target_layer = actual_model.layer4[-1].lin_conv
-                else:
-                    target_layer = actual_model.layer4[-1].conv2
-                plot_gradcam(model, target_layer, fixed_val_batch[:8].to(device), args.use_wandb)
-
         if val_acc > best_acc:
             best_acc = val_acc
             print(f'  -> New best validation accuracy: {best_acc:.2f}%. Saving model...')
-            model_path = f'best_{args.model}_{args.dataset}.pth'
+            model_path = f'best_{args.model}_{args.hf_dataset or args.dataset}.pth'
             state_to_save = model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict()
             torch.save(state_to_save, model_path)
             if args.use_wandb:
@@ -552,17 +498,24 @@ def main():
     # --- Final Evaluation and Logging ---
     print('\nTraining completed!')
     if args.use_wandb:
-        model_path = f'best_{args.model}_{args.dataset}.pth'
+        model_path = f'best_{args.model}_{args.hf_dataset or args.dataset}.pth'
         state_dict = torch.load(model_path, map_location=device)
         model_to_load = model.module if isinstance(model, nn.DataParallel) else model
         model_to_load.load_state_dict(state_dict)
 
         _, _, all_preds, all_targets = validate(model, val_loader, criterion, device)
-        class_names = train_loader.dataset.classes if hasattr(train_loader.dataset, 'classes') else [str(i) for i in range(num_classes)]
+        
+        # Get class names for confusion matrix
+        if hasattr(train_loader.dataset, 'classes'):
+            class_names = train_loader.dataset.classes
+        elif hasattr(train_loader.dataset, 'info'):
+             class_names = train_loader.dataset.info.features['label'].names
+        else:
+            class_names = [str(i) for i in range(num_classes)]
+
         plot_confusion_matrix(all_preds, all_targets, class_names, args.use_wandb)
 
         wandb.finish()
 
 if __name__ == '__main__':
     main()
-
