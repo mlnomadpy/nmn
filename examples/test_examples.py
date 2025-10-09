@@ -49,11 +49,14 @@ def test_model_creation():
         # Test vision model
         vision_model = tf.keras.Sequential([
             tf.keras.layers.Input(shape=(32, 32, 3)),
-            YatConv2D(16, (3, 3), activation='relu', padding='same'),
+            YatConv2D(16, (3, 3), padding='same'),
+            tf.keras.layers.Activation('relu'),
             tf.keras.layers.MaxPooling2D((2, 2)),
             tf.keras.layers.Flatten(),
-            YatNMN(32, activation='relu'),
-            YatNMN(10, activation='softmax')
+            YatNMN(32),
+            tf.keras.layers.Activation('relu'),
+            YatNMN(10),
+            tf.keras.layers.Activation('softmax')
         ])
         
         vision_model.compile(
@@ -66,8 +69,10 @@ def test_model_creation():
         language_model = tf.keras.Sequential([
             tf.keras.layers.Embedding(1000, 64, input_length=100),
             tf.keras.layers.LSTM(64),
-            YatNMN(32, activation='relu'),
-            YatNMN(2, activation='softmax')
+            YatNMN(32),
+            tf.keras.layers.Activation('relu'),
+            YatNMN(2),
+            tf.keras.layers.Activation('softmax')
         ])
         
         language_model.compile(
@@ -92,8 +97,10 @@ def test_training():
         
         # Create minimal model
         model = tf.keras.Sequential([
-            YatNMN(16, activation='relu', input_shape=(10,)),
-            YatNMN(1, activation='sigmoid')
+            YatNMN(16, input_shape=(10,)),
+            tf.keras.layers.Activation('relu'),
+            YatNMN(1),
+            tf.keras.layers.Activation('sigmoid')
         ])
         
         model.compile(
@@ -138,8 +145,10 @@ def test_save_load():
             tf.keras.layers.Input(shape=(16, 16, 3)),
             YatConv2D(8, (3, 3), padding='same'),
             tf.keras.layers.Flatten(),
-            YatNMN(16, activation='relu'),
-            YatNMN(5, activation='softmax')
+            YatNMN(16),
+            tf.keras.layers.Activation('relu'),
+            YatNMN(5),
+            tf.keras.layers.Activation('softmax')
         ])
         
         model.compile(optimizer='adam', loss='categorical_crossentropy')

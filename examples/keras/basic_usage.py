@@ -11,9 +11,12 @@ try:
     
     # Create a simple model with YAT dense layers
     model = tf.keras.Sequential([
-        YatNMN(64, activation='relu', input_shape=(10,)),
-        YatNMN(32, activation='relu'),
-        YatNMN(1, activation='sigmoid')
+        YatNMN(64, input_shape=(10,)),
+        tf.keras.layers.Activation('relu'),
+        YatNMN(32),
+        tf.keras.layers.Activation('relu'),
+        YatNMN(1),
+        tf.keras.layers.Activation('sigmoid')
     ])
     
     # Compile the model
