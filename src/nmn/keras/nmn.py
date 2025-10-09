@@ -16,6 +16,9 @@ class YatNMN(Layer):
     - `squared_euclidean_distance` is computed between input and kernel
     - `epsilon` is a small constant to prevent division by zero
 
+    Note: This layer is activation-free. Any activation function should be applied
+    as a separate layer after this layer.
+
     Args:
         units: Positive integer, dimensionality of the output space.
         use_bias: Boolean, whether the layer uses a bias vector.
@@ -42,7 +45,6 @@ class YatNMN(Layer):
     def __init__(
         self,
         units,
-        activation=None,
         use_bias=True,
         epsilon=1e-5,
         kernel_initializer="orthogonal",
@@ -56,7 +58,6 @@ class YatNMN(Layer):
     ):
         super().__init__(activity_regularizer=activity_regularizer, **kwargs)
         self.units = units
-        self.activation = activations.get(activation)
         self.use_bias = use_bias
         self.epsilon = epsilon
 
@@ -124,10 +125,6 @@ class YatNMN(Layer):
                 ops.log1p(ops.cast(self.units, self.compute_dtype))) ** self.alpha
         outputs = outputs * scale
 
-
-        if self.activation is not None:
-            outputs = self.activation(outputs)
-
         return outputs
 
     def compute_output_shape(self, input_shape):
@@ -139,7 +136,6 @@ class YatNMN(Layer):
         config = super().get_config()
         config.update({
             "units": self.units,
-            "activation": activations.serialize(self.activation),
             "use_bias": self.use_bias,
             "epsilon": self.epsilon,
             "kernel_initializer": initializers.serialize(self.kernel_initializer),

@@ -16,6 +16,9 @@ class YatConv1D(Layer):
     input to produce a tensor of outputs using the YAT (You Are There) algorithm.
     YAT uses squared dot products divided by squared Euclidean distances plus epsilon.
 
+    Note: This layer is activation-free. Any activation function should be applied
+    as a separate layer after this layer.
+
     Args:
         filters: Integer, the dimensionality of the output space (i.e. the number
             of output filters in the convolution).
@@ -41,8 +44,6 @@ class YatConv1D(Layer):
             separately with `filters / groups` filters. The output is the
             concatenation of all the `groups` results along the channel axis.
             Input channels and `filters` must both be divisible by `groups`.
-        activation: Activation function to use. If you don't specify anything,
-            no activation is applied (see `keras.activations`).
         use_bias: Boolean, whether the layer uses a bias vector. Defaults to `True`.
         use_alpha: Boolean, whether to use alpha scaling. Defaults to `True`.
         epsilon: Float, small constant added to denominator for numerical stability.
@@ -78,7 +79,6 @@ class YatConv1D(Layer):
         data_format=None,
         dilation_rate=1,
         groups=1,
-        activation=None,
         use_bias=True,
         use_alpha=True,
         epsilon=1e-5,
@@ -99,7 +99,6 @@ class YatConv1D(Layer):
         self.data_format = data_format
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate,)
         self.groups = groups
-        self.activation = activations.get(activation)
         self.use_bias = use_bias
         self.use_alpha = use_alpha
         self.epsilon = epsilon
@@ -231,9 +230,6 @@ class YatConv1D(Layer):
                     ops.log1p(ops.cast(self.filters, self.compute_dtype))) ** self.alpha
             outputs = outputs * scale
 
-        if self.activation is not None:
-            outputs = self.activation(outputs)
-
         return outputs
 
     def compute_output_shape(self, input_shape):
@@ -266,7 +262,6 @@ class YatConv1D(Layer):
             "data_format": self.data_format,
             "dilation_rate": self.dilation_rate,
             "groups": self.groups,
-            "activation": activations.serialize(self.activation),
             "use_bias": self.use_bias,
             "use_alpha": self.use_alpha,
             "epsilon": self.epsilon,
@@ -287,6 +282,9 @@ class YatConv2D(Layer):
 
     This layer creates a convolution kernel that is convolved with the layer
     input to produce a tensor of outputs using the YAT (You Are There) algorithm.
+
+    Note: This layer is activation-free. Any activation function should be applied
+    as a separate layer after this layer.
 
     Args:
         filters: Integer, the dimensionality of the output space (i.e. the number
@@ -315,8 +313,6 @@ class YatConv2D(Layer):
             separately with `filters / groups` filters. The output is the
             concatenation of all the `groups` results along the channel axis.
             Input channels and `filters` must both be divisible by `groups`.
-        activation: Activation function to use. If you don't specify anything,
-            no activation is applied (see `keras.activations`).
         use_bias: Boolean, whether the layer uses a bias vector.
         use_alpha: Boolean, whether to use alpha scaling. Defaults to `True`.
         epsilon: Float, small constant added to denominator for numerical stability.
@@ -359,7 +355,6 @@ class YatConv2D(Layer):
         data_format=None,
         dilation_rate=(1, 1),
         groups=1,
-        activation=None,
         use_bias=True,
         use_alpha=True,
         epsilon=1e-5,
@@ -380,7 +375,6 @@ class YatConv2D(Layer):
         self.data_format = data_format
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate)
         self.groups = groups
-        self.activation = activations.get(activation)
         self.use_bias = use_bias
         self.use_alpha = use_alpha
         self.epsilon = epsilon
@@ -515,9 +509,6 @@ class YatConv2D(Layer):
                     ops.log1p(ops.cast(self.filters, self.compute_dtype))) ** self.alpha
             outputs = outputs * scale
 
-        if self.activation is not None:
-            outputs = self.activation(outputs)
-
         return outputs
 
     def compute_output_shape(self, input_shape):
@@ -553,7 +544,6 @@ class YatConv2D(Layer):
             "data_format": self.data_format,
             "dilation_rate": self.dilation_rate,
             "groups": self.groups,
-            "activation": activations.serialize(self.activation),
             "use_bias": self.use_bias,
             "use_alpha": self.use_alpha,
             "epsilon": self.epsilon,
