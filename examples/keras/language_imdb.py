@@ -100,18 +100,22 @@ try:
             layers.LSTM(64, dropout=0.2, recurrent_dropout=0.2),
             
             # YAT dense layers for classification
-            YatNMN(256, activation='relu'),
+            YatNMN(256),
+            layers.Activation('relu'),
             layers.BatchNormalization(),
             layers.Dropout(0.5),
             
-            YatNMN(128, activation='relu'),
+            YatNMN(128),
+            layers.Activation('relu'),
             layers.BatchNormalization(),
             layers.Dropout(0.5),
             
-            YatNMN(64, activation='relu'),
+            YatNMN(64),
+            layers.Activation('relu'),
             layers.Dropout(0.3),
             
-            YatNMN(NUM_CLASSES, activation='softmax')
+            YatNMN(NUM_CLASSES),
+            layers.Activation('softmax')
         ])
         
         # Compile the model
