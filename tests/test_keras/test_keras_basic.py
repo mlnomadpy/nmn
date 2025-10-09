@@ -127,34 +127,6 @@ def test_yat_conv2d_same_padding():
     True,
     reason="TensorFlow not available in test environment"
 )
-def test_yat_nmn_with_activation():
-    """Test YatNMN with activation function."""
-    try:
-        import tensorflow as tf
-        from nmn.keras.nmn import YatNMN
-        
-        # Create layer with ReLU activation
-        layer = YatNMN(units=10, activation='relu')
-        
-        # Build layer with input shape
-        layer.build((None, 8))
-        
-        # Test forward pass
-        dummy_input = tf.constant(np.random.randn(4, 8).astype(np.float32))
-        output = layer(dummy_input)
-        
-        assert output.shape == (4, 10)
-        # Check that ReLU was applied (no negative values)
-        assert tf.reduce_min(output) >= 0
-        
-    except ImportError:
-        pytest.skip("TensorFlow dependencies not available")
-
-
-@pytest.mark.skipif(
-    True,
-    reason="TensorFlow not available in test environment"
-)
 def test_yat_nmn_no_bias():
     """Test YatNMN without bias."""
     try:

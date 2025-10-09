@@ -79,34 +79,43 @@ try:
             layers.Input(shape=(32, 32, 3)),
             
             # First convolutional block with YAT Conv2D
-            YatConv2D(32, (3, 3), activation='relu', padding='same'),
+            YatConv2D(32, (3, 3), padding='same'),
+            layers.Activation('relu'),
             layers.BatchNormalization(),
-            YatConv2D(32, (3, 3), activation='relu', padding='same'),
+            YatConv2D(32, (3, 3), padding='same'),
+            layers.Activation('relu'),
             layers.MaxPooling2D((2, 2)),
             layers.Dropout(0.25),
             
             # Second convolutional block
-            YatConv2D(64, (3, 3), activation='relu', padding='same'),
+            YatConv2D(64, (3, 3), padding='same'),
+            layers.Activation('relu'),
             layers.BatchNormalization(),
-            YatConv2D(64, (3, 3), activation='relu', padding='same'),
+            YatConv2D(64, (3, 3), padding='same'),
+            layers.Activation('relu'),
             layers.MaxPooling2D((2, 2)),
             layers.Dropout(0.25),
             
             # Third convolutional block
-            YatConv2D(128, (3, 3), activation='relu', padding='same'),
+            YatConv2D(128, (3, 3), padding='same'),
+            layers.Activation('relu'),
             layers.BatchNormalization(),
-            YatConv2D(128, (3, 3), activation='relu', padding='same'),
+            YatConv2D(128, (3, 3), padding='same'),
+            layers.Activation('relu'),
             layers.MaxPooling2D((2, 2)),
             layers.Dropout(0.25),
             
             # Dense layers with YAT
             layers.Flatten(),
-            YatNMN(512, activation='relu'),
+            YatNMN(512),
+            layers.Activation('relu'),
             layers.BatchNormalization(),
             layers.Dropout(0.5),
-            YatNMN(256, activation='relu'),
+            YatNMN(256),
+            layers.Activation('relu'),
             layers.Dropout(0.5),
-            YatNMN(NUM_CLASSES, activation='softmax')
+            YatNMN(NUM_CLASSES),
+            layers.Activation('softmax')
         ])
         
         # Compile the model
