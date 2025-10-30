@@ -161,7 +161,7 @@ def test_yat_conv2d_with_alpha():
             use_alpha=True
         )
         
-        assert layer.use_alpha == True
+        assert layer.use_alpha is True
         assert layer.alpha is not None
         
     except ImportError:
@@ -181,7 +181,7 @@ def test_yat_conv2d_without_alpha():
             use_alpha=False
         )
         
-        assert layer.use_alpha == False
+        assert layer.use_alpha is False
         assert layer.alpha is None
         
     except ImportError:
@@ -202,7 +202,7 @@ def test_yat_conv2d_with_dropconnect():
             drop_rate=0.2
         )
         
-        assert layer.use_dropconnect == True
+        assert layer.use_dropconnect is True
         assert layer.drop_rate == 0.2
         
     except ImportError:
