@@ -70,7 +70,7 @@ def test_yat_conv2d_parameters():
         )
         
         # Check if parameters are properly set
-        assert layer.use_alpha == True
+        assert layer.use_alpha is True
         assert layer.alpha.item() == pytest.approx(1.5)
         assert layer.epsilon == 1e-6
         

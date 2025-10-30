@@ -2422,8 +2422,8 @@ class YatConvTranspose1d(YatConvTransposeNd, ConvTranspose1d):
             mask,
             epsilon,
             drop_rate,
-            device,
-            dtype,
+            device=device,
+            dtype=dtype,
         )
 
     def forward(self, input: Tensor, output_size: Optional[list[int]] = None, *, deterministic: bool = False) -> Tensor:
@@ -2477,8 +2477,8 @@ class YatConvTranspose2d(YatConvTransposeNd, ConvTranspose2d):
             mask,
             epsilon,
             drop_rate,
-            device,
-            dtype,
+            device=device,
+            dtype=dtype,
         )
 
     def forward(self, input: Tensor, output_size: Optional[list[int]] = None, *, deterministic: bool = False) -> Tensor:
@@ -2532,8 +2532,8 @@ class YatConvTranspose3d(YatConvTransposeNd, ConvTranspose3d):
             mask,
             epsilon,
             drop_rate,
-            device,
-            dtype,
+            device=device,
+            dtype=dtype,
         )
 
     def forward(self, input: Tensor, output_size: Optional[list[int]] = None, *, deterministic: bool = False) -> Tensor:
