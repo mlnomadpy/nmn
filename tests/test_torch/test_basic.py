@@ -9,7 +9,7 @@ def test_torch_import():
     try:
         import torch
         from nmn.torch import nmn
-        from nmn.torch import conv
+        from nmn.torch import layers
         assert True
     except ImportError as e:
         pytest.skip(f"PyTorch dependencies not available: {e}")
@@ -23,7 +23,7 @@ def test_yat_conv2d_basic():
     """Test basic YatConv2d functionality."""
     try:
         import torch
-        from nmn.torch.conv import YatConv2d
+        from nmn.torch.layers import YatConv2d
         
         # Test parameters
         in_channels, out_channels = 3, 16
@@ -58,7 +58,7 @@ def test_yat_conv2d_parameters():
     """Test YatConv2d parameter configuration."""
     try:
         import torch
-        from nmn.torch.conv import YatConv2d
+        from nmn.torch.layers import YatConv2d
         
         layer = YatConv2d(
             in_channels=3,

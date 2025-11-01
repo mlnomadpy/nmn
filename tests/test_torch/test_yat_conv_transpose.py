@@ -7,7 +7,7 @@ def test_torch_yat_conv_transpose_import():
     """Test that YatConvTranspose classes can be imported."""
     try:
         import torch
-        from nmn.torch.conv import (
+        from nmn.torch.layers import (
             YatConvTranspose1d,
             YatConvTranspose2d,
             YatConvTranspose3d,
@@ -21,7 +21,7 @@ def test_yat_conv_transpose1d_instantiation():
     """Test YatConvTranspose1d can be instantiated with device and dtype parameters."""
     try:
         import torch
-        from nmn.torch.conv import YatConvTranspose1d
+        from nmn.torch.layers import YatConvTranspose1d
         
         # Test basic instantiation
         layer = YatConvTranspose1d(
@@ -53,7 +53,7 @@ def test_yat_conv_transpose2d_instantiation():
     """Test YatConvTranspose2d can be instantiated with device and dtype parameters."""
     try:
         import torch
-        from nmn.torch.conv import YatConvTranspose2d
+        from nmn.torch.layers import YatConvTranspose2d
         
         # Test basic instantiation (from error example in problem statement)
         layer = YatConvTranspose2d(
@@ -85,7 +85,7 @@ def test_yat_conv_transpose3d_instantiation():
     """Test YatConvTranspose3d can be instantiated with device and dtype parameters."""
     try:
         import torch
-        from nmn.torch.conv import YatConvTranspose3d
+        from nmn.torch.layers import YatConvTranspose3d
         
         # Test basic instantiation
         layer = YatConvTranspose3d(
@@ -117,7 +117,7 @@ def test_yat_conv_transpose2d_forward():
     """Test YatConvTranspose2d forward pass."""
     try:
         import torch
-        from nmn.torch.conv import YatConvTranspose2d
+        from nmn.torch.layers import YatConvTranspose2d
         
         # Create layer
         layer = YatConvTranspose2d(
@@ -145,7 +145,7 @@ def test_yat_conv_transpose2d_with_parameters():
     """Test YatConvTranspose2d with various parameters."""
     try:
         import torch
-        from nmn.torch.conv import YatConvTranspose2d
+        from nmn.torch.layers import YatConvTranspose2d
         
         layer = YatConvTranspose2d(
             in_channels=16,
@@ -172,7 +172,7 @@ def test_yat_conv_transpose1d_forward():
     """Test YatConvTranspose1d forward pass."""
     try:
         import torch
-        from nmn.torch.conv import YatConvTranspose1d
+        from nmn.torch.layers import YatConvTranspose1d
         
         # Create layer
         layer = YatConvTranspose1d(
@@ -200,7 +200,7 @@ def test_yat_conv_transpose3d_forward():
     """Test YatConvTranspose3d forward pass."""
     try:
         import torch
-        from nmn.torch.conv import YatConvTranspose3d
+        from nmn.torch.layers import YatConvTranspose3d
         
         # Create layer
         layer = YatConvTranspose3d(
