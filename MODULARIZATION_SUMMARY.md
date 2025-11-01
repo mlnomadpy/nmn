@@ -1,7 +1,7 @@
 # Modularization Summary: src/nmn/torch
 
 ## Overview
-Successfully restructured the PyTorch implementation so that **each layer has its own file** as requested, with base classes grouped together to avoid circular dependencies.
+Successfully restructured the PyTorch implementation so that **each layer has its own file** as requested, with base classes grouped together to avoid circular dependencies. Applied the same pattern to both conv layers and NMN layers.
 
 ## Final Structure
 
@@ -17,30 +17,32 @@ src/nmn/torch/
 src/nmn/torch/
 ├── __init__.py - Exports all layers
 ├── base.py (26KB) - All base classes
-├── nmn.py (4.6KB) - YatNMN layer (unchanged)
-└── layers/ - Individual layer files
-    ├── __init__.py - Layer exports
-    ├── conv1d.py
-    ├── conv2d.py
-    ├── conv3d.py
-    ├── conv_transpose1d.py
-    ├── conv_transpose2d.py
-    ├── conv_transpose3d.py
-    ├── lazy_conv1d.py
-    ├── lazy_conv2d.py
-    ├── lazy_conv3d.py
-    ├── lazy_conv_transpose1d.py
-    ├── lazy_conv_transpose2d.py
-    ├── lazy_conv_transpose3d.py
-    ├── yat_conv1d.py
-    ├── yat_conv2d.py
-    ├── yat_conv3d.py
-    ├── yat_conv_transpose1d.py
-    ├── yat_conv_transpose2d.py
-    └── yat_conv_transpose3d.py
+├── layers/ - Individual conv layer files
+│   ├── __init__.py - Layer exports
+│   ├── conv1d.py
+│   ├── conv2d.py
+│   ├── conv3d.py
+│   ├── conv_transpose1d.py
+│   ├── conv_transpose2d.py
+│   ├── conv_transpose3d.py
+│   ├── lazy_conv1d.py
+│   ├── lazy_conv2d.py
+│   ├── lazy_conv3d.py
+│   ├── lazy_conv_transpose1d.py
+│   ├── lazy_conv_transpose2d.py
+│   ├── lazy_conv_transpose3d.py
+│   ├── yat_conv1d.py
+│   ├── yat_conv2d.py
+│   ├── yat_conv3d.py
+│   ├── yat_conv_transpose1d.py
+│   ├── yat_conv_transpose2d.py
+│   └── yat_conv_transpose3d.py
+└── nmn/ - Individual NMN layer files
+    ├── __init__.py - NMN exports
+    └── yat_nmn.py - YatNMN layer
 ```
 
-**Total**: 22 files (base.py + nmn.py + 2 __init__.py + 18 layer files)
+**Total**: 23 files (base.py + 2 subdirectories with __init__.py + 19 layer files)
 
 ## File Breakdown
 
@@ -85,8 +87,10 @@ Each public-facing layer class has its own dedicated file:
 - `yat_conv_transpose2d.py` - YatConvTranspose2d layer
 - `yat_conv_transpose3d.py` - YatConvTranspose3d layer
 
-### nmn.py (4.6KB)
-Contains YatNMN layer (unchanged from original)
+### NMN Layer Files (1 file)
+
+**YAT NMN**:
+- `nmn/yat_nmn.py` - YatNMN layer
 
 ## Usage
 
@@ -94,7 +98,15 @@ All import patterns are supported:
 
 ```python
 # Import from main module (recommended)
-from nmn.torch import Conv2d, YatConv2d, LazyConv3d
+from nmn.torch import Conv2d, YatConv2d, LazyConv3d, YatNMN
+
+# Import from subdirectory packages
+from nmn.torch.layers import Conv2d, YatConv2d
+from nmn.torch.nmn import YatNMN
+
+# Import from specific files
+from nmn.torch.layers.conv2d import Conv2d
+from nmn.torch.nmn.yat_nmn import YatNMN
 
 # Import from layers submodule
 from nmn.torch.layers import Conv2d, YatConv2d
@@ -112,10 +124,13 @@ All existing tests have been updated to work with the new structure:
 - `test_yat_conv.py` - Updated imports
 - `test_yat_conv_module.py` - Updated imports
 - `test_yat_conv_transpose.py` - Updated imports
+- `test_nmn_module.py` - Updated to test nmn package imports
 
 ## Benefits
 
 1. **Each layer has its own file** ✓
+   - Conv layers in `layers/` subdirectory
+   - NMN layers in `nmn/` subdirectory
    - Easy to locate specific layer implementations
    - Simpler to understand individual layer code
    - Clearer file organization
@@ -127,7 +142,8 @@ All existing tests have been updated to work with the new structure:
 
 3. **Clear Separation**
    - Base classes grouped in base.py
-   - Individual layers in layers/ directory
+   - Conv layers in layers/ directory
+   - NMN layers in nmn/ directory
    - No circular dependencies
 
 4. **Backward Compatible**
@@ -142,8 +158,10 @@ All existing tests have been updated to work with the new structure:
 
 ## Changes from Previous Iteration
 
-- Restructured from 3 files (conv.py, yat_conv.py, nmn.py) 
-- Now 22 files with each layer in its own file
+- Restructured from 2 monolithic files (conv.py 2543 lines, nmn.py 145 lines)
+- Now 23 files with each layer in its own file
 - Base classes consolidated in base.py
-- All layers organized in layers/ subdirectory
+- Conv layers organized in layers/ subdirectory (18 files)
+- NMN layers organized in nmn/ subdirectory (1 file)
+- Consistent modular pattern applied to both conv and nmn layers
 - Improved modularity and organization
