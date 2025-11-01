@@ -6,7 +6,7 @@ import pytest
 def test_conv_module_imports():
     """Test that standard conv classes can be imported from conv module."""
     try:
-        from nmn.torch.conv import (
+        from nmn.torch.layers import (
             Conv1d,
             Conv2d,
             Conv3d,
@@ -50,17 +50,17 @@ def test_conv_from_main_module():
 def test_yat_classes_not_in_conv_module():
     """Test that YAT classes are not in conv module (they're in yat_conv)."""
     try:
-        from nmn.torch import conv
+        from nmn.torch import layers
         
         # YAT classes should not be in conv module
-        assert not hasattr(conv, 'YatConv1d')
-        assert not hasattr(conv, 'YatConv2d')
-        assert not hasattr(conv, 'YatConv3d')
-        assert not hasattr(conv, 'YatConvTranspose1d')
-        assert not hasattr(conv, 'YatConvTranspose2d')
-        assert not hasattr(conv, 'YatConvTranspose3d')
-        assert not hasattr(conv, 'YatConvNd')
-        assert not hasattr(conv, 'YatConvTransposeNd')
+        assert not hasattr(layers, 'YatConv1d')
+        assert not hasattr(layers, 'YatConv2d')
+        assert not hasattr(layers, 'YatConv3d')
+        assert not hasattr(layers, 'YatConvTranspose1d')
+        assert not hasattr(layers, 'YatConvTranspose2d')
+        assert not hasattr(layers, 'YatConvTranspose3d')
+        assert not hasattr(layers, 'YatConvNd')
+        assert not hasattr(layers, 'YatConvTransposeNd')
         
     except ImportError:
         pytest.skip("PyTorch dependencies not available")
@@ -69,17 +69,17 @@ def test_yat_classes_not_in_conv_module():
 def test_yat_classes_in_yat_conv_module():
     """Test that YAT classes are in yat_conv module."""
     try:
-        from nmn.torch import yat_conv
+        from nmn.torch import layers
         
         # YAT classes should be in yat_conv module
-        assert hasattr(yat_conv, 'YatConv1d')
-        assert hasattr(yat_conv, 'YatConv2d')
-        assert hasattr(yat_conv, 'YatConv3d')
-        assert hasattr(yat_conv, 'YatConvTranspose1d')
-        assert hasattr(yat_conv, 'YatConvTranspose2d')
-        assert hasattr(yat_conv, 'YatConvTranspose3d')
-        assert hasattr(yat_conv, 'YatConvNd')
-        assert hasattr(yat_conv, 'YatConvTransposeNd')
+        assert hasattr(layers, 'YatConv1d')
+        assert hasattr(layers, 'YatConv2d')
+        assert hasattr(layers, 'YatConv3d')
+        assert hasattr(layers, 'YatConvTranspose1d')
+        assert hasattr(layers, 'YatConvTranspose2d')
+        assert hasattr(layers, 'YatConvTranspose3d')
+        assert hasattr(layers, 'YatConvNd')
+        assert hasattr(layers, 'YatConvTransposeNd')
         
     except ImportError:
         pytest.skip("PyTorch dependencies not available")
@@ -88,7 +88,7 @@ def test_yat_classes_in_yat_conv_module():
 def test_conv2d_module_instantiation():
     """Test Conv2d can be instantiated from conv module."""
     try:
-        from nmn.torch.conv import Conv2d
+        from nmn.torch.layers import Conv2d
         
         layer = Conv2d(
             in_channels=3,
@@ -106,7 +106,7 @@ def test_conv2d_module_instantiation():
 def test_conv_transpose2d_module_instantiation():
     """Test ConvTranspose2d can be instantiated from conv module."""
     try:
-        from nmn.torch.conv import ConvTranspose2d
+        from nmn.torch.layers import ConvTranspose2d
         
         layer = ConvTranspose2d(
             in_channels=3,
@@ -124,7 +124,7 @@ def test_conv_transpose2d_module_instantiation():
 def test_lazy_conv2d_module_instantiation():
     """Test LazyConv2d can be instantiated from conv module."""
     try:
-        from nmn.torch.conv import LazyConv2d
+        from nmn.torch.layers import LazyConv2d
         
         layer = LazyConv2d(
             out_channels=16,
@@ -141,7 +141,7 @@ def test_conv2d_forward_from_module():
     """Test Conv2d forward pass from conv module."""
     try:
         import torch
-        from nmn.torch.conv import Conv2d
+        from nmn.torch.layers import Conv2d
         
         layer = Conv2d(
             in_channels=3,

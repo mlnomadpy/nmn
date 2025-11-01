@@ -1,7 +1,7 @@
 """PyTorch implementation of Neural Matter Network (NMN) layers."""
 
-# Import standard conv layers from conv module
-from .conv import (
+# Import all layers from the layers module
+from .layers import (
     Conv1d,
     Conv2d,
     Conv3d,
@@ -14,10 +14,6 @@ from .conv import (
     LazyConvTranspose1d,
     LazyConvTranspose2d,
     LazyConvTranspose3d,
-)
-
-# Import YAT conv layers from yat_conv module
-from .yat_conv import (
     YatConv1d,
     YatConv2d,
     YatConv3d,
