@@ -7,7 +7,7 @@ def test_torch_yat_conv_import():
     """Test that YatConv classes can be imported."""
     try:
         import torch
-        from nmn.torch.conv import YatConv1d, YatConv2d, YatConv3d
+        from nmn.torch.layers import YatConv1d, YatConv2d, YatConv3d
         assert True
     except ImportError as e:
         pytest.skip(f"PyTorch dependencies not available: {e}")
@@ -17,7 +17,7 @@ def test_yat_conv1d_instantiation():
     """Test YatConv1d can be instantiated."""
     try:
         import torch
-        from nmn.torch.conv import YatConv1d
+        from nmn.torch.layers import YatConv1d
         
         layer = YatConv1d(
             in_channels=16,
@@ -36,7 +36,7 @@ def test_yat_conv2d_instantiation():
     """Test YatConv2d can be instantiated."""
     try:
         import torch
-        from nmn.torch.conv import YatConv2d
+        from nmn.torch.layers import YatConv2d
         
         layer = YatConv2d(
             in_channels=3,
@@ -55,7 +55,7 @@ def test_yat_conv3d_instantiation():
     """Test YatConv3d can be instantiated."""
     try:
         import torch
-        from nmn.torch.conv import YatConv3d
+        from nmn.torch.layers import YatConv3d
         
         layer = YatConv3d(
             in_channels=8,
@@ -74,7 +74,7 @@ def test_yat_conv1d_forward():
     """Test YatConv1d forward pass."""
     try:
         import torch
-        from nmn.torch.conv import YatConv1d
+        from nmn.torch.layers import YatConv1d
         
         layer = YatConv1d(
             in_channels=16,
@@ -100,7 +100,7 @@ def test_yat_conv2d_forward():
     """Test YatConv2d forward pass."""
     try:
         import torch
-        from nmn.torch.conv import YatConv2d
+        from nmn.torch.layers import YatConv2d
         
         layer = YatConv2d(
             in_channels=3,
@@ -126,7 +126,7 @@ def test_yat_conv3d_forward():
     """Test YatConv3d forward pass."""
     try:
         import torch
-        from nmn.torch.conv import YatConv3d
+        from nmn.torch.layers import YatConv3d
         
         layer = YatConv3d(
             in_channels=8,
@@ -152,7 +152,7 @@ def test_yat_conv2d_with_alpha():
     """Test YatConv2d with alpha parameter."""
     try:
         import torch
-        from nmn.torch.conv import YatConv2d
+        from nmn.torch.layers import YatConv2d
         
         layer = YatConv2d(
             in_channels=3,
@@ -172,7 +172,7 @@ def test_yat_conv2d_without_alpha():
     """Test YatConv2d without alpha parameter."""
     try:
         import torch
-        from nmn.torch.conv import YatConv2d
+        from nmn.torch.layers import YatConv2d
         
         layer = YatConv2d(
             in_channels=3,
@@ -192,7 +192,7 @@ def test_yat_conv2d_with_dropconnect():
     """Test YatConv2d with dropconnect."""
     try:
         import torch
-        from nmn.torch.conv import YatConv2d
+        from nmn.torch.layers import YatConv2d
         
         layer = YatConv2d(
             in_channels=3,
@@ -213,7 +213,7 @@ def test_yat_conv2d_custom_epsilon():
     """Test YatConv2d with custom epsilon."""
     try:
         import torch
-        from nmn.torch.conv import YatConv2d
+        from nmn.torch.layers import YatConv2d
         
         epsilon = 1e-6
         layer = YatConv2d(
@@ -233,7 +233,7 @@ def test_yat_conv2d_stride_and_padding():
     """Test YatConv2d with stride and padding."""
     try:
         import torch
-        from nmn.torch.conv import YatConv2d
+        from nmn.torch.layers import YatConv2d
         
         layer = YatConv2d(
             in_channels=3,

@@ -1,7 +1,14 @@
+# mypy: allow-untyped-defs
+"""YatNMN - Yet Another Transformation Neural Matter Network."""
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
+
+
+__all__ = ["YatNMN"]
+
 
 class YatNMN(nn.Module):
     """
