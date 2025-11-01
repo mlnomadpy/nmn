@@ -14,21 +14,6 @@ from torch.nn.modules.module import Module
 from torch.nn.modules.utils import _pair, _reverse_repeat_tuple, _single, _triple
 
 
-__all__ = [
-    "Conv1d",
-    "Conv2d",
-    "Conv3d",
-    "ConvTranspose1d",
-    "ConvTranspose2d",
-    "ConvTranspose3d",
-    "LazyConv1d",
-    "LazyConv2d",
-    "LazyConv3d",
-    "LazyConvTranspose1d",
-    "LazyConvTranspose2d",
-    "LazyConvTranspose3d",
-]
-
 convolution_notes = {
     "groups_note": r"""* :attr:`groups` controls the connections between inputs and outputs.
       :attr:`in_channels` and :attr:`out_channels` must both be divisible by
@@ -1376,4 +1361,39 @@ class _ConvTransposeMixin(_ConvTransposeNd):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+
+# Import YAT classes from yat_conv module for backward compatibility
+# These are now in a separate module but we re-export them here
+# so existing code that imports from conv.py continues to work
+from .yat_conv import (  # noqa: F401, E402
+    YatConv1d,
+    YatConv2d,
+    YatConv3d,
+    YatConvTranspose1d,
+    YatConvTranspose2d,
+    YatConvTranspose3d,
+)
+
+# Update __all__ to include YAT classes for backward compatibility
+__all__ = [
+    "Conv1d",
+    "Conv2d",
+    "Conv3d",
+    "ConvTranspose1d",
+    "ConvTranspose2d",
+    "ConvTranspose3d",
+    "LazyConv1d",
+    "LazyConv2d",
+    "LazyConv3d",
+    "LazyConvTranspose1d",
+    "LazyConvTranspose2d",
+    "LazyConvTranspose3d",
+    # YAT classes (re-exported from yat_conv for backward compatibility)
+    "YatConv1d",
+    "YatConv2d",
+    "YatConv3d",
+    "YatConvTranspose1d",
+    "YatConvTranspose2d",
+    "YatConvTranspose3d",
+]
 
