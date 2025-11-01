@@ -21,6 +21,15 @@ def test_nmn_from_main_module():
         pytest.skip(f"PyTorch dependencies not available: {e}")
 
 
+def test_yat_nmn_from_specific_file():
+    """Test that YatNMN can be imported from specific file."""
+    try:
+        from nmn.torch.nmn.yat_nmn import YatNMN
+        assert True
+    except ImportError as e:
+        pytest.skip(f"PyTorch dependencies not available: {e}")
+
+
 def test_yat_nmn_module_instantiation():
     """Test YatNMN can be instantiated from nmn module."""
     try:
