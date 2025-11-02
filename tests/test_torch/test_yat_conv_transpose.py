@@ -222,3 +222,143 @@ def test_yat_conv_transpose3d_forward():
         
     except ImportError:
         pytest.skip("PyTorch dependencies not available")
+
+
+def test_yat_conv_transpose2d_device_dtype_via_to():
+    """Test YatConvTranspose2d can be moved to different devices (simulating multi-GPU)."""
+    try:
+        import torch
+        from nmn.torch.layers import YatConvTranspose2d
+        
+        # Test instantiation and .to() method which is commonly used with DataParallel
+        layer = YatConvTranspose2d(
+            in_channels=32,
+            out_channels=16,
+            kernel_size=2,
+            stride=2
+        )
+        
+        # Test .to(device) - this is what DataParallel does internally
+        # We test with CPU since GPU might not be available
+        device = torch.device('cpu')
+        layer_on_device = layer.to(device)
+        assert layer_on_device is not None
+        
+        # Test forward pass on the device
+        dummy_input = torch.randn(1, 32, 8, 8, device=device)
+        output = layer_on_device(dummy_input)
+        assert output.shape == (1, 16, 16, 16)
+        assert output.device == device
+        
+    except ImportError:
+        pytest.skip("PyTorch dependencies not available")
+
+
+def test_yat_conv_transpose_all_variants_with_device():
+    """Test all YatConvTranspose variants can be instantiated with device parameter."""
+    try:
+        import torch
+        from nmn.torch.layers import (
+            YatConvTranspose1d,
+            YatConvTranspose2d,
+            YatConvTranspose3d,
+        )
+        
+        # Test YatConvTranspose1d
+        layer1d = YatConvTranspose1d(
+            in_channels=8,
+            out_channels=4,
+            kernel_size=2,
+            stride=2,
+            device='cpu'
+        )
+        assert layer1d is not None
+        assert layer1d.weight.device.type == 'cpu'
+        
+        # Test YatConvTranspose2d (the one from the bug report)
+        layer2d = YatConvTranspose2d(
+            in_channels=128,
+            out_channels=64,
+            kernel_size=2,
+            stride=2,
+            device='cpu'
+        )
+        assert layer2d is not None
+        assert layer2d.weight.device.type == 'cpu'
+        
+        # Test YatConvTranspose3d
+        layer3d = YatConvTranspose3d(
+            in_channels=16,
+            out_channels=8,
+            kernel_size=2,
+            stride=2,
+            device='cpu'
+        )
+        assert layer3d is not None
+        assert layer3d.weight.device.type == 'cpu'
+        
+    except ImportError:
+        pytest.skip("PyTorch dependencies not available")
+
+
+def test_yat_conv_transpose2d_dtype_parameter():
+    """Test YatConvTranspose2d can be instantiated with dtype parameter."""
+    try:
+        import torch
+        from nmn.torch.layers import YatConvTranspose2d
+        
+        # Test with float32 dtype
+        layer_f32 = YatConvTranspose2d(
+            in_channels=16,
+            out_channels=8,
+            kernel_size=2,
+            stride=2,
+            dtype=torch.float32
+        )
+        assert layer_f32 is not None
+        assert layer_f32.weight.dtype == torch.float32
+        
+        # Test with float64 dtype
+        layer_f64 = YatConvTranspose2d(
+            in_channels=16,
+            out_channels=8,
+            kernel_size=2,
+            stride=2,
+            dtype=torch.float64
+        )
+        assert layer_f64 is not None
+        assert layer_f64.weight.dtype == torch.float64
+        
+    except ImportError:
+        pytest.skip("PyTorch dependencies not available")
+
+
+def test_yat_conv_transpose2d_device_and_dtype():
+    """Test YatConvTranspose2d with both device and dtype parameters simultaneously."""
+    try:
+        import torch
+        from nmn.torch.layers import YatConvTranspose2d
+        
+        # This is the scenario that was failing before the fix
+        layer = YatConvTranspose2d(
+            in_channels=128,
+            out_channels=64,
+            kernel_size=2,
+            stride=2,
+            device='cpu',
+            dtype=torch.float32
+        )
+        
+        assert layer is not None
+        assert layer.weight.device.type == 'cpu'
+        assert layer.weight.dtype == torch.float32
+        
+        # Test forward pass
+        dummy_input = torch.randn(2, 128, 16, 16, device='cpu', dtype=torch.float32)
+        output = layer(dummy_input)
+        assert output.shape == (2, 64, 32, 32)
+        assert output.device.type == 'cpu'
+        assert output.dtype == torch.float32
+        
+    except ImportError:
+        pytest.skip("PyTorch dependencies not available")
