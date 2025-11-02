@@ -350,6 +350,11 @@ class YatConvNd(_ConvNd):
         dtype=None,
         **kwargs,
     ) -> None:
+        # Remove device and dtype from kwargs to avoid duplicate keyword arguments
+        # when they are passed both explicitly and within **kwargs
+        kwargs.pop('device', None)
+        kwargs.pop('dtype', None)
+        
         super().__init__(
             in_channels,
             out_channels,
