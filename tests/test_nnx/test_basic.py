@@ -16,10 +16,6 @@ def test_nnx_import():
         pytest.skip(f"NNX dependencies not available: {e}")
 
 
-@pytest.mark.skipif(
-    True,
-    reason="JAX/Flax not available in test environment"
-)
 def test_yat_nmn_basic():
     """Test basic YatNMN functionality."""
     try:
@@ -50,10 +46,6 @@ def test_yat_nmn_basic():
         pytest.skip("JAX/Flax dependencies not available")
 
 
-@pytest.mark.skipif(
-    True,
-    reason="JAX/Flax not available in test environment"
-)
 def test_yat_conv_basic():
     """Test basic YatConv functionality."""
     try:
@@ -67,11 +59,12 @@ def test_yat_conv_basic():
         kernel_size = (3, 3)
         conv_key, conv_param_key, conv_input_key = jax.random.split(jax.random.key(1), 3)
         
-        # Create layer
+        # Create layer with VALID padding for expected output size
         conv_layer = YatConv(
             in_features=in_channels,
             out_features=out_channels,
             kernel_size=kernel_size,
+            padding='VALID',
             rngs=nnx.Rngs(params=conv_param_key)
         )
         

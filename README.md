@@ -84,9 +84,9 @@ The library provides several layer types across all supported frameworks:
 | Layer Type | Description | Flax NNX | Flax Linen | Keras | PyTorch | TensorFlow |
 |------------|-------------|----------|------------|-------|---------|------------|
 | **YatNMN** | Dense/Linear layer | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **YatConv** | Convolutional layer | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **YatConvTranspose** | Transposed convolution | ✅ | 🚧 | 🚧 | 🚧 | 🚧 |
-| **YatAttention** | Multi-head attention | ✅ | 🚧 | 🚧 | 🚧 | 🚧 |
+| **YatConv1D/2D/3D** | Convolutional layers | ✅ (1D,2D,3D) | ❌ | ✅ (1D,2D only) | ✅ (1D,2D,3D) | ✅ (1D,2D,3D) |
+| **YatConvTranspose** | Transposed convolution | ✅ (2D+) | ❌ | ❌ | ✅ | ❌ |
+| **YatAttention** | Multi-head attention | ✅ | ❌ | ❌ | ❌ | ❌ |
 
 ### Recurrent Layers (Flax NNX)
 
@@ -104,14 +104,24 @@ The library provides several layer types across all supported frameworks:
 | **softer_sigmoid** | $\frac{x^n}{1 + x^n}$ | Smoother sigmoid variant |
 | **soft_tanh** | $\frac{x^n}{1 + x^n} - \frac{(-x)^n}{1 + (-x)^n}$ | Smoother tanh variant |
 
-### Advanced Features (Flax NNX)
+### Advanced Features
 
-*   **✅ DropConnect**: Built-in weight dropout for regularization
-*   **✅ Alpha Scaling**: Learnable output scaling parameter
-*   **🚧 Ternary Networks**: Quantized weight versions (in development)
-*   **✅ Custom Initializers**: Optimized for Yat-layer convergence
+| Feature | Flax NNX | Flax Linen | Keras | PyTorch | TensorFlow |
+|---------|----------|------------|-------|---------|------------|
+| **DropConnect** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Alpha Scaling** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Custom Activations** | ✅ (softermax, etc.) | ❌ | ❌ | ❌ | ❌ |
+| **Custom Initializers** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-*Legend: ✅ Implemented, 🚧 In Development*
+*Legend: ✅ Implemented, ❌ Not Implemented*
+
+### Framework-Specific Notes
+
+- **Flax NNX**: Most feature-complete implementation with attention, RNN cells, and DropConnect
+- **PyTorch**: Full conv/transpose conv support, but missing attention and RNN layers
+- **Keras**: Missing 3D conv, transpose conv, and attention
+- **TensorFlow**: Missing transpose conv and attention
+- **Flax Linen**: Basic YatNMN only - consider using NNX for full features
 
 ## Installation
 
@@ -639,7 +649,7 @@ This library is inspired by research into alternative neural network architectur
 - 📖 **Documentation**: [GitHub Wiki](https://github.com/mlnomadpy/nmn/wiki) (coming soon)
 - 🐛 **Bug Reports**: [GitHub Issues](https://github.com/mlnomadpy/nmn/issues)
 - 💬 **Discussions**: [GitHub Discussions](https://github.com/mlnomadpy/nmn/discussions)
-- 📧 **Contact**: yat@mlnomads.com
+- 📧 **Contact**: taha@azetta.ai
 
 ## Related Projects
 
@@ -650,4 +660,3 @@ This library is inspired by research into alternative neural network architectur
 
 ---
 
-**Built with ❤️ by the ML Nomads team**

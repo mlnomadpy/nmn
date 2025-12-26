@@ -415,10 +415,11 @@ class YatConvNd(_ConvNd):
         # Compute ||input_patches||^2 using convolution with ones kernel
         input_squared = input * input
         
-        # For grouped convolution, the kernel shape for computing patch sums is:
-        # kernel_size + (in_channels_per_group, 1)
+        # For grouped convolution, we need one kernel per group
+        # Each kernel sums over the input channels in that group
+        # PyTorch conv expects: (out_channels, in_channels_per_group, *kernel_size)
         in_channels_per_group = self.in_channels // self.groups
-        ones_kernel_shape = self.kernel_size + (in_channels_per_group, 1)
+        ones_kernel_shape = (self.groups, in_channels_per_group) + self.kernel_size
         ones_kernel = torch.ones(ones_kernel_shape, device=input.device, dtype=input.dtype)
         
         if self.padding_mode != "zeros":

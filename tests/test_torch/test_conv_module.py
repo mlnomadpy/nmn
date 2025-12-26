@@ -47,39 +47,31 @@ def test_conv_from_main_module():
         pytest.skip(f"PyTorch dependencies not available: {e}")
 
 
-def test_yat_classes_not_in_conv_module():
-    """Test that YAT classes are not in conv module (they're in yat_conv)."""
+def test_yat_classes_in_layers_module():
+    """Test that YAT classes are exported from layers module."""
     try:
         from nmn.torch import layers
         
-        # YAT classes should not be in conv module
-        assert not hasattr(layers, 'YatConv1d')
-        assert not hasattr(layers, 'YatConv2d')
-        assert not hasattr(layers, 'YatConv3d')
-        assert not hasattr(layers, 'YatConvTranspose1d')
-        assert not hasattr(layers, 'YatConvTranspose2d')
-        assert not hasattr(layers, 'YatConvTranspose3d')
-        assert not hasattr(layers, 'YatConvNd')
-        assert not hasattr(layers, 'YatConvTransposeNd')
-        
-    except ImportError:
-        pytest.skip("PyTorch dependencies not available")
-
-
-def test_yat_classes_in_yat_conv_module():
-    """Test that YAT classes are in yat_conv module."""
-    try:
-        from nmn.torch import layers
-        
-        # YAT classes should be in yat_conv module
+        # YAT classes should be exported from layers
         assert hasattr(layers, 'YatConv1d')
         assert hasattr(layers, 'YatConv2d')
         assert hasattr(layers, 'YatConv3d')
         assert hasattr(layers, 'YatConvTranspose1d')
         assert hasattr(layers, 'YatConvTranspose2d')
         assert hasattr(layers, 'YatConvTranspose3d')
-        assert hasattr(layers, 'YatConvNd')
-        assert hasattr(layers, 'YatConvTransposeNd')
+        
+    except ImportError:
+        pytest.skip("PyTorch dependencies not available")
+
+
+def test_yat_base_classes_in_base_module():
+    """Test that YAT base classes are in base module."""
+    try:
+        from nmn.torch import base
+        
+        # YAT base classes should be in base module
+        assert hasattr(base, 'YatConvNd')
+        assert hasattr(base, 'YatConvTransposeNd')
         
     except ImportError:
         pytest.skip("PyTorch dependencies not available")

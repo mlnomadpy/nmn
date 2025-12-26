@@ -13,20 +13,16 @@ def test_linen_import():
         pytest.skip(f"Linen/JAX dependencies not available: {e}")
 
 
-@pytest.mark.skipif(
-    True,
-    reason="JAX/Flax not available in test environment"
-)
 def test_linen_basic_functionality():
     """Test basic Linen NMN functionality.""" 
     try:
         import jax
         import jax.numpy as jnp
         from flax import linen as nn
-        from nmn.linen.nmn import YatDense
+        from nmn.linen.nmn import YatNMN
         
         # Create layer
-        layer = YatDense(features=10)
+        layer = YatNMN(features=10)
         
         # Initialize parameters
         key = jax.random.PRNGKey(0)

@@ -17,10 +17,6 @@ def test_tf_import():
         pytest.skip(f"TensorFlow dependencies not available: {e}")
 
 
-@pytest.mark.skipif(
-    True,
-    reason="TensorFlow not available in test environment"
-)
 def test_yat_nmn_basic():
     """Test basic TensorFlow YatNMN functionality."""
     try:
@@ -40,10 +36,6 @@ def test_yat_nmn_basic():
         pytest.skip("TensorFlow dependencies not available")
 
 
-@pytest.mark.skipif(
-    True,
-    reason="TensorFlow not available in test environment"
-)
 def test_yat_conv1d_basic():
     """Test basic TensorFlow YatConv1D functionality."""
     try:
@@ -64,10 +56,6 @@ def test_yat_conv1d_basic():
         pytest.skip("TensorFlow dependencies not available")
 
 
-@pytest.mark.skipif(
-    True,
-    reason="TensorFlow not available in test environment"
-)
 def test_yat_conv2d_basic():
     """Test basic TensorFlow YatConv2D functionality."""
     try:
@@ -88,10 +76,6 @@ def test_yat_conv2d_basic():
         pytest.skip("TensorFlow dependencies not available")
 
 
-@pytest.mark.skipif(
-    True,
-    reason="TensorFlow not available in test environment"
-)
 def test_yat_conv3d_basic():
     """Test basic TensorFlow YatConv3D functionality."""
     try:
@@ -112,10 +96,6 @@ def test_yat_conv3d_basic():
         pytest.skip("TensorFlow dependencies not available")
 
 
-@pytest.mark.skipif(
-    True,
-    reason="TensorFlow not available in test environment"
-)
 def test_yat_conv2d_same_padding():
     """Test YatConv2D with SAME padding."""
     try:
@@ -136,10 +116,6 @@ def test_yat_conv2d_same_padding():
         pytest.skip("TensorFlow dependencies not available")
 
 
-@pytest.mark.skipif(
-    True,
-    reason="TensorFlow not available in test environment"
-)
 def test_yat_nmn_no_bias():
     """Test YatNMN without bias."""
     try:
@@ -161,10 +137,6 @@ def test_yat_nmn_no_bias():
         pytest.skip("TensorFlow dependencies not available")
 
 
-@pytest.mark.skipif(
-    True,
-    reason="TensorFlow not available in test environment"
-)
 def test_yat_nmn_custom_epsilon():
     """Test YatNMN with custom epsilon."""
     try:
@@ -186,10 +158,6 @@ def test_yat_nmn_custom_epsilon():
         pytest.skip("TensorFlow dependencies not available")
 
 
-@pytest.mark.skipif(
-    True,
-    reason="TensorFlow not available in test environment"
-)
 def test_yat_conv1d_strides():
     """Test YatConv1D with strides."""
     try:
@@ -210,10 +178,6 @@ def test_yat_conv1d_strides():
         pytest.skip("TensorFlow dependencies not available")
 
 
-@pytest.mark.skipif(
-    True,
-    reason="TensorFlow not available in test environment"
-)
 def test_yat_conv2d_strides():
     """Test YatConv2D with strides."""
     try:
