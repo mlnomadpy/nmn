@@ -10,12 +10,13 @@ The architecture uses:
 - Configurable attention mechanism (YAT or standard)
 - Optional QK normalization for training stability
 - Support for autoregressive (cached) decoding
+- Optional alpha scaling for YAT attention (learnable or constant)
 """
 
 from __future__ import annotations
 
 import functools
-from typing import Any, Callable
+from typing import Any, Callable, Optional, Union
 
 import jax.numpy as jnp
 from jax import lax
@@ -38,6 +39,9 @@ from jax import Array
 from .yat_attention import yat_attention
 from .masks import combine_masks
 
+# Default constant alpha value (sqrt(2)), same as NMN
+DEFAULT_CONSTANT_ALPHA = jnp.sqrt(2.0)
+
 
 class MultiHeadAttention(Module):
     """Multi-head attention with YAT or standard dot-product attention.
@@ -53,6 +57,9 @@ class MultiHeadAttention(Module):
     YAT attention computes: softmax((Q·K)² / (||Q-K||² + ε)) · V
     Standard attention computes: softmax(Q·K / sqrt(d_k)) · V
 
+    With optional alpha scaling (for YAT attention):
+        scaled_attn = attn * (sqrt(head_dim) / log(1 + head_dim))^alpha
+
     Attributes:
         num_heads: Number of attention heads.
         in_features: Input feature dimension.
@@ -62,12 +69,31 @@ class MultiHeadAttention(Module):
         epsilon: Numerical stability constant for YAT attention.
         use_softermax: Whether to use softermax instead of softmax.
         power: Power parameter for softermax.
+        use_alpha: Whether alpha scaling is enabled.
+        alpha: Learnable alpha parameter (if use_alpha=True and constant_alpha=None).
 
     Example:
         >>> rngs = nnx.Rngs(0)
+        >>> # Learnable alpha (default)
         >>> attn = MultiHeadAttention(
         ...     num_heads=8,
         ...     in_features=512,
+        ...     rngs=rngs,
+        ...     decode=False,
+        ... )
+        >>> # Constant alpha = sqrt(2)
+        >>> attn = MultiHeadAttention(
+        ...     num_heads=8,
+        ...     in_features=512,
+        ...     constant_alpha=True,
+        ...     rngs=rngs,
+        ...     decode=False,
+        ... )
+        >>> # No alpha scaling
+        >>> attn = MultiHeadAttention(
+        ...     num_heads=8,
+        ...     in_features=512,
+        ...     use_alpha=False,
         ...     rngs=rngs,
         ...     decode=False,
         ... )
@@ -99,6 +125,7 @@ class MultiHeadAttention(Module):
         decode: bool | None = None,
         normalize_qk: bool = False,
         use_alpha: bool = True,
+        constant_alpha: Optional[Union[bool, float]] = None,
         alpha_init: Initializer = initializers.ones_init(),
         use_dropconnect: bool = False,
         dropconnect_rate: float = 0.0,
@@ -132,8 +159,13 @@ class MultiHeadAttention(Module):
             attention_fn: Attention function to use (default: yat_attention).
             decode: Whether to use autoregressive decoding mode.
             normalize_qk: Whether to apply layer norm to Q and K.
-            use_alpha: (Unused, kept for API compatibility).
-            alpha_init: (Unused, kept for API compatibility).
+            use_alpha: Whether to use alpha scaling for YAT attention. Ignored if
+                constant_alpha is set.
+            constant_alpha: If True, use sqrt(2) as constant alpha. If a float,
+                use that value. If None (default), use learnable alpha when
+                use_alpha=True.
+            alpha_init: Initializer for learnable alpha (only used if use_alpha=True
+                and constant_alpha=None).
             use_dropconnect: Whether to use DropConnect (for training).
             dropconnect_rate: DropConnect probability.
             qkv_dot_general: (Deprecated).
@@ -170,10 +202,40 @@ class MultiHeadAttention(Module):
         self.epsilon = epsilon
         self.use_softermax = use_softermax
         self.power = power
-        self.use_alpha = use_alpha
-        self.alpha_init = alpha_init
         self.use_dropconnect = use_dropconnect
         self.dropconnect_rate = dropconnect_rate
+
+        # Handle alpha configuration (same logic as YatNMN)
+        # Priority: constant_alpha > use_alpha
+        #
+        # Options:
+        #   1. constant_alpha=True -> use sqrt(2) as constant
+        #   2. constant_alpha=<float> -> use that value as constant
+        #   3. use_alpha=True (default) -> learnable alpha parameter
+        #   4. use_alpha=False -> no alpha scaling
+        self.alpha: nnx.Param[Array] | None
+        
+        if constant_alpha is not None:
+            # Use constant alpha (no learnable parameter)
+            if constant_alpha is True:
+                self._constant_alpha_value = float(DEFAULT_CONSTANT_ALPHA)
+            else:
+                self._constant_alpha_value = float(constant_alpha)
+            self.alpha = None
+            use_alpha = True  # Alpha scaling is enabled (but constant)
+        else:
+            self._constant_alpha_value = None
+            if use_alpha:
+                # Use learnable alpha
+                alpha_key = rngs.params()
+                self.alpha = nnx.Param(alpha_init(alpha_key, (1,), param_dtype))
+            else:
+                # No alpha scaling
+                self.alpha = None
+        
+        self.use_alpha = use_alpha
+        self.constant_alpha = constant_alpha
+        self.alpha_init = alpha_init
 
         if self.qkv_features % self.num_heads != 0:
             raise ValueError(
@@ -371,6 +433,14 @@ class MultiHeadAttention(Module):
                 raise ValueError("'rngs' must be provided for dropout.")
             dropout_rng = rngs.dropout()
 
+        # Get alpha value (either learnable or constant)
+        alpha_value = None
+        if self.use_alpha:
+            if self._constant_alpha_value is not None:
+                alpha_value = self._constant_alpha_value
+            elif self.alpha is not None:
+                alpha_value = self.alpha.value
+
         # Apply attention (YAT by default)
         x = self.attention_fn(
             query,
@@ -387,6 +457,7 @@ class MultiHeadAttention(Module):
             epsilon=self.epsilon,
             use_softermax=self.use_softermax,
             power=self.power,
+            alpha=alpha_value,
         )
 
         # Reshape back: [batch..., length, num_heads, head_dim] -> [batch..., length, qkv_features]

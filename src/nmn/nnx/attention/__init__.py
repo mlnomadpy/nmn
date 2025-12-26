@@ -7,6 +7,11 @@ standard scaled dot-product attention.
 YAT Attention:
     Uses the formula: softmax((Q·K)² / (||Q-K||² + ε)) · V
     This balances similarity (dot product) with proximity (Euclidean distance).
+    
+    With optional alpha scaling:
+        scaled_attn = attn * (sqrt(head_dim) / log(1 + head_dim))^alpha
+    
+    Alpha can be learnable, constant (e.g., sqrt(2)), or disabled.
 
 Rotary YAT Attention:
     Combines Rotary Position Embeddings (RoPE) with YAT attention:
@@ -91,7 +96,7 @@ from .dot_product import (
 )
 
 # Multi-Head Attention Module
-from .multi_head import MultiHeadAttention
+from .multi_head import MultiHeadAttention, DEFAULT_CONSTANT_ALPHA
 
 # Mask Utilities
 from .masks import (
@@ -129,6 +134,7 @@ __all__ = [
     "dot_product_attention_weights",
     # Multi-Head Attention
     "MultiHeadAttention",
+    "DEFAULT_CONSTANT_ALPHA",
     # Masks
     "make_attention_mask",
     "make_causal_mask",

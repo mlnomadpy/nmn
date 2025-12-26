@@ -25,7 +25,7 @@ Reference:
 from __future__ import annotations
 
 import functools
-from typing import Optional, Tuple, Callable, Any
+from typing import Optional, Tuple, Callable, Any, Union
 
 import jax
 import jax.numpy as jnp
@@ -54,6 +54,7 @@ from .yat_attention import (
     create_yat_projection,
     normalize_qk,
 )
+from .multi_head import DEFAULT_CONSTANT_ALPHA
 from .masks import combine_masks
 from nmn.nnx.squashers import softermax
 
@@ -169,6 +170,7 @@ def rotary_yat_attention_weights(
     use_softermax: bool = False,
     power: float = 1.0,
     position_offset: int = 0,
+    alpha: Optional[Array] = None,
 ) -> Array:
     """Computes Rotary YAT attention weights.
 
@@ -192,6 +194,7 @@ def rotary_yat_attention_weights(
         use_softermax: Whether to use softermax.
         power: Softermax power parameter.
         position_offset: Starting position for RoPE.
+        alpha: Optional alpha scaling parameter.
 
     Returns:
         Attention weights of shape [..., num_heads, q_length, kv_length].
@@ -216,6 +219,7 @@ def rotary_yat_attention_weights(
         epsilon=epsilon,
         use_softermax=use_softermax,
         power=power,
+        alpha=alpha,
     )
 
 
@@ -238,12 +242,16 @@ def rotary_yat_attention(
     use_softermax: bool = False,
     power: float = 1.0,
     position_offset: int = 0,
+    alpha: Optional[Array] = None,
 ) -> Array:
     """Computes Rotary YAT attention: RoPE + YAT formula.
 
     Combines Rotary Position Embeddings with YAT attention:
         1. Apply RoPE: q' = RoPE(q), k' = RoPE(k)
         2. Compute YAT: softmax((q'·k')² / (||q' - k'||² + ε)) · V
+
+    With optional alpha scaling:
+        scaled_attn = attn * (sqrt(head_dim) / log(1 + head_dim))^alpha
 
     Args:
         query: Queries of shape [..., q_length, num_heads, head_dim].
@@ -264,6 +272,7 @@ def rotary_yat_attention(
         use_softermax: Whether to use softermax.
         power: Softermax power parameter.
         position_offset: Starting position for RoPE.
+        alpha: Optional alpha scaling parameter.
 
     Returns:
         Output of shape [..., q_length, num_heads, v_dim].
@@ -290,6 +299,7 @@ def rotary_yat_attention(
         use_softermax=use_softermax,
         power=power,
         position_offset=position_offset,
+        alpha=alpha,
     )
 
     # Return weighted sum over values
@@ -318,6 +328,7 @@ def rotary_yat_performer_attention(
     position_offset: int = 0,
     causal: bool = False,
     normalize_inputs: bool = True,
+    alpha: Optional[Array] = None,
 ) -> Array:
     """Computes Rotary YAT Performer attention: RoPE + YAT + O(n) complexity.
 
@@ -334,6 +345,9 @@ def rotary_yat_performer_attention(
         ||q - k||² = ||q||² + ||k||² - 2(q·k) = 1 + 1 - 2(q·k) = 2(1 - q·k)
 
     This requires only ONE dot product instead of computing separate norms!
+
+    With optional alpha scaling:
+        scaled_output = output * (sqrt(head_dim) / log(1 + head_dim))^alpha
 
     Args:
         query: Queries of shape [..., q_length, num_heads, head_dim].
@@ -355,12 +369,15 @@ def rotary_yat_performer_attention(
         position_offset: Starting position for RoPE.
         causal: If True, use causal attention.
         normalize_inputs: If True (default), normalize Q and K after RoPE.
+        alpha: Optional alpha scaling parameter.
 
     Returns:
         Output of shape [..., q_length, num_heads, v_dim].
     """
     query, key, value = promote_dtype((query, key, value), dtype=dtype)
     dtype = query.dtype
+
+    head_dim = query.shape[-1]
 
     # Apply RoPE first
     query_rotated = apply_rotary_emb(query, freqs_cos, freqs_sin, position_offset)
@@ -379,7 +396,7 @@ def rotary_yat_performer_attention(
     )
 
     if causal:
-        return _rotary_yat_causal_performer(
+        output = _rotary_yat_causal_performer(
             q_features, k_features, value, epsilon, precision
         )
     else:
@@ -403,13 +420,19 @@ def rotary_yat_performer_attention(
 
         output = qkv / normalizer
 
-        # Apply dropout
-        if not deterministic and dropout_rate > 0.0:
-            keep_prob = 1.0 - dropout_rate
-            keep = random.bernoulli(dropout_rng, keep_prob, output.shape)
-            output = output * keep / keep_prob
+    # Apply alpha scaling: scale = (sqrt(head_dim) / log(1 + head_dim))^alpha
+    if alpha is not None:
+        alpha_val = jnp.asarray(alpha, dtype=dtype)
+        scale = (jnp.sqrt(head_dim) / jnp.log(1 + head_dim)) ** alpha_val
+        output = output * scale
 
-        return output
+    # Apply dropout
+    if not deterministic and dropout_rate > 0.0:
+        keep_prob = 1.0 - dropout_rate
+        keep = random.bernoulli(dropout_rng, keep_prob, output.shape)
+        output = output * keep / keep_prob
+
+    return output
 
 
 def _rotary_yat_causal_performer(
@@ -496,6 +519,7 @@ class RotaryYatAttention(Module):
         precision: PrecisionLike = None,
         kernel_init: Initializer = default_kernel_init,
         bias_init: Initializer = initializers.zeros_init(),
+        alpha_init: Initializer = initializers.ones_init(),
         use_bias: bool = False,
         normalize_qk: bool = False,
         use_out_proj: bool = True,
@@ -506,6 +530,8 @@ class RotaryYatAttention(Module):
         num_features: int | None = None,
         causal: bool = False,
         performer_normalize: bool = True,
+        use_alpha: bool = True,
+        constant_alpha: Optional[Union[bool, float]] = None,
         rngs: rnglib.Rngs,
     ):
         """Initializes RotaryYatAttention.
@@ -522,6 +548,7 @@ class RotaryYatAttention(Module):
             precision: JAX precision.
             kernel_init: Weight initializer.
             bias_init: Bias initializer.
+            alpha_init: Initializer for learnable alpha.
             use_bias: Whether to use bias in projections.
             normalize_qk: Whether to apply QK layer normalization.
             use_out_proj: Whether to use output projection.
@@ -534,6 +561,10 @@ class RotaryYatAttention(Module):
             performer_normalize: If True (default), normalize Q/K to unit vectors
                 in Performer mode. This enables the optimized YAT formula:
                 (q·k)² / (2(1 - q·k) + ε) which only needs ONE dot product!
+            use_alpha: Whether to use alpha scaling for YAT attention.
+            constant_alpha: If True, use sqrt(2) as constant alpha. If a float,
+                use that value. If None (default), use learnable alpha when
+                use_alpha=True.
             rngs: Random number generators.
         """
         self.embed_dim = embed_dim
@@ -555,6 +586,30 @@ class RotaryYatAttention(Module):
         self.use_performer = use_performer
         self.causal = causal
         self.performer_normalize = performer_normalize
+
+        # Handle alpha configuration (same logic as MultiHeadAttention)
+        self.alpha: nnx.Param[Array] | None
+        
+        if constant_alpha is not None:
+            # Use constant alpha (no learnable parameter)
+            if constant_alpha is True:
+                self._constant_alpha_value = float(DEFAULT_CONSTANT_ALPHA)
+            else:
+                self._constant_alpha_value = float(constant_alpha)
+            self.alpha = None
+            use_alpha = True  # Alpha scaling is enabled (but constant)
+        else:
+            self._constant_alpha_value = None
+            if use_alpha:
+                # Use learnable alpha
+                alpha_key = rngs.params()
+                self.alpha = nnx.Param(alpha_init(alpha_key, (1,), param_dtype))
+            else:
+                # No alpha scaling
+                self.alpha = None
+        
+        self.use_alpha = use_alpha
+        self.constant_alpha = constant_alpha
 
         if embed_dim % num_heads != 0:
             raise ValueError(
@@ -727,6 +782,14 @@ class RotaryYatAttention(Module):
                 raise ValueError("rngs required for dropout")
             dropout_rng = rngs.dropout()
 
+        # Get alpha value (either learnable or constant)
+        alpha_value = None
+        if self.use_alpha:
+            if self._constant_alpha_value is not None:
+                alpha_value = self._constant_alpha_value
+            elif self.alpha is not None:
+                alpha_value = self.alpha.value
+
         # Apply Rotary YAT attention
         if self.use_performer:
             # Performer mode: O(n) complexity
@@ -750,6 +813,7 @@ class RotaryYatAttention(Module):
                 position_offset=position_offset,
                 causal=self.causal,
                 normalize_inputs=self.performer_normalize,
+                alpha=alpha_value,
             )
         else:
             # Standard O(n²) attention
@@ -771,6 +835,7 @@ class RotaryYatAttention(Module):
                 use_softermax=self.use_softermax,
                 power=self.power,
                 position_offset=position_offset,
+                alpha=alpha_value,
             )
 
         # Reshape back: [batch, seq, num_heads, head_dim] -> [batch, seq, embed_dim]

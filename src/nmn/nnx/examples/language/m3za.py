@@ -48,6 +48,7 @@ class ModernTransformerBlock(nnx.Module):
             kernel_init = nnx.initializers.xavier_uniform()
 
         # Use RotaryYatAttention - combines RoPE with YAT attention
+        # constant_alpha=True uses sqrt(2) as alpha scaling for attention scores
         self.attn = RotaryYatAttention(
             embed_dim=embed_dim,
             num_heads=num_heads,
@@ -55,6 +56,8 @@ class ModernTransformerBlock(nnx.Module):
             kernel_init=kernel_init,
             use_bias=False,
             dropout_rate=rate,
+            # Alpha scaling for YAT attention
+            constant_alpha=True,  # Use sqrt(2) as constant alpha
             rngs=rngs,
         )
         self.norm1 = RMSNorm(embed_dim, rngs=rngs)
