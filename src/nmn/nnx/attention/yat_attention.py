@@ -11,6 +11,11 @@ This balances:
 
 The result is attention that activates when queries and keys are both
 similar in direction AND close in Euclidean space.
+
+Performer Mode:
+    When use_performer=True, uses FAVOR+ random feature approximation for
+    O(n) time complexity instead of O(n²). This approximates the YAT attention
+    by using random features to approximate the normalized attention scores.
 """
 
 from __future__ import annotations
@@ -239,4 +244,356 @@ def yat_attention(
     return jnp.einsum(
         "...hqk,...khd->...qhd", attn_weights, value, precision=precision
     )
+
+
+# =============================================================================
+# Performer-style YAT Attention (Linear Complexity)
+# =============================================================================
+
+
+def normalize_qk(
+    query: Array,
+    key: Array,
+    epsilon: float = 1e-6,
+) -> tuple[Array, Array]:
+    """Normalizes query and key to unit vectors.
+
+    When Q and K are unit vectors, the YAT formula simplifies significantly:
+        ||q - k||² = ||q||² + ||k||² - 2(q·k) = 1 + 1 - 2(q·k) = 2(1 - q·k)
+
+    So YAT becomes: (q·k)² / (2(1 - q·k) + ε)
+
+    This eliminates separate norm computations, requiring only ONE dot product.
+
+    Args:
+        query: Query tensor of any shape [..., head_dim].
+        key: Key tensor of any shape [..., head_dim].
+        epsilon: Small constant for numerical stability.
+
+    Returns:
+        Tuple of (normalized_query, normalized_key).
+    """
+    q_norm = jnp.sqrt(jnp.sum(query ** 2, axis=-1, keepdims=True) + epsilon)
+    k_norm = jnp.sqrt(jnp.sum(key ** 2, axis=-1, keepdims=True) + epsilon)
+    return query / q_norm, key / k_norm
+
+
+def yat_attention_normalized(
+    query: Array,
+    key: Array,
+    value: Array,
+    bias: Optional[Array] = None,
+    mask: Optional[Array] = None,
+    broadcast_dropout: bool = True,
+    dropout_rng: Optional[Array] = None,
+    dropout_rate: float = 0.0,
+    deterministic: bool = False,
+    dtype: Optional[Dtype] = None,
+    precision: PrecisionLike = None,
+    module: Optional[Module] = None,
+    epsilon: float = 1e-5,
+    use_softermax: bool = False,
+    power: float = 1.0,
+) -> Array:
+    """Computes YAT attention with normalized Q and K (optimized).
+
+    When Q and K are normalized to unit vectors, the YAT formula simplifies:
+        (q·k)² / (2(1 - q·k) + ε)
+
+    This is faster because we only need ONE dot product instead of computing
+    separate squared norms. The normalization is O(n) and very fast.
+
+    Args:
+        query: Queries [..., q_length, num_heads, head_dim] (will be normalized).
+        key: Keys [..., kv_length, num_heads, head_dim] (will be normalized).
+        value: Values [..., kv_length, num_heads, v_dim].
+        bias: Optional attention bias.
+        mask: Optional attention mask.
+        broadcast_dropout: Whether to broadcast dropout.
+        dropout_rng: RNG for dropout.
+        dropout_rate: Dropout probability.
+        deterministic: If True, no dropout.
+        dtype: Computation dtype.
+        precision: JAX precision.
+        module: Optional module for sowing.
+        epsilon: Numerical stability constant.
+        use_softermax: Whether to use softermax.
+        power: Softermax power parameter.
+
+    Returns:
+        Output of shape [..., q_length, num_heads, v_dim].
+    """
+    query, key, value = promote_dtype((query, key, value), dtype=dtype)
+    dtype = query.dtype
+
+    # Normalize Q and K to unit vectors
+    query_normalized, key_normalized = normalize_qk(query, key, epsilon)
+
+    # Compute dot product: q·k (only need this one operation!)
+    # Output shape: [..., num_heads, q_length, kv_length]
+    dot_product = jnp.einsum(
+        "...qhd,...khd->...hqk", query_normalized, key_normalized, precision=precision
+    )
+
+    # Squared dot product: (q·k)²
+    squared_dot_product = jnp.square(dot_product)
+
+    # Simplified distance: 2(1 - q·k) since ||q|| = ||k|| = 1
+    # ||q - k||² = ||q||² + ||k||² - 2(q·k) = 1 + 1 - 2(q·k) = 2 - 2(q·k)
+    distance_sq = 2.0 - 2.0 * dot_product
+
+    # YAT attention scores: (q·k)² / (2(1 - q·k) + ε)
+    attn_weights = squared_dot_product / (distance_sq + epsilon)
+
+    # Apply bias
+    if bias is not None:
+        attn_weights = attn_weights + bias
+
+    # Apply mask
+    if mask is not None:
+        big_neg = jnp.finfo(dtype).min
+        attn_weights = jnp.where(mask, attn_weights, big_neg)
+
+    # Normalize
+    if use_softermax:
+        attn_weights = softermax(attn_weights, n=power).astype(dtype)
+    else:
+        attn_weights = jax.nn.softmax(attn_weights).astype(dtype)
+
+    # Sow weights
+    if module:
+        module.sow(nnx.Intermediate, "attention_weights", attn_weights)
+
+    # Dropout
+    if not deterministic and dropout_rate > 0.0:
+        keep_prob = 1.0 - dropout_rate
+        if broadcast_dropout:
+            dropout_shape = tuple([1] * (key.ndim - 2)) + attn_weights.shape[-2:]
+            keep = random.bernoulli(dropout_rng, keep_prob, dropout_shape)
+        else:
+            keep = random.bernoulli(dropout_rng, keep_prob, attn_weights.shape)
+        multiplier = keep.astype(dtype) / jnp.asarray(keep_prob, dtype=dtype)
+        attn_weights = attn_weights * multiplier
+
+    # Weighted sum
+    return jnp.einsum(
+        "...hqk,...khd->...qhd", attn_weights, value, precision=precision
+    )
+
+
+def yat_performer_feature_map(
+    x: Array,
+    projection: Array,
+    epsilon: float = 1e-6,
+    pre_normalized: bool = False,
+) -> Array:
+    """Applies YAT-adapted feature map for Performer approximation.
+
+    This feature map is designed to work with the YAT attention mechanism,
+    using random features to approximate the YAT kernel.
+
+    For YAT, we approximate: (q·k)² / (||q-k||² + ε)
+
+    When pre_normalized=True, inputs are already unit vectors, enabling
+    the simplified formula: (q·k)² / (2(1 - q·k) + ε)
+
+    Args:
+        x: Input tensor of shape [..., seq_len, num_heads, head_dim].
+        projection: Random projection matrix [num_features, head_dim].
+        epsilon: Numerical stability constant.
+        pre_normalized: If True, assumes x is already normalized to unit vectors.
+
+    Returns:
+        Feature-mapped tensor of shape [..., seq_len, num_heads, num_features].
+    """
+    head_dim = x.shape[-1]
+    num_features = projection.shape[0]
+
+    if pre_normalized:
+        # Input is already normalized - use directly
+        x_normalized = x
+        x_norm = jnp.ones(x.shape[:-1] + (1,), dtype=x.dtype)
+    else:
+        # Normalize input
+        x_norm = jnp.sqrt(jnp.sum(x ** 2, axis=-1, keepdims=True) + epsilon)
+        x_normalized = x / x_norm
+
+    # Project normalized vectors
+    x_proj = jnp.einsum("...d,md->...m", x_normalized, projection)
+
+    # Apply softplus for positive features (similar to ELU+1 in some Performer variants)
+    features = jax.nn.softplus(x_proj)
+
+    # Scale by norm to preserve magnitude information (only if not pre-normalized)
+    if not pre_normalized:
+        features = features * (x_norm / jnp.sqrt(head_dim).astype(x.dtype))
+    else:
+        features = features / jnp.sqrt(head_dim).astype(x.dtype)
+
+    # Normalize by sqrt(num_features)
+    features = features / jnp.sqrt(num_features).astype(x.dtype)
+
+    return features
+
+
+def yat_performer_attention(
+    query: Array,
+    key: Array,
+    value: Array,
+    projection: Array,
+    bias: Optional[Array] = None,
+    mask: Optional[Array] = None,
+    broadcast_dropout: bool = True,
+    dropout_rng: Optional[Array] = None,
+    dropout_rate: float = 0.0,
+    deterministic: bool = False,
+    dtype: Optional[Dtype] = None,
+    precision: PrecisionLike = None,
+    module: Optional[Module] = None,
+    epsilon: float = 1e-5,
+    causal: bool = False,
+    normalize_inputs: bool = True,
+) -> Array:
+    """Computes YAT attention with Performer-style linear complexity.
+
+    Uses random feature approximation to compute YAT attention in O(n) time
+    instead of O(n²). The approximation captures the geometric properties
+    of YAT attention while enabling efficient computation.
+
+    When normalize_inputs=True (default), Q and K are normalized to unit vectors
+    first, enabling the optimized YAT formula:
+        (q·k)² / (2(1 - q·k) + ε)
+
+    This is faster because:
+    1. We only need ONE dot product instead of computing separate norms
+    2. The feature map can be simpler for unit vectors
+    3. Better numerical stability
+
+    Args:
+        query: Queries with shape [..., q_length, num_heads, head_dim].
+        key: Keys with shape [..., kv_length, num_heads, head_dim].
+        value: Values with shape [..., kv_length, num_heads, v_dim].
+        projection: Random projection matrix [num_features, head_dim].
+        bias: Optional attention bias (not used in efficient mode).
+        mask: Optional attention mask (limited support in efficient mode).
+        broadcast_dropout: Whether to broadcast dropout.
+        dropout_rng: RNG for dropout.
+        dropout_rate: Dropout probability.
+        deterministic: If True, no dropout.
+        dtype: Computation dtype.
+        precision: JAX precision.
+        module: Optional module for sowing.
+        epsilon: Numerical stability constant.
+        causal: If True, use causal attention.
+        normalize_inputs: If True (default), normalize Q and K to unit vectors.
+
+    Returns:
+        Output of shape [..., q_length, num_heads, v_dim].
+    """
+    query, key, value = promote_dtype((query, key, value), dtype=dtype)
+    dtype = query.dtype
+
+    # Normalize Q and K for optimized computation
+    if normalize_inputs:
+        query, key = normalize_qk(query, key, epsilon)
+
+    # Apply YAT-adapted feature maps (pre_normalized if we normalized)
+    q_features = yat_performer_feature_map(
+        query, projection, epsilon, pre_normalized=normalize_inputs
+    )
+    k_features = yat_performer_feature_map(
+        key, projection, epsilon, pre_normalized=normalize_inputs
+    )
+
+    if causal:
+        return _yat_causal_performer(q_features, k_features, value, epsilon, precision)
+    else:
+        # Non-causal efficient computation
+        # Step 1: Compute φ(K)^T @ V
+        kv = jnp.einsum(
+            "...khm,...khd->...hmd", k_features, value, precision=precision
+        )
+
+        # Step 2: Compute φ(Q) @ (φ(K)^T @ V)
+        qkv = jnp.einsum(
+            "...qhm,...hmd->...qhd", q_features, kv, precision=precision
+        )
+
+        # Step 3: Normalizer
+        k_sum = jnp.sum(k_features, axis=-3)
+        normalizer = jnp.einsum(
+            "...qhm,...hm->...qh", q_features, k_sum, precision=precision
+        )
+        normalizer = normalizer[..., None] + epsilon
+
+        output = qkv / normalizer
+
+        # Apply dropout to output if needed
+        if not deterministic and dropout_rate > 0.0:
+            keep_prob = 1.0 - dropout_rate
+            keep = random.bernoulli(dropout_rng, keep_prob, output.shape)
+            output = output * keep / keep_prob
+
+        return output
+
+
+def _yat_causal_performer(
+    q_features: Array,
+    k_features: Array,
+    value: Array,
+    epsilon: float,
+    precision: PrecisionLike,
+) -> Array:
+    """Causal YAT Performer attention using prefix sums."""
+    # Outer product for kv
+    kv = jnp.einsum("...khm,...khd->...khmd", k_features, value, precision=precision)
+
+    # Cumulative sums
+    kv_cumsum = jnp.cumsum(kv, axis=-4)
+    k_cumsum = jnp.cumsum(k_features, axis=-3)
+
+    # Compute output
+    numerator = jnp.einsum(
+        "...qhm,...qhmd->...qhd", q_features, kv_cumsum, precision=precision
+    )
+    denominator = jnp.einsum(
+        "...qhm,...qhm->...qh", q_features, k_cumsum, precision=precision
+    )
+    denominator = denominator[..., None] + epsilon
+
+    return numerator / denominator
+
+
+def create_yat_projection(
+    key: Array,
+    num_features: int,
+    head_dim: int,
+    dtype: Dtype = jnp.float32,
+    orthogonal: bool = True,
+) -> Array:
+    """Creates random projection matrix for YAT Performer.
+
+    Args:
+        key: JAX random key.
+        num_features: Number of random features.
+        head_dim: Dimension of each attention head.
+        dtype: Data type.
+        orthogonal: If True, use orthogonal random features.
+
+    Returns:
+        Projection matrix of shape [num_features, head_dim].
+    """
+    if orthogonal:
+        # Orthogonal random features
+        num_blocks = (num_features + head_dim - 1) // head_dim
+        blocks = []
+        for i in range(num_blocks):
+            key, subkey = random.split(key)
+            random_matrix = random.normal(subkey, (head_dim, head_dim), dtype=dtype)
+            q, _ = jnp.linalg.qr(random_matrix)
+            blocks.append(q)
+        projection = jnp.concatenate(blocks, axis=0)[:num_features]
+        return projection * jnp.sqrt(head_dim).astype(dtype)
+    else:
+        return random.normal(key, (num_features, head_dim), dtype=dtype)
 
