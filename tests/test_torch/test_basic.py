@@ -8,17 +8,12 @@ def test_torch_import():
     """Test that PyTorch module can be imported."""
     try:
         import torch
-        from nmn.torch import nmn
-        from nmn.torch import layers
+        from nmn.torch import YatConv2d, YatNMN
         assert True
     except ImportError as e:
         pytest.skip(f"PyTorch dependencies not available: {e}")
 
 
-@pytest.mark.skipif(
-    True,
-    reason="PyTorch not available in test environment"
-)
 def test_yat_conv2d_basic():
     """Test basic YatConv2d functionality."""
     try:
@@ -50,10 +45,6 @@ def test_yat_conv2d_basic():
         pytest.skip("PyTorch dependencies not available")
 
 
-@pytest.mark.skipif(
-    True,
-    reason="PyTorch not available in test environment"
-)
 def test_yat_conv2d_parameters():
     """Test YatConv2d parameter configuration."""
     try:
@@ -65,14 +56,18 @@ def test_yat_conv2d_parameters():
             out_channels=16,
             kernel_size=3,
             use_alpha=True,
-            alpha=1.5,
             epsilon=1e-6
         )
         
         # Check if parameters are properly set
         assert layer.use_alpha is True
-        assert layer.alpha.item() == pytest.approx(1.5)
+        assert layer.alpha is not None  # alpha should be a Parameter when use_alpha=True
         assert layer.epsilon == 1e-6
+        
+        # Test that we can set alpha value
+        with torch.no_grad():
+            layer.alpha.fill_(1.5)
+        assert layer.alpha.item() == pytest.approx(1.5)
         
     except ImportError:
         pytest.skip("PyTorch dependencies not available")

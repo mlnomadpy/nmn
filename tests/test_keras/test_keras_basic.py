@@ -16,10 +16,6 @@ def test_keras_import():
         pytest.skip(f"Keras/TensorFlow dependencies not available: {e}")
 
 
-@pytest.mark.skipif(
-    True,
-    reason="TensorFlow not available in test environment"
-)
 def test_yat_nmn_basic():
     """Test basic YatNMN functionality."""
     try:
@@ -42,10 +38,6 @@ def test_yat_nmn_basic():
         pytest.skip("TensorFlow dependencies not available")
 
 
-@pytest.mark.skipif(
-    True,
-    reason="TensorFlow not available in test environment"
-)
 def test_yat_conv1d_basic():
     """Test basic YatConv1D functionality."""
     try:
@@ -69,10 +61,6 @@ def test_yat_conv1d_basic():
         pytest.skip("TensorFlow dependencies not available")
 
 
-@pytest.mark.skipif(
-    True,
-    reason="TensorFlow not available in test environment"
-)
 def test_yat_conv2d_basic():
     """Test basic YatConv2D functionality."""
     try:
@@ -96,10 +84,6 @@ def test_yat_conv2d_basic():
         pytest.skip("TensorFlow dependencies not available")
 
 
-@pytest.mark.skipif(
-    True,
-    reason="TensorFlow not available in test environment"
-)
 def test_yat_conv2d_same_padding():
     """Test YatConv2D with same padding."""
     try:
@@ -123,10 +107,6 @@ def test_yat_conv2d_same_padding():
         pytest.skip("TensorFlow dependencies not available")
 
 
-@pytest.mark.skipif(
-    True,
-    reason="TensorFlow not available in test environment"
-)
 def test_yat_nmn_no_bias():
     """Test YatNMN without bias."""
     try:
@@ -152,10 +132,6 @@ def test_yat_nmn_no_bias():
         pytest.skip("TensorFlow dependencies not available")
 
 
-@pytest.mark.skipif(
-    True,
-    reason="TensorFlow not available in test environment"
-)
 def test_yat_nmn_epsilon():
     """Test YatNMN with custom epsilon."""
     try:
