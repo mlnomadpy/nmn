@@ -412,6 +412,12 @@ If you use NMN in your research, please cite:
   title = {Deep Learning 2.1: Mind and Cosmos},
   year = {2025}
 }
+
+@article{bouhsine2025nomoredelulu,
+  author = {Taha Bouhsine},
+  title = {No More DeLuLu: A Kernel-Based Activation-Free Neural Networks},
+  year = {2025}
+}
 ```
 
 ---
