@@ -13,7 +13,7 @@ class YatConv1D(Layer):
     """1D YAT convolution layer (e.g. temporal convolution).
 
     This layer creates a convolution kernel that is convolved with the layer
-    input to produce a tensor of outputs using the YAT (You Are There) algorithm.
+    input to produce a tensor of outputs using the YAT  algorithm.
     YAT uses squared dot products divided by squared Euclidean distances plus epsilon.
 
     Note: This layer is activation-free. Any activation function should be applied
@@ -281,7 +281,7 @@ class YatConv2D(Layer):
     """2D YAT convolution layer (e.g. spatial convolution over images).
 
     This layer creates a convolution kernel that is convolved with the layer
-    input to produce a tensor of outputs using the YAT (You Are There) algorithm.
+    input to produce a tensor of outputs using the YAT algorithm.
 
     Note: This layer is activation-free. Any activation function should be applied
     as a separate layer after this layer.
@@ -563,7 +563,7 @@ class YatConv3D(Layer):
     """3D YAT convolution layer (e.g. spatial convolution over volumes).
 
     This layer creates a convolution kernel that is convolved with the layer
-    input to produce a tensor of outputs using the YAT (You Are There) algorithm.
+    input to produce a tensor of outputs using the YAT  algorithm.
 
     Note: This layer is activation-free. Any activation function should be applied
     as a separate layer after this layer.
