@@ -55,6 +55,7 @@ class ModernTransformerBlock(nnx.Module):
 
         # Use RotaryYatAttention with Performer mode for O(n) complexity
         # performer_normalize=True uses the optimized formula: (q·k)² / (2(1-q·k) + ε)
+        # constant_alpha=True uses sqrt(2) as alpha scaling for attention scores
         self.attn = RotaryYatAttention(
             embed_dim=embed_dim,
             num_heads=num_heads,
@@ -66,6 +67,8 @@ class ModernTransformerBlock(nnx.Module):
             use_performer=True,
             num_features=embed_dim // 2,  # Half the dim for efficiency
             performer_normalize=True,  # Optimized: only ONE dot product needed!
+            # Alpha scaling for YAT attention
+            constant_alpha=True,  # Use sqrt(2) as constant alpha
             rngs=rngs,
         )
         self.norm1 = RMSNorm(embed_dim, rngs=rngs)

@@ -12,6 +12,15 @@ This balances:
 The result is attention that activates when queries and keys are both
 similar in direction AND close in Euclidean space.
 
+Alpha Scaling:
+    Optional alpha parameter scales the attention scores:
+        scaled_attn = attn * (sqrt(head_dim) / log(1 + head_dim))^alpha
+    
+    Alpha can be:
+    - Learnable: Pass alpha as a trainable parameter
+    - Constant: Pass alpha as a float value (e.g., sqrt(2) ≈ 1.414)
+    - Disabled: Pass alpha=None (default)
+
 Performer Mode:
     When use_performer=True, uses FAVOR+ random feature approximation for
     O(n) time complexity instead of O(n²). This approximates the YAT attention
@@ -50,6 +59,7 @@ def yat_attention_weights(
     epsilon: float = 1e-5,
     use_softermax: bool = False,
     power: float = 1.0,
+    alpha: Optional[Array] = None,
 ) -> Array:
     """Computes YAT attention weights: softmax((Q·K)² / (||Q-K||² + ε))
 
@@ -57,6 +67,9 @@ def yat_attention_weights(
     (squared dot product) with proximity (squared Euclidean distance).
 
     The YAT attention score: ⵟ(q, k) = (q·k)² / (||q - k||² + ε)
+
+    With optional alpha scaling:
+        scaled_attn = attn * (sqrt(head_dim) / log(1 + head_dim))^alpha
 
     Args:
         query: Queries with shape [..., q_length, num_heads, head_dim]
@@ -75,6 +88,8 @@ def yat_attention_weights(
         epsilon: Small constant for numerical stability in denominator.
         use_softermax: If True, use softermax instead of standard softmax.
         power: Power parameter for softermax (only used if use_softermax=True).
+        alpha: Optional alpha scaling parameter. Can be a scalar Array (learnable)
+            or a float value (constant). If None, no alpha scaling is applied.
 
     Returns:
         Attention weights of shape [..., num_heads, q_length, kv_length]
@@ -86,6 +101,8 @@ def yat_attention_weights(
     assert query.shape[:-3] == key.shape[:-3], "q, k batch dims must match."
     assert query.shape[-2] == key.shape[-2], "q, k num_heads must match."
     assert query.shape[-1] == key.shape[-1], "q, k depths must match."
+
+    head_dim = query.shape[-1]
 
     # YAT-style attention: softmax((q·k)² / (||q-k||² + ε)) · V
     #
@@ -131,6 +148,12 @@ def yat_attention_weights(
 
     # YAT attention scores: (q·k)² / (||q - k||² + ε)
     attn_weights = squared_dot_product / (squared_dist + epsilon)
+
+    # Apply alpha scaling: scale = (sqrt(head_dim) / log(1 + head_dim))^alpha
+    if alpha is not None:
+        alpha_val = jnp.asarray(alpha, dtype=dtype)
+        scale = (jnp.sqrt(head_dim) / jnp.log(1 + head_dim)) ** alpha_val
+        attn_weights = attn_weights * scale
 
     # Apply attention bias
     if bias is not None:
@@ -181,6 +204,7 @@ def yat_attention(
     epsilon: float = 1e-5,
     use_softermax: bool = False,
     power: float = 1.0,
+    alpha: Optional[Array] = None,
 ) -> Array:
     """Computes YAT attention: softmax((Q·K)² / (||Q-K||² + ε)) · V
 
@@ -189,6 +213,9 @@ def yat_attention(
 
     The YAT attention score for each (query, key) pair is:
         ⵟ(q, k) = (q·k)² / (||q - k||² + ε)
+
+    With optional alpha scaling:
+        scaled_attn = attn * (sqrt(head_dim) / log(1 + head_dim))^alpha
 
     Args:
         query: Queries with shape [..., q_length, num_heads, head_dim]
@@ -206,6 +233,8 @@ def yat_attention(
         epsilon: Small constant for numerical stability in denominator.
         use_softermax: If True, use softermax instead of standard softmax.
         power: Power parameter for softermax.
+        alpha: Optional alpha scaling parameter. Can be a scalar Array (learnable)
+            or a float value (constant). If None, no alpha scaling is applied.
 
     Returns:
         Output of shape [..., q_length, num_heads, v_dim]
@@ -238,6 +267,7 @@ def yat_attention(
         epsilon,
         use_softermax,
         power,
+        alpha,
     )
 
     # Return weighted sum over values for each query position
@@ -294,6 +324,7 @@ def yat_attention_normalized(
     epsilon: float = 1e-5,
     use_softermax: bool = False,
     power: float = 1.0,
+    alpha: Optional[Array] = None,
 ) -> Array:
     """Computes YAT attention with normalized Q and K (optimized).
 
@@ -302,6 +333,9 @@ def yat_attention_normalized(
 
     This is faster because we only need ONE dot product instead of computing
     separate squared norms. The normalization is O(n) and very fast.
+
+    With optional alpha scaling:
+        scaled_attn = attn * (sqrt(head_dim) / log(1 + head_dim))^alpha
 
     Args:
         query: Queries [..., q_length, num_heads, head_dim] (will be normalized).
@@ -319,12 +353,16 @@ def yat_attention_normalized(
         epsilon: Numerical stability constant.
         use_softermax: Whether to use softermax.
         power: Softermax power parameter.
+        alpha: Optional alpha scaling parameter. Can be a scalar Array (learnable)
+            or a float value (constant). If None, no alpha scaling is applied.
 
     Returns:
         Output of shape [..., q_length, num_heads, v_dim].
     """
     query, key, value = promote_dtype((query, key, value), dtype=dtype)
     dtype = query.dtype
+
+    head_dim = query.shape[-1]
 
     # Normalize Q and K to unit vectors
     query_normalized, key_normalized = normalize_qk(query, key, epsilon)
@@ -344,6 +382,12 @@ def yat_attention_normalized(
 
     # YAT attention scores: (q·k)² / (2(1 - q·k) + ε)
     attn_weights = squared_dot_product / (distance_sq + epsilon)
+
+    # Apply alpha scaling: scale = (sqrt(head_dim) / log(1 + head_dim))^alpha
+    if alpha is not None:
+        alpha_val = jnp.asarray(alpha, dtype=dtype)
+        scale = (jnp.sqrt(head_dim) / jnp.log(1 + head_dim)) ** alpha_val
+        attn_weights = attn_weights * scale
 
     # Apply bias
     if bias is not None:
@@ -453,6 +497,7 @@ def yat_performer_attention(
     epsilon: float = 1e-5,
     causal: bool = False,
     normalize_inputs: bool = True,
+    alpha: Optional[Array] = None,
 ) -> Array:
     """Computes YAT attention with Performer-style linear complexity.
 
@@ -468,6 +513,9 @@ def yat_performer_attention(
     1. We only need ONE dot product instead of computing separate norms
     2. The feature map can be simpler for unit vectors
     3. Better numerical stability
+
+    With optional alpha scaling:
+        scaled_output = output * (sqrt(head_dim) / log(1 + head_dim))^alpha
 
     Args:
         query: Queries with shape [..., q_length, num_heads, head_dim].
@@ -486,12 +534,16 @@ def yat_performer_attention(
         epsilon: Numerical stability constant.
         causal: If True, use causal attention.
         normalize_inputs: If True (default), normalize Q and K to unit vectors.
+        alpha: Optional alpha scaling parameter. Can be a scalar Array (learnable)
+            or a float value (constant). If None, no alpha scaling is applied.
 
     Returns:
         Output of shape [..., q_length, num_heads, v_dim].
     """
     query, key, value = promote_dtype((query, key, value), dtype=dtype)
     dtype = query.dtype
+
+    head_dim = query.shape[-1]
 
     # Normalize Q and K for optimized computation
     if normalize_inputs:
@@ -506,7 +558,7 @@ def yat_performer_attention(
     )
 
     if causal:
-        return _yat_causal_performer(q_features, k_features, value, epsilon, precision)
+        output = _yat_causal_performer(q_features, k_features, value, epsilon, precision)
     else:
         # Non-causal efficient computation
         # Step 1: Compute φ(K)^T @ V
@@ -528,13 +580,19 @@ def yat_performer_attention(
 
         output = qkv / normalizer
 
-        # Apply dropout to output if needed
-        if not deterministic and dropout_rate > 0.0:
-            keep_prob = 1.0 - dropout_rate
-            keep = random.bernoulli(dropout_rng, keep_prob, output.shape)
-            output = output * keep / keep_prob
+    # Apply alpha scaling: scale = (sqrt(head_dim) / log(1 + head_dim))^alpha
+    if alpha is not None:
+        alpha_val = jnp.asarray(alpha, dtype=dtype)
+        scale = (jnp.sqrt(head_dim) / jnp.log(1 + head_dim)) ** alpha_val
+        output = output * scale
 
-        return output
+    # Apply dropout to output if needed
+    if not deterministic and dropout_rate > 0.0:
+        keep_prob = 1.0 - dropout_rate
+        keep = random.bernoulli(dropout_rng, keep_prob, output.shape)
+        output = output * keep / keep_prob
+
+    return output
 
 
 def _yat_causal_performer(
