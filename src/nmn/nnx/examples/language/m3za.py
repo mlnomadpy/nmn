@@ -21,7 +21,7 @@ from nmn.nnx.attention import RotaryYatAttention
 
 # --- JAX Device and Mesh Setup ---
 if jax.default_backend() == 'tpu':
-    mesh = Mesh(mesh_utils.create_device_mesh((4, 2)), ('batch', 'model'))
+    mesh = Mesh(mesh_utils.create_device_mesh((8, 1)), ('batch', 'model'))
 else:
     num_devices = len(jax.devices())
     mesh_shape = (num_devices, 1)
@@ -46,6 +46,9 @@ class ModernTransformerBlock(nnx.Module):
             kernel_init = nnx.with_partitioning(nnx.initializers.xavier_uniform(), NamedSharding(mesh, P(None, 'model')))
         else:
             kernel_init = nnx.initializers.xavier_uniform()
+
+        # Store rngs for dropout during training
+        self.rngs = rngs
 
         # Use RotaryYatAttention - combines RoPE with YAT attention
         # constant_alpha=True uses sqrt(2) as alpha scaling for attention scores
@@ -74,7 +77,7 @@ class ModernTransformerBlock(nnx.Module):
         # Pre-Norm Architecture
         # x = x + Drop(Attn(Norm(x)))
         h = self.norm1(x)
-        attn_out = self.attn(h, deterministic=not training)
+        attn_out = self.attn(h, deterministic=not training, rngs=self.rngs if training else None)
         x = x + self.dropout1(attn_out, deterministic=not training)
         
         h = self.norm2(x)
@@ -363,8 +366,8 @@ class MiniBERTForMTEB:
 def main_pretrain():
     """Runs the MLM pre-training loop."""
     config = {
-        'num_transformer_blocks': 4, 'maxlen': 128,
-        'embed_dim': 256, 'num_heads': 4, 'feed_forward_dim': 1024, 'batch_size': 128,
+        'num_transformer_blocks': 12, 'maxlen': 1024,
+        'embed_dim': 768, 'num_heads': 12, 'feed_forward_dim': 3072, 'batch_size': 32,
         'learning_rate': 1e-4, 'mask_prob': 0.15, 
         'max_tokens_to_process': 5_000_000, 
         'eval_interval': 500, 'eval_steps': 50, 'val_set_size': 2000,
@@ -433,7 +436,7 @@ def main_contrastive_tuning(mlm_checkpoint_path, config):
     print("\n=== Phase 2: Contrastive Post-Pretraining (SimCSE) ===")
     
     config['contrastive_lr'] = 5e-5
-    config['contrastive_batch_size'] = 64
+    config['contrastive_batch_size'] = 16
     config['contrastive_steps'] = 1000 
     
     wandb.init(project=config['wandb_project'], config=config, name="phase2_contrastive")
@@ -523,6 +526,6 @@ if __name__ == '__main__':
     mlm_ckpt, config = main_pretrain()
     if mlm_ckpt:
         contrastive_ckpt = main_contrastive_tuning(mlm_ckpt, config)
-        # if contrastive_ckpt:
-            # main_eval(contrastive_ckpt, config)
+        if contrastive_ckpt:
+            main_eval(contrastive_ckpt, config)
     wandb.finish()
