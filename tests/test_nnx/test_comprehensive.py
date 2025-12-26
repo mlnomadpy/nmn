@@ -25,6 +25,7 @@ def test_nnx_yat_attention():
             in_features=in_features,
             qkv_features=qkv_features,
             out_features=out_features,
+            decode=False,
             rngs=nnx.Rngs(params=key)
         )
         
