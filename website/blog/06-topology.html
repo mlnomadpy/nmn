@@ -1,0 +1,145 @@
+    <div class="blog-modal" id="modal-topology">
+        <div class="blog-modal-header">
+            <div class="blog-modal-header-content">
+                <span class="blog-modal-badge">Theorem 6</span>
+                <h2 class="blog-modal-title">Topological Organization: Neural Fiber Bundles</h2>
+            </div>
+            <button class="blog-modal-close" onclick="closeModal()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <div class="blog-modal-body">
+            <!-- ELI5 Section -->
+            <div class="eli5-section">
+                <div class="eli5-header">
+                    <span class="eli5-icon">🧒</span>
+                    <h4>Explain Like I'm 5</h4>
+                </div>
+                <div class="eli5-content">
+                    <p>
+                        Imagine you're organizing your toys. You could put them in boxes with straight lines dividing them 
+                        (like a grid), but that's boring and doesn't match how toys naturally group together.
+                    </p>
+                    <p>
+                        Instead, imagine each toy has a <strong>magnetic field</strong> around it that attracts similar toys. 
+                        These fields create <em>swirling, vortex-like</em> territories where similar toys naturally gather.
+                    </p>
+                    <p>
+                        The <span class="yat-symbol">ⵟ</span>-product creates these "vortex territories"! Each neuron 
+                        creates a swirling field around its weight vector, and inputs are classified based on which 
+                        territory they fall into. It's like having <strong>smart, organic boundaries</strong> instead 
+                        of boring straight lines.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Formal Statement -->
+            <div class="theorem-statement">
+                <div class="theorem-box">
+                    <strong>Theorem:</strong> <span class="yat-symbol">ⵟ</span>-product classification creates a 
+                    <em>fiber bundle</em> structure over the input space, where each neuron defines a "fiber" (territory) 
+                    with vortex-like boundaries. The decision boundaries are smooth, localized, and topologically organized.
+                </div>
+            </div>
+
+            <div class="theorem-content">
+                <h4>🎯 The Problem This Solves</h4>
+                <p>
+                    Traditional linear models create <strong>unbounded, half-space partitions</strong>:
+                </p>
+                <ul>
+                    <li>Decision boundaries are hyperplanes (straight lines/planes)</li>
+                    <li>Each class occupies an unbounded region</li>
+                    <li>No natural "territories" or localization</li>
+                </ul>
+                <p>
+                    The <span class="yat-symbol">ⵟ</span>-product creates <strong>localized, vortex-like territories</strong> 
+                    with smooth, organic boundaries that better match natural data distributions.
+                </p>
+
+                <h4>📐 The Mathematics In Depth</h4>
+                <p>
+                    In a classification setting with $K$ classes, we have $K$ weight vectors $\{\mathbf{w}_1, ..., \mathbf{w}_K\}$. 
+                    The decision rule is:
+                </p>
+                <div class="math-block">
+                    $$\text{class}(\mathbf{x}) = \arg\max_k \text{ⵟ}(\mathbf{w}_k, \mathbf{x})$$
+                </div>
+                <p>
+                    This creates a <em>Voronoi-like</em> partition, but with smooth, curved boundaries instead of straight lines. 
+                    Each region is:
+                </p>
+                <ul>
+                    <li><strong>Localized:</strong> Bounded around the weight vector (due to inverse-square decay)</li>
+                    <li><strong>Smooth:</strong> Infinitely differentiable boundaries (due to C∞ property)</li>
+                    <li><strong>Vortex-like:</strong> Creates swirling patterns due to the interaction of alignment and proximity</li>
+                </ul>
+                <p>
+                    The <em>fiber bundle</em> structure comes from viewing each class as a "fiber" over the input space, 
+                    with the <span class="yat-symbol">ⵟ</span>-product defining the connection.
+                </p>
+
+                <h4>💥 The Consequences</h4>
+                <div class="consequences-grid">
+                    <div class="consequence-item">
+                        <span class="consequence-icon">🌀</span>
+                        <h5>Vortex Territories</h5>
+                        <p>
+                            Each neuron creates a localized "vortex" territory around its weight vector, with smooth, 
+                            curved boundaries that naturally adapt to data distribution.
+                        </p>
+                    </div>
+                    <div class="consequence-item">
+                        <span class="consequence-icon">📐</span>
+                        <h5>Geometric Interpretability</h5>
+                        <p>
+                            The weight vectors act as "prototypes" or "centers" of their territories, making the 
+                            learned representations geometrically interpretable.
+                        </p>
+                    </div>
+                    <div class="consequence-item">
+                        <span class="consequence-icon">🎯</span>
+                        <h5>Better Generalization</h5>
+                        <p>
+                            Localized territories prevent overfitting to distant outliers and create more robust 
+                            decision boundaries that generalize better.
+                        </p>
+                    </div>
+                    <div class="consequence-item">
+                        <span class="consequence-icon">🔬</span>
+                        <h5>Topological Insights</h5>
+                        <p>
+                            The fiber bundle structure provides a rich mathematical framework for understanding 
+                            how NMNs organize and partition the input space.
+                        </p>
+                    </div>
+                </div>
+
+                <h4>🎓 What This Really Means</h4>
+                <p>
+                    This theorem reveals the <strong>geometric organization</strong> of NMNs. Unlike linear models 
+                    that create arbitrary half-spaces, <span class="yat-symbol">ⵟ</span>-product neurons create 
+                    <em>natural territories</em> — regions of space that "belong" to each neuron.
+                </p>
+                <p>
+                    This organization is:
+                </p>
+                <ul>
+                    <li><strong>Localized:</strong> Each territory is bounded and centered around a prototype</li>
+                    <li><strong>Smooth:</strong> Boundaries are infinitely differentiable, creating organic shapes</li>
+                    <li><strong>Interpretable:</strong> Weight vectors directly represent the "center" of each territory</li>
+                    <li><strong>Topologically Rich:</strong> The fiber bundle structure provides deep mathematical insights</li>
+                </ul>
+                <p>
+                    This is why NMNs learn <strong>sharp, coherent prototypes</strong> (as seen in MNIST experiments) 
+                    rather than diffuse, blurry representations — each neuron naturally organizes into a well-defined territory.
+                </p>
+            </div>
+        </div>
+        <div class="blog-modal-nav">
+            <button class="blog-modal-nav-btn" onclick="navigateModal('modal-info')">← Previous: Information Theory</button>
+            <button class="blog-modal-nav-btn" disabled>Next →</button>
+        </div>
+    </div>

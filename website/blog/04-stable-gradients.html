@@ -1,0 +1,134 @@
+    <div class="blog-modal" id="modal-gradient">
+        <div class="blog-modal-header">
+            <div class="blog-modal-header-content">
+                <span class="blog-modal-badge">Theorem 4</span>
+                <h2 class="blog-modal-title">Stable Learning & Gradient Localization</h2>
+            </div>
+            <button class="blog-modal-close" onclick="closeModal()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <div class="blog-modal-body">
+            <!-- ELI5 Section -->
+            <div class="eli5-section">
+                <div class="eli5-header">
+                    <span class="eli5-icon">🧒</span>
+                    <h4>Explain Like I'm 5</h4>
+                </div>
+                <div class="eli5-content">
+                    <p>
+                        Imagine you're learning to draw, and you have a teacher who gives you feedback. 
+                        If you're drawing something <strong>very different</strong> from what the teacher wants, 
+                        they might not give you much feedback (because it's too far off).
+                    </p>
+                    <p>
+                        The <span class="yat-symbol">ⵟ</span>-product works the same way! When inputs are 
+                        <strong>far away</strong> from the weight vector, the gradients (feedback) become very small. 
+                        This means each neuron only "learns" from nearby examples — creating natural <em>localization</em>.
+                    </p>
+                    <p>
+                        This is like having a teacher who focuses on helping you with things that are <em>close</em> 
+                        to what you're trying to learn, rather than getting distracted by completely different things.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Formal Statement -->
+            <div class="theorem-statement">
+                <div class="theorem-box">
+                    <strong>Proposition:</strong> The gradient of the <span class="yat-symbol">ⵟ</span>-product with respect to input vanishes for distant inputs:
+                    $$\lim_{\|\mathbf{x}\| \to \infty} \|\nabla_{\mathbf{x}} \text{ⵟ}(\mathbf{w}, \mathbf{x})\| = 0$$
+                    Specifically, $\|\nabla_{\mathbf{x}} \text{ⵟ}\| \sim \mathcal{O}(1/k)$ as $\|\mathbf{x}\| = k \to \infty$.
+                </div>
+            </div>
+
+            <div class="theorem-content">
+                <h4>🎯 The Problem This Solves</h4>
+                <p>
+                    Traditional neurons have <strong>global gradient influence</strong>:
+                </p>
+                <ul>
+                    <li><strong>Linear neurons:</strong> Gradients are constant regardless of distance (no localization)</li>
+                    <li><strong>ReLU neurons:</strong> Gradients are either constant (positive side) or zero (negative side) — binary, not smooth</li>
+                </ul>
+                <p>
+                    This means every training example affects every weight, leading to:
+                </p>
+                <ul>
+                    <li>Slow convergence (too many conflicting signals)</li>
+                    <li>Difficulty learning local patterns</li>
+                    <li>Susceptibility to outliers</li>
+                </ul>
+
+                <h4>📐 The Mathematics In Depth</h4>
+                <p>
+                    Computing the gradient:
+                </p>
+                <div class="math-block">
+                    $$\nabla_{\mathbf{x}} \text{ⵟ}(\mathbf{w}, \mathbf{x}) = \frac{2(\mathbf{w}^\top\mathbf{x})\mathbf{w}}{\|\mathbf{w} - \mathbf{x}\|^2 + \varepsilon} - \frac{(\mathbf{w}^\top\mathbf{x})^2 \cdot 2(\mathbf{x} - \mathbf{w})}{(\|\mathbf{w} - \mathbf{x}\|^2 + \varepsilon)^2}$$
+                </div>
+                <p>
+                    As $\|\mathbf{x}\| = k \to \infty$, the denominator grows as $k^2$, while the numerator grows as $k$. 
+                    Therefore, $\|\nabla_{\mathbf{x}} \text{ⵟ}\| \sim \mathcal{O}(1/k) \to 0$.
+                </p>
+
+                <h4>💥 The Consequences</h4>
+                <div class="consequences-grid">
+                    <div class="consequence-item">
+                        <span class="consequence-icon">🎯</span>
+                        <h5>Natural Localization</h5>
+                        <p>
+                            Each neuron creates a "territory" around its weight vector. Only nearby inputs contribute 
+                            significant gradients, enabling local pattern learning.
+                        </p>
+                    </div>
+                    <div class="consequence-item">
+                        <span class="consequence-icon">∞</span>
+                        <h5>Infinitely Smooth (C∞)</h5>
+                        <p>
+                            The <span class="yat-symbol">ⵟ</span>-product is infinitely differentiable, perfect for 
+                            physics-informed neural networks (PINNs) requiring higher-order derivatives.
+                        </p>
+                    </div>
+                    <div class="consequence-item">
+                        <span class="consequence-icon">📊</span>
+                        <h5>Lipschitz Continuity</h5>
+                        <p>
+                            The gradient is Lipschitz continuous, providing theoretical guarantees for optimization 
+                            and stability during training.
+                        </p>
+                    </div>
+                    <div class="consequence-item">
+                        <span class="consequence-icon">🛡️</span>
+                        <h5>Robust to Outliers</h5>
+                        <p>
+                            Distant outliers contribute vanishingly small gradients, so they don't disrupt learning 
+                            of local patterns.
+                        </p>
+                    </div>
+                </div>
+
+                <h4>🎓 What This Really Means</h4>
+                <p>
+                    This proposition shows that <span class="yat-symbol">ⵟ</span>-product neurons have <strong>spatial awareness</strong>. 
+                    They naturally create "learning territories" — regions of input space where they actively learn, 
+                    with smooth falloff outside.
+                </p>
+                <p>
+                    This is fundamentally different from linear or ReLU neurons, which have <em>global</em> influence. 
+                    The localization property enables:
+                </p>
+                <ul>
+                    <li>Faster convergence (less conflicting gradient signals)</li>
+                    <li>Better generalization (local patterns are more robust)</li>
+                    <li>Interpretability (each neuron "owns" a region of space)</li>
+                </ul>
+            </div>
+        </div>
+        <div class="blog-modal-nav">
+            <button class="blog-modal-nav-btn" onclick="navigateModal('modal-regulation')">← Previous: Self-Regulation</button>
+            <button class="blog-modal-nav-btn" onclick="navigateModal('modal-info')">Next: Information Theory →</button>
+        </div>
+    </div>

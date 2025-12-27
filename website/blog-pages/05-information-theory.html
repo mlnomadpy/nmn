@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Information-Geometric Foundations — Neural Matter Networks</title>
+    <meta name="description" content="The ⵟ-product: A kernel-based activation-free neural network architecture that unifies alignment and proximity for geometrically-aware computation.">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tifinagh&display=swap" rel="stylesheet">
+    
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    
+    <!-- Three.js for 3D -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/blog-pages.css">
+</head>
+<body>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="#" class="nav-logo">
+                <span class="yat-symbol">ⵟ</span>
+                <span>NMN</span>
+            </a>
+            <div class="nav-links">
+                <a href="#introduction">Introduction</a>
+                <a href="#yat-product">ⵟ-Product</a>
+                <a href="#visualizations">Visualizations</a>
+                <a href="#results">Results</a>
+                <a href="#theory" class="nav-blog">Blog</a>
+                <a href="#code">Code</a>
+                <a href="https://github.com/mlnomadpy/nmn" target="_blank" class="nav-github">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Blog Post Page -->
+    <main class="blog-page">
+        <div class="container">
+            <article class="blog-post">
+                <header class="blog-post-header">
+                    <a href="index.html#theory" class="blog-back-link">← Back to Theory</a>
+                    <span class="blog-post-badge">Theorem 5</span>
+                    <h1 class="blog-post-title">Information-Geometric Foundations</h1>
+                </header>
+                
+                <div class="blog-post-content">
+
+            <!-- ELI5 Section -->
+            <div class="eli5-section">
+                <div class="eli5-header">
+                    <span class="eli5-icon">🧒</span>
+                    <h4>Explain Like I'm 5</h4>
+                </div>
+                <div class="eli5-content">
+                    <p>
+                        Imagine you have two ways to measure how "different" two things are:
+                    </p>
+                    <ul>
+                        <li>📏 <strong>Ruler way:</strong> Measure the distance between them (like measuring with a ruler)</li>
+                        <li>📊 <strong>Information way:</strong> Measure how surprised you'd be to see one when expecting the other</li>
+                    </ul>
+                    <p>
+                        The <span class="yat-symbol">ⵟ</span>-product is special because it connects both ways! 
+                        It's like having a <em>magic bridge</em> between measuring distances and measuring information.
+                    </p>
+                    <p>
+                        This means we can use the <span class="yat-symbol">ⵟ</span>-product with information-theoretic 
+                        losses (like KL divergence) and it still makes mathematical sense!
+                    </p>
+                </div>
+            </div>
+
+            <!-- Formal Statement -->
+            <div class="theorem-statement">
+                <div class="theorem-box">
+                    <strong>Theorem:</strong> The <span class="yat-symbol">ⵟ</span>-product exhibits a duality between 
+                    Euclidean geometry and information geometry. Specifically, it can be related to KL divergence 
+                    and entropy-based losses through its kernel structure.
+                </div>
+            </div>
+
+            <div class="theorem-content">
+                <h4>🎯 The Problem This Solves</h4>
+                <p>
+                    Many machine learning tasks use <strong>information-theoretic losses</strong>:
+                </p>
+                <ul>
+                    <li>KL divergence for probabilistic models</li>
+                    <li>Cross-entropy for classification</li>
+                    <li>Mutual information for representation learning</li>
+                </ul>
+                <p>
+                    Traditional neural networks use <em>Euclidean geometry</em> (dot products, distances), which 
+                    doesn't naturally connect to information theory. This theorem bridges that gap.
+                </p>
+
+                <h4>📐 The Mathematics In Depth</h4>
+                <p>
+                    The connection comes from the kernel structure. Since the <span class="yat-symbol">ⵟ</span>-product 
+                    is a Mercer kernel, it defines a Reproducing Kernel Hilbert Space (RKHS). In this space:
+                </p>
+                <div class="math-block">
+                    $$\text{ⵟ}(\mathbf{w}, \mathbf{x}) = \langle \phi(\mathbf{w}), \phi(\mathbf{x}) \rangle_{\mathcal{H}}$$
+                </p>
+                <p>
+                    where $\phi$ maps to the RKHS $\mathcal{H}$.
+                </p>
+                <p>
+                    Information geometry studies probability distributions using the <em>Fisher information metric</em>, 
+                    which can be related to KL divergence. The kernel structure of the <span class="yat-symbol">ⵟ</span>-product 
+                    allows us to interpret it in this framework.
+                </p>
+
+                <h4>💥 The Consequences</h4>
+                <div class="consequences-grid">
+                    <div class="consequence-item">
+                        <span class="consequence-icon">🔗</span>
+                        <h5>Unified Framework</h5>
+                        <p>
+                            The <span class="yat-symbol">ⵟ</span>-product bridges Euclidean geometry (for optimization) 
+                            and information geometry (for probabilistic modeling), creating a unified framework.
+                        </p>
+                    </div>
+                    <div class="consequence-item">
+                        <span class="consequence-icon">📊</span>
+                        <h5>Compatible with Information Losses</h5>
+                        <p>
+                            Can be used with KL divergence, cross-entropy, and other information-theoretic losses 
+                            while maintaining geometric interpretability.
+                        </p>
+                    </div>
+                    <div class="consequence-item">
+                        <span class="consequence-icon">🎯</span>
+                        <h5>Dual Interpretation</h5>
+                        <p>
+                            The same operation can be interpreted as either geometric similarity (Euclidean) or 
+                            information similarity (probabilistic), depending on context.
+                        </p>
+                    </div>
+                    <div class="consequence-item">
+                        <span class="consequence-icon">🔮</span>
+                        <h5>Rich Theoretical Connections</h5>
+                        <p>
+                            Connects to maximum entropy principles, variational inference, and other information-theoretic 
+                            frameworks through the kernel structure.
+                        </p>
+                    </div>
+                </div>
+
+                <h4>🎓 What This Really Means</h4>
+                <p>
+                    This theorem shows that the <span class="yat-symbol">ⵟ</span>-product isn't just a geometric operator — 
+                    it's a <strong>unifying bridge</strong> between two fundamental mathematical frameworks:
+                </p>
+                <ul>
+                    <li><strong>Euclidean geometry:</strong> For optimization, distances, and spatial reasoning</li>
+                    <li><strong>Information geometry:</strong> For probability, entropy, and statistical learning</li>
+                </ul>
+                <p>
+                    This duality means NMNs can seamlessly work with both geometric and probabilistic objectives, 
+                    making them versatile for a wide range of applications.
+                </p>
+            </div>
+        
+                </div>
+                
+                <div class="blog-page-nav"><a href="04-stable-gradients.html" class="blog-nav-btn">← Previous: Stable Learning & Gradient Localization</a><a href="index.html#theory" class="blog-nav-btn">All Theorems</a><a href="06-topology.html" class="blog-nav-btn">Next: Topological Organization: Neural Fiber Bundles →</a></div>
+            </article>
+        </div>
+    </main>
+    
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="yat-symbol">ⵟ</span>
+                    <span>Neural Matter Networks</span>
+                </div>
+                <div class="footer-links">
+                    <a href="https://github.com/mlnomadpy/nmn" target="_blank">GitHub</a>
+                    <a href="https://pypi.org/project/nmn/" target="_blank">PyPI</a>
+                    <a href="mailto:taha@azetta.ai">Contact</a>
+                </div>
+                <div class="footer-copy">
+                    <p>Built with ❤️ by <a href="https://azetta.ai" target="_blank">azetta.ai</a></p>
+                    <p>AGPL-3.0 License</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+    <!-- Scripts -->
+    <script src="js/math-utils.js"></script>
+    <script src="js/heatmap-viz.js"></script>
+    <script src="js/gradient-viz.js"></script>
+    <script src="js/xor-demo.js"></script>
+    <script src="js/decision-boundary.js"></script>
+    <script src="js/loss-landscape.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</body>
+</html>
