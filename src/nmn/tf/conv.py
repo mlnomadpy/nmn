@@ -8,7 +8,7 @@ from typing import Optional, Any, Tuple, Union, List, Callable
 class YatConv1D(tf.Module):
     """1D YAT convolution module using TensorFlow operations.
     
-    This module implements 1D convolution using the YAT (You Are There) algorithm,
+    This module implements 1D convolution using the YAT  algorithm,
     which computes (dot_product)^2 / (squared_euclidean_distance + epsilon).
     
     Args:
@@ -196,7 +196,7 @@ class YatConv1D(tf.Module):
 class YatConv2D(tf.Module):
     """2D YAT convolution module using TensorFlow operations.
     
-    This module implements 2D convolution using the YAT (You Are There) algorithm,
+    This module implements 2D convolution using the YAT  algorithm,
     which computes (dot_product)^2 / (squared_euclidean_distance + epsilon).
     
     Args:
@@ -387,7 +387,7 @@ class YatConv2D(tf.Module):
 class YatConv3D(tf.Module):
     """3D YAT convolution module using TensorFlow operations.
     
-    This module implements 3D convolution using the YAT (You Are There) algorithm,
+    This module implements 3D convolution using the YAT algorithm,
     which computes (dot_product)^2 / (squared_euclidean_distance + epsilon).
     
     Args:
