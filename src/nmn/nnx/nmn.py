@@ -30,7 +30,7 @@ default_alpha_init = initializers.ones_init()
 class YatNMN(Module):
   """A YAT linear transformation applied over the last dimension of the input.
 
-  The YAT (You Are There) operation computes:
+  The YAT  operation computes:
     y = (x · W)² / (||x - W||² + ε)
 
   With optional scaling:
