@@ -1,0 +1,73 @@
+# GitHub Actions workflow to deploy website to GitHub Pages
+name: Deploy Website to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'website/**'
+      - '.github/workflows/deploy.yml'
+  
+  # Allow manual trigger
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Copy images from paper to website
+        run: |
+          mkdir -p website/assets/images
+          
+          # Copy key images
+          cp -f paper/sections/theoretical_background/imgs/fuked_manifold.png website/assets/images/manifold_distortion.png || true
+          cp -f paper/sections/results_discussion/imgs/fineweb_wandb.png website/assets/images/training_curves.png || true
+          cp -f paper/sections/results_discussion/imgs/mnist_prototypes.png website/assets/images/mnist_prototypes.png || true
+          cp -f paper/sections/results_discussion/imgs/linear.png website/assets/images/linear_boundary.png || true
+          cp -f paper/sections/results_discussion/imgs/yat.png website/assets/images/yat_boundary.png || true
+          
+          # Copy vector visualization images
+          cp -f paper/vector_viz_iclr/combined_heatmaps_2d.png website/assets/images/combined_heatmaps_2d.png || true
+          cp -f paper/vector_viz_iclr/combined_gradients.png website/assets/images/combined_gradients.png || true
+          
+          # List copied files
+          echo "Copied images:"
+          ls -la website/assets/images/
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'website'
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
