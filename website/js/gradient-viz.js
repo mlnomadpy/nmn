@@ -11,12 +11,13 @@ class GradientVisualization {
             yat: document.getElementById('gradient-yat'),
             cosine: document.getElementById('gradient-cosine')
         };
-        
+
         this.contexts = {};
         this.anchor = [3, 4];  // Same as heatmap
         this.epsilon = 1.0;
         this.range = { min: -8, max: 8 };
-        
+        this.isDragging = false;
+
         this.init();
     }
 
@@ -24,22 +25,111 @@ class GradientVisualization {
         for (const [name, canvas] of Object.entries(this.canvases)) {
             if (canvas) {
                 this.contexts[name] = canvas.getContext('2d');
+                this.setupCanvasEvents(canvas);
             }
         }
-        
-        // Listen for anchor updates from heatmap
-        if (typeof heatmapViz !== 'undefined' && heatmapViz) {
-            // Sync with heatmap visualization
-            const originalRender = heatmapViz.render.bind(heatmapViz);
-            heatmapViz.render = () => {
-                originalRender();
-                this.anchor = heatmapViz.anchor;
-                this.epsilon = heatmapViz.epsilon;
-                this.render();
-            };
-        }
-        
+
         this.render();
+    }
+
+    /**
+     * Setup drag events on gradient canvases
+     */
+    setupCanvasEvents(canvas) {
+        const getMousePos = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            return {
+                x: (e.clientX - rect.left) * scaleX,
+                y: (e.clientY - rect.top) * scaleY
+            };
+        };
+
+        const pixelToCoord = (px, py) => {
+            const range = this.range.max - this.range.min;
+            return [
+                this.range.min + (px / canvas.width) * range,
+                this.range.max - (py / canvas.height) * range
+            ];
+        };
+
+        canvas.addEventListener('mousedown', (e) => {
+            const pos = getMousePos(e);
+            const anchorPx = this.coordToPixel(this.anchor[0], this.anchor[1], canvas);
+            const dist = Math.sqrt(Math.pow(pos.x - anchorPx.x, 2) + Math.pow(pos.y - anchorPx.y, 2));
+
+            if (dist < 20) {
+                this.isDragging = true;
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (this.isDragging) {
+                const pos = getMousePos(e);
+                const coord = pixelToCoord(pos.x, pos.y);
+                this.anchor = coord;
+
+                // Sync to heatmap
+                if (typeof heatmapViz !== 'undefined' && heatmapViz) {
+                    heatmapViz.anchor = coord;
+                    heatmapViz.updateAnchorDisplay();
+                    heatmapViz.render();
+                } else {
+                    this.render();
+                }
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            this.isDragging = false;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            // Keep tracking if dragging
+        });
+
+        // Touch events
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const pos = {
+                x: (touch.clientX - rect.left) * (canvas.width / rect.width),
+                y: (touch.clientY - rect.top) * (canvas.height / rect.height)
+            };
+
+            const anchorPx = this.coordToPixel(this.anchor[0], this.anchor[1], canvas);
+            const dist = Math.sqrt(Math.pow(pos.x - anchorPx.x, 2) + Math.pow(pos.y - anchorPx.y, 2));
+
+            if (dist < 30) {
+                this.isDragging = true;
+            }
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (this.isDragging) {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const rect = canvas.getBoundingClientRect();
+                const px = (touch.clientX - rect.left) * (canvas.width / rect.width);
+                const py = (touch.clientY - rect.top) * (canvas.height / rect.height);
+                const coord = pixelToCoord(px, py);
+                this.anchor = coord;
+
+                if (typeof heatmapViz !== 'undefined' && heatmapViz) {
+                    heatmapViz.anchor = coord;
+                    heatmapViz.updateAnchorDisplay();
+                    heatmapViz.render();
+                } else {
+                    this.render();
+                }
+            }
+        });
+
+        canvas.addEventListener('touchend', () => {
+            this.isDragging = false;
+        });
     }
 
     /**
@@ -48,7 +138,7 @@ class GradientVisualization {
     computeGradient(metric, x, y) {
         const w = this.anchor;
         const point = [x, y];
-        
+
         switch (metric) {
             case 'dot':
                 return MathUtils.dotGradient(w);
@@ -69,7 +159,7 @@ class GradientVisualization {
     computeValue(metric, x, y) {
         const w = this.anchor;
         const point = [x, y];
-        
+
         switch (metric) {
             case 'dot':
                 return MathUtils.dotProduct(w, point);
@@ -98,18 +188,18 @@ class GradientVisualization {
     renderGradientField(ctx, canvas, metric) {
         const width = canvas.width;
         const height = canvas.height;
-        
+
         // Clear canvas
         ctx.fillStyle = '#0d0d12';
         ctx.fillRect(0, 0, width, height);
-        
+
         // Draw background gradient based on scalar value
         this.drawBackground(ctx, canvas, metric);
-        
+
         // Draw vector field
         const gridStep = 25;
         const arrowScale = 15;
-        
+
         // Collect all gradients for normalization
         const gradients = [];
         for (let py = gridStep / 2; py < height; py += gridStep) {
@@ -121,25 +211,25 @@ class GradientVisualization {
                 gradients.push({ px, py, x, y, grad, magnitude });
             }
         }
-        
+
         // Find max magnitude for normalization
         const maxMag = Math.max(...gradients.map(g => g.magnitude), 0.001);
-        
+
         // Draw arrows
         for (const g of gradients) {
             if (g.magnitude < 0.001) continue;
-            
+
             // Normalize gradient for display
             const normalizedMag = g.magnitude / maxMag;
             const dx = (g.grad[0] / g.magnitude) * arrowScale * Math.sqrt(normalizedMag);
             const dy = -(g.grad[1] / g.magnitude) * arrowScale * Math.sqrt(normalizedMag);  // Y inverted
-            
+
             // Color based on magnitude
             const color = this.getArrowColor(normalizedMag);
-            
+
             this.drawArrow(ctx, g.px, g.py, g.px + dx, g.py + dy, color, normalizedMag);
         }
-        
+
         // Draw anchor point
         this.drawAnchor(ctx, canvas);
     }
@@ -151,8 +241,8 @@ class GradientVisualization {
         const width = canvas.width;
         const height = canvas.height;
         const imageData = ctx.createImageData(width, height);
-        const resolution = 4;
-        
+        const resolution = 2; // Better quality
+
         // Compute values for normalization
         const values = [];
         for (let py = 0; py < height; py += resolution) {
@@ -165,7 +255,7 @@ class GradientVisualization {
                 });
             }
         }
-        
+
         let minVal = Infinity, maxVal = -Infinity;
         for (const v of values) {
             if (isFinite(v.value)) {
@@ -173,29 +263,30 @@ class GradientVisualization {
                 maxVal = Math.max(maxVal, v.value);
             }
         }
-        
+
         if (!isFinite(minVal)) minVal = 0;
         if (!isFinite(maxVal)) maxVal = 1;
         if (maxVal === minVal) maxVal = minVal + 1;
-        
-        // Render as faint background
+
+        // Render as faint background - terminal green tint
         for (const v of values) {
             const normalized = (v.value - minVal) / (maxVal - minVal);
-            
-            // Dark background with subtle gradient
-            const intensity = 20 + normalized * 40;
-            
+
+            // Dark green-tinted background
+            const base = 8;
+            const intensity = normalized * 35;
+
             for (let dy = 0; dy < resolution && v.py + dy < height; dy++) {
                 for (let dx = 0; dx < resolution && v.px + dx < width; dx++) {
                     const idx = ((v.py + dy) * width + (v.px + dx)) * 4;
-                    imageData.data[idx] = intensity * 0.8;
-                    imageData.data[idx + 1] = intensity * 0.6;
-                    imageData.data[idx + 2] = intensity;
+                    imageData.data[idx] = base + intensity * 0.3;     // R
+                    imageData.data[idx + 1] = base + intensity * 0.8; // G - more green
+                    imageData.data[idx + 2] = base + intensity * 0.5; // B
                     imageData.data[idx + 3] = 255;
                 }
             }
         }
-        
+
         ctx.putImageData(imageData, 0, 0);
     }
 
@@ -216,18 +307,18 @@ class GradientVisualization {
     drawArrow(ctx, fromX, fromY, toX, toY, color, magnitude) {
         const headLength = 6 + magnitude * 4;
         const angle = Math.atan2(toY - fromY, toX - fromX);
-        
+
         ctx.strokeStyle = color;
         ctx.fillStyle = color;
         ctx.lineWidth = 1 + magnitude * 1.5;
         ctx.lineCap = 'round';
-        
+
         // Draw line
         ctx.beginPath();
         ctx.moveTo(fromX, fromY);
         ctx.lineTo(toX, toY);
         ctx.stroke();
-        
+
         // Draw arrowhead
         ctx.beginPath();
         ctx.moveTo(toX, toY);
@@ -244,34 +335,47 @@ class GradientVisualization {
     }
 
     /**
-     * Draw the anchor point (w vector)
+     * Draw the anchor point (w vector) - Terminal Style
      */
     drawAnchor(ctx, canvas) {
         const pos = this.coordToPixel(this.anchor[0], this.anchor[1], canvas);
-        
-        // Glow
-        const gradient = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, 15);
-        gradient.addColorStop(0, 'rgba(59, 130, 246, 0.6)');
-        gradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
+
+        // Glow - terminal green
+        const gradient = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, 20);
+        gradient.addColorStop(0, 'rgba(79, 249, 117, 0.6)');
+        gradient.addColorStop(0.5, 'rgba(79, 249, 117, 0.2)');
+        gradient.addColorStop(1, 'rgba(79, 249, 117, 0)');
         ctx.fillStyle = gradient;
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, 15, 0, Math.PI * 2);
+        ctx.arc(pos.x, pos.y, 20, 0, Math.PI * 2);
         ctx.fill();
-        
-        // Point
-        ctx.fillStyle = '#3b82f6';
-        ctx.strokeStyle = '#ffffff';
+
+        // Pulsing ring
+        const pulsePhase = (Date.now() % 2000) / 2000;
+        const pulseRadius = 10 + Math.sin(pulsePhase * Math.PI * 2) * 2;
+        ctx.strokeStyle = `rgba(77, 238, 234, ${0.3 + Math.sin(pulsePhase * Math.PI * 2) * 0.2})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, pulseRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Point - terminal colors
+        ctx.fillStyle = '#4ff975';
+        ctx.strokeStyle = '#4deeea';
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(pos.x, pos.y, 6, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
-        
-        // Label
-        ctx.font = 'bold 12px "Space Grotesk", sans-serif';
-        ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'left';
-        ctx.fillText('w', pos.x + 12, pos.y - 8);
+
+        // Coordinate label
+        ctx.font = '10px "Share Tech Mono", monospace';
+        ctx.fillStyle = '#4ff975';
+        ctx.strokeStyle = '#050505';
+        ctx.lineWidth = 3;
+        const label = `w`;
+        ctx.strokeText(label, pos.x + 12, pos.y - 6);
+        ctx.fillText(label, pos.x + 12, pos.y - 6);
     }
 
     /**
@@ -289,7 +393,7 @@ class GradientVisualization {
      */
     render() {
         this.syncWithHeatmap();
-        
+
         for (const [metric, canvas] of Object.entries(this.canvases)) {
             if (canvas && this.contexts[metric]) {
                 this.renderGradientField(this.contexts[metric], canvas, metric);

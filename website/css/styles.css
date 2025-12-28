@@ -1,53 +1,70 @@
-/* ========================================
-   Neural Matter Networks - Website Styles
-   A physics-inspired, dark-theme design
-   ======================================== */
+/* ==================== TERMINAL CRT DESIGN SYSTEM ==================== */
+/* Neural Matter Networks - A retro-futuristic terminal aesthetic */
 
-/* CSS Variables */
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Press+Start+2P&display=swap');
+
+/* CSS Variables - Terminal Theme */
 :root {
-    /* Colors - Deep space theme */
-    --bg-primary: #0a0a0f;
-    --bg-secondary: #12121a;
-    --bg-tertiary: #1a1a26;
-    --bg-card: #16161f;
+    /* Base colors */
+    --bg: #050505;
+    --bg-primary: #050505;
+    --bg-secondary: #0a0f0a;
+    --bg-tertiary: #0f1a12;
+    --bg-card: rgba(10, 20, 15, 0.95);
+    --panel-bg: rgba(10, 20, 15, 0.95);
 
-    /* Accent colors */
-    --accent-cyan: #00d4ff;
-    --accent-magenta: #ff00aa;
-    --accent-purple: #8b5cf6;
-    --accent-blue: #3b82f6;
-    --accent-green: #10b981;
-    --accent-orange: #f97316;
-    --accent-yellow: #fbbf24;
+    /* Accent colors - Terminal green palette */
+    --primary: #4ff975;
+    --primary-glow: rgba(79, 249, 117, 0.4);
+    --secondary: #4deeea;
+    --secondary-glow: rgba(77, 238, 234, 0.4);
+    --accent: #f9d71c;
+    --accent-glow: rgba(249, 215, 28, 0.4);
+    --success: #4ff975;
+    --error: #ff4f4f;
+
+    /* Legacy aliases for compatibility */
+    --accent-cyan: #4deeea;
+    --accent-magenta: #ff4f9a;
+    --accent-purple: #a855f7;
+    --accent-blue: #4deeea;
+    --accent-green: #4ff975;
+    --accent-orange: #f9d71c;
+    --accent-yellow: #f9d71c;
 
     /* Gradients */
-    --gradient-primary: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta));
-    --gradient-secondary: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
-    --gradient-glow: radial-gradient(ellipse at center, rgba(0, 212, 255, 0.15) 0%, transparent 70%);
+    --gradient-primary: linear-gradient(135deg, var(--primary), var(--secondary));
+    --gradient-secondary: linear-gradient(135deg, var(--secondary), var(--primary));
+    --gradient-glow: radial-gradient(ellipse at center, rgba(79, 249, 117, 0.15) 0%, transparent 70%);
 
     /* Text colors */
-    --text-primary: #f0f0f5;
-    --text-secondary: #a0a0b0;
-    --text-muted: #6b6b7b;
+    --text: #e0e0e0;
+    --text-primary: #e0e0e0;
+    --text-secondary: #a0a0a0;
+    --text-muted: #606060;
 
     /* Borders */
-    --border-color: rgba(255, 255, 255, 0.08);
-    --border-glow: rgba(0, 212, 255, 0.3);
+    --border: #2a3a30;
+    --border-dim: #1a2a20;
+    --border-color: #2a3a30;
+    --border-glow: rgba(79, 249, 117, 0.3);
 
-    /* Typography */
-    --font-display: 'Space Grotesk', sans-serif;
-    --font-body: 'Crimson Pro', Georgia, serif;
-    --font-mono: 'JetBrains Mono', monospace;
+    /* Typography - Monospace terminals */
+    --font-display: 'Press Start 2P', 'Share Tech Mono', monospace;
+    --font-body: 'Share Tech Mono', 'Inter', monospace;
+    --font-mono: 'Share Tech Mono', monospace;
     --font-tifinagh: 'Noto Sans Tifinagh', sans-serif;
 
     /* Spacing */
-    --section-padding: 120px;
-    --container-max: 1200px;
+    --section-padding: 100px;
+    --container-max: 1400px;
 
-    /* Transitions */
-    --transition-fast: 0.15s ease;
-    --transition-base: 0.3s ease;
-    --transition-slow: 0.5s ease;
+    /* Effects */
+    --shadow: 0 0 30px rgba(79, 249, 117, 0.15);
+    --transition: all 0.3s steps(6);
+    --transition-fast: 0.15s steps(4);
+    --transition-base: 0.3s steps(6);
+    --transition-slow: 0.5s steps(8);
 }
 
 /* Reset & Base */
@@ -66,10 +83,61 @@ html {
 
 body {
     font-family: var(--font-body);
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    line-height: 1.7;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
     overflow-x: hidden;
+    position: relative;
+}
+
+/* CRT Scanline Effects */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    background:
+        linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%),
+        linear-gradient(90deg, rgba(255, 0, 0, 0.01), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.01));
+    background-size: 100% 3px, 3px 100%;
+}
+
+/* Scanline Animation */
+body::after {
+    content: '';
+    position: fixed;
+    width: 100%;
+    height: 100px;
+    z-index: 9998;
+    background: linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(79, 249, 117, 0.03) 50%, rgba(0, 0, 0, 0) 100%);
+    opacity: 0.3;
+    bottom: 100%;
+    animation: scanline 12s linear infinite;
+    pointer-events: none;
+}
+
+@keyframes scanline {
+    0% {
+        bottom: 100%;
+    }
+
+    100% {
+        bottom: -100px;
+    }
+}
+
+/* Grid Background Pattern */
+.section::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(79, 249, 117, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(79, 249, 117, 0.02) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 0;
 }
 
 /* Utility Classes */
@@ -77,24 +145,40 @@ body {
     max-width: var(--container-max);
     margin: 0 auto;
     padding: 0 24px;
+    position: relative;
+    z-index: 1;
 }
 
 /* Yat Symbol Styling */
 .yat-symbol {
     font-family: var(--font-tifinagh);
-    color: var(--accent-cyan);
+    color: var(--primary);
     font-weight: normal;
+    text-shadow: 0 0 8px var(--primary-glow);
 }
 
 .yat-symbol-large {
     font-family: var(--font-tifinagh);
     font-size: 3rem;
-    color: var(--accent-cyan);
-    text-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+    color: var(--primary);
+    text-shadow: 0 0 30px var(--primary-glow), 0 0 60px var(--primary-glow);
+    animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+
+    0%,
+    100% {
+        filter: brightness(1);
+    }
+
+    50% {
+        filter: brightness(1.2);
+    }
 }
 
 /* ========================================
-   Navigation
+   Navigation - Terminal Style
    ======================================== */
 .main-nav {
     position: fixed;
@@ -102,9 +186,9 @@ body {
     left: 0;
     right: 0;
     z-index: 1000;
-    background: rgba(10, 10, 15, 0.85);
+    background: var(--panel-bg);
     backdrop-filter: blur(20px);
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border);
 }
 
 .nav-container {
@@ -122,10 +206,12 @@ body {
     align-items: center;
     gap: 8px;
     text-decoration: none;
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: 1.25rem;
-    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-weight: 400;
+    font-size: 1rem;
+    color: var(--primary);
+    text-shadow: 0 0 10px var(--primary-glow);
+    letter-spacing: 1px;
 }
 
 .nav-logo .yat-symbol {
@@ -283,7 +369,7 @@ body {
 }
 
 .hero-abstract {
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     color: var(--text-secondary);
     max-width: 700px;
     margin: 0 auto 40px;
@@ -291,8 +377,9 @@ body {
 }
 
 .hero-abstract em {
-    color: var(--accent-cyan);
-    font-style: italic;
+    color: var(--secondary);
+    font-style: normal;
+    text-shadow: 0 0 8px var(--secondary-glow);
 }
 
 /* Hero Actions */
@@ -309,28 +396,56 @@ body {
     align-items: center;
     gap: 10px;
     padding: 14px 28px;
-    border-radius: 12px;
-    font-family: var(--font-display);
-    font-size: 1rem;
-    font-weight: 600;
+    border-radius: 0;
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    font-weight: 400;
     text-decoration: none;
     cursor: pointer;
-    transition: all var(--transition-base);
-    border: none;
+    transition: var(--transition);
+    border: 1px solid var(--border);
+    position: relative;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+/* Terminal corner decorations */
+.btn::before,
+.btn::after {
+    content: '';
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border: 1px solid var(--secondary);
+}
+
+.btn::before {
+    top: -1px;
+    left: -1px;
+    border-right: none;
+    border-bottom: none;
+}
+
+.btn::after {
+    bottom: -1px;
+    right: -1px;
+    border-left: none;
+    border-top: none;
 }
 
 .btn-primary {
     background: var(--gradient-primary);
-    color: #000;
+    color: var(--bg);
+    border-color: var(--primary);
 }
 
 .btn-primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 40px rgba(0, 212, 255, 0.3);
+    box-shadow: 0 0 30px var(--primary-glow), 0 0 60px var(--primary-glow);
 }
 
 .btn-secondary {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--panel-bg);
     color: var(--text-primary);
     border: 1px solid var(--border-color);
 }
@@ -353,18 +468,19 @@ body {
 
 .stat-value {
     display: block;
-    font-family: var(--font-display);
-    font-size: 2.5rem;
-    font-weight: 700;
-    color: var(--accent-cyan);
+    font-family: var(--font-mono);
+    font-size: 2rem;
+    font-weight: 400;
+    color: var(--primary);
+    text-shadow: 0 0 20px var(--primary-glow);
 }
 
 .stat-label {
-    font-family: var(--font-display);
-    font-size: 0.85rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
     color: var(--text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 2px;
 }
 
 /* Scroll Indicator */
@@ -377,16 +493,19 @@ body {
     flex-direction: column;
     align-items: center;
     gap: 8px;
-    color: var(--text-muted);
-    font-size: 0.8rem;
-    animation: bounce 2s infinite;
+    color: var(--secondary);
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    animation: bounce 2s steps(8) infinite;
 }
 
 .scroll-arrow {
-    width: 24px;
-    height: 24px;
-    border-right: 2px solid var(--text-muted);
-    border-bottom: 2px solid var(--text-muted);
+    width: 20px;
+    height: 20px;
+    border-right: 2px solid var(--secondary);
+    border-bottom: 2px solid var(--secondary);
     transform: rotate(45deg);
 }
 
@@ -422,20 +541,24 @@ body {
 }
 
 .section-title {
-    font-family: var(--font-display);
-    font-size: clamp(2rem, 4vw, 3rem);
-    font-weight: 700;
+    font-family: 'Press Start 2P', var(--font-mono);
+    font-size: clamp(1rem, 2vw, 1.4rem);
+    font-weight: 400;
     text-align: center;
     margin-bottom: 24px;
-    color: var(--text-primary);
+    color: var(--primary);
+    text-shadow: 0 0 20px var(--primary-glow);
+    letter-spacing: 2px;
+    text-transform: uppercase;
 }
 
 .section-subtitle {
     text-align: center;
     color: var(--text-secondary);
-    font-size: 1.15rem;
-    max-width: 600px;
+    font-size: 1rem;
+    max-width: 700px;
     margin: 0 auto 60px;
+    font-family: var(--font-mono);
 }
 
 /* ========================================
@@ -518,6 +641,67 @@ body {
     font-size: 0.9rem;
     color: var(--text-muted);
     font-style: italic;
+}
+
+/* Mini Manifold Visualization (embedded in intro) */
+.manifold-controls-mini {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-bottom: 16px;
+}
+
+.terminal-select-mini {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--primary);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.terminal-select-mini:hover {
+    border-color: var(--primary);
+    box-shadow: 0 0 8px var(--primary-glow);
+}
+
+.terminal-select-mini:focus {
+    outline: none;
+    border-color: var(--secondary);
+}
+
+.terminal-select-mini option {
+    background: var(--bg);
+    color: var(--text-primary);
+}
+
+.manifold-demo-mini {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+.manifold-mini-panel {
+    text-align: center;
+}
+
+.manifold-3d-mini {
+    width: 100%;
+    height: 180px;
+    background: var(--bg);
+    border: 1px solid var(--border-dim);
+    margin-bottom: 4px;
+}
+
+.mini-label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
 /* ========================================
@@ -645,50 +829,105 @@ body {
 }
 
 /* ========================================
-   Visualizations Section
+   Visualization Blocks - Terminal CRT Style
    ======================================== */
 .viz-block {
     margin-bottom: 80px;
+    position: relative;
 }
 
 .viz-title {
-    font-family: var(--font-display);
-    font-size: 1.8rem;
+    font-family: 'Press Start 2P', var(--font-mono);
+    font-size: 0.9rem;
     margin-bottom: 16px;
-    color: var(--text-primary);
+    color: var(--secondary);
+    text-shadow: 0 0 15px var(--secondary-glow);
+    letter-spacing: 2px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.viz-title::before {
+    content: '>';
+    color: var(--primary);
+    animation: blink 1s steps(2) infinite;
+}
+
+@keyframes blink {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.3;
+    }
 }
 
 .viz-desc {
     color: var(--text-secondary);
     margin-bottom: 32px;
-    max-width: 800px;
+    max-width: 900px;
+    font-family: var(--font-mono);
+    font-size: 0.95rem;
+    line-height: 1.7;
 }
 
-/* Heatmap Grid */
+/* Heatmap Controls - Terminal Panel */
 .heatmap-controls {
     display: flex;
     gap: 40px;
     margin-bottom: 24px;
     padding: 16px 24px;
-    background: var(--bg-card);
-    border-radius: 12px;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
     align-items: center;
+    position: relative;
+}
+
+.heatmap-controls::before,
+.heatmap-controls::after {
+    content: '';
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border: 1px solid var(--secondary);
+}
+
+.heatmap-controls::before {
+    top: -1px;
+    left: -1px;
+    border-right: none;
+    border-bottom: none;
+}
+
+.heatmap-controls::after {
+    bottom: -1px;
+    right: -1px;
+    border-left: none;
+    border-top: none;
 }
 
 .heatmap-controls label {
     display: flex;
     align-items: center;
     gap: 12px;
-    font-family: var(--font-display);
-    font-size: 0.9rem;
-    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: var(--secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
 .heatmap-controls input[type="range"] {
     width: 120px;
-    accent-color: var(--accent-cyan);
+    accent-color: var(--primary);
+    background: var(--bg-secondary);
 }
 
+/* Visualization Grids */
 .heatmap-grid,
 .gradient-grid,
 .levelset-grid {
@@ -698,46 +937,276 @@ body {
     margin-bottom: 32px;
 }
 
+/* Row Labels - Terminal Style */
 .row-label {
-    font-family: var(--font-display);
-    font-size: 1.1rem;
-    color: var(--text-secondary);
+    font-family: 'Press Start 2P', var(--font-mono);
+    font-size: 0.6rem;
+    color: var(--secondary);
     margin-bottom: 16px;
-    border-left: 3px solid var(--accent-cyan);
-    padding-left: 12px;
+    padding-left: 16px;
+    position: relative;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-shadow: 0 0 10px var(--secondary-glow);
 }
 
+.row-label::before {
+    content: '▶';
+    position: absolute;
+    left: 0;
+    color: var(--primary);
+    animation: pulse-arrow 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-arrow {
+
+    0%,
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    50% {
+        opacity: 0.5;
+        transform: translateX(3px);
+    }
+}
+
+.row-hint {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+/* Visualization Cards - Terminal Display */
 .heatmap-item,
 .gradient-item,
 .levelset-item {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 16px;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
     padding: 16px;
     text-align: center;
+    position: relative;
+    transition: var(--transition);
+    overflow: hidden;
 }
 
+/* Corner Decorations */
+.heatmap-item::before,
+.heatmap-item::after,
+.gradient-item::before,
+.gradient-item::after {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border: 1px solid var(--secondary);
+    transition: var(--transition);
+}
+
+.heatmap-item::before,
+.gradient-item::before {
+    top: -1px;
+    left: -1px;
+    border-right: none;
+    border-bottom: none;
+}
+
+.heatmap-item::after,
+.gradient-item::after {
+    bottom: -1px;
+    right: -1px;
+    border-left: none;
+    border-top: none;
+}
+
+/* Hover Effects */
+.heatmap-item:hover,
+.gradient-item:hover {
+    border-color: var(--primary);
+    box-shadow: 0 0 30px var(--primary-glow), inset 0 0 30px rgba(79, 249, 117, 0.03);
+}
+
+.heatmap-item:hover::before,
+.heatmap-item:hover::after,
+.gradient-item:hover::before,
+.gradient-item:hover::after {
+    border-color: var(--primary);
+    width: 16px;
+    height: 16px;
+}
+
+/* Scanline Effect on Cards */
+.heatmap-item::selection,
+.gradient-item::selection {
+    background: var(--primary-glow);
+}
+
+/* Show fullscreen button on hover */
+.heatmap-item:hover .fullscreen-btn,
+.gradient-item:hover .fullscreen-btn {
+    opacity: 1;
+}
+
+/* Fullscreen Button - Terminal Style */
+.fullscreen-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--border);
+    border-radius: 0;
+    background: var(--panel-bg);
+    color: var(--secondary);
+    font-size: 14px;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: var(--transition);
+    z-index: 10;
+}
+
+.fullscreen-btn:hover {
+    opacity: 1;
+    border-color: var(--primary);
+    color: var(--primary);
+    box-shadow: 0 0 15px var(--primary-glow);
+}
+
+/* Fullscreen Visualization Modal - Terminal Style */
+.fullscreen-viz-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 5, 5, 0.98);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    padding: 40px;
+}
+
+.fullscreen-viz-overlay.active {
+    display: flex;
+}
+
+.fullscreen-viz-container {
+    position: relative;
+    background: var(--panel-bg);
+    border: 1px solid var(--primary);
+    padding: 24px;
+    max-width: 90vw;
+    max-height: 90vh;
+    box-shadow: 0 0 60px var(--primary-glow), 0 0 100px rgba(79, 249, 117, 0.1);
+}
+
+/* Fullscreen container corner brackets */
+.fullscreen-viz-container::before,
+.fullscreen-viz-container::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--secondary);
+}
+
+.fullscreen-viz-container::before {
+    top: -2px;
+    left: -2px;
+    border-right: none;
+    border-bottom: none;
+}
+
+.fullscreen-viz-container::after {
+    bottom: -2px;
+    right: -2px;
+    border-left: none;
+    border-top: none;
+}
+
+.fullscreen-close-btn {
+    position: absolute;
+    top: -15px;
+    right: -15px;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--error);
+    border-radius: 0;
+    background: var(--panel-bg);
+    color: var(--error);
+    font-size: 16px;
+    font-family: var(--font-mono);
+    cursor: pointer;
+    transition: var(--transition);
+    z-index: 10;
+}
+
+.fullscreen-close-btn:hover {
+    background: var(--error);
+    color: var(--bg);
+    box-shadow: 0 0 20px rgba(255, 79, 79, 0.5);
+}
+
+#fullscreen-canvas {
+    border: 1px solid var(--border);
+    cursor: crosshair;
+    max-width: 100%;
+    max-height: calc(90vh - 100px);
+}
+
+.fullscreen-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px dotted var(--border);
+}
+
+#fullscreen-label {
+    font-family: 'Press Start 2P', var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--secondary);
+    text-shadow: 0 0 10px var(--secondary-glow);
+    letter-spacing: 1px;
+}
+
+.fullscreen-hint {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* Visualization Canvases */
 .heatmap-item canvas,
 .gradient-item canvas,
 .levelset-item canvas {
     width: 100%;
     height: auto;
-    border-radius: 8px;
+    border: 1px solid var(--border-dim);
     cursor: crosshair;
+    image-rendering: auto;
+    image-rendering: -webkit-optimize-contrast;
 }
 
+/* Visualization Labels */
 .heatmap-label {
-    font-family: var(--font-display);
-    font-size: 1rem;
+    font-family: 'Press Start 2P', var(--font-mono);
+    font-size: 0.55rem;
     margin-top: 12px;
-    color: var(--text-primary);
+    color: var(--secondary);
+    text-shadow: 0 0 8px var(--secondary-glow);
+    letter-spacing: 1px;
 }
 
 .heatmap-formula {
     font-family: var(--font-mono);
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    margin-top: 4px;
+    font-size: 0.75rem;
+    color: var(--primary);
+    margin-top: 6px;
+    text-shadow: 0 0 8px var(--primary-glow);
 }
 
 /* Coupled Visualization Grid (Heatmap + Gradient pairs) */
@@ -2768,4 +3237,182 @@ body {
 
 .katex-display {
     margin: 1em 0;
+}
+
+/* ========================================
+   Topological Distortion Visualization
+   ======================================== */
+.manifold-controls {
+    display: flex;
+    gap: 32px;
+    justify-content: center;
+    margin-bottom: 24px;
+    padding: 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+}
+
+.manifold-control-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.manifold-control-group label {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.terminal-select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--primary);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.terminal-select:hover {
+    border-color: var(--primary);
+    box-shadow: 0 0 10px var(--primary-glow);
+}
+
+.terminal-select:focus {
+    outline: none;
+    border-color: var(--secondary);
+    box-shadow: 0 0 15px var(--secondary-glow);
+}
+
+.terminal-select option {
+    background: var(--bg);
+    color: var(--text-primary);
+}
+
+.manifold-demo-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 32px;
+    margin-bottom: 32px;
+}
+
+.manifold-panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    padding: 20px;
+    text-align: center;
+    position: relative;
+}
+
+/* Terminal corner decorations */
+.manifold-panel::before,
+.manifold-panel::after {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border: 1px solid var(--secondary);
+    transition: var(--transition);
+}
+
+.manifold-panel::before {
+    top: -1px;
+    left: -1px;
+    border-right: none;
+    border-bottom: none;
+}
+
+.manifold-panel::after {
+    bottom: -1px;
+    right: -1px;
+    border-left: none;
+    border-top: none;
+}
+
+.manifold-panel:hover {
+    border-color: var(--primary);
+    box-shadow: 0 0 25px var(--primary-glow);
+}
+
+.manifold-panel:hover::before,
+.manifold-panel:hover::after {
+    border-color: var(--primary);
+    width: 16px;
+    height: 16px;
+}
+
+.manifold-panel h4 {
+    font-family: 'Press Start 2P', var(--font-mono);
+    font-size: 0.55rem;
+    color: var(--secondary);
+    text-shadow: 0 0 10px var(--secondary-glow);
+    letter-spacing: 1px;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+}
+
+.manifold-3d-canvas {
+    width: 100%;
+    height: 280px;
+    background: var(--bg);
+    border: 1px solid var(--border-dim);
+    margin-bottom: 12px;
+}
+
+.manifold-desc {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.manifold-insight {
+    display: flex;
+    justify-content: center;
+    margin-top: 24px;
+}
+
+.insight-box {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 24px;
+    background: rgba(249, 215, 28, 0.08);
+    border: 1px solid var(--accent);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: var(--accent);
+}
+
+.insight-box::before,
+.insight-box::after {
+    content: '';
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border: 1px solid var(--accent);
+}
+
+.insight-icon {
+    font-size: 1.2rem;
+}
+
+.insight-text {
+    max-width: 600px;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .manifold-demo-container {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+
+    .manifold-3d-canvas {
+        height: 250px;
+    }
 }

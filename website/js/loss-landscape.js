@@ -214,18 +214,18 @@ class LossLandscapeViz {
     }
 
     /**
-     * Get viridis-like color
+     * Get terminal-themed color (dark to green to cyan to yellow)
      */
     getViridisColor(t) {
         t = Math.max(0, Math.min(1, t));
 
-        // Simplified viridis
+        // Terminal green theme
         const colors = [
-            { r: 0.267, g: 0.004, b: 0.329 },  // 0.0 - dark purple
-            { r: 0.282, g: 0.140, b: 0.458 },  // 0.25
-            { r: 0.127, g: 0.566, b: 0.551 },  // 0.5
-            { r: 0.369, g: 0.789, b: 0.383 },  // 0.75
-            { r: 0.993, g: 0.906, b: 0.144 }   // 1.0 - yellow
+            { r: 0.02, g: 0.06, b: 0.04 },   // 0.0 - almost black green
+            { r: 0.08, g: 0.20, b: 0.15 },   // 0.25
+            { r: 0.20, g: 0.50, b: 0.35 },   // 0.5
+            { r: 0.31, g: 0.98, b: 0.46 },   // 0.75 - terminal green
+            { r: 0.98, g: 0.84, b: 0.11 }    // 1.0 - terminal yellow
         ];
 
         const idx = t * (colors.length - 1);
@@ -241,35 +241,35 @@ class LossLandscapeViz {
     }
 
     /**
-     * Add axes to scene
+     * Add axes to scene - Terminal Style
      */
     addAxes(scene) {
-        // X axis (w1)
+        // X axis (w1) - terminal magenta
         const xGeom = new THREE.BufferGeometry().setFromPoints([
             new THREE.Vector3(-9, 0, 0),
             new THREE.Vector3(9, 0, 0)
         ]);
-        const xMat = new THREE.LineBasicMaterial({ color: 0xff6b6b, opacity: 0.6, transparent: true });
+        const xMat = new THREE.LineBasicMaterial({ color: 0xff4f9a, opacity: 0.7, transparent: true });
         scene.add(new THREE.Line(xGeom, xMat));
 
-        // Z axis (w2)
+        // Z axis (w2) - terminal cyan
         const zGeom = new THREE.BufferGeometry().setFromPoints([
             new THREE.Vector3(0, 0, -9),
             new THREE.Vector3(0, 0, 9)
         ]);
-        const zMat = new THREE.LineBasicMaterial({ color: 0x4ecdc4, opacity: 0.6, transparent: true });
+        const zMat = new THREE.LineBasicMaterial({ color: 0x4deeea, opacity: 0.7, transparent: true });
         scene.add(new THREE.Line(zGeom, zMat));
 
-        // Y axis (loss)
+        // Y axis (loss) - terminal yellow
         const yGeom = new THREE.BufferGeometry().setFromPoints([
             new THREE.Vector3(0, 0, 0),
             new THREE.Vector3(0, 7, 0)
         ]);
-        const yMat = new THREE.LineBasicMaterial({ color: 0xf7dc6f, opacity: 0.6, transparent: true });
+        const yMat = new THREE.LineBasicMaterial({ color: 0xf9d71c, opacity: 0.7, transparent: true });
         scene.add(new THREE.Line(yGeom, yMat));
 
-        // Grid on XZ plane
-        const gridHelper = new THREE.GridHelper(16, 16, 0x444444, 0x222222);
+        // Grid on XZ plane - terminal green
+        const gridHelper = new THREE.GridHelper(16, 16, 0x2a3a30, 0x1a2a20);
         gridHelper.position.y = 0;
         scene.add(gridHelper);
     }

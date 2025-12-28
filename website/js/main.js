@@ -11,10 +11,10 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
         initHeatmapViz();
         initGradientViz();
-        initLevelSetViz();
         initXORDemo();
         initDecisionBoundaryViz();
         initLossLandscapeViz();
+        initTopologicalDistortionViz();
     }, 100);
 
     // Initialize UI interactions
@@ -23,6 +23,143 @@ document.addEventListener('DOMContentLoaded', () => {
     initScrollAnimations();
     initParticles();
 });
+
+/**
+ * Fullscreen Visualization System
+ */
+let currentFullscreenViz = null;
+let fullscreenRenderInterval = null;
+
+function openFullscreen(canvasId) {
+    const overlay = document.getElementById('fullscreenOverlay');
+    const fsCanvas = document.getElementById('fullscreen-canvas');
+    const label = document.getElementById('fullscreen-label');
+    const sourceCanvas = document.getElementById(canvasId);
+
+    if (!overlay || !fsCanvas || !sourceCanvas) return;
+
+    // Determine visualization type and label
+    const isHeatmap = canvasId.startsWith('heatmap-');
+    const isGradient = canvasId.startsWith('gradient-');
+    const metric = canvasId.replace('heatmap-', '').replace('gradient-', '');
+
+    const metricLabels = {
+        'dot': 'Dot Product',
+        'euclidean': 'Euclidean Distance²',
+        'yat': 'ⵟ-Product',
+        'cosine': 'Cosine Similarity'
+    };
+
+    const vizType = isHeatmap ? 'Similarity Heatmap' : 'Gradient Field';
+    label.textContent = `${metricLabels[metric] || metric} — ${vizType}`;
+
+    currentFullscreenViz = { canvasId, metric, isHeatmap, isGradient };
+
+    // Setup fullscreen canvas
+    const fsCtx = fsCanvas.getContext('2d');
+    const range = { min: -8, max: 8 };
+
+    // Add drag events to fullscreen canvas
+    setupFullscreenDrag(fsCanvas, range);
+
+    // Show overlay
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+
+    // Initial render
+    renderFullscreen();
+
+    // Setup continuous render loop
+    fullscreenRenderInterval = setInterval(renderFullscreen, 100);
+}
+
+function renderFullscreen() {
+    if (!currentFullscreenViz) return;
+
+    const fsCanvas = document.getElementById('fullscreen-canvas');
+    const fsCtx = fsCanvas.getContext('2d');
+
+    if (currentFullscreenViz.isHeatmap && typeof heatmapViz !== 'undefined' && heatmapViz) {
+        heatmapViz.renderHeatmap(fsCtx, fsCanvas, currentFullscreenViz.metric);
+    } else if (currentFullscreenViz.isGradient && typeof gradientViz !== 'undefined' && gradientViz) {
+        gradientViz.renderGradientField(fsCtx, fsCanvas, currentFullscreenViz.metric);
+    }
+}
+
+function setupFullscreenDrag(canvas, range) {
+    let isDragging = false;
+
+    const getMousePos = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        return {
+            x: (e.clientX - rect.left) * scaleX,
+            y: (e.clientY - rect.top) * scaleY
+        };
+    };
+
+    const pixelToCoord = (px, py) => {
+        const r = range.max - range.min;
+        return [
+            range.min + (px / canvas.width) * r,
+            range.max - (py / canvas.height) * r
+        ];
+    };
+
+    const coordToPixel = (x, y) => {
+        const r = range.max - range.min;
+        return {
+            x: ((x - range.min) / r) * canvas.width,
+            y: ((range.max - y) / r) * canvas.height
+        };
+    };
+
+    canvas.onmousedown = (e) => {
+        if (!heatmapViz) return;
+        const pos = getMousePos(e);
+        const anchorPx = coordToPixel(heatmapViz.anchor[0], heatmapViz.anchor[1]);
+        const dist = Math.sqrt(Math.pow(pos.x - anchorPx.x, 2) + Math.pow(pos.y - anchorPx.y, 2));
+        if (dist < 30) isDragging = true;
+    };
+
+    canvas.onmousemove = (e) => {
+        if (isDragging && heatmapViz) {
+            const pos = getMousePos(e);
+            const coord = pixelToCoord(pos.x, pos.y);
+            heatmapViz.anchor = coord;
+            heatmapViz.updateAnchorDisplay();
+            heatmapViz.render();
+            renderFullscreen();
+        }
+    };
+
+    canvas.onmouseup = () => { isDragging = false; };
+    canvas.onmouseleave = () => { };
+}
+
+function closeFullscreen() {
+    const overlay = document.getElementById('fullscreenOverlay');
+    if (overlay) overlay.classList.remove('active');
+    document.body.style.overflow = '';
+    currentFullscreenViz = null;
+
+    if (fullscreenRenderInterval) {
+        clearInterval(fullscreenRenderInterval);
+        fullscreenRenderInterval = null;
+    }
+}
+
+// Escape key to close fullscreen
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && currentFullscreenViz) {
+        closeFullscreen();
+    }
+});
+
+// Make functions globally available
+window.openFullscreen = openFullscreen;
+window.closeFullscreen = closeFullscreen;
 
 /**
  * Initialize KaTeX math rendering

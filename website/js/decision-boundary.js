@@ -336,10 +336,12 @@ class DecisionBoundaryViz {
     }
 
     /**
-     * Draw coordinate grid
+     * Draw coordinate grid - Terminal Style
      */
     drawGrid(ctx, canvas) {
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        // Dotted grid lines
+        ctx.setLineDash([2, 4]);
+        ctx.strokeStyle = 'rgba(79, 249, 117, 0.12)';
         ctx.lineWidth = 1;
 
         // Grid at 0.5 intervals
@@ -357,15 +359,17 @@ class DecisionBoundaryViz {
             ctx.lineTo(canvas.width, pos2.y);
             ctx.stroke();
         }
+        ctx.setLineDash([]);
     }
 
     /**
-     * Draw decision boundaries (edges between regions)
+     * Draw decision boundaries (edges between regions) - Terminal Style
      */
     drawBoundaries(ctx, canvas, method) {
         const step = 3;
 
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        // Terminal cyan glow for boundaries
+        ctx.fillStyle = 'rgba(77, 238, 234, 0.5)';
 
         for (let py = 0; py < canvas.height - step; py += step) {
             for (let px = 0; px < canvas.width - step; px += step) {
