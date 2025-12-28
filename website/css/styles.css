@@ -10,7 +10,7 @@
     --bg-secondary: #12121a;
     --bg-tertiary: #1a1a26;
     --bg-card: #16161f;
-    
+
     /* Accent colors */
     --accent-cyan: #00d4ff;
     --accent-magenta: #ff00aa;
@@ -19,31 +19,31 @@
     --accent-green: #10b981;
     --accent-orange: #f97316;
     --accent-yellow: #fbbf24;
-    
+
     /* Gradients */
     --gradient-primary: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta));
     --gradient-secondary: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
     --gradient-glow: radial-gradient(ellipse at center, rgba(0, 212, 255, 0.15) 0%, transparent 70%);
-    
+
     /* Text colors */
     --text-primary: #f0f0f5;
     --text-secondary: #a0a0b0;
     --text-muted: #6b6b7b;
-    
+
     /* Borders */
     --border-color: rgba(255, 255, 255, 0.08);
     --border-glow: rgba(0, 212, 255, 0.3);
-    
+
     /* Typography */
     --font-display: 'Space Grotesk', sans-serif;
     --font-body: 'Crimson Pro', Georgia, serif;
     --font-mono: 'JetBrains Mono', monospace;
     --font-tifinagh: 'Noto Sans Tifinagh', sans-serif;
-    
+
     /* Spacing */
     --section-padding: 120px;
     --container-max: 1200px;
-    
+
     /* Transitions */
     --transition-fast: 0.15s ease;
     --transition-base: 0.3s ease;
@@ -51,7 +51,9 @@
 }
 
 /* Reset & Base */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
@@ -184,7 +186,7 @@ body {
     justify-content: center;
     position: relative;
     padding: 100px 24px 60px;
-    background: 
+    background:
         radial-gradient(ellipse at 20% 20%, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
         radial-gradient(ellipse at 80% 80%, rgba(0, 212, 255, 0.08) 0%, transparent 50%),
         var(--bg-primary);
@@ -269,7 +271,8 @@ body {
     gap: 4px;
 }
 
-.frac-num, .frac-den {
+.frac-num,
+.frac-den {
     padding: 4px 12px;
 }
 
@@ -388,9 +391,22 @@ body {
 }
 
 @keyframes bounce {
-    0%, 20%, 50%, 80%, 100% { transform: translateX(-50%) translateY(0); }
-    40% { transform: translateX(-50%) translateY(-10px); }
-    60% { transform: translateX(-50%) translateY(-5px); }
+
+    0%,
+    20%,
+    50%,
+    80%,
+    100% {
+        transform: translateX(-50%) translateY(0);
+    }
+
+    40% {
+        transform: translateX(-50%) translateY(-10px);
+    }
+
+    60% {
+        transform: translateX(-50%) translateY(-5px);
+    }
 }
 
 /* ========================================
@@ -673,13 +689,27 @@ body {
     accent-color: var(--accent-cyan);
 }
 
-.heatmap-grid, .gradient-grid {
+.heatmap-grid,
+.gradient-grid,
+.levelset-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 20px;
+    margin-bottom: 32px;
 }
 
-.heatmap-item, .gradient-item {
+.row-label {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+    border-left: 3px solid var(--accent-cyan);
+    padding-left: 12px;
+}
+
+.heatmap-item,
+.gradient-item,
+.levelset-item {
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 16px;
@@ -687,7 +717,9 @@ body {
     text-align: center;
 }
 
-.heatmap-item canvas, .gradient-item canvas {
+.heatmap-item canvas,
+.gradient-item canvas,
+.levelset-item canvas {
     width: 100%;
     height: auto;
     border-radius: 8px;
@@ -706,6 +738,80 @@ body {
     font-size: 0.8rem;
     color: var(--text-muted);
     margin-top: 4px;
+}
+
+/* Coupled Visualization Grid (Heatmap + Gradient pairs) */
+.coupled-viz-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+}
+
+.coupled-viz-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 16px;
+    text-align: center;
+}
+
+.viz-pair {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+}
+
+.viz-pair canvas {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    cursor: crosshair;
+}
+
+.viz-legend {
+    display: flex;
+    justify-content: center;
+    gap: 32px;
+    margin-top: 24px;
+    padding: 12px 24px;
+    background: var(--bg-card);
+    border-radius: 8px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+}
+
+.legend-dot.heatmap {
+    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta));
+}
+
+.legend-dot.gradient {
+    background: rgba(255, 255, 255, 0.3);
+    border: 2px solid var(--accent-cyan);
+}
+
+@media (max-width: 900px) {
+    .coupled-viz-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .coupled-viz-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* XOR Demo */
@@ -769,7 +875,8 @@ body {
     border-collapse: collapse;
 }
 
-.xor-table th, .xor-table td {
+.xor-table th,
+.xor-table td {
     padding: 12px 20px;
     text-align: center;
     border-bottom: 1px solid var(--border-color);
@@ -938,7 +1045,8 @@ body {
     border-collapse: collapse;
 }
 
-.impl-table th, .impl-table td {
+.impl-table th,
+.impl-table td {
     padding: 16px;
     text-align: left;
     border-bottom: 1px solid var(--border-color);
@@ -985,7 +1093,8 @@ body {
     border-collapse: collapse;
 }
 
-.results-table th, .results-table td {
+.results-table th,
+.results-table td {
     padding: 12px 16px;
     text-align: center;
     border-bottom: 1px solid var(--border-color);
@@ -1077,7 +1186,8 @@ body {
 }
 
 /* Training Curves */
-.training-curves, .mnist-prototypes {
+.training-curves,
+.mnist-prototypes {
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 16px;
@@ -1086,14 +1196,16 @@ body {
     margin-bottom: 40px;
 }
 
-.training-curves h3, .mnist-prototypes h3 {
+.training-curves h3,
+.mnist-prototypes h3 {
     font-family: var(--font-display);
     font-size: 1.3rem;
     margin-bottom: 24px;
     color: var(--text-primary);
 }
 
-.training-img, .prototypes-img {
+.training-img,
+.prototypes-img {
     max-width: 100%;
     border-radius: 8px;
 }
@@ -1719,7 +1831,8 @@ body {
     color: var(--text-secondary);
 }
 
-.proof-step ul, .proof-step ol {
+.proof-step ul,
+.proof-step ol {
     margin: 8px 0;
     padding-left: 20px;
 }
@@ -1825,7 +1938,8 @@ body {
 }
 
 /* Problem Visualization */
-.problem-comparison, .problem-visualization {
+.problem-comparison,
+.problem-visualization {
     margin: 24px 0;
 }
 
@@ -1973,7 +2087,7 @@ body {
     margin: 24px 0;
 }
 
-.corollary-section > p {
+.corollary-section>p {
     margin-top: 12px;
     padding-left: 16px;
     border-left: 2px solid var(--border-color);
@@ -1981,6 +2095,7 @@ body {
 
 /* Responsive for expanded content */
 @media (max-width: 768px) {
+
     .consequences-grid,
     .two-worlds,
     .problem-comparison,
@@ -1988,11 +2103,11 @@ body {
     .comparison-box {
         grid-template-columns: 1fr;
     }
-    
+
     .comparison-box {
         flex-direction: column;
     }
-    
+
     .comparison-divider {
         transform: rotate(90deg);
     }
@@ -2324,9 +2439,9 @@ body {
 }
 
 .linear-diagram {
-    background: linear-gradient(90deg, rgba(239, 68, 68, 0.2) 0%, rgba(239, 68, 68, 0.2) 49%, 
-                                        var(--border-color) 49%, var(--border-color) 51%,
-                                        rgba(59, 130, 246, 0.2) 51%, rgba(59, 130, 246, 0.2) 100%);
+    background: linear-gradient(90deg, rgba(239, 68, 68, 0.2) 0%, rgba(239, 68, 68, 0.2) 49%,
+            var(--border-color) 49%, var(--border-color) 51%,
+            rgba(59, 130, 246, 0.2) 51%, rgba(59, 130, 246, 0.2) 100%);
 }
 
 .half-space {
@@ -2389,8 +2504,15 @@ body {
 }
 
 @keyframes pulse-vortex {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.1); }
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.1);
+    }
 }
 
 /* Theorem Navigation Links */
@@ -2443,7 +2565,7 @@ body {
     margin-bottom: 16px;
 }
 
-.theory-summary > p {
+.theory-summary>p {
     color: var(--text-secondary);
     margin-bottom: 32px;
 }
@@ -2510,35 +2632,36 @@ body {
     .intro-grid {
         grid-template-columns: 1fr;
     }
-    
-    .heatmap-grid, .gradient-grid {
+
+    .heatmap-grid,
+    .gradient-grid {
         grid-template-columns: repeat(2, 1fr);
     }
-    
+
     .arch-cards {
         grid-template-columns: 1fr;
     }
-    
+
     .results-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .dual-box {
         grid-template-columns: 1fr;
     }
-    
+
     .connection-diagram {
         grid-template-columns: 1fr;
     }
-    
+
     .visual-comparison {
         grid-template-columns: 1fr;
     }
-    
+
     .theory-nav {
         gap: 4px;
     }
-    
+
     .theory-nav-arrow {
         display: none;
     }
@@ -2548,87 +2671,88 @@ body {
     :root {
         --section-padding: 80px;
     }
-    
+
     .nav-links a:not(.nav-github) {
         display: none;
     }
-    
+
     .hero-stats {
         flex-direction: column;
         gap: 24px;
     }
-    
-    .heatmap-grid, .gradient-grid {
+
+    .heatmap-grid,
+    .gradient-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .xor-demo-container,
     .boundary-demo-container,
     .loss-landscape-container {
         grid-template-columns: 1fr;
     }
-    
+
     .equation-breakdown {
         flex-direction: column;
     }
-    
+
     .breakdown-divider {
         display: none;
     }
-    
+
     .footer-content {
         flex-direction: column;
         text-align: center;
     }
-    
+
     .footer-copy {
         text-align: center;
     }
-    
+
     /* Theory section mobile */
     .theorem-post {
         padding: 24px;
     }
-    
+
     .theorem-title {
         font-size: 1.5rem;
     }
-    
+
     .theorem-box {
         padding: 16px;
         font-size: 0.95rem;
     }
-    
+
     .benefits-list {
         grid-template-columns: 1fr;
     }
-    
+
     .theory-nav-item {
         padding: 6px 10px;
         font-size: 0.75rem;
     }
-    
+
     .theory-nav-item span:last-child {
         display: none;
     }
-    
+
     .theorem-nav-links {
         flex-direction: column;
         text-align: center;
     }
-    
+
     .summary-item {
         padding: 12px 16px;
     }
-    
+
     .theory-summary {
         padding: 24px;
     }
-    
+
     .orthogonality-table {
         font-size: 0.85rem;
     }
-    
+
     .orthogonality-table th,
     .orthogonality-table td {
         padding: 10px 12px;
@@ -2645,4 +2769,3 @@ body {
 .katex-display {
     margin: 1em 0;
 }
-

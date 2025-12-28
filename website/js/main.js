@@ -6,16 +6,17 @@
 document.addEventListener('DOMContentLoaded', () => {
     // Initialize KaTeX
     initMathRendering();
-    
+
     // Initialize visualizations with delay for DOM readiness
     setTimeout(() => {
         initHeatmapViz();
         initGradientViz();
+        initLevelSetViz();
         initXORDemo();
         initDecisionBoundaryViz();
         initLossLandscapeViz();
     }, 100);
-    
+
     // Initialize UI interactions
     initNavigation();
     initCodeTabs();
@@ -49,23 +50,23 @@ function initMathRendering() {
 function initNavigation() {
     const nav = document.querySelector('.main-nav');
     let lastScroll = 0;
-    
+
     // Hide/show nav on scroll
     window.addEventListener('scroll', () => {
         const currentScroll = window.pageYOffset;
-        
+
         if (currentScroll > 100) {
             nav.style.background = 'rgba(10, 10, 15, 0.95)';
         } else {
             nav.style.background = 'rgba(10, 10, 15, 0.85)';
         }
-        
+
         lastScroll = currentScroll;
     });
-    
+
     // Smooth scroll for nav links
     document.querySelectorAll('.nav-links a[href^="#"]').forEach(anchor => {
-        anchor.addEventListener('click', function(e) {
+        anchor.addEventListener('click', function (e) {
             e.preventDefault();
             const href = this.getAttribute('href');
             const target = document.querySelector(href);
@@ -74,19 +75,19 @@ function initNavigation() {
                 target.classList.add('animate-in');
                 const parentSection = target.closest('.section') || target;
                 parentSection.classList.add('animate-in');
-                
+
                 // Animate all blog elements within the section
                 parentSection.querySelectorAll('.theorem-post, .theory-nav, .theory-summary').forEach(el => {
                     el.classList.add('animate-in');
                 });
-                
+
                 const offset = 80; // Nav height
                 const targetPosition = target.getBoundingClientRect().top + window.pageYOffset - offset;
                 window.scrollTo({
                     top: targetPosition,
                     behavior: 'smooth'
                 });
-                
+
                 // Update URL hash
                 history.pushState(null, null, href);
             }
@@ -100,15 +101,15 @@ function initNavigation() {
 function initCodeTabs() {
     const tabs = document.querySelectorAll('.code-tab');
     const panels = document.querySelectorAll('.code-panel');
-    
+
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
             const targetId = tab.dataset.tab;
-            
+
             // Update tabs
             tabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
-            
+
             // Update panels
             panels.forEach(p => {
                 p.classList.remove('active');
@@ -128,12 +129,12 @@ function initScrollAnimations() {
         threshold: 0.05,  // Lower threshold for better detection
         rootMargin: '50px 0px -20px 0px'  // More generous margins
     };
-    
+
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
                 entry.target.classList.add('animate-in');
-                
+
                 // Trigger visualization updates when visible
                 if (entry.target.classList.contains('viz-block')) {
                     // Re-render visualizations that might have been hidden
@@ -147,20 +148,20 @@ function initScrollAnimations() {
             }
         });
     }, observerOptions);
-    
+
     // Observe sections, viz blocks, and blog elements
     const animatedElements = document.querySelectorAll(
         '.section, .viz-block, .arch-card, .property-card, .problem-card, ' +
         '.theorem-post, .theory-nav, .theory-summary'
     );
-    
+
     animatedElements.forEach(el => {
         el.style.opacity = '0';
         el.style.transform = 'translateY(30px)';
         el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
         observer.observe(el);
     });
-    
+
     // Handle hash navigation - make target section visible immediately
     function handleHashNavigation() {
         const hash = window.location.hash;
@@ -180,7 +181,7 @@ function initScrollAnimations() {
             }
         }
     }
-    
+
     // Run on load and hash change
     handleHashNavigation();
     window.addEventListener('hashchange', handleHashNavigation);
@@ -204,7 +205,7 @@ document.head.appendChild(style);
 function initParticles() {
     const container = document.getElementById('particles');
     if (!container) return;
-    
+
     const canvas = document.createElement('canvas');
     canvas.style.position = 'absolute';
     canvas.style.top = '0';
@@ -213,20 +214,20 @@ function initParticles() {
     canvas.style.height = '100%';
     canvas.style.pointerEvents = 'none';
     container.appendChild(canvas);
-    
+
     const ctx = canvas.getContext('2d');
     let particles = [];
     let animationId;
-    
+
     function resize() {
         canvas.width = container.offsetWidth;
         canvas.height = container.offsetHeight;
     }
-    
+
     function createParticles() {
         particles = [];
         const numParticles = Math.floor((canvas.width * canvas.height) / 15000);
-        
+
         for (let i = 0; i < numParticles; i++) {
             particles.push({
                 x: Math.random() * canvas.width,
@@ -238,37 +239,37 @@ function initParticles() {
             });
         }
     }
-    
+
     function animate() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
+
         // Update and draw particles
         particles.forEach(p => {
             p.x += p.vx;
             p.y += p.vy;
-            
+
             // Wrap around
             if (p.x < 0) p.x = canvas.width;
             if (p.x > canvas.width) p.x = 0;
             if (p.y < 0) p.y = canvas.height;
             if (p.y > canvas.height) p.y = 0;
-            
+
             ctx.beginPath();
             ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
             ctx.fillStyle = `rgba(0, 212, 255, ${p.alpha})`;
             ctx.fill();
         });
-        
+
         // Draw connections
         ctx.strokeStyle = 'rgba(0, 212, 255, 0.05)';
         ctx.lineWidth = 0.5;
-        
+
         for (let i = 0; i < particles.length; i++) {
             for (let j = i + 1; j < particles.length; j++) {
                 const dx = particles[i].x - particles[j].x;
                 const dy = particles[i].y - particles[j].y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                
+
                 if (dist < 150) {
                     ctx.beginPath();
                     ctx.moveTo(particles[i].x, particles[i].y);
@@ -277,14 +278,14 @@ function initParticles() {
                 }
             }
         }
-        
+
         animationId = requestAnimationFrame(animate);
     }
-    
+
     resize();
     createParticles();
     animate();
-    
+
     window.addEventListener('resize', () => {
         resize();
         createParticles();
@@ -301,13 +302,13 @@ function copyBibtex() {
   year = {2025},
   url = {https://github.com/mlnomadpy/nmn}
 }`;
-    
+
     navigator.clipboard.writeText(bibtex).then(() => {
         const btn = document.querySelector('.copy-btn');
         const originalText = btn.innerHTML;
         btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Copied!';
         btn.style.color = '#10b981';
-        
+
         setTimeout(() => {
             btn.innerHTML = originalText;
             btn.style.color = '';
@@ -364,19 +365,19 @@ let currentModal = null;
 function openModal(modalId) {
     const modal = document.getElementById(modalId);
     const overlay = document.getElementById('modalOverlay');
-    
+
     if (modal && overlay) {
         // Close any existing modal
         closeModal();
-        
+
         // Open new modal
         overlay.classList.add('active');
         modal.classList.add('active');
         currentModal = modal;
-        
+
         // Prevent body scroll
         document.body.style.overflow = 'hidden';
-        
+
         // Re-render math in modal
         if (typeof renderMathInElement === 'function') {
             renderMathInElement(modal, {
@@ -389,7 +390,7 @@ function openModal(modalId) {
                 throwOnError: false
             });
         }
-        
+
         // Scroll modal body to top
         const modalBody = modal.querySelector('.blog-modal-body');
         if (modalBody) {
@@ -401,11 +402,11 @@ function openModal(modalId) {
 function closeModal() {
     const overlay = document.getElementById('modalOverlay');
     const modals = document.querySelectorAll('.blog-modal');
-    
+
     overlay.classList.remove('active');
     modals.forEach(modal => modal.classList.remove('active'));
     currentModal = null;
-    
+
     // Restore body scroll
     document.body.style.overflow = '';
 }
@@ -426,20 +427,20 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
-    
+
     // Overlay click to close
     const overlay = document.getElementById('modalOverlay');
     if (overlay) {
         overlay.addEventListener('click', closeModal);
     }
-    
+
     // Escape key to close
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && currentModal) {
             closeModal();
         }
     });
-    
+
     // Prevent modal body clicks from closing
     const modals = document.querySelectorAll('.blog-modal');
     modals.forEach(modal => {
