@@ -11,14 +11,14 @@ class HeatmapVisualization {
             yat: document.getElementById('heatmap-yat'),
             cosine: document.getElementById('heatmap-cosine')
         };
-        
+
         this.contexts = {};
         this.anchor = [3, 4];  // Default anchor position (w vector)
         this.epsilon = 1.0;
         this.range = { min: -8, max: 8 };
         this.isDragging = false;
         this.activeCanvas = null;
-        
+
         this.init();
     }
 
@@ -30,10 +30,10 @@ class HeatmapVisualization {
                 this.setupCanvasEvents(canvas);
             }
         }
-        
+
         // Setup controls
         this.setupControls();
-        
+
         // Initial render
         this.render();
     }
@@ -41,7 +41,7 @@ class HeatmapVisualization {
     setupControls() {
         const epsilonSlider = document.getElementById('epsilon-slider');
         const epsilonDisplay = document.getElementById('epsilon-display');
-        
+
         if (epsilonSlider) {
             epsilonSlider.addEventListener('input', (e) => {
                 this.epsilon = Math.pow(10, parseFloat(e.target.value));
@@ -75,11 +75,11 @@ class HeatmapVisualization {
         canvas.addEventListener('mousedown', (e) => {
             const pos = getMousePos(e);
             const coord = pixelToCoord(pos.x, pos.y);
-            
+
             // Check if click is near anchor
             const anchorPx = this.coordToPixel(this.anchor[0], this.anchor[1], canvas);
             const dist = Math.sqrt(Math.pow(pos.x - anchorPx.x, 2) + Math.pow(pos.y - anchorPx.y, 2));
-            
+
             if (dist < 20) {
                 this.isDragging = true;
                 this.activeCanvas = canvas;
@@ -116,10 +116,10 @@ class HeatmapVisualization {
                 x: (touch.clientX - rect.left) * (canvas.width / rect.width),
                 y: (touch.clientY - rect.top) * (canvas.height / rect.height)
             };
-            
+
             const anchorPx = this.coordToPixel(this.anchor[0], this.anchor[1], canvas);
             const dist = Math.sqrt(Math.pow(pos.x - anchorPx.x, 2) + Math.pow(pos.y - anchorPx.y, 2));
-            
+
             if (dist < 30) {
                 this.isDragging = true;
             }
@@ -164,7 +164,7 @@ class HeatmapVisualization {
     computeValue(metric, x, y) {
         const w = this.anchor;
         const point = [x, y];
-        
+
         switch (metric) {
             case 'dot':
                 return MathUtils.dotProduct(w, point);
@@ -186,11 +186,11 @@ class HeatmapVisualization {
         const width = canvas.width;
         const height = canvas.height;
         const imageData = ctx.createImageData(width, height);
-        
+
         // Compute all values first to find min/max
         const values = [];
         const resolution = 2; // Pixel step for performance
-        
+
         for (let py = 0; py < height; py += resolution) {
             for (let px = 0; px < width; px += resolution) {
                 const x = this.range.min + (px / width) * (this.range.max - this.range.min);
@@ -201,7 +201,7 @@ class HeatmapVisualization {
                 });
             }
         }
-        
+
         // Find min/max for normalization
         let minVal = Infinity, maxVal = -Infinity;
         for (const v of values) {
@@ -210,16 +210,16 @@ class HeatmapVisualization {
                 maxVal = Math.max(maxVal, v.value);
             }
         }
-        
+
         // Handle edge cases
         if (!isFinite(minVal)) minVal = 0;
         if (!isFinite(maxVal)) maxVal = 1;
         if (maxVal === minVal) maxVal = minVal + 1;
-        
+
         // Choose colormap based on metric
         let colormap;
         let normalizeForDiverging = false;
-        
+
         switch (metric) {
             case 'dot':
                 colormap = MathUtils.colorMaps.diverging;
@@ -238,7 +238,7 @@ class HeatmapVisualization {
             default:
                 colormap = MathUtils.colorMaps.viridis;
         }
-        
+
         // Render pixels
         for (const v of values) {
             let normalized;
@@ -249,10 +249,10 @@ class HeatmapVisualization {
             } else {
                 normalized = (v.value - minVal) / (maxVal - minVal);
             }
-            
+
             const color = colormap(normalized);
             const rgb = color.match(/\d+/g).map(Number);
-            
+
             // Fill resolution x resolution block
             for (let dy = 0; dy < resolution && v.py + dy < height; dy++) {
                 for (let dx = 0; dx < resolution && v.px + dx < width; dx++) {
@@ -264,15 +264,15 @@ class HeatmapVisualization {
                 }
             }
         }
-        
+
         ctx.putImageData(imageData, 0, 0);
-        
+
         // Draw contour lines
         this.drawContours(ctx, canvas, metric, minVal, maxVal);
-        
+
         // Draw anchor point
         this.drawAnchor(ctx, canvas);
-        
+
         // Draw axes
         this.drawAxes(ctx, canvas);
     }
@@ -284,7 +284,7 @@ class HeatmapVisualization {
         const numContours = 8;
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
         ctx.lineWidth = 0.5;
-        
+
         for (let i = 1; i < numContours; i++) {
             const level = minVal + (i / numContours) * (maxVal - minVal);
             this.drawContourLine(ctx, canvas, metric, level);
@@ -298,9 +298,9 @@ class HeatmapVisualization {
         const step = 10;
         const width = canvas.width;
         const height = canvas.height;
-        
+
         ctx.beginPath();
-        
+
         for (let py = 0; py < height - step; py += step) {
             for (let px = 0; px < width - step; px += step) {
                 const corners = [];
@@ -315,10 +315,10 @@ class HeatmapVisualization {
                         });
                     }
                 }
-                
+
                 // Simple contour: draw line segments where level crosses
                 const above = corners.map(c => c.value > level);
-                
+
                 // Check for crossing on edges
                 if (above[0] !== above[1]) {
                     const t = (level - corners[0].value) / (corners[1].value - corners[0].value);
@@ -327,7 +327,7 @@ class HeatmapVisualization {
                 }
             }
         }
-        
+
         ctx.stroke();
     }
 
@@ -336,7 +336,7 @@ class HeatmapVisualization {
      */
     drawAnchor(ctx, canvas) {
         const pos = this.coordToPixel(this.anchor[0], this.anchor[1], canvas);
-        
+
         // Glow effect
         const gradient = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, 20);
         gradient.addColorStop(0, 'rgba(0, 212, 255, 0.5)');
@@ -345,14 +345,14 @@ class HeatmapVisualization {
         ctx.beginPath();
         ctx.arc(pos.x, pos.y, 20, 0, Math.PI * 2);
         ctx.fill();
-        
+
         // Star shape
         ctx.fillStyle = '#00d4ff';
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
-        
+
         this.drawStar(ctx, pos.x, pos.y, 5, 10, 5);
-        
+
         // Label
         ctx.font = '12px "Space Grotesk", sans-serif';
         ctx.fillStyle = '#ffffff';
@@ -366,24 +366,24 @@ class HeatmapVisualization {
     drawStar(ctx, cx, cy, spikes, outerRadius, innerRadius) {
         let rot = Math.PI / 2 * 3;
         const step = Math.PI / spikes;
-        
+
         ctx.beginPath();
         ctx.moveTo(cx, cy - outerRadius);
-        
+
         for (let i = 0; i < spikes; i++) {
             ctx.lineTo(
                 cx + Math.cos(rot) * outerRadius,
                 cy + Math.sin(rot) * outerRadius
             );
             rot += step;
-            
+
             ctx.lineTo(
                 cx + Math.cos(rot) * innerRadius,
                 cy + Math.sin(rot) * innerRadius
             );
             rot += step;
         }
-        
+
         ctx.lineTo(cx, cy - outerRadius);
         ctx.closePath();
         ctx.fill();
@@ -396,33 +396,33 @@ class HeatmapVisualization {
     drawAxes(ctx, canvas) {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
         ctx.lineWidth = 1;
-        
+
         // X axis (y = 0)
         const y0 = this.coordToPixel(0, 0, canvas).y;
         ctx.beginPath();
         ctx.moveTo(0, y0);
         ctx.lineTo(canvas.width, y0);
         ctx.stroke();
-        
+
         // Y axis (x = 0)
         const x0 = this.coordToPixel(0, 0, canvas).x;
         ctx.beginPath();
         ctx.moveTo(x0, 0);
         ctx.lineTo(x0, canvas.height);
         ctx.stroke();
-        
+
         // Axis labels
         ctx.font = '11px "Space Grotesk", sans-serif';
         ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
         ctx.textAlign = 'center';
-        
+
         // X axis labels
         for (let x = this.range.min; x <= this.range.max; x += 4) {
             if (x === 0) continue;
             const px = this.coordToPixel(x, 0, canvas);
             ctx.fillText(x.toString(), px.x, canvas.height - 5);
         }
-        
+
         // Y axis labels
         ctx.textAlign = 'right';
         for (let y = this.range.min; y <= this.range.max; y += 4) {
@@ -430,7 +430,7 @@ class HeatmapVisualization {
             const px = this.coordToPixel(0, y, canvas);
             ctx.fillText(y.toString(), 25, px.y + 4);
         }
-        
+
         // Axis titles
         ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
         ctx.textAlign = 'center';
@@ -446,6 +446,14 @@ class HeatmapVisualization {
             if (canvas && this.contexts[metric]) {
                 this.renderHeatmap(this.contexts[metric], canvas, metric);
             }
+        }
+
+        // Also update gradient and level set visualizations (they share anchor/epsilon)
+        if (typeof gradientViz !== 'undefined' && gradientViz) {
+            gradientViz.render();
+        }
+        if (typeof levelSetViz !== 'undefined' && levelSetViz) {
+            levelSetViz.render();
         }
     }
 }
