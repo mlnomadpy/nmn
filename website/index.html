@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Press+Start+2P&family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
         rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tifinagh&display=swap" rel="stylesheet">
 
@@ -25,7 +25,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <!-- Styles -->
-    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/styles.css?v=6.0">
 </head>
 
 <body>
@@ -151,10 +151,37 @@
                 <div class="intro-visual">
                     <div class="manifold-viz-container">
                         <h4>Topological Distortion by Activations</h4>
-                        <img src="assets/images/manifold_distortion.png"
-                            alt="Manifold distortion by activation functions" class="manifold-img">
-                        <p class="caption">Activation functions can distort the geometric structure of the input data
-                            manifold, leading to information loss.</p>
+                        <!-- Controls embedded in intro -->
+                        <div class="manifold-controls-mini">
+                            <select id="manifold-type-select" class="terminal-select-mini">
+                                <option value="swiss-roll">Swiss Roll</option>
+                                <option value="saddle">Saddle</option>
+                                <option value="sphere">Hemisphere</option>
+                                <option value="torus">Torus</option>
+                                <option value="wave">Wave</option>
+                            </select>
+                            <select id="activation-select" class="terminal-select-mini">
+                                <option value="relu">ReLU</option>
+                                <option value="sigmoid">Sigmoid</option>
+                                <option value="tanh">Tanh</option>
+                                <option value="leaky-relu">Leaky ReLU</option>
+                                <option value="elu">ELU</option>
+                                <option value="softplus">Softplus</option>
+                            </select>
+                        </div>
+                        <!-- Embedded 3D panels -->
+                        <div class="manifold-demo-mini">
+                            <div class="manifold-mini-panel">
+                                <div id="manifold-original" class="manifold-3d-mini"></div>
+                                <span class="mini-label">Original</span>
+                            </div>
+                            <div class="manifold-mini-panel">
+                                <div id="manifold-activated" class="manifold-3d-mini"></div>
+                                <span class="mini-label" id="activation-title">After ReLU</span>
+                            </div>
+                        </div>
+                        <p class="caption" id="activation-desc">⚠️ ReLU creates sharp folds - discontinuous gradient at
+                            zero</p>
                     </div>
                 </div>
             </div>
@@ -257,68 +284,63 @@
                     </label>
                 </div>
                 <!-- Similarity Heatmaps Row -->
-                <div class="row-label">Similarity Measures</div>
+                <div class="row-label">Similarity Measures <span class="row-hint">(drag ⭐ to move anchor)</span></div>
                 <div class="heatmap-grid" id="heatmap-container">
-                    <div class="heatmap-item">
-                        <canvas id="heatmap-dot" width="250" height="250"></canvas>
+                    <div class="heatmap-item" data-viz-id="heatmap-dot">
+                        <button class="fullscreen-btn" onclick="openFullscreen('heatmap-dot')"
+                            title="Fullscreen">⛶</button>
+                        <canvas id="heatmap-dot" width="400" height="400"></canvas>
                         <div class="heatmap-label">Dot Product</div>
                         <div class="heatmap-formula">w · x</div>
                     </div>
-                    <div class="heatmap-item">
-                        <canvas id="heatmap-euclidean" width="250" height="250"></canvas>
+                    <div class="heatmap-item" data-viz-id="heatmap-euclidean">
+                        <button class="fullscreen-btn" onclick="openFullscreen('heatmap-euclidean')"
+                            title="Fullscreen">⛶</button>
+                        <canvas id="heatmap-euclidean" width="400" height="400"></canvas>
                         <div class="heatmap-label">Euclidean Distance²</div>
                         <div class="heatmap-formula">‖w − x‖²</div>
                     </div>
-                    <div class="heatmap-item">
-                        <canvas id="heatmap-yat" width="250" height="250"></canvas>
+                    <div class="heatmap-item" data-viz-id="heatmap-yat">
+                        <button class="fullscreen-btn" onclick="openFullscreen('heatmap-yat')"
+                            title="Fullscreen">⛶</button>
+                        <canvas id="heatmap-yat" width="400" height="400"></canvas>
                         <div class="heatmap-label"><span class="yat-symbol">ⵟ</span>-Product</div>
                         <div class="heatmap-formula">(w·x)² / (‖w−x‖² + ε)</div>
                     </div>
-                    <div class="heatmap-item">
-                        <canvas id="heatmap-cosine" width="250" height="250"></canvas>
+                    <div class="heatmap-item" data-viz-id="heatmap-cosine">
+                        <button class="fullscreen-btn" onclick="openFullscreen('heatmap-cosine')"
+                            title="Fullscreen">⛶</button>
+                        <canvas id="heatmap-cosine" width="400" height="400"></canvas>
                         <div class="heatmap-label">Cosine Similarity</div>
                         <div class="heatmap-formula">w·x / (‖w‖‖x‖)</div>
                     </div>
                 </div>
 
                 <!-- Gradient Fields Row -->
-                <div class="row-label">Gradient Fields ∇</div>
+                <div class="row-label">Gradient Fields ∇ <span class="row-hint">(also draggable)</span></div>
                 <div class="gradient-grid" id="gradient-container">
-                    <div class="gradient-item">
-                        <canvas id="gradient-dot" width="250" height="250"></canvas>
+                    <div class="gradient-item" data-viz-id="gradient-dot">
+                        <button class="fullscreen-btn" onclick="openFullscreen('gradient-dot')"
+                            title="Fullscreen">⛶</button>
+                        <canvas id="gradient-dot" width="400" height="400"></canvas>
                         <div class="heatmap-label">Dot Product</div>
                     </div>
-                    <div class="gradient-item">
-                        <canvas id="gradient-euclidean" width="250" height="250"></canvas>
+                    <div class="gradient-item" data-viz-id="gradient-euclidean">
+                        <button class="fullscreen-btn" onclick="openFullscreen('gradient-euclidean')"
+                            title="Fullscreen">⛶</button>
+                        <canvas id="gradient-euclidean" width="400" height="400"></canvas>
                         <div class="heatmap-label">Euclidean</div>
                     </div>
-                    <div class="gradient-item">
-                        <canvas id="gradient-yat" width="250" height="250"></canvas>
+                    <div class="gradient-item" data-viz-id="gradient-yat">
+                        <button class="fullscreen-btn" onclick="openFullscreen('gradient-yat')"
+                            title="Fullscreen">⛶</button>
+                        <canvas id="gradient-yat" width="400" height="400"></canvas>
                         <div class="heatmap-label"><span class="yat-symbol">ⵟ</span>-Product</div>
                     </div>
-                    <div class="gradient-item">
-                        <canvas id="gradient-cosine" width="250" height="250"></canvas>
-                        <div class="heatmap-label">Cosine</div>
-                    </div>
-                </div>
-
-                <!-- Level Set Curves Row -->
-                <div class="row-label">Level Set Curves (Contours)</div>
-                <div class="levelset-grid" id="levelset-container">
-                    <div class="levelset-item">
-                        <canvas id="levelset-dot" width="250" height="250"></canvas>
-                        <div class="heatmap-label">Dot Product</div>
-                    </div>
-                    <div class="levelset-item">
-                        <canvas id="levelset-euclidean" width="250" height="250"></canvas>
-                        <div class="heatmap-label">Euclidean</div>
-                    </div>
-                    <div class="levelset-item">
-                        <canvas id="levelset-yat" width="250" height="250"></canvas>
-                        <div class="heatmap-label"><span class="yat-symbol">ⵟ</span>-Product</div>
-                    </div>
-                    <div class="levelset-item">
-                        <canvas id="levelset-cosine" width="250" height="250"></canvas>
+                    <div class="gradient-item" data-viz-id="gradient-cosine">
+                        <button class="fullscreen-btn" onclick="openFullscreen('gradient-cosine')"
+                            title="Fullscreen">⛶</button>
+                        <canvas id="gradient-cosine" width="400" height="400"></canvas>
                         <div class="heatmap-label">Cosine</div>
                     </div>
                 </div>
@@ -2487,14 +2509,26 @@ y = layer(x)  # (32, 64)</code></pre>
 
         <div class="blog-modal-overlay" id="modalOverlay"></div>
 
+        <!-- Fullscreen Visualization Modal -->
+        <div class="fullscreen-viz-overlay" id="fullscreenOverlay" onclick="closeFullscreen()">
+            <div class="fullscreen-viz-container" onclick="event.stopPropagation()">
+                <button class="fullscreen-close-btn" onclick="closeFullscreen()">✕</button>
+                <canvas id="fullscreen-canvas" width="800" height="800"></canvas>
+                <div class="fullscreen-info">
+                    <span id="fullscreen-label"></span>
+                    <span class="fullscreen-hint">Drag the anchor point to interact</span>
+                </div>
+            </div>
+        </div>
+
         <!-- Scripts -->
         <script src="js/math-utils.js"></script>
         <script src="js/heatmap-viz.js"></script>
         <script src="js/gradient-viz.js"></script>
-        <script src="js/levelset-viz.js"></script>
         <script src="js/xor-demo.js"></script>
         <script src="js/decision-boundary.js"></script>
         <script src="js/loss-landscape.js"></script>
+        <script src="js/topological-distortion.js"></script>
         <script src="js/main.js"></script>
 </body>
 

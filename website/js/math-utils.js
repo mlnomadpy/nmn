@@ -90,11 +90,11 @@ const MathUtils = {
         const dot = this.dotProduct(w, x);
         const sqDist = this.squaredDistance(w, x);
         const denom = sqDist + epsilon;
-        
+
         // ∂(dot²)/∂x_i = 2 * dot * w_i
         // ∂(sqDist)/∂x_i = 2 * (x_i - w_i)
         // Using quotient rule: d/dx [f/g] = (f'g - fg') / g²
-        
+
         const grad = [];
         for (let i = 0; i < w.length; i++) {
             const fPrime = 2 * dot * w[i];  // derivative of numerator
@@ -133,11 +133,11 @@ const MathUtils = {
         const dot = this.dotProduct(w, x);
         const normW = this.norm(w);
         const normX = this.norm(x);
-        
+
         if (normW < 1e-10 || normX < 1e-10) {
             return w.map(() => 0);
         }
-        
+
         const grad = [];
         for (let i = 0; i < w.length; i++) {
             // ∂/∂x_i [w·x / (||w|| ||x||)]
@@ -171,7 +171,7 @@ const MathUtils = {
         diverging(value) {
             // Clamp value
             value = Math.max(0, Math.min(1, value));
-            
+
             let r, g, b;
             if (value < 0.5) {
                 // Blue to white
@@ -196,7 +196,7 @@ const MathUtils = {
          */
         viridis(value) {
             value = Math.max(0, Math.min(1, value));
-            
+
             // Simplified viridis
             const colors = [
                 [68, 1, 84],      // 0.0 - dark purple
@@ -207,16 +207,16 @@ const MathUtils = {
                 [53, 183, 121],   // 0.8
                 [253, 231, 37]    // 1.0 - yellow
             ];
-            
+
             const idx = value * (colors.length - 1);
             const low = Math.floor(idx);
             const high = Math.min(low + 1, colors.length - 1);
             const t = idx - low;
-            
+
             const r = Math.round(colors[low][0] + t * (colors[high][0] - colors[low][0]));
             const g = Math.round(colors[low][1] + t * (colors[high][1] - colors[low][1]));
             const b = Math.round(colors[low][2] + t * (colors[high][2] - colors[low][2]));
-            
+
             return `rgb(${r}, ${g}, ${b})`;
         },
 
@@ -227,7 +227,7 @@ const MathUtils = {
          */
         inferno(value) {
             value = Math.max(0, Math.min(1, value));
-            
+
             const colors = [
                 [0, 0, 4],        // 0.0
                 [40, 11, 84],     // 0.2
@@ -237,16 +237,16 @@ const MathUtils = {
                 [245, 125, 21],   // 0.8
                 [252, 255, 164]   // 1.0
             ];
-            
+
             const idx = value * (colors.length - 1);
             const low = Math.floor(idx);
             const high = Math.min(low + 1, colors.length - 1);
             const t = idx - low;
-            
+
             const r = Math.round(colors[low][0] + t * (colors[high][0] - colors[low][0]));
             const g = Math.round(colors[low][1] + t * (colors[high][1] - colors[low][1]));
             const b = Math.round(colors[low][2] + t * (colors[high][2] - colors[low][2]));
-            
+
             return `rgb(${r}, ${g}, ${b})`;
         },
 
@@ -257,7 +257,7 @@ const MathUtils = {
          */
         plasma(value) {
             value = Math.max(0, Math.min(1, value));
-            
+
             const colors = [
                 [13, 8, 135],     // 0.0 - deep blue
                 [84, 2, 163],     // 0.2
@@ -267,16 +267,73 @@ const MathUtils = {
                 [244, 136, 73],   // 0.8
                 [240, 249, 33]    // 1.0 - yellow
             ];
-            
+
             const idx = value * (colors.length - 1);
             const low = Math.floor(idx);
             const high = Math.min(low + 1, colors.length - 1);
             const t = idx - low;
-            
+
             const r = Math.round(colors[low][0] + t * (colors[high][0] - colors[low][0]));
             const g = Math.round(colors[low][1] + t * (colors[high][1] - colors[low][1]));
             const b = Math.round(colors[low][2] + t * (colors[high][2] - colors[low][2]));
-            
+
+            return `rgb(${r}, ${g}, ${b})`;
+        },
+
+        /**
+         * Terminal green colormap (dark to bright green/cyan)
+         * Matches the CRT terminal aesthetic
+         * @param {number} value - Value between 0 and 1
+         * @returns {string} RGB color string
+         */
+        terminal(value) {
+            value = Math.max(0, Math.min(1, value));
+
+            const colors = [
+                [5, 15, 10],       // 0.0 - almost black
+                [10, 40, 30],      // 0.15
+                [20, 80, 60],      // 0.3
+                [30, 120, 90],     // 0.45
+                [50, 160, 120],    // 0.6
+                [79, 249, 117],    // 0.75 - primary green
+                [77, 238, 234],    // 0.9 - cyan
+                [249, 215, 28]     // 1.0 - accent yellow
+            ];
+
+            const idx = value * (colors.length - 1);
+            const low = Math.floor(idx);
+            const high = Math.min(low + 1, colors.length - 1);
+            const t = idx - low;
+
+            const r = Math.round(colors[low][0] + t * (colors[high][0] - colors[low][0]));
+            const g = Math.round(colors[low][1] + t * (colors[high][1] - colors[low][1]));
+            const b = Math.round(colors[low][2] + t * (colors[high][2] - colors[low][2]));
+
+            return `rgb(${r}, ${g}, ${b})`;
+        },
+
+        /**
+         * Terminal diverging colormap (magenta - black - green)
+         * @param {number} value - Value between 0 and 1
+         * @returns {string} RGB color string
+         */
+        terminalDiverging(value) {
+            value = Math.max(0, Math.min(1, value));
+
+            let r, g, b;
+            if (value < 0.5) {
+                // Magenta to dark
+                const t = value * 2;
+                r = Math.round(180 * (1 - t));
+                g = Math.round(30 * (1 - t));
+                b = Math.round(120 * (1 - t));
+            } else {
+                // Dark to green
+                const t = (value - 0.5) * 2;
+                r = Math.round(10 + t * 70);
+                g = Math.round(20 + t * 229);
+                b = Math.round(15 + t * 102);
+            }
             return `rgb(${r}, ${g}, ${b})`;
         }
     },

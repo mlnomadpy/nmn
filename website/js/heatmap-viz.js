@@ -189,7 +189,7 @@ class HeatmapVisualization {
 
         // Compute all values first to find min/max
         const values = [];
-        const resolution = 2; // Pixel step for performance
+        const resolution = 1; // Full resolution for quality
 
         for (let py = 0; py < height; py += resolution) {
             for (let px = 0; px < width; px += resolution) {
@@ -216,27 +216,27 @@ class HeatmapVisualization {
         if (!isFinite(maxVal)) maxVal = 1;
         if (maxVal === minVal) maxVal = minVal + 1;
 
-        // Choose colormap based on metric
+        // Choose colormap based on metric - using terminal theme
         let colormap;
         let normalizeForDiverging = false;
 
         switch (metric) {
             case 'dot':
-                colormap = MathUtils.colorMaps.diverging;
+                colormap = MathUtils.colorMaps.terminalDiverging;
                 normalizeForDiverging = true;
                 break;
             case 'cosine':
-                colormap = MathUtils.colorMaps.diverging;
+                colormap = MathUtils.colorMaps.terminalDiverging;
                 normalizeForDiverging = true;
                 break;
             case 'yat':
-                colormap = MathUtils.colorMaps.inferno;
+                colormap = MathUtils.colorMaps.terminal;
                 break;
             case 'euclidean':
-                colormap = MathUtils.colorMaps.viridis;
+                colormap = MathUtils.colorMaps.terminal;
                 break;
             default:
-                colormap = MathUtils.colorMaps.viridis;
+                colormap = MathUtils.colorMaps.terminal;
         }
 
         // Render pixels
@@ -332,32 +332,45 @@ class HeatmapVisualization {
     }
 
     /**
-     * Draw the anchor point (w vector)
+     * Draw the anchor point (w vector) - Terminal Style
      */
     drawAnchor(ctx, canvas) {
         const pos = this.coordToPixel(this.anchor[0], this.anchor[1], canvas);
 
-        // Glow effect
-        const gradient = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, 20);
-        gradient.addColorStop(0, 'rgba(0, 212, 255, 0.5)');
-        gradient.addColorStop(1, 'rgba(0, 212, 255, 0)');
+        // Outer glow effect - terminal green
+        const gradient = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, 25);
+        gradient.addColorStop(0, 'rgba(79, 249, 117, 0.6)');
+        gradient.addColorStop(0.5, 'rgba(79, 249, 117, 0.2)');
+        gradient.addColorStop(1, 'rgba(79, 249, 117, 0)');
         ctx.fillStyle = gradient;
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, 20, 0, Math.PI * 2);
+        ctx.arc(pos.x, pos.y, 25, 0, Math.PI * 2);
         ctx.fill();
 
-        // Star shape
-        ctx.fillStyle = '#00d4ff';
-        ctx.strokeStyle = '#ffffff';
+        // Pulsing ring
+        const pulsePhase = (Date.now() % 2000) / 2000;
+        const pulseRadius = 12 + Math.sin(pulsePhase * Math.PI * 2) * 3;
+        ctx.strokeStyle = `rgba(77, 238, 234, ${0.3 + Math.sin(pulsePhase * Math.PI * 2) * 0.2})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, pulseRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Inner star - terminal colors
+        ctx.fillStyle = '#4ff975';
+        ctx.strokeStyle = '#4deeea';
         ctx.lineWidth = 2;
 
         this.drawStar(ctx, pos.x, pos.y, 5, 10, 5);
 
-        // Label
-        ctx.font = '12px "Space Grotesk", sans-serif';
-        ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'left';
-        ctx.fillText('w', pos.x + 15, pos.y - 10);
+        // Coordinate label with terminal font
+        ctx.font = '11px "Share Tech Mono", monospace';
+        ctx.fillStyle = '#4ff975';
+        ctx.strokeStyle = '#050505';
+        ctx.lineWidth = 3;
+        const label = `w(${this.anchor[0].toFixed(1)}, ${this.anchor[1].toFixed(1)})`;
+        ctx.strokeText(label, pos.x + 15, pos.y - 8);
+        ctx.fillText(label, pos.x + 15, pos.y - 8);
     }
 
     /**
@@ -391,10 +404,34 @@ class HeatmapVisualization {
     }
 
     /**
-     * Draw coordinate axes
+     * Draw coordinate axes - Terminal Style with grid
      */
     drawAxes(ctx, canvas) {
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        // Faint grid lines
+        ctx.setLineDash([2, 4]);
+        ctx.strokeStyle = 'rgba(79, 249, 117, 0.08)';
+        ctx.lineWidth = 1;
+
+        for (let x = this.range.min; x <= this.range.max; x += 2) {
+            const px = this.coordToPixel(x, 0, canvas).x;
+            ctx.beginPath();
+            ctx.moveTo(px, 0);
+            ctx.lineTo(px, canvas.height);
+            ctx.stroke();
+        }
+
+        for (let y = this.range.min; y <= this.range.max; y += 2) {
+            const py = this.coordToPixel(0, y, canvas).y;
+            ctx.beginPath();
+            ctx.moveTo(0, py);
+            ctx.lineTo(canvas.width, py);
+            ctx.stroke();
+        }
+
+        ctx.setLineDash([]);
+
+        // Main axes - terminal green
+        ctx.strokeStyle = 'rgba(79, 249, 117, 0.4)';
         ctx.lineWidth = 1;
 
         // X axis (y = 0)
@@ -411,9 +448,9 @@ class HeatmapVisualization {
         ctx.lineTo(x0, canvas.height);
         ctx.stroke();
 
-        // Axis labels
-        ctx.font = '11px "Space Grotesk", sans-serif';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        // Axis labels - terminal font
+        ctx.font = '10px "Share Tech Mono", monospace';
+        ctx.fillStyle = 'rgba(77, 238, 234, 0.7)';
         ctx.textAlign = 'center';
 
         // X axis labels
@@ -428,14 +465,18 @@ class HeatmapVisualization {
         for (let y = this.range.min; y <= this.range.max; y += 4) {
             if (y === 0) continue;
             const px = this.coordToPixel(0, y, canvas);
-            ctx.fillText(y.toString(), 25, px.y + 4);
+            ctx.fillText(y.toString(), 22, px.y + 4);
         }
 
-        // Axis titles
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        // Axis titles with glow
+        ctx.fillStyle = '#4ff975';
+        ctx.font = '11px "Share Tech Mono", monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('x₁', canvas.width - 15, y0 - 10);
+        ctx.shadowColor = '#4ff975';
+        ctx.shadowBlur = 5;
+        ctx.fillText('x₁', canvas.width - 15, y0 - 8);
         ctx.fillText('x₂', x0 + 15, 15);
+        ctx.shadowBlur = 0;
     }
 
     /**
@@ -448,12 +489,9 @@ class HeatmapVisualization {
             }
         }
 
-        // Also update gradient and level set visualizations (they share anchor/epsilon)
+        // Also update gradient visualization (shares anchor/epsilon)
         if (typeof gradientViz !== 'undefined' && gradientViz) {
             gradientViz.render();
-        }
-        if (typeof levelSetViz !== 'undefined' && levelSetViz) {
-            levelSetViz.render();
         }
     }
 }
