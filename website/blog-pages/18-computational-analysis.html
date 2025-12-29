@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Computational Analysis — Neural Matter Networks</title>
+    <meta name="description"
+        content="FLOP counts, memory analysis, and computational trade-offs of NMN layers vs standard neural network components.">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tifinagh&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/blog-pages.css">
+</head>
+
+<body>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="../index.html" class="nav-logo">
+                <span class="yat-symbol">ⵟ</span>
+                <span>NMN</span>
+            </a>
+            <div class="nav-links">
+                <a href="../index.html#introduction">Introduction</a>
+                <a href="../index.html#yat-product">ⵟ-Product</a>
+                <a href="../index.html#visualizations">Visualizations</a>
+                <a href="../index.html#results">Results</a>
+                <a href="../index.html#theory" class="nav-blog">Blog</a>
+                <a href="../index.html#code">Code</a>
+                <a href="https://github.com/mlnomadpy/nmn" target="_blank" class="nav-github">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path
+                            d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="blog-page">
+        <div class="container">
+            <article class="blog-post">
+                <header class="blog-post-header">
+                    <a href="../index.html#theory" class="blog-back-link">← Back to Theory</a>
+                    <span class="blog-post-badge">Analysis</span>
+                    <h1 class="blog-post-title">Computational Analysis</h1>
+                </header>
+
+                <div class="blog-post-content">
+
+                    <!-- ELI5 Section -->
+                    <div class="eli5-section">
+                        <div class="eli5-header">
+                            <span class="eli5-icon">🧒</span>
+                            <h4>Explain Like I'm 5</h4>
+                        </div>
+                        <div class="eli5-content">
+                            <p>
+                                Building with LEGOs takes time and table space! ⏱️🧱
+                            </p>
+                            <ul>
+                                <li>⏱️ <strong>FLOPs</strong> = How many "clicks" to snap pieces together (time)</li>
+                                <li>📦 <strong>Memory</strong> = How big a table you need (space)</li>
+                                <li>🤔 <strong>Trade-off:</strong> NMN takes slightly more clicks, but needs a smaller
+                                    table!</li>
+                            </ul>
+                            <p>
+                                It's like trading: do 2× the snapping, but your table can be 25% smaller!
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="theorem-content">
+                        <h4>🧮 Interactive FLOP Calculator</h4>
+
+                        <!-- Interactive Calculator -->
+                        <div class="interactive-demo"
+                            style="margin: 2rem 0; padding: 1.5rem; background: linear-gradient(135deg, rgba(100,100,255,0.1), rgba(0,255,136,0.05)); border-radius: 12px; border: 1px solid rgba(0,255,136,0.2);">
+                            <h5 style="margin-bottom: 1rem; color: var(--terminal-green);">⚡ Layer Complexity Calculator
+                            </h5>
+
+                            <div
+                                style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
+                                <div>
+                                    <label style="font-size: 0.8rem; color: var(--text-muted);">Batch Size (B)</label>
+                                    <input type="number" id="batch-size" value="32" min="1" max="1024"
+                                        style="width: 100%; padding: 0.5rem; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #fff;">
+                                </div>
+                                <div>
+                                    <label style="font-size: 0.8rem; color: var(--text-muted);">Input Dim (d)</label>
+                                    <input type="number" id="input-dim" value="768" min="1" max="4096"
+                                        style="width: 100%; padding: 0.5rem; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #fff;">
+                                </div>
+                                <div>
+                                    <label style="font-size: 0.8rem; color: var(--text-muted);">Output Dim (n)</label>
+                                    <input type="number" id="output-dim" value="768" min="1" max="4096"
+                                        style="width: 100%; padding: 0.5rem; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #fff;">
+                                </div>
+                            </div>
+
+                            <div id="results" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                <!-- Filled by JS -->
+                            </div>
+                        </div>
+
+                        <script>
+                            (function () {
+                                const batchInput = document.getElementById('batch-size');
+                                const inputDim = document.getElementById('input-dim');
+                                const outputDim = document.getElementById('output-dim');
+                                const results = document.getElementById('results');
+
+                                function formatNumber(n) {
+                                    if (n >= 1e9) return (n / 1e9).toFixed(2) + 'G';
+                                    if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+                                    if (n >= 1e3) return (n / 1e3).toFixed(2) + 'K';
+                                    return n.toString();
+                                }
+
+                                function calculate() {
+                                    const B = parseInt(batchInput.value) || 32;
+                                    const d = parseInt(inputDim.value) || 768;
+                                    const n = parseInt(outputDim.value) || 768;
+
+                                    // Linear + ReLU
+                                    const linearFlops = 2 * B * n * d; // matmul
+                                    const reluFlops = B * n; // comparison per element
+                                    const linearTotal = linearFlops + reluFlops;
+                                    const linearMemory = B * n * 4; // store activations for backprop (FP32)
+
+                                    // NMN Layer
+                                    const dotFlops = 2 * B * n * d; // same matmul
+                                    const normWFlops = n * d; // ||w||^2 (can be cached)
+                                    const normXFlops = B * d; // ||x||^2
+                                    const distFlops = B * n * 3; // ||w-x||^2 from identity
+                                    const squareFlops = B * n; // dot^2
+                                    const divFlops = B * n; // division
+                                    const nmnTotal = dotFlops + normXFlops + distFlops + squareFlops + divFlops;
+                                    const nmnMemory = B * d * 4 / 4; // no activation storage needed
+
+                                    const flopRatio = (nmnTotal / linearTotal).toFixed(2);
+                                    const memRatio = ((1 - nmnMemory / linearMemory) * 100).toFixed(0);
+
+                                    results.innerHTML = `
+                                    <div style="background: rgba(255,107,107,0.1); padding: 1rem; border-radius: 8px; border: 1px solid rgba(255,107,107,0.3);">
+                                        <div style="font-weight: 600; color: #ff6b6b; margin-bottom: 0.5rem;">Linear + ReLU</div>
+                                        <div style="font-size: 0.85rem; font-family: 'JetBrains Mono', monospace;">
+                                            <div>FLOPs: <strong>${formatNumber(linearTotal)}</strong></div>
+                                            <div>Memory: <strong>${formatNumber(linearMemory)} bytes</strong></div>
+                                        </div>
+                                    </div>
+                                    <div style="background: rgba(0,255,136,0.1); padding: 1rem; border-radius: 8px; border: 1px solid rgba(0,255,136,0.3);">
+                                        <div style="font-weight: 600; color: var(--terminal-green); margin-bottom: 0.5rem;">NMN Layer</div>
+                                        <div style="font-size: 0.85rem; font-family: 'JetBrains Mono', monospace;">
+                                            <div>FLOPs: <strong>${formatNumber(nmnTotal)}</strong> (${flopRatio}×)</div>
+                                            <div>Memory: <strong>${formatNumber(nmnMemory)} bytes</strong> (↓${memRatio}%)</div>
+                                        </div>
+                                    </div>
+                                `;
+                                }
+
+                                [batchInput, inputDim, outputDim].forEach(el => el.oninput = calculate);
+                                calculate();
+                            })();
+                        </script>
+
+                        <h4>📐 Complexity Analysis</h4>
+
+                        <div class="theorem-statement">
+                            <div class="theorem-box">
+                                <strong>Key Identity:</strong> We reuse computations using:
+                                $$\|\mathbf{w} - \mathbf{x}\|^2 = \|\mathbf{w}\|^2 + \|\mathbf{x}\|^2 -
+                                2\mathbf{w}^\top\mathbf{x}$$
+                                Since $\mathbf{w}^\top\mathbf{x}$ is already computed for the numerator, the denominator
+                                comes "almost free"!
+                            </div>
+                        </div>
+
+                        <h4>📊 Detailed FLOP Breakdown</h4>
+
+                        <div class="comparison-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Operation</th>
+                                        <th>Linear + ReLU</th>
+                                        <th>NMN Layer</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Matrix multiply</strong></td>
+                                        <td>$2Bnd$</td>
+                                        <td>$2Bnd$ (same)</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Weight norms</strong></td>
+                                        <td>—</td>
+                                        <td>$nd$ (can cache)</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Input norms</strong></td>
+                                        <td>—</td>
+                                        <td>$Bd$</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Distance computation</strong></td>
+                                        <td>—</td>
+                                        <td>$3Bn$ (from identity)</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Square + Division</strong></td>
+                                        <td>—</td>
+                                        <td>$2Bn$</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>ReLU</strong></td>
+                                        <td>$Bn$</td>
+                                        <td>—</td>
+                                    </tr>
+                                    <tr style="border-top: 2px solid rgba(255,255,255,0.2);">
+                                        <td><strong>Total</strong></td>
+                                        <td>$\approx 2Bnd$</td>
+                                        <td>$\approx 4Bnd$</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <h4>💾 Memory Analysis</h4>
+
+                        <div class="consequences-grid">
+                            <div class="consequence-item">
+                                <span class="consequence-icon">📦</span>
+                                <h5>Linear + ReLU</h5>
+                                <p>Must store $Bn$ activation values for ReLU backward pass (to compute gradient mask).
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">✨</span>
+                                <h5>NMN Layer</h5>
+                                <p>No activation storage needed — gradient flows through geometric computation directly.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">⚖️</span>
+                            <div>
+                                <strong>The Trade-off:</strong> NMN uses ~2× FLOPs but saves 15-25% peak memory.
+                                For large models (LLMs, vision transformers), memory is often the bottleneck —
+                                the extra compute is worth it if you can fit larger batches or longer sequences!
+                            </div>
+                        </div>
+
+                        <h4>🚀 Optimization Techniques</h4>
+
+                        <ul>
+                            <li><strong>Norm Caching:</strong> $\|\mathbf{w}\|^2$ can be computed once and cached per
+                                layer</li>
+                            <li><strong>Fused Kernels:</strong> Custom CUDA kernels can combine operations for better
+                                memory bandwidth</li>
+                            <li><strong>Mixed Precision:</strong> BF16 shows excellent stability due to bounded outputs
+                            </li>
+                            <li><strong>Gradient Checkpointing:</strong> Less relevant since we already save activation
+                                memory</li>
+                        </ul>
+
+                        <h4>📈 Scaling Behavior</h4>
+
+                        <div class="theorem-statement">
+                            <div class="theorem-box">
+                                <strong>High-Dimensional Scaling:</strong>
+                                In high dimensions ($d \to \infty$), for random unit vectors:
+                                $$\mathbb{E}[\text{ⵟ}(\mathbf{w}, \mathbf{x})] \approx \frac{1/d}{2 + \epsilon} =
+                                O(1/d)$$
+                                The <span class="yat-symbol">ⵟ</span>-product naturally handles the "curse of
+                                dimensionality"
+                                through its self-regulating denominator.
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="blog-page-nav">
+                    <a href="17-language-experiments.html" class="blog-nav-btn">← Previous: Language Experiments</a>
+                    <a href="../index.html#theory" class="blog-nav-btn">All Topics</a>
+                    <a href="19-conclusion-future.html" class="blog-nav-btn">Next: Conclusion →</a>
+                </div>
+            </article>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="yat-symbol">ⵟ</span>
+                    <span>Neural Matter Networks</span>
+                </div>
+                <div class="footer-links">
+                    <a href="https://github.com/mlnomadpy/nmn" target="_blank">GitHub</a>
+                    <a href="https://pypi.org/project/nmn/" target="_blank">PyPI</a>
+                    <a href="mailto:taha@azetta.ai">Contact</a>
+                </div>
+                <div class="footer-copy">
+                    <p>Built with ❤️ by <a href="https://azetta.ai" target="_blank">azetta.ai</a></p>
+                    <p>AGPL-3.0 License</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '$', right: '$', display: false }
+                ]
+            });
+        });
+    </script>
+</body>
+
+</html>

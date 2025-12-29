@@ -182,27 +182,102 @@ function initMathRendering() {
 }
 
 /**
- * Navigation handling
+ * Navigation handling with UX enhancements
  */
 function initNavigation() {
     const nav = document.querySelector('.main-nav');
+    const navLinks = document.querySelectorAll('.nav-links a[href^="#"]');
     let lastScroll = 0;
 
-    // Hide/show nav on scroll
-    window.addEventListener('scroll', () => {
-        const currentScroll = window.pageYOffset;
+    // Create scroll progress bar
+    const progressBar = document.createElement('div');
+    progressBar.className = 'scroll-progress';
+    document.body.prepend(progressBar);
 
-        if (currentScroll > 100) {
-            nav.style.background = 'rgba(10, 10, 15, 0.95)';
-        } else {
-            nav.style.background = 'rgba(10, 10, 15, 0.85)';
-        }
+    // Create back to top button
+    const backToTop = document.createElement('button');
+    backToTop.className = 'back-to-top';
+    backToTop.innerHTML = '↑';
+    backToTop.title = 'Back to top';
+    backToTop.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+    document.body.appendChild(backToTop);
 
-        lastScroll = currentScroll;
+    // Create mobile hamburger
+    const hamburger = document.createElement('div');
+    hamburger.className = 'nav-hamburger';
+    hamburger.innerHTML = '<span></span><span></span><span></span>';
+    document.querySelector('.nav-container').appendChild(hamburger);
+
+    // Create mobile drawer
+    const drawer = document.createElement('div');
+    drawer.className = 'nav-drawer';
+    drawer.innerHTML = `
+        <a href="#introduction">Introduction</a>
+        <a href="#yat-product">ⵟ-Product</a>
+        <a href="#visualizations">Visualizations</a>
+        <a href="#results">Results</a>
+        <a href="#theory">Blog</a>
+        <a href="#code">Code</a>
+        <a href="https://github.com/mlnomadpy/nmn" target="_blank">GitHub →</a>
+    `;
+    nav.after(drawer);
+
+    // Mobile menu toggle
+    hamburger.onclick = () => {
+        hamburger.classList.toggle('open');
+        drawer.classList.toggle('open');
+    };
+
+    // Close drawer on link click
+    drawer.querySelectorAll('a').forEach(link => {
+        link.onclick = () => {
+            hamburger.classList.remove('open');
+            drawer.classList.remove('open');
+        };
     });
 
+    // Scroll handler for progress, nav bg, back to top, and active section
+    const sections = document.querySelectorAll('section[id]');
+
+    function updateOnScroll() {
+        const currentScroll = window.pageYOffset;
+        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+
+        // Update progress bar
+        const scrollPercent = (currentScroll / docHeight) * 100;
+        progressBar.style.width = `${scrollPercent}%`;
+
+        // Update nav background
+        nav.style.background = currentScroll > 100 ? 'rgba(10, 10, 15, 0.95)' : 'rgba(10, 10, 15, 0.85)';
+
+        // Show/hide back to top button
+        backToTop.classList.toggle('visible', currentScroll > 500);
+
+        // Update active section in nav
+        let activeSection = '';
+        sections.forEach(section => {
+            const sectionTop = section.offsetTop - 100;
+            const sectionBottom = sectionTop + section.offsetHeight;
+            if (currentScroll >= sectionTop && currentScroll < sectionBottom) {
+                activeSection = section.id;
+            }
+        });
+
+        navLinks.forEach(link => {
+            link.classList.remove('active');
+            if (link.getAttribute('href') === `#${activeSection}`) {
+                link.classList.add('active');
+            }
+        });
+
+        lastScroll = currentScroll;
+    }
+
+    window.addEventListener('scroll', updateOnScroll, { passive: true });
+    updateOnScroll(); // Initial call
+
     // Smooth scroll for nav links
-    document.querySelectorAll('.nav-links a[href^="#"]').forEach(anchor => {
+    navLinks.forEach(anchor => {
         anchor.addEventListener('click', function (e) {
             e.preventDefault();
             const href = this.getAttribute('href');
@@ -337,7 +412,7 @@ style.textContent = `
 document.head.appendChild(style);
 
 /**
- * Hero section particles
+ * Hero section particles - Terminal Matrix Rain Effect
  */
 function initParticles() {
     const container = document.getElementById('particles');
@@ -354,36 +429,88 @@ function initParticles() {
 
     const ctx = canvas.getContext('2d');
     let particles = [];
+    let matrixDrops = [];
     let animationId;
+    let time = 0;
+
+    // Terminal theme colors
+    const colors = {
+        primary: 'rgba(79, 249, 117, ',      // Terminal green
+        secondary: 'rgba(77, 238, 234, ',    // Cyan
+        accent: 'rgba(249, 215, 28, ',       // Yellow
+    };
 
     function resize() {
         canvas.width = container.offsetWidth;
         canvas.height = container.offsetHeight;
+        initMatrixDrops();
+    }
+
+    // Matrix-style falling characters
+    function initMatrixDrops() {
+        matrixDrops = [];
+        const columns = Math.floor(canvas.width / 20);
+        for (let i = 0; i < columns; i++) {
+            matrixDrops.push({
+                x: i * 20,
+                y: Math.random() * canvas.height,
+                speed: Math.random() * 2 + 1,
+                chars: [],
+                length: Math.floor(Math.random() * 15) + 5
+            });
+        }
     }
 
     function createParticles() {
         particles = [];
-        const numParticles = Math.floor((canvas.width * canvas.height) / 15000);
+        const numParticles = Math.floor((canvas.width * canvas.height) / 20000);
 
         for (let i = 0; i < numParticles; i++) {
+            const colorChoice = Math.random();
+            let color;
+            if (colorChoice < 0.7) color = colors.primary;
+            else if (colorChoice < 0.9) color = colors.secondary;
+            else color = colors.accent;
+
             particles.push({
                 x: Math.random() * canvas.width,
                 y: Math.random() * canvas.height,
-                vx: (Math.random() - 0.5) * 0.3,
-                vy: (Math.random() - 0.5) * 0.3,
-                radius: Math.random() * 1.5 + 0.5,
-                alpha: Math.random() * 0.5 + 0.1
+                vx: (Math.random() - 0.5) * 0.4,
+                vy: (Math.random() - 0.5) * 0.4,
+                radius: Math.random() * 2 + 1,
+                alpha: Math.random() * 0.6 + 0.2,
+                color: color,
+                pulse: Math.random() * Math.PI * 2,
+                pulseSpeed: Math.random() * 0.02 + 0.01
             });
         }
     }
 
     function animate() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        time += 0.01;
+        ctx.fillStyle = 'rgba(5, 5, 5, 0.1)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Update and draw particles
+        // Draw matrix rain (subtle)
+        ctx.font = '12px "Share Tech Mono", monospace';
+        matrixDrops.forEach(drop => {
+            const char = String.fromCharCode(0x30A0 + Math.random() * 96);
+            const alpha = 0.08 + Math.random() * 0.05;
+            ctx.fillStyle = colors.primary + alpha + ')';
+            ctx.fillText(char, drop.x, drop.y);
+
+            drop.y += drop.speed;
+            if (drop.y > canvas.height) {
+                drop.y = 0;
+                drop.speed = Math.random() * 2 + 1;
+            }
+        });
+
+        // Update and draw particles with glow
         particles.forEach(p => {
             p.x += p.vx;
             p.y += p.vy;
+            p.pulse += p.pulseSpeed;
 
             // Wrap around
             if (p.x < 0) p.x = canvas.width;
@@ -391,26 +518,41 @@ function initParticles() {
             if (p.y < 0) p.y = canvas.height;
             if (p.y > canvas.height) p.y = 0;
 
+            // Pulsing alpha
+            const pulseAlpha = p.alpha * (0.7 + Math.sin(p.pulse) * 0.3);
+
+            // Outer glow
+            const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.radius * 3);
+            gradient.addColorStop(0, p.color + pulseAlpha + ')');
+            gradient.addColorStop(0.5, p.color + (pulseAlpha * 0.3) + ')');
+            gradient.addColorStop(1, p.color + '0)');
+
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.radius * 3, 0, Math.PI * 2);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+
+            // Core
             ctx.beginPath();
             ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(0, 212, 255, ${p.alpha})`;
+            ctx.fillStyle = p.color + pulseAlpha + ')';
             ctx.fill();
         });
 
-        // Draw connections
-        ctx.strokeStyle = 'rgba(0, 212, 255, 0.05)';
-        ctx.lineWidth = 0.5;
-
+        // Draw neural connections
         for (let i = 0; i < particles.length; i++) {
             for (let j = i + 1; j < particles.length; j++) {
                 const dx = particles[i].x - particles[j].x;
                 const dy = particles[i].y - particles[j].y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
 
-                if (dist < 150) {
+                if (dist < 120) {
+                    const alpha = (1 - dist / 120) * 0.15;
                     ctx.beginPath();
                     ctx.moveTo(particles[i].x, particles[i].y);
                     ctx.lineTo(particles[j].x, particles[j].y);
+                    ctx.strokeStyle = colors.primary + alpha + ')';
+                    ctx.lineWidth = 0.5;
                     ctx.stroke();
                 }
             }

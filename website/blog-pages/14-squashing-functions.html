@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Squashing Functions — Neural Matter Networks</title>
+    <meta name="description"
+        content="Softermax, soft-sigmoid, and soft-tanh: alternative squashing functions designed for non-negative ⵟ-product outputs.">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tifinagh&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/blog-pages.css">
+</head>
+
+<body>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="../index.html" class="nav-logo">
+                <span class="yat-symbol">ⵟ</span>
+                <span>NMN</span>
+            </a>
+            <div class="nav-links">
+                <a href="../index.html#introduction">Introduction</a>
+                <a href="../index.html#yat-product">ⵟ-Product</a>
+                <a href="../index.html#visualizations">Visualizations</a>
+                <a href="../index.html#results">Results</a>
+                <a href="../index.html#theory" class="nav-blog">Blog</a>
+                <a href="../index.html#code">Code</a>
+                <a href="https://github.com/mlnomadpy/nmn" target="_blank" class="nav-github">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path
+                            d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="blog-page">
+        <div class="container">
+            <article class="blog-post">
+                <header class="blog-post-header">
+                    <a href="../index.html#theory" class="blog-back-link">← Back to Theory</a>
+                    <span class="blog-post-badge">Implementation</span>
+                    <h1 class="blog-post-title">Squashing Functions</h1>
+                </header>
+
+                <div class="blog-post-content">
+
+                    <!-- ELI5 Section -->
+                    <div class="eli5-section">
+                        <div class="eli5-header">
+                            <span class="eli5-icon">🧒</span>
+                            <h4>Explain Like I'm 5</h4>
+                        </div>
+                        <div class="eli5-content">
+                            <p>
+                                Imagine you have a balloon 🎈 that can get REALLY big, but you need it to fit in a box.
+                            </p>
+                            <ul>
+                                <li>📦 <strong>Sigmoid:</strong> Squishes the balloon, but it's always at least
+                                    half-full!</li>
+                                <li>💥 <strong>Softmax:</strong> Makes balloons compete — one WINS and gets all the air
+                                </li>
+                                <li>🧸 <strong>Softermax:</strong> A gentler version — balloons share more fairly</li>
+                                <li>🎈 <strong>Soft-sigmoid:</strong> Squishes gently from 0 up, not from 0.5!</li>
+                            </ul>
+                            <p>
+                                The <span class="yat-symbol">ⵟ</span>-product gives us numbers that are always positive,
+                                so we need special squishing functions made just for that!
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="theorem-content">
+                        <h4>⚠️ The Problem with Standard Functions</h4>
+                        <p>
+                            The <span class="yat-symbol">ⵟ</span>-product always outputs <strong>non-negative</strong>
+                            values ($\geq 0$). Standard activation functions have issues with this:
+                        </p>
+
+                        <div class="consequences-grid">
+                            <div class="consequence-item">
+                                <span class="consequence-icon">❌</span>
+                                <h5>Standard Sigmoid</h5>
+                                <p>
+                                    $\sigma(x) = \frac{1}{1 + e^{-x}}$<br>
+                                    For $x \geq 0$: outputs are in $[0.5, 1)$<br>
+                                    <strong>Problem:</strong> Zero maps to 0.5, not 0!
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">❌</span>
+                                <h5>Standard Softmax</h5>
+                                <p>
+                                    Uses $e^x$ which can explode for large inputs.<br>
+                                    Creates "hard" distributions — one winner takes all.<br>
+                                    <strong>Problem:</strong> Too aggressive for soft attention!
+                                </p>
+                            </div>
+                        </div>
+
+                        <h4>✨ Alternative Squashing Functions</h4>
+
+                        <!-- Interactive Function Comparison -->
+                        <div class="interactive-demo"
+                            style="margin: 2rem 0; padding: 1.5rem; background: rgba(0,255,136,0.05); border-radius: 12px; border: 1px solid rgba(0,255,136,0.2);">
+                            <h5 style="margin-bottom: 1rem; color: var(--terminal-green);">📊 Interactive: Squashing
+                                Function Comparison</h5>
+                            <div style="text-align: center; margin-bottom: 1rem;">
+                                <canvas id="squash-canvas" width="600" height="350"
+                                    style="width: 100%; max-width: 600px; border-radius: 8px; background: #0a0a0f;"></canvas>
+                            </div>
+                            <div
+                                style="display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap; margin-bottom: 1rem;">
+                                <label style="font-size: 0.9rem;">
+                                    Power n: <span id="power-val">1.0</span><br>
+                                    <input type="range" id="power-slider" min="0.5" max="3" step="0.1" value="1"
+                                        style="width: 150px;">
+                                </label>
+                            </div>
+                            <div
+                                style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; font-size: 0.8rem;">
+                                <span style="color: #ff6b6b;">━━ sigmoid</span>
+                                <span style="color: #00ff88;">━━ soft-sigmoid</span>
+                                <span style="color: #6b9fff;">━━ soft-tanh</span>
+                            </div>
+                        </div>
+
+                        <script>
+                            (function () {
+                                const canvas = document.getElementById('squash-canvas');
+                                if (!canvas) return;
+                                const ctx = canvas.getContext('2d');
+                                const powerSlider = document.getElementById('power-slider');
+                                const powerVal = document.getElementById('power-val');
+
+                                function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
+                                function softSigmoid(x, n) { const xn = Math.pow(Math.abs(x), n); return xn / (1 + xn); }
+                                function softTanh(x, n) { return 2 * softSigmoid(x, n) - 1; }
+
+                                function draw() {
+                                    const n = parseFloat(powerSlider.value);
+                                    powerVal.textContent = n.toFixed(1);
+
+                                    ctx.fillStyle = '#0a0a0f';
+                                    ctx.fillRect(0, 0, 600, 350);
+
+                                    // Grid
+                                    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+                                    ctx.lineWidth = 1;
+                                    for (let i = 0; i <= 6; i++) {
+                                        ctx.beginPath();
+                                        ctx.moveTo(i * 100, 0);
+                                        ctx.lineTo(i * 100, 350);
+                                        ctx.stroke();
+                                    }
+                                    for (let i = 0; i <= 3; i++) {
+                                        ctx.beginPath();
+                                        ctx.moveTo(0, i * 100 + 25);
+                                        ctx.lineTo(600, i * 100 + 25);
+                                        ctx.stroke();
+                                    }
+
+                                    // Axes
+                                    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+                                    ctx.lineWidth = 2;
+                                    ctx.beginPath();
+                                    ctx.moveTo(50, 175);
+                                    ctx.lineTo(580, 175);
+                                    ctx.moveTo(50, 25);
+                                    ctx.lineTo(50, 325);
+                                    ctx.stroke();
+
+                                    // Labels
+                                    ctx.fillStyle = '#888';
+                                    ctx.font = '12px JetBrains Mono';
+                                    ctx.fillText('0', 45, 180);
+                                    ctx.fillText('1', 35, 30);
+                                    ctx.fillText('-1', 30, 320);
+                                    ctx.fillText('x', 570, 190);
+                                    ctx.fillText('5', 545, 190);
+
+                                    function plotX(x) { return 50 + x * 105; }
+                                    function plotY(y) { return 175 - y * 145; }
+
+                                    // Plot sigmoid (standard)
+                                    ctx.beginPath();
+                                    ctx.strokeStyle = '#ff6b6b';
+                                    ctx.lineWidth = 2;
+                                    for (let i = 0; i <= 500; i++) {
+                                        const x = i / 100;
+                                        const y = sigmoid(x);
+                                        const px = plotX(x), py = plotY(y);
+                                        if (i === 0) ctx.moveTo(px, py);
+                                        else ctx.lineTo(px, py);
+                                    }
+                                    ctx.stroke();
+
+                                    // Plot soft-sigmoid
+                                    ctx.beginPath();
+                                    ctx.strokeStyle = '#00ff88';
+                                    ctx.lineWidth = 2;
+                                    for (let i = 0; i <= 500; i++) {
+                                        const x = i / 100;
+                                        const y = softSigmoid(x, n);
+                                        const px = plotX(x), py = plotY(y);
+                                        if (i === 0) ctx.moveTo(px, py);
+                                        else ctx.lineTo(px, py);
+                                    }
+                                    ctx.stroke();
+
+                                    // Plot soft-tanh
+                                    ctx.beginPath();
+                                    ctx.strokeStyle = '#6b9fff';
+                                    ctx.lineWidth = 2;
+                                    for (let i = 0; i <= 500; i++) {
+                                        const x = i / 100;
+                                        const y = softTanh(x, n);
+                                        const px = plotX(x), py = plotY(y);
+                                        if (i === 0) ctx.moveTo(px, py);
+                                        else ctx.lineTo(px, py);
+                                    }
+                                    ctx.stroke();
+
+                                    // Highlight y=0.5 issue with sigmoid
+                                    ctx.setLineDash([4, 4]);
+                                    ctx.strokeStyle = 'rgba(255,107,107,0.5)';
+                                    ctx.beginPath();
+                                    ctx.moveTo(50, plotY(0.5));
+                                    ctx.lineTo(100, plotY(0.5));
+                                    ctx.stroke();
+                                    ctx.setLineDash([]);
+                                }
+
+                                powerSlider.oninput = draw;
+                                draw();
+                            })();
+                        </script>
+
+                        <h4>📐 Softermax (Competitive)</h4>
+                        <div class="theorem-statement">
+                            <div class="theorem-box">
+                                <strong>Definition (Softermax):</strong>
+                                $$\text{softermax}_n(x_k, \{x_i\}) = \frac{x_k^n}{\epsilon + \sum_i x_i^n}$$
+                                <ul>
+                                    <li>✅ No exponentials — numerically stable for large inputs</li>
+                                    <li>✅ Power $n$ controls sharpness (like temperature)</li>
+                                    <li>✅ Direct, interpretable translation of scores</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <h4>📐 Soft-Sigmoid (Individualistic)</h4>
+                        <div class="theorem-statement">
+                            <div class="theorem-box">
+                                <strong>Definition (Soft-Sigmoid):</strong>
+                                $$\text{soft-sigmoid}_n(x) = \frac{x^n}{1 + x^n}$$
+                                <ul>
+                                    <li>✅ Maps non-negative inputs to $[0, 1)$</li>
+                                    <li>✅ $f(0) = 0$ (unlike standard sigmoid where $f(0) = 0.5$)</li>
+                                    <li>✅ Power $n$ controls transition steepness</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <h4>📐 Soft-Tanh (Individualistic)</h4>
+                        <div class="theorem-statement">
+                            <div class="theorem-box">
+                                <strong>Definition (Soft-Tanh):</strong>
+                                $$\text{soft-tanh}_n(x) = \frac{x^n - 1}{1 + x^n} = 2 \cdot \text{soft-sigmoid}_n(x) -
+                                1$$
+                                <ul>
+                                    <li>✅ Maps non-negative inputs to $[-1, 1)$</li>
+                                    <li>✅ $f(0) = -1$, $f(1) = 0$, $f(\infty) \to 1$</li>
+                                    <li>✅ Useful when centered output is needed</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <h4>🎯 When to Use Each</h4>
+
+                        <div class="comparison-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Function</th>
+                                        <th>Type</th>
+                                        <th>Output Range</th>
+                                        <th>Best For</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Softermax</strong></td>
+                                        <td>Competitive</td>
+                                        <td>$[0, 1]$, sums to ~1</td>
+                                        <td>Attention weights, class probabilities</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Soft-Sigmoid</strong></td>
+                                        <td>Individual</td>
+                                        <td>$[0, 1)$</td>
+                                        <td>Gates, per-neuron confidence</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Soft-Tanh</strong></td>
+                                        <td>Individual</td>
+                                        <td>$[-1, 1)$</td>
+                                        <td>Centered outputs, residual modulation</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">💡</span>
+                            <div>
+                                <strong>Design Philosophy:</strong> These functions are purpose-built for
+                                <span class="yat-symbol">ⵟ</span>-product scores. The power parameter $n$
+                                acts like a "gravitational potential slope" — controlling how sharply
+                                neurons compete for territory.
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="blog-page-nav">
+                    <a href="13-mathematical-guarantees.html" class="blog-nav-btn">← Previous: Math Guarantees</a>
+                    <a href="../index.html#theory" class="blog-nav-btn">All Topics</a>
+                    <a href="15-design-philosophy.html" class="blog-nav-btn">Next: Design Philosophy →</a>
+                </div>
+            </article>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="yat-symbol">ⵟ</span>
+                    <span>Neural Matter Networks</span>
+                </div>
+                <div class="footer-links">
+                    <a href="https://github.com/mlnomadpy/nmn" target="_blank">GitHub</a>
+                    <a href="https://pypi.org/project/nmn/" target="_blank">PyPI</a>
+                    <a href="mailto:taha@azetta.ai">Contact</a>
+                </div>
+                <div class="footer-copy">
+                    <p>Built with ❤️ by <a href="https://azetta.ai" target="_blank">azetta.ai</a></p>
+                    <p>AGPL-3.0 License</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '$', right: '$', display: false }
+                ]
+            });
+        });
+    </script>
+</body>
+
+</html>
