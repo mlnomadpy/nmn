@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Theoretical Background — Neural Matter Networks</title>
+    <meta name="description"
+        content="Understand the core computational primitives (dot product, convolution, distance) and why traditional activation functions cause geometric distortion.">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tifinagh&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/blog-pages.css">
+</head>
+
+<body>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="../index.html" class="nav-logo">
+                <span class="yat-symbol">ⵟ</span>
+                <span>NMN</span>
+            </a>
+            <div class="nav-links">
+                <a href="../index.html#introduction">Introduction</a>
+                <a href="../index.html#yat-product">ⵟ-Product</a>
+                <a href="../index.html#visualizations">Visualizations</a>
+                <a href="../index.html#results">Results</a>
+                <a href="../index.html#theory" class="nav-blog">Blog</a>
+                <a href="../index.html#code">Code</a>
+                <a href="https://github.com/mlnomadpy/nmn" target="_blank" class="nav-github">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path
+                            d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Blog Post Page -->
+    <main class="blog-page">
+        <div class="container">
+            <article class="blog-post">
+                <header class="blog-post-header">
+                    <a href="../index.html#theory" class="blog-back-link">← Back to Theory</a>
+                    <span class="blog-post-badge">Foundation</span>
+                    <h1 class="blog-post-title">Theoretical Background</h1>
+                </header>
+
+                <div class="blog-post-content">
+
+                    <!-- ELI5 Section -->
+                    <div class="eli5-section">
+                        <div class="eli5-header">
+                            <span class="eli5-icon">🧒</span>
+                            <h4>Explain Like I'm 5</h4>
+                        </div>
+                        <div class="eli5-content">
+                            <p>
+                                Building a brain (neural network) is like building with different tools:
+                            </p>
+                            <ul>
+                                <li>📏 <strong>The measuring tool (dot product):</strong> Checks if two arrows point the
+                                    same way.
+                                    But it doesn't care how far apart they are!</li>
+                                <li>📐 <strong>The angle tool (cosine):</strong> Only cares about direction, ignores
+                                    everything else.</li>
+                                <li>📍 <strong>The distance tool (Euclidean):</strong> Only cares about "how far,"
+                                    ignores direction.</li>
+                                <li>🔌 <strong>The switch (activation):</strong> Turns things on or off. But sometimes
+                                    it's too harsh
+                                    and forgets important details!</li>
+                            </ul>
+                            <p>
+                                The problem? Each tool only does <em>one thing</em>. And the switch sometimes
+                                <strong>breaks our drawings</strong> by squishing or cutting parts off!
+                            </p>
+                            <p>
+                                The <span class="yat-symbol">ⵟ</span>-product is like a <em>super tool</em> that
+                                measures direction AND distance at the same time — and it doesn't need a harsh switch!
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="theorem-content">
+                        <!-- The Dot Product -->
+                        <h4>📏 The Dot Product: Alignment Without Distance</h4>
+                        <p>
+                            The dot product is the workhorse of neural computation. For vectors
+                            $\mathbf{a} = [a_1, \ldots, a_n]$ and $\mathbf{b} = [b_1, \ldots, b_n]$:
+                        </p>
+
+                        <div class="math-block">
+                            $$\mathbf{a} \cdot \mathbf{b} = \sum_{i=1}^{n} a_i b_i = \|\mathbf{a}\| \|\mathbf{b}\|
+                            \cos(\theta)$$
+                        </div>
+
+                        <p><strong>What it tells us:</strong></p>
+                        <ul>
+                            <li><strong>Positive:</strong> Vectors point in roughly the same direction</li>
+                            <li><strong>Zero:</strong> Vectors are perpendicular (orthogonal)</li>
+                            <li><strong>Negative:</strong> Vectors point in roughly opposite directions</li>
+                        </ul>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">⚠️</span>
+                            <div>
+                                <strong>The Problem:</strong> The dot product conflates <em>direction</em> and
+                                <em>magnitude</em>.
+                                Two unit vectors have a maximum dot product of 1, but $[100, 0] \cdot [100, 0] = 10000$.
+                                This magnitude sensitivity must be compensated for elsewhere (e.g., normalization
+                                layers).
+                            </div>
+                        </div>
+
+                        <!-- Cosine Similarity -->
+                        <h4>🧭 Cosine Similarity: Pure Direction</h4>
+                        <p>
+                            To isolate directional information, we normalize by magnitude:
+                        </p>
+
+                        <div class="math-block">
+                            $$\cos(\theta) = \frac{\mathbf{a} \cdot \mathbf{b}}{\|\mathbf{a}\| \|\mathbf{b}\|}$$
+                        </div>
+
+                        <p>
+                            This gives values from $-1$ (opposite) through $0$ (orthogonal) to $+1$ (identical
+                            direction).
+                        </p>
+
+                        <div class="consequences-grid">
+                            <div class="consequence-item">
+                                <span class="consequence-icon">✅</span>
+                                <h5>Advantage</h5>
+                                <p>
+                                    Scale-invariant: $[1, 2, 3]$ and $[100, 200, 300]$ have cosine similarity of 1.0
+                                    because they point in the same direction.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">❌</span>
+                                <h5>Limitation</h5>
+                                <p>
+                                    Ignores distance entirely! Vectors at $[0.001, 0]$ and $[1000000, 0]$
+                                    also have similarity 1.0, despite being vastly separated in space.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Euclidean Distance -->
+                        <h4>📍 Euclidean Distance: Proximity Without Direction</h4>
+                        <p>
+                            The Euclidean distance measures spatial separation:
+                        </p>
+
+                        <div class="math-block">
+                            $$d(\mathbf{p}, \mathbf{q}) = \sqrt{\sum_{i=1}^{n} (q_i - p_i)^2} = \|\mathbf{p} -
+                            \mathbf{q}\|$$
+                        </div>
+
+                        <p>
+                            This is the foundation of clustering algorithms (k-means, k-NN), RBF networks,
+                            and many loss functions (MSE).
+                        </p>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">⚠️</span>
+                            <div>
+                                <strong>The Problem:</strong> Distance ignores alignment completely.
+                                Consider a weight vector at the origin: points at $[1, 0]$ and $[0, 1]$
+                                are equidistant, but one is aligned with the x-axis and one with the y-axis —
+                                very different orientations that distance alone cannot distinguish.
+                            </div>
+                        </div>
+
+                        <!-- The Convolution Operator -->
+                        <h4>🖼️ Convolution: Localized Alignment</h4>
+                        <p>
+                            In convolutional neural networks (CNNs), the convolution operator slides a
+                            kernel across the input, computing dot products at each location:
+                        </p>
+
+                        <div class="math-block">
+                            $$(f * g)[n] = \sum_{m} f[m] \cdot g[n - m]$$
+                        </div>
+
+                        <p>
+                            Each position in the output represents <em>how well the local patch aligns with the
+                                kernel</em>.
+                        </p>
+
+                        <div class="proof-step">
+                            <strong>Key Roles of Convolution</strong>
+                            <ul>
+                                <li><strong>Feature Detection:</strong> Kernels learn to detect edges, textures, shapes
+                                </li>
+                                <li><strong>Spatial Hierarchy:</strong> Stacking layers builds increasingly abstract
+                                    features</li>
+                                <li><strong>Parameter Sharing:</strong> Same kernel applied everywhere → efficiency</li>
+                            </ul>
+                        </div>
+
+                        <p>
+                            <strong>The limitation:</strong> Standard convolution is essentially a local dot product.
+                            It inherits all the problems of dot products — no distance awareness, magnitude sensitivity.
+                        </p>
+
+                        <!-- The Need for Non-Linearity -->
+                        <h4>🔌 Why We Need Non-Linearity</h4>
+                        <p>
+                            Here's a fundamental mathematical fact:
+                        </p>
+
+                        <div class="theorem-statement">
+                            <div class="theorem-box">
+                                <strong>Theorem (Collapse of Linear Compositions):</strong>
+                                Any composition of linear functions is itself a linear function:
+                                $$f_n \circ f_{n-1} \circ \cdots \circ f_1 = \text{single linear function}$$
+                                No matter how many layers, a purely linear network can only compute linear functions.
+                            </div>
+                        </div>
+
+                        <p>
+                            This means we NEED non-linearity to approximate complex functions. The question is:
+                            <em>how do we introduce it?</em>
+                        </p>
+
+                        <!-- Activation Functions -->
+                        <h4>⚡ Traditional Activation Functions</h4>
+                        <p>
+                            The standard approach is to apply element-wise non-linear functions after linear layers:
+                        </p>
+
+                        <div class="consequences-grid">
+                            <div class="consequence-item">
+                                <span class="consequence-icon">📊</span>
+                                <h5>ReLU: $\max(0, x)$</h5>
+                                <p>
+                                    <strong>Pros:</strong> Simple, fast, mitigates vanishing gradients<br>
+                                    <strong>Cons:</strong> "Dead neurons" (zero gradient for negative inputs),
+                                    discontinuous derivative at 0
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">📈</span>
+                                <h5>Sigmoid: $\frac{1}{1+e^{-x}}$</h5>
+                                <p>
+                                    <strong>Pros:</strong> Smooth, bounded output [0,1]<br>
+                                    <strong>Cons:</strong> Vanishing gradients at extremes,
+                                    outputs not zero-centered
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">〰️</span>
+                                <h5>Tanh: $\frac{e^x - e^{-x}}{e^x + e^{-x}}$</h5>
+                                <p>
+                                    <strong>Pros:</strong> Zero-centered, smooth<br>
+                                    <strong>Cons:</strong> Still saturates at extremes
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">🔔</span>
+                                <h5>GELU, SiLU, Mish</h5>
+                                <p>
+                                    <strong>Pros:</strong> Smooth approximations to ReLU<br>
+                                    <strong>Cons:</strong> More computation, still element-wise
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- The Geometric Cost -->
+                        <h4>🔺 The Geometric Cost of Activation Functions</h4>
+                        <p>
+                            This is the core insight that motivates Neural Matter Networks:
+                            <strong>activation functions distort geometry</strong>.
+                        </p>
+
+                        <div class="proof-step">
+                            <strong>ReLU Distortion</strong>
+                            <p>
+                                Consider a smooth manifold (like a Swiss roll) passing through a ReLU layer:
+                            </p>
+                            <ul>
+                                <li>All negative values → 0 (entire half-space collapsed!)</li>
+                                <li>Points that were distinct become identical</li>
+                                <li>Local neighborhoods are destroyed</li>
+                                <li>Information is <strong>irreversibly lost</strong></li>
+                            </ul>
+                        </div>
+
+                        <div class="proof-step">
+                            <strong>Sigmoid/Tanh Saturation</strong>
+                            <p>
+                                Points with very positive or very negative values get "squashed" to the extremes:
+                            </p>
+                            <ul>
+                                <li>Distinct points → approximately the same output</li>
+                                <li>Distances between large values → compressed to near-zero</li>
+                                <li>Fine-grained differences → lost in saturation regions</li>
+                            </ul>
+                        </div>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">💥</span>
+                            <div>
+                                <strong>Example:</strong> Imagine two inputs: one has dot product $-0.1$ with a weight
+                                (slightly misaligned) and another has dot product $-100$ (strongly opposed).
+                                After ReLU, both become exactly 0 — we've lost all information about the
+                                <em>degree</em> of misalignment!
+                            </div>
+                        </div>
+
+                        <!-- Interactive Gradient Flow Visualization -->
+                        <div class="interactive-demo"
+                            style="margin: 2rem 0; padding: 1.5rem; background: linear-gradient(135deg, rgba(255,107,107,0.05), rgba(0,255,136,0.05)); border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);">
+                            <h5 style="margin-bottom: 1rem; color: var(--terminal-green);">🌀 Animated: Gradient Flow
+                                Fields (watch the particles!)</h5>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                                <div style="text-align: center;">
+                                    <div style="font-size: 0.85rem; margin-bottom: 0.5rem; color: #ff6b6b;">ReLU:
+                                        Half-Space Collapse</div>
+                                    <canvas id="relu-flow" width="300" height="300"
+                                        style="width: 100%; max-width: 300px; border-radius: 8px; background: #0a0a0f;"></canvas>
+                                </div>
+                                <div style="text-align: center;">
+                                    <div
+                                        style="font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--terminal-green);">
+                                        ⵟ-Product: Vortex Field</div>
+                                    <canvas id="yat-flow" width="300" height="300"
+                                        style="width: 100%; max-width: 300px; border-radius: 8px; background: #0a0a0f;"></canvas>
+                                </div>
+                            </div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center;">
+                                🔴 Particles flow along gradient directions • Watch how ReLU kills all info below zero
+                            </div>
+                        </div>
+
+                        <script>
+                            (function () {
+                                const reluCanvas = document.getElementById('relu-flow');
+                                const yatCanvas = document.getElementById('yat-flow');
+                                if (!reluCanvas || !yatCanvas) return;
+                                const reluCtx = reluCanvas.getContext('2d');
+                                const yatCtx = yatCanvas.getContext('2d');
+
+                                const w = [0.7, 0.5]; // Weight vector
+                                const epsilon = 0.5;
+                                const numParticles = 80;
+
+                                // Particles for each canvas
+                                let reluParticles = [];
+                                let yatParticles = [];
+
+                                function initParticles(arr) {
+                                    arr.length = 0;
+                                    for (let i = 0; i < numParticles; i++) {
+                                        arr.push({
+                                            x: Math.random() * 300,
+                                            y: Math.random() * 300,
+                                            age: Math.random() * 60
+                                        });
+                                    }
+                                }
+
+                                function coordFromPixel(px, py) {
+                                    return [(px / 150) - 1, 1 - (py / 150)];
+                                }
+
+                                function pixelFromCoord(x, y) {
+                                    return [(x + 1) * 150, (1 - y) * 150];
+                                }
+
+                                // ReLU gradient: if (dot > 0) returns w, else returns 0
+                                function reluGrad(x, y) {
+                                    const dot = w[0] * x + w[1] * y;
+                                    if (dot > 0) return [w[0] * 0.5, w[1] * 0.5];
+                                    return [0, 0];
+                                }
+
+                                // ⵟ gradient using quotient rule:
+                                // ⵟ(w,x) = (w·x)² / (‖w-x‖² + ε)
+                                // ∂ⵟ/∂x_i = (2·dot·w_i·denom - dot²·2·(x_i - w_i)) / denom²
+                                function yatGrad(x, y) {
+                                    const xVec = [x, y];
+                                    const dot = w[0] * x + w[1] * y;
+                                    const diff = [xVec[0] - w[0], xVec[1] - w[1]];
+                                    const distSq = diff[0] * diff[0] + diff[1] * diff[1];
+                                    const denom = distSq + epsilon;
+                                    const denomSq = denom * denom;
+
+                                    // Quotient rule: d/dx [f/g] = (f'g - fg') / g²
+                                    // f = (w·x)², f' = 2·(w·x)·w
+                                    // g = ‖w-x‖² + ε, g' = 2·(x-w)
+                                    const grad = [];
+                                    for (let i = 0; i < 2; i++) {
+                                        const fPrime = 2 * dot * w[i];  // ∂(dot²)/∂x_i
+                                        const gPrime = 2 * diff[i];      // ∂(‖w-x‖²)/∂x_i = 2(x_i - w_i)
+                                        grad[i] = (fPrime * denom - (dot * dot) * gPrime) / denomSq;
+                                    }
+
+                                    // Scale for visualization
+                                    const mag = Math.sqrt(grad[0] * grad[0] + grad[1] * grad[1]) + 0.001;
+                                    const scale = Math.min(1, mag) * 0.5;
+                                    return [grad[0] / mag * scale, grad[1] / mag * scale];
+                                }
+
+                                function updateParticles(particles, gradFn) {
+                                    for (const p of particles) {
+                                        const [x, y] = coordFromPixel(p.x, p.y);
+                                        const [gx, gy] = gradFn(x, y);
+                                        p.x += gx * 8;
+                                        p.y -= gy * 8;
+                                        p.age++;
+
+                                        // Respawn if out of bounds or too old
+                                        if (p.x < 0 || p.x > 300 || p.y < 0 || p.y > 300 || p.age > 80) {
+                                            p.x = Math.random() * 300;
+                                            p.y = Math.random() * 300;
+                                            p.age = 0;
+                                        }
+                                    }
+                                }
+
+                                function drawCanvas(ctx, particles, gradFn, isRelu) {
+                                    // Semi-transparent clear for trails
+                                    ctx.fillStyle = 'rgba(10, 10, 15, 0.15)';
+                                    ctx.fillRect(0, 0, 300, 300);
+
+                                    // Draw decision boundary / zero line
+                                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                                    ctx.lineWidth = 1;
+                                    ctx.setLineDash([4, 4]);
+                                    ctx.beginPath();
+                                    // Line perpendicular to w passing through origin
+                                    const perpX = -w[1], perpY = w[0];
+                                    const [p1x, p1y] = pixelFromCoord(perpX * 2, perpY * 2);
+                                    const [p2x, p2y] = pixelFromCoord(-perpX * 2, -perpY * 2);
+                                    ctx.moveTo(p1x, p1y);
+                                    ctx.lineTo(p2x, p2y);
+                                    ctx.stroke();
+                                    ctx.setLineDash([]);
+
+                                    if (isRelu) {
+                                        // ReLU: shade the dead region
+                                        ctx.fillStyle = 'rgba(255, 50, 50, 0.1)';
+                                        ctx.beginPath();
+                                        ctx.moveTo(150, 150);
+                                        const [ex1, ey1] = pixelFromCoord(perpX * 3, perpY * 3);
+                                        const [ex2, ey2] = pixelFromCoord(-perpX * 3, -perpY * 3);
+                                        ctx.lineTo(ex1, ey1);
+                                        ctx.lineTo(0, 0);
+                                        ctx.lineTo(0, 300);
+                                        ctx.lineTo(ex2, ey2);
+                                        ctx.closePath();
+                                        ctx.fill();
+                                    }
+
+                                    // Draw particles
+                                    for (const p of particles) {
+                                        const alpha = Math.max(0, 1 - p.age / 80);
+                                        const size = 3 - (p.age / 80) * 2;
+                                        ctx.beginPath();
+                                        ctx.arc(p.x, p.y, Math.max(1, size), 0, Math.PI * 2);
+                                        ctx.fillStyle = isRelu ?
+                                            `rgba(255, 150, 100, ${alpha})` :
+                                            `rgba(0, 255, 150, ${alpha})`;
+                                        ctx.fill();
+                                    }
+
+                                    // Draw weight vector
+                                    const [wx, wy] = pixelFromCoord(w[0], w[1]);
+                                    ctx.beginPath();
+                                    ctx.moveTo(150, 150);
+                                    ctx.lineTo(wx, wy);
+                                    ctx.strokeStyle = isRelu ? '#ff9966' : '#00ff88';
+                                    ctx.lineWidth = 3;
+                                    ctx.stroke();
+                                    ctx.beginPath();
+                                    ctx.arc(wx, wy, 6, 0, Math.PI * 2);
+                                    ctx.fillStyle = isRelu ? '#ff9966' : '#00ff88';
+                                    ctx.fill();
+
+                                    // Label
+                                    ctx.fillStyle = '#fff';
+                                    ctx.font = '11px JetBrains Mono, monospace';
+                                    ctx.fillText('w', wx + 8, wy - 5);
+
+                                    // Origin
+                                    ctx.beginPath();
+                                    ctx.arc(150, 150, 3, 0, Math.PI * 2);
+                                    ctx.fillStyle = '#888';
+                                    ctx.fill();
+                                }
+
+                                initParticles(reluParticles);
+                                initParticles(yatParticles);
+
+                                function animate() {
+                                    updateParticles(reluParticles, reluGrad);
+                                    updateParticles(yatParticles, yatGrad);
+                                    drawCanvas(reluCtx, reluParticles, reluGrad, true);
+                                    drawCanvas(yatCtx, yatParticles, yatGrad, false);
+                                    requestAnimationFrame(animate);
+                                }
+
+                                animate();
+                            })();
+                        </script>
+
+                        <!-- Topological Changes -->
+                        <h4>🔄 Topological Distortions</h4>
+                        <p>
+                            Beyond metric distortion, activation functions can change the <em>topology</em> of
+                            representations:
+                        </p>
+
+                        <div class="comparison-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Property</th>
+                                        <th>Before Activation</th>
+                                        <th>After Activation</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Injectivity</strong></td>
+                                        <td>Linear maps can be injective</td>
+                                        <td>ReLU collapses half-spaces to 0</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Connectedness</strong></td>
+                                        <td>Connected sets stay connected</td>
+                                        <td>Can be preserved or broken</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Smoothness</strong></td>
+                                        <td>Affine = infinitely smooth</td>
+                                        <td>ReLU has discontinuous derivative</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Neighborhoods</strong></td>
+                                        <td>Local structure preserved</td>
+                                        <td>Neighbors can become identical</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- The ⵟ-Product Solution -->
+                        <h4>✨ The <span class="yat-symbol">ⵟ</span>-Product: A Better Way</h4>
+                        <p>
+                            This theoretical background reveals what we need: a computational primitive that provides
+                            non-linearity <strong>without</strong> the geometric destruction of activation functions.
+                        </p>
+
+                        <div class="theorem-statement">
+                            <div class="theorem-box">
+                                <strong>The <span class="yat-symbol">ⵟ</span>-Product Solution:</strong>
+                                $$\text{ⵟ}(\mathbf{w}, \mathbf{x}) = \frac{\langle \mathbf{w}, \mathbf{x}
+                                \rangle^2}{\|\mathbf{w} - \mathbf{x}\|^2 + \epsilon}$$
+                                <ul>
+                                    <li>✅ <strong>Non-linear:</strong> Ratio of squared terms is inherently non-linear
+                                    </li>
+                                    <li>✅ <strong>Distance-aware:</strong> Denominator captures proximity</li>
+                                    <li>✅ <strong>Alignment-aware:</strong> Numerator captures direction</li>
+                                    <li>✅ <strong>Smooth:</strong> Infinitely differentiable everywhere</li>
+                                    <li>✅ <strong>Injective for distinct inputs:</strong> Different (w,x) pairs →
+                                        different outputs</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">🎯</span>
+                            <div>
+                                <strong>Key Insight:</strong> The <span class="yat-symbol">ⵟ</span>-product achieves
+                                non-linearity through the <em>geometric relationship</em> between vectors, not through
+                                a separate, information-destroying activation function. This preserves the rich
+                                geometric structure that traditional activations discard.
+                            </div>
+                        </div>
+
+                        <!-- Summary Table -->
+                        <h4>📋 Summary: Why Traditional Primitives Need Help</h4>
+
+                        <div class="comparison-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Primitive</th>
+                                        <th>Captures</th>
+                                        <th>Misses</th>
+                                        <th>Problem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Dot Product</td>
+                                        <td>Alignment + Magnitude</td>
+                                        <td>Distance</td>
+                                        <td>Scale-sensitive</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Cosine Similarity</td>
+                                        <td>Pure Direction</td>
+                                        <td>Distance + Magnitude</td>
+                                        <td>Position-blind</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Euclidean Distance</td>
+                                        <td>Spatial Separation</td>
+                                        <td>Direction</td>
+                                        <td>Orientation-blind</td>
+                                    </tr>
+                                    <tr>
+                                        <td>ReLU Activation</td>
+                                        <td>Positive values</td>
+                                        <td>Negative distinctions</td>
+                                        <td>Half-space collapse</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Sigmoid/Tanh</td>
+                                        <td>Bounded output</td>
+                                        <td>Extreme distinctions</td>
+                                        <td>Saturation</td>
+                                    </tr>
+                                    <tr class="highlight-row">
+                                        <td><strong><span class="yat-symbol">ⵟ</span>-Product</strong></td>
+                                        <td>Alignment + Distance</td>
+                                        <td>—</td>
+                                        <td><em>Addresses all above!</em></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="blog-page-nav">
+                    <a href="09-experiments.html" class="blog-nav-btn">← Previous: Experiments</a>
+                    <a href="../index.html#theory" class="blog-nav-btn">All Topics</a>
+                    <a href="11-architectures.html" class="blog-nav-btn">Next: Architectures →</a>
+                </div>
+            </article>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="yat-symbol">ⵟ</span>
+                    <span>Neural Matter Networks</span>
+                </div>
+                <div class="footer-links">
+                    <a href="https://github.com/mlnomadpy/nmn" target="_blank">GitHub</a>
+                    <a href="https://pypi.org/project/nmn/" target="_blank">PyPI</a>
+                    <a href="mailto:taha@azetta.ai">Contact</a>
+                </div>
+                <div class="footer-copy">
+                    <p>Built with ❤️ by <a href="https://azetta.ai" target="_blank">azetta.ai</a></p>
+                    <p>AGPL-3.0 License</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '$', right: '$', display: false }
+                ]
+            });
+        });
+    </script>
+</body>
+
+</html>

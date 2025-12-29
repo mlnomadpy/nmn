@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NMN Architectures — Neural Matter Networks</title>
+    <meta name="description"
+        content="Detailed guide to Neural Matter Network architectures: NMN layers, ⵟ-Convolution, ⵟ-Attention, AetherResNet, and AetherGPT implementations.">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tifinagh&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/blog-pages.css">
+</head>
+
+<body>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="../index.html" class="nav-logo">
+                <span class="yat-symbol">ⵟ</span>
+                <span>NMN</span>
+            </a>
+            <div class="nav-links">
+                <a href="../index.html#introduction">Introduction</a>
+                <a href="../index.html#yat-product">ⵟ-Product</a>
+                <a href="../index.html#visualizations">Visualizations</a>
+                <a href="../index.html#results">Results</a>
+                <a href="../index.html#theory" class="nav-blog">Blog</a>
+                <a href="../index.html#code">Code</a>
+                <a href="https://github.com/mlnomadpy/nmn" target="_blank" class="nav-github">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path
+                            d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Blog Post Page -->
+    <main class="blog-page">
+        <div class="container">
+            <article class="blog-post">
+                <header class="blog-post-header">
+                    <a href="../index.html#theory" class="blog-back-link">← Back to Theory</a>
+                    <span class="blog-post-badge">Implementation</span>
+                    <h1 class="blog-post-title">NMN Architecture Guide</h1>
+                </header>
+
+                <div class="blog-post-content">
+
+                    <!-- ELI5 Section -->
+                    <div class="eli5-section">
+                        <div class="eli5-header">
+                            <span class="eli5-icon">🧒</span>
+                            <h4>Explain Like I'm 5</h4>
+                        </div>
+                        <div class="eli5-content">
+                            <p>
+                                Think of neural networks like building with different LEGO sets:
+                            </p>
+                            <ul>
+                                <li>🧱 <strong>Regular LEGO (Linear + ReLU):</strong> Each brick does two things —
+                                    one part measures, another part decides "keep or throw away." Lots of pieces!</li>
+                                <li>⭐ <strong>NMN LEGO (<span class="yat-symbol">ⵟ</span>-Product):</strong>
+                                    Each brick does <em>everything at once</em>! Measures AND decides in one magic
+                                    piece!</li>
+                            </ul>
+                            <p>
+                                We made three special bricks:
+                            </p>
+                            <ul>
+                                <li>🔷 <strong>NMN Layer:</strong> For regular data (like a list of numbers)</li>
+                                <li>🖼️ <strong><span class="yat-symbol">ⵟ</span>-Conv:</strong> For pictures (slides a
+                                    magic window)</li>
+                                <li>👀 <strong><span class="yat-symbol">ⵟ</span>-Attention:</strong> For sentences
+                                    (decides what words to focus on)</li>
+                            </ul>
+                            <p>
+                                Then we built awesome robots with these bricks: <strong>AetherResNet</strong> for
+                                pictures
+                                and <strong>AetherGPT</strong> for words!
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="theorem-content">
+                        <!-- NMN Layer -->
+                        <h4>🔷 The NMN Layer: Dense Geometric Computation</h4>
+                        <p>
+                            The NMN layer is the simplest building block — a drop-in replacement for
+                            <code>Linear + Activation</code>. Each unit learns a prototype and responds based on both
+                            alignment and proximity.
+                        </p>
+
+                        <div class="theorem-statement">
+                            <div class="theorem-box">
+                                <strong>NMN Layer Definition:</strong>
+                                For input $\mathbf{x} \in \mathbb{R}^d$ and weights $\{\mathbf{w}_i\}_{i=1}^n$ with
+                                biases $\{b_i\}$:
+                                $$h(\mathbf{x}) = s \cdot \sum_{i=1}^n \frac{(\mathbf{w}_i^T\mathbf{x} +
+                                b_i)^2}{\|\mathbf{w}_i - \mathbf{x}\|^2 + \epsilon}$$
+                                where $s$ is a learnable scaling factor.
+                            </div>
+                        </div>
+
+                        <p><strong>Key components:</strong></p>
+                        <ul>
+                            <li><strong>Weight vectors $\mathbf{w}_i$:</strong> Each acts as a learned "prototype" —
+                                what the neuron is looking for</li>
+                            <li><strong>Bias terms $b_i$:</strong> Added to the numerator for expressivity
+                                (like a tunable threshold)</li>
+                            <li><strong>Scaling factor $s$:</strong> Adaptive scaling: $s =
+                                \left(\frac{n}{\log(1+n)}\right)^\alpha$
+                                with learnable $\alpha$</li>
+                            <li><strong>Epsilon $\epsilon$:</strong> Stability constant preventing division by zero</li>
+                        </ul>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">💡</span>
+                            <div>
+                                <strong>Why This Works:</strong> Every unit automatically provides non-linearity
+                                through the geometric ratio. No separate activation needed! The Universal Approximation
+                                Theorem (Theorem 2.4) guarantees this layer can approximate any continuous function.
+                            </div>
+                        </div>
+
+                        <!-- Interactive NMN Neuron Playground -->
+                        <div class="interactive-demo"
+                            style="margin: 2rem 0; padding: 1.5rem; background: linear-gradient(135deg, rgba(0,200,255,0.05), rgba(0,255,136,0.05)); border-radius: 12px; border: 1px solid rgba(0,255,136,0.2);">
+                            <h5 style="margin-bottom: 1rem; color: var(--terminal-green);">🎛️ Interactive: NMN Neuron
+                                Playground</h5>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 1rem;">
+                                <div>
+                                    <div style="font-size: 0.9rem; margin-bottom: 0.75rem; font-weight: 600;">Weight
+                                        Vector <span style="color: var(--terminal-green);">w</span></div>
+                                    <div style="margin-bottom: 0.5rem;">
+                                        <label style="font-size: 0.8rem; color: var(--text-muted);">w₁: <span
+                                                id="w1-val">0.5</span></label>
+                                        <input type="range" id="w1-slider" min="-2" max="2" step="0.1" value="0.5"
+                                            style="width: 100%;">
+                                    </div>
+                                    <div>
+                                        <label style="font-size: 0.8rem; color: var(--text-muted);">w₂: <span
+                                                id="w2-val">0.8</span></label>
+                                        <input type="range" id="w2-slider" min="-2" max="2" step="0.1" value="0.8"
+                                            style="width: 100%;">
+                                    </div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 0.9rem; margin-bottom: 0.75rem; font-weight: 600;">Input
+                                        Vector <span style="color: #00bfff;">x</span></div>
+                                    <div style="margin-bottom: 0.5rem;">
+                                        <label style="font-size: 0.8rem; color: var(--text-muted);">x₁: <span
+                                                id="x1-val">0.3</span></label>
+                                        <input type="range" id="x1-slider" min="-2" max="2" step="0.1" value="0.3"
+                                            style="width: 100%;">
+                                    </div>
+                                    <div>
+                                        <label style="font-size: 0.8rem; color: var(--text-muted);">x₂: <span
+                                                id="x2-val">0.6</span></label>
+                                        <input type="range" id="x2-slider" min="-2" max="2" step="0.1" value="0.6"
+                                            style="width: 100%;">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                <canvas id="nmn-vectors-canvas" width="280" height="280"
+                                    style="width: 100%; max-width: 280px; border-radius: 8px; background: #0a0a0f;"></canvas>
+                                <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;">
+                                    <div style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 8px;">
+                                        <div style="margin-bottom: 0.75rem; color: var(--text-muted);">Computation:
+                                        </div>
+                                        <div style="margin-bottom: 0.5rem;">
+                                            <span style="color: #888;">Dot product:</span>
+                                            <span id="dot-result" style="color: #fff;">--</span>
+                                        </div>
+                                        <div style="margin-bottom: 0.5rem;">
+                                            <span style="color: #888;">Distance²:</span>
+                                            <span id="dist-result" style="color: #fff;">--</span>
+                                        </div>
+                                        <div
+                                            style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.5rem; margin-top: 0.5rem;">
+                                            <span style="color: var(--terminal-green);">ⵟ(w,x) =</span>
+                                            <span id="yat-result"
+                                                style="color: var(--terminal-green); font-size: 1.2rem; font-weight: bold;">--</span>
+                                        </div>
+                                        <div
+                                            style="margin-top: 1rem; padding: 0.75rem; border-radius: 6px; background: rgba(0,255,136,0.1);">
+                                            <div
+                                                style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">
+                                                Response strength:</div>
+                                            <div id="response-bar"
+                                                style="height: 20px; background: linear-gradient(90deg, #00ff88 0%, #0a0a0f 0%); border-radius: 4px; transition: all 0.2s;">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <script>
+                            (function () {
+                                const canvas = document.getElementById('nmn-vectors-canvas');
+                                if (!canvas) return;
+                                const ctx = canvas.getContext('2d');
+
+                                const sliders = {
+                                    w1: document.getElementById('w1-slider'),
+                                    w2: document.getElementById('w2-slider'),
+                                    x1: document.getElementById('x1-slider'),
+                                    x2: document.getElementById('x2-slider')
+                                };
+                                const vals = {
+                                    w1: document.getElementById('w1-val'),
+                                    w2: document.getElementById('w2-val'),
+                                    x1: document.getElementById('x1-val'),
+                                    x2: document.getElementById('x2-val')
+                                };
+
+                                const epsilon = 0.5;
+
+                                function pixelFromCoord(x, y) {
+                                    return [(x + 2) / 4 * 280, (2 - y) / 4 * 280];
+                                }
+
+                                function update() {
+                                    const w = [parseFloat(sliders.w1.value), parseFloat(sliders.w2.value)];
+                                    const x = [parseFloat(sliders.x1.value), parseFloat(sliders.x2.value)];
+
+                                    vals.w1.textContent = w[0].toFixed(1);
+                                    vals.w2.textContent = w[1].toFixed(1);
+                                    vals.x1.textContent = x[0].toFixed(1);
+                                    vals.x2.textContent = x[1].toFixed(1);
+
+                                    // Compute values
+                                    const dot = w[0] * x[0] + w[1] * x[1];
+                                    const distSq = (w[0] - x[0]) ** 2 + (w[1] - x[1]) ** 2;
+                                    const yat = (dot * dot) / (distSq + epsilon);
+
+                                    document.getElementById('dot-result').textContent = dot.toFixed(3);
+                                    document.getElementById('dist-result').textContent = distSq.toFixed(3);
+                                    document.getElementById('yat-result').textContent = yat.toFixed(3);
+
+                                    // Response bar
+                                    const barPercent = Math.min(100, yat * 10);
+                                    document.getElementById('response-bar').style.background =
+                                        `linear-gradient(90deg, #00ff88 ${barPercent}%, rgba(0,255,136,0.2) ${barPercent}%)`;
+
+                                    // Draw canvas
+                                    ctx.fillStyle = '#0a0a0f';
+                                    ctx.fillRect(0, 0, 280, 280);
+
+                                    // Grid
+                                    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+                                    ctx.lineWidth = 1;
+                                    for (let i = -2; i <= 2; i++) {
+                                        const [px, py] = pixelFromCoord(i, 0);
+                                        ctx.beginPath();
+                                        ctx.moveTo(px, 0);
+                                        ctx.lineTo(px, 280);
+                                        ctx.stroke();
+                                        const [px2, py2] = pixelFromCoord(0, i);
+                                        ctx.beginPath();
+                                        ctx.moveTo(0, py2);
+                                        ctx.lineTo(280, py2);
+                                        ctx.stroke();
+                                    }
+
+                                    // Axes
+                                    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+                                    ctx.lineWidth = 2;
+                                    const [ox, oy] = pixelFromCoord(0, 0);
+                                    ctx.beginPath();
+                                    ctx.moveTo(0, oy);
+                                    ctx.lineTo(280, oy);
+                                    ctx.moveTo(ox, 0);
+                                    ctx.lineTo(ox, 280);
+                                    ctx.stroke();
+
+                                    // Draw dashed line between w and x (distance)
+                                    const [wx, wy] = pixelFromCoord(w[0], w[1]);
+                                    const [xx, xy] = pixelFromCoord(x[0], x[1]);
+                                    ctx.strokeStyle = 'rgba(255,100,100,0.5)';
+                                    ctx.setLineDash([4, 4]);
+                                    ctx.beginPath();
+                                    ctx.moveTo(wx, wy);
+                                    ctx.lineTo(xx, xy);
+                                    ctx.stroke();
+                                    ctx.setLineDash([]);
+
+                                    // Draw w vector (green)
+                                    ctx.beginPath();
+                                    ctx.moveTo(ox, oy);
+                                    ctx.lineTo(wx, wy);
+                                    ctx.strokeStyle = '#00ff88';
+                                    ctx.lineWidth = 3;
+                                    ctx.stroke();
+                                    ctx.beginPath();
+                                    ctx.arc(wx, wy, 8, 0, Math.PI * 2);
+                                    ctx.fillStyle = '#00ff88';
+                                    ctx.fill();
+                                    ctx.fillStyle = '#00ff88';
+                                    ctx.font = '14px JetBrains Mono';
+                                    ctx.fillText('w', wx + 10, wy - 5);
+
+                                    // Draw x vector (cyan)
+                                    ctx.beginPath();
+                                    ctx.moveTo(ox, oy);
+                                    ctx.lineTo(xx, xy);
+                                    ctx.strokeStyle = '#00bfff';
+                                    ctx.lineWidth = 3;
+                                    ctx.stroke();
+                                    ctx.beginPath();
+                                    ctx.arc(xx, xy, 8, 0, Math.PI * 2);
+                                    ctx.fillStyle = '#00bfff';
+                                    ctx.fill();
+                                    ctx.fillStyle = '#00bfff';
+                                    ctx.fillText('x', xx + 10, xy - 5);
+
+                                    // Origin
+                                    ctx.beginPath();
+                                    ctx.arc(ox, oy, 4, 0, Math.PI * 2);
+                                    ctx.fillStyle = '#888';
+                                    ctx.fill();
+                                }
+
+                                Object.values(sliders).forEach(s => s.oninput = update);
+                                update();
+                            })();
+                        </script>
+
+                        <!-- ⵟ-Convolution -->
+                        <h4>🖼️ <span class="yat-symbol">ⵟ</span>-Convolution: Geometric Feature Extraction</h4>
+                        <p>
+                            For spatially-structured data (images, audio spectrograms), we extend the
+                            <span class="yat-symbol">ⵟ</span>-product to convolutional operations:
+                        </p>
+
+                        <div class="theorem-statement">
+                            <div class="theorem-box">
+                                <strong><span class="yat-symbol">ⵟ</span>-Conv Definition:</strong>
+                                For kernel $K$ and input patch $I_{i,j}$ at location $(i,j)$:
+                                $$(\text{ⵟ-Conv}(K, I))_{i,j} = \frac{\langle K, I_{i,j} \rangle^2}{\|K - I_{i,j}\|^2 +
+                                \epsilon}$$
+                            </div>
+                        </div>
+
+                        <p>
+                            Like standard convolution, the kernel slides across the input. But instead of just computing
+                            a dot product, we compute the full <span class="yat-symbol">ⵟ</span>-product at each
+                            location.
+                        </p>
+
+                        <div class="consequences-grid">
+                            <div class="consequence-item">
+                                <span class="consequence-icon">🎯</span>
+                                <h5>Dual Sensitivity</h5>
+                                <p>
+                                    Responds strongly only when a patch is both <em>aligned with</em> AND
+                                    <em>close to</em> the kernel. More selective than standard convolution.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">🔄</span>
+                                <h5>Intrinsic Non-linearity</h5>
+                                <p>
+                                    No need for ReLU/GELU after the convolution — the geometric ratio
+                                    provides all the non-linearity needed.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">📍</span>
+                                <h5>Localized Response</h5>
+                                <p>
+                                    Like RBF kernels, responses decay for patches far from the learned kernel,
+                                    providing natural attention-like behavior.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">💾</span>
+                                <h5>Memory Efficient</h5>
+                                <p>
+                                    No activation values to store for backprop — the gradient flows through
+                                    the geometric computation directly.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- ⵟ-Attention -->
+                        <h4>👀 <span class="yat-symbol">ⵟ</span>-Attention: Geometric Query-Key Matching</h4>
+                        <p>
+                            For sequence modeling (text, time series), we adapt the <span
+                                class="yat-symbol">ⵟ</span>-product
+                            to the attention mechanism:
+                        </p>
+
+                        <div class="theorem-statement">
+                            <div class="theorem-box">
+                                <strong><span class="yat-symbol">ⵟ</span>-Attention Definition:</strong>
+                                $$\text{ⵟ-Attention}(Q, K, V) = \text{softmax}\left( s \cdot (Q \text{ ⵟ } K^T) \right)
+                                V$$
+                                where $Q \text{ ⵟ } K^T$ applies the <span class="yat-symbol">ⵟ</span>-product
+                                element-wise between query and key vectors.
+                            </div>
+                        </div>
+
+                        <p><strong>How it differs from standard attention:</strong></p>
+
+                        <div class="comparison-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Aspect</th>
+                                        <th>Standard Attention</th>
+                                        <th><span class="yat-symbol">ⵟ</span>-Attention</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Score Computation</strong></td>
+                                        <td>$Q \cdot K^T$ (dot product)</td>
+                                        <td>$Q \text{ ⵟ } K^T$ (alignment + distance)</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Similarity Measure</strong></td>
+                                        <td>Pure alignment</td>
+                                        <td>Alignment AND proximity</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Score Scaling</strong></td>
+                                        <td>$\frac{1}{\sqrt{d_k}}$ (manual)</td>
+                                        <td>Learnable $s$</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Distant Pairs</strong></td>
+                                        <td>Can still have high scores</td>
+                                        <td>Naturally suppressed</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">🔬</span>
+                            <div>
+                                <strong>Intuition:</strong> In <span class="yat-symbol">ⵟ</span>-Attention,
+                                a query strongly attends to a key only if they are BOTH aligned (pointing same
+                                direction)
+                                AND close in representation space. This is more selective than standard attention,
+                                which only considers alignment.
+                            </div>
+                        </div>
+
+                        <!-- AetherResNet -->
+                        <h4>🏔️ AetherResNet: Geometric Vision Architecture</h4>
+                        <p>
+                            AetherResNet adapts the ResNet architecture by replacing standard convolutions
+                            with our geometric alternatives.
+                        </p>
+
+                        <div class="proof-step">
+                            <strong>Block Structure</strong>
+                            <p>Each residual block consists of:</p>
+                            <ol>
+                                <li><strong><span class="yat-symbol">ⵟ</span>-Conv Layer:</strong> Geometric feature
+                                    extraction
+                                    (replaces Conv + ReLU)</li>
+                                <li><strong>Linear Conv Layer:</strong> Standard convolution for channel mixing</li>
+                                <li><strong>Residual Connection:</strong> $\text{output} = F(\mathbf{x}) + \mathbf{x}$
+                                </li>
+                            </ol>
+                        </div>
+
+                        <div class="comparison-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Component</th>
+                                        <th>Standard ResNet</th>
+                                        <th>AetherResNet</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Conv Layers</strong></td>
+                                        <td>Conv2d → BatchNorm → ReLU</td>
+                                        <td><span class="yat-symbol">ⵟ</span>-Conv → Linear Conv</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Normalization</strong></td>
+                                        <td>BatchNorm required</td>
+                                        <td>Not needed (self-regularizing)</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Activation</strong></td>
+                                        <td>ReLU between layers</td>
+                                        <td>None (intrinsic non-linearity)</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Skip Connection</strong></td>
+                                        <td>Identity or projection</td>
+                                        <td>Same</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <p>
+                            <strong>Results:</strong> AetherResNet-18 outperforms standard ResNet-18 on CIFAR-100
+                            (+2.68%), STL-10 (+2.49%), and Tiny-ImageNet (+2.45%).
+                        </p>
+
+                        <!-- AetherGPT -->
+                        <h4>📝 AetherGPT: Geometric Language Model</h4>
+                        <p>
+                            AetherGPT adapts GPT-2's transformer architecture with geometric operators:
+                        </p>
+
+                        <div class="proof-step">
+                            <strong>Transformer Block Structure</strong>
+                            <ol>
+                                <li><strong>Multi-Head <span class="yat-symbol">ⵟ</span>-Attention:</strong>
+                                    Replaces standard attention with geometric query-key matching</li>
+                                <li><strong>NMN Feed-Forward:</strong> Replaces MLP + GELU with NMN layers</li>
+                                <li><strong>No LayerNorm:</strong> Self-regulation makes normalization unnecessary</li>
+                                <li><strong>Linear Output:</strong> Standard linear projection for next-token prediction
+                                </li>
+                            </ol>
+                        </div>
+
+                        <div class="consequences-grid">
+                            <div class="consequence-item">
+                                <span class="consequence-icon">📉</span>
+                                <h5>Better Loss</h5>
+                                <p>
+                                    11.2% improvement in validation loss (BF16): 2.69 vs 3.03 for baseline GPT-2.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">💾</span>
+                                <h5>Less Memory</h5>
+                                <p>
+                                    15-25% reduction in peak memory usage due to eliminated activation storage.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">🚫</span>
+                                <h5>No LayerNorm</h5>
+                                <p>
+                                    Self-regularization property eliminates the need for normalization layers entirely.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">⏱️</span>
+                                <h5>Comparable Speed</h5>
+                                <p>
+                                    Only ~4% slower in raw throughput, often offset by larger batch sizes from memory
+                                    savings.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Computational Analysis -->
+                        <h4>⚡ Computational Efficiency</h4>
+                        <p>
+                            A common question: <em>Is the <span class="yat-symbol">ⵟ</span>-product more expensive than
+                                linear layers?</em> Here's the detailed analysis:
+                        </p>
+
+                        <div class="proof-step">
+                            <strong>Complexity Analysis</strong>
+                            <p>For input dimension $d$, output dimension $n$, batch size $B$:</p>
+                            <ul>
+                                <li><strong>Linear Layer:</strong> $\Theta(Bnd)$ — one matrix multiplication</li>
+                                <li><strong>NMN Layer:</strong> $\Theta(Bnd)$ — same asymptotic complexity!</li>
+                            </ul>
+                            <p>
+                                The key insight: we reuse computations using the algebraic identity:
+                            </p>
+                        </div>
+
+                        <div class="math-block">
+                            $$\|\mathbf{w} - \mathbf{x}\|^2 = \|\mathbf{w}\|^2 + \|\mathbf{x}\|^2 -
+                            2\mathbf{w}^T\mathbf{x}$$
+                        </div>
+
+                        <p>
+                            Since we already compute $\mathbf{w}^T\mathbf{x}$ for the numerator, we can reuse it
+                            for the denominator. The squared norms $\|\mathbf{w}\|^2$ and $\|\mathbf{x}\|^2$ can be
+                            precomputed and cached.
+                        </p>
+
+                        <div class="comparison-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Metric</th>
+                                        <th>Linear + ReLU</th>
+                                        <th>NMN Layer</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>FLOPs</strong></td>
+                                        <td>$2Bnd + Bn$</td>
+                                        <td>$\approx 4Bnd$</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Memory (Forward)</strong></td>
+                                        <td>Store activations for ReLU</td>
+                                        <td>No activation storage needed</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Normalization</strong></td>
+                                        <td>Often needs BatchNorm/LayerNorm</td>
+                                        <td>Self-regularizing</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Net Effect</strong></td>
+                                        <td>Baseline</td>
+                                        <td>~2× FLOPs, 15-25% less memory</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">📊</span>
+                            <div>
+                                <strong>The Trade-off:</strong> NMN layers use roughly 2× the FLOPs of Linear+ReLU
+                                but save 15-25% memory by eliminating activation storage. At larger layer sizes,
+                                the memory savings become increasingly valuable, enabling larger batch sizes or
+                                longer contexts.
+                            </div>
+                        </div>
+
+                        <!-- Getting Started -->
+                        <h4>🚀 Getting Started with NMN</h4>
+                        <p>
+                            Ready to try it yourself? The NMN package is available on PyPI:
+                        </p>
+
+                        <div class="proof-step">
+                            <strong>Installation</strong>
+                            <pre
+                                style="background: var(--terminal-bg); padding: 1rem; border-radius: 8px; overflow-x: auto;"><code>pip install nmn</code></pre>
+                        </div>
+
+                        <div class="proof-step">
+                            <strong>Basic Usage</strong>
+                            <pre
+                                style="background: var(--terminal-bg); padding: 1rem; border-radius: 8px; overflow-x: auto; font-size: 0.85rem;"><code>import torch
+from nmn import NMNLayer, YatConv2d
+
+# Dense NMN layer
+layer = NMNLayer(in_features=64, out_features=128)
+x = torch.randn(32, 64)  # batch of 32
+output = layer(x)  # shape: (32, 128)
+
+# Convolutional ⵟ-layer
+conv = YatConv2d(in_channels=3, out_channels=64, kernel_size=3)
+img = torch.randn(1, 3, 224, 224)
+features = conv(img)  # shape: (1, 64, 222, 222)</code></pre>
+                        </div>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">📚</span>
+                            <div>
+                                <strong>Full Documentation:</strong> Check out the
+                                <a href="https://github.com/mlnomadpy/nmn" target="_blank">GitHub repository</a>
+                                for complete examples, pre-trained models, and training scripts for
+                                AetherResNet and AetherGPT.
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="blog-page-nav">
+                    <a href="10-theoretical-background.html" class="blog-nav-btn">← Previous: Theory Background</a>
+                    <a href="../index.html#theory" class="blog-nav-btn">All Topics</a>
+                    <a href="01-mercer-kernel.html" class="blog-nav-btn">Next: Mercer Kernel →</a>
+                </div>
+            </article>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="yat-symbol">ⵟ</span>
+                    <span>Neural Matter Networks</span>
+                </div>
+                <div class="footer-links">
+                    <a href="https://github.com/mlnomadpy/nmn" target="_blank">GitHub</a>
+                    <a href="https://pypi.org/project/nmn/" target="_blank">PyPI</a>
+                    <a href="mailto:taha@azetta.ai">Contact</a>
+                </div>
+                <div class="footer-copy">
+                    <p>Built with ❤️ by <a href="https://azetta.ai" target="_blank">azetta.ai</a></p>
+                    <p>AGPL-3.0 License</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '$', right: '$', display: false }
+                ]
+            });
+        });
+    </script>
+</body>
+
+</html>

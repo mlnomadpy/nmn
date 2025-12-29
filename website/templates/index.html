@@ -1,28 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Neural Matter Networks — Activation-Free Neural Computation</title>
-    <meta name="description" content="The ⵟ-product: A kernel-based activation-free neural network architecture that unifies alignment and proximity for geometrically-aware computation.">
-    
+    <meta name="description"
+        content="The ⵟ-product: A kernel-based activation-free neural network architecture that unifies alignment and proximity for geometrically-aware computation.">
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tifinagh&display=swap" rel="stylesheet">
-    
+
     <!-- KaTeX for math rendering -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-    
+
     <!-- Three.js for 3D -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    
+
     <!-- Styles -->
     <link rel="stylesheet" href="css/styles.css">
 </head>
+
 <body>
     <!-- Navigation -->
     <nav class="main-nav">
@@ -40,7 +45,8 @@
                 <a href="#code">Code</a>
                 <a href="https://github.com/mlnomadpy/nmn" target="_blank" class="nav-github">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+                        <path
+                            d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
                     </svg>
                 </a>
             </div>
@@ -51,7 +57,6 @@
     <header class="hero">
         <div class="hero-particles" id="particles"></div>
         <div class="hero-content">
-            <div class="hero-badge">ICLR 2025 Submission</div>
             <h1 class="hero-title">
                 <span class="title-line">No More DeLuLu</span>
                 <span class="title-subtitle">A Kernel-Based Activation-Free Neural Networks</span>
@@ -68,14 +73,17 @@
                 </div>
             </div>
             <p class="hero-abstract">
-                The <span class="yat-symbol">ⵟ</span>-product unifies <em>alignment</em> and <em>proximity</em> in a single geometric operator, 
-                enabling neural networks without activation functions while maintaining universal approximation capabilities.
+                The <span class="yat-symbol">ⵟ</span>-product unifies <em>alignment</em> and <em>proximity</em> in a
+                single geometric operator,
+                enabling neural networks without activation functions while maintaining universal approximation
+                capabilities.
             </p>
             <div class="hero-actions">
                 <a href="#visualizations" class="btn btn-primary">Explore Visualizations</a>
                 <a href="https://github.com/mlnomadpy/nmn" class="btn btn-secondary" target="_blank">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+                        <path
+                            d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
                     </svg>
                     View on GitHub
                 </a>
@@ -108,36 +116,44 @@
             <div class="intro-grid">
                 <div class="intro-text">
                     <p class="lead">
-                        Modern neural networks rely on a paradigm that <strong>separates geometry from non-linearity</strong>: 
-                        linear transformations (dot products) followed by element-wise activation functions (ReLU, sigmoid).
+                        Modern neural networks rely on a paradigm that <strong>separates geometry from
+                            non-linearity</strong>:
+                        linear transformations (dot products) followed by element-wise activation functions (ReLU,
+                        sigmoid).
                     </p>
                     <p>
-                        Consider ReLU: it maps the entire spectrum of negative pre-activations—representing varying degrees 
+                        Consider ReLU: it maps the entire spectrum of negative pre-activations—representing varying
+                        degrees
                         of dissimilarity—to a uniform zero, <em>discarding nuanced geometric relationships</em>.
                     </p>
                     <div class="problem-cards">
                         <div class="problem-card">
                             <div class="problem-icon">📐</div>
                             <h4>Dot Product Limitation</h4>
-                            <p>Captures alignment but ignores spatial proximity. Vectors can be aligned yet arbitrarily far apart.</p>
+                            <p>Captures alignment but ignores spatial proximity. Vectors can be aligned yet arbitrarily
+                                far apart.</p>
                         </div>
                         <div class="problem-card">
                             <div class="problem-icon">🎯</div>
                             <h4>Activation Information Loss</h4>
-                            <p>ReLU collapses half-spaces to zero. Sigmoid saturates extremes. Geometric structure is lost.</p>
+                            <p>ReLU collapses half-spaces to zero. Sigmoid saturates extremes. Geometric structure is
+                                lost.</p>
                         </div>
                         <div class="problem-card">
                             <div class="problem-icon">🔄</div>
                             <h4>Architectural Complexity</h4>
-                            <p>Requires normalization layers, attention mechanisms, and regularization to stabilize training.</p>
+                            <p>Requires normalization layers, attention mechanisms, and regularization to stabilize
+                                training.</p>
                         </div>
                     </div>
                 </div>
                 <div class="intro-visual">
                     <div class="manifold-viz-container">
                         <h4>Topological Distortion by Activations</h4>
-                        <img src="assets/images/manifold_distortion.png" alt="Manifold distortion by activation functions" class="manifold-img">
-                        <p class="caption">Activation functions can distort the geometric structure of the input data manifold, leading to information loss.</p>
+                        <img src="assets/images/manifold_distortion.png"
+                            alt="Manifold distortion by activation functions" class="manifold-img">
+                        <p class="caption">Activation functions can distort the geometric structure of the input data
+                            manifold, leading to information loss.</p>
                     </div>
                 </div>
             </div>
@@ -150,26 +166,30 @@
             <h2 class="section-title">The <span class="yat-symbol">ⵟ</span>-Product: Unifying Alignment & Proximity</h2>
             <div class="yat-intro">
                 <p class="lead">
-                    Inspired by <strong>inverse-square laws in physics</strong>, the <span class="yat-symbol">ⵟ</span>-product 
+                    Inspired by <strong>inverse-square laws in physics</strong>, the <span
+                        class="yat-symbol">ⵟ</span>-product
                     creates a unified operator that captures both directional alignment and spatial proximity.
                 </p>
             </div>
-            
+
             <div class="equation-showcase">
                 <div class="equation-main" id="yat-equation">
-                    $$\text{ⵟ}(\mathbf{w}, \mathbf{x}) = \frac{\langle \mathbf{w}, \mathbf{x} \rangle^2}{\|\mathbf{w} - \mathbf{x}\|^2 + \epsilon}$$
+                    $$\text{ⵟ}(\mathbf{w}, \mathbf{x}) = \frac{\langle \mathbf{w}, \mathbf{x} \rangle^2}{\|\mathbf{w} -
+                    \mathbf{x}\|^2 + \epsilon}$$
                 </div>
                 <div class="equation-breakdown">
                     <div class="breakdown-item">
                         <div class="breakdown-formula">⟨<b>w</b>, <b>x</b>⟩²</div>
                         <div class="breakdown-label">Numerator</div>
-                        <div class="breakdown-desc">Squared dot product captures <strong>alignment</strong> between vectors</div>
+                        <div class="breakdown-desc">Squared dot product captures <strong>alignment</strong> between
+                            vectors</div>
                     </div>
                     <div class="breakdown-divider">÷</div>
                     <div class="breakdown-item">
                         <div class="breakdown-formula">‖<b>w</b> − <b>x</b>‖² + ε</div>
                         <div class="breakdown-label">Denominator</div>
-                        <div class="breakdown-desc">Squared distance captures <strong>proximity</strong> with inverse-square decay</div>
+                        <div class="breakdown-desc">Squared distance captures <strong>proximity</strong> with
+                            inverse-square decay</div>
                     </div>
                 </div>
             </div>
@@ -212,7 +232,7 @@
     </section>
 
     <!-- Visualizations Section -->
-        <!-- VISUALIZATIONS_PLACEHOLDER -->
+    <!-- VISUALIZATIONS_PLACEHOLDER -->
 
 
     <!-- Architecture Section -->
@@ -221,10 +241,11 @@
             <h2 class="section-title">Neural Matter Network Architectures</h2>
             <div class="arch-intro">
                 <p class="lead">
-                    NMN layers serve as drop-in replacements for Linear + Activation, providing intrinsic non-linearity through geometry.
+                    NMN layers serve as drop-in replacements for Linear + Activation, providing intrinsic non-linearity
+                    through geometry.
                 </p>
             </div>
-            
+
             <div class="arch-cards">
                 <div class="arch-card">
                     <div class="arch-header">
@@ -232,7 +253,8 @@
                         <span class="arch-badge">Dense</span>
                     </div>
                     <div class="arch-equation">
-                        $$h(\mathbf{x}) = s \cdot \sum_{i=1}^n \frac{(\mathbf{w}_i^\top\mathbf{x} + b_i)^2}{\|\mathbf{w}_i - \mathbf{x}\|^2 + \epsilon}$$
+                        $$h(\mathbf{x}) = s \cdot \sum_{i=1}^n \frac{(\mathbf{w}_i^\top\mathbf{x} +
+                        b_i)^2}{\|\mathbf{w}_i - \mathbf{x}\|^2 + \epsilon}$$
                     </div>
                     <p>Replaces Linear + ReLU with a single geometric operation.</p>
                 </div>
@@ -242,7 +264,8 @@
                         <span class="arch-badge">Convolution</span>
                     </div>
                     <div class="arch-equation">
-                        $$(\text{ⵟ-Conv}(K, I))_{i,j} = \frac{\langle K, I_{i,j} \rangle^2}{\|K - I_{i,j}\|^2 + \epsilon}$$
+                        $$(\text{ⵟ-Conv}(K, I))_{i,j} = \frac{\langle K, I_{i,j} \rangle^2}{\|K - I_{i,j}\|^2 +
+                        \epsilon}$$
                     </div>
                     <p>Geometrically-aware feature extraction for spatial data.</p>
                 </div>
@@ -292,7 +315,7 @@
     <section id="results" class="section">
         <div class="container">
             <h2 class="section-title">Experimental Results</h2>
-            
+
             <div class="results-grid">
                 <div class="results-block">
                     <h3>Vision Benchmarks</h3>
@@ -375,14 +398,18 @@
 
             <div class="training-curves">
                 <h3>Training Dynamics</h3>
-                <img src="assets/images/training_curves.png" alt="Training curves comparing Aether vs Linear baseline" class="training-img">
-                <p class="caption">Validation and training loss over 35k steps. Aether-GPT2 (blue) consistently outperforms the linear baseline (green).</p>
+                <img src="assets/images/training_curves.png" alt="Training curves comparing Aether vs Linear baseline"
+                    class="training-img">
+                <p class="caption">Validation and training loss over 35k steps. Aether-GPT2 (blue) consistently
+                    outperforms the linear baseline (green).</p>
             </div>
 
             <div class="mnist-prototypes">
                 <h3>Learned Prototypes: Linear vs <span class="yat-symbol">ⵟ</span>-Product</h3>
                 <img src="assets/images/mnist_prototypes.png" alt="MNIST prototype comparison" class="prototypes-img">
-                <p class="caption">Linear models produce diffuse, blurry prototypes. <span class="yat-symbol">ⵟ</span>-product neurons learn sharp, geometrically coherent digit representations.</p>
+                <p class="caption">Linear models produce diffuse, blurry prototypes. <span
+                        class="yat-symbol">ⵟ</span>-product neurons learn sharp, geometrically coherent digit
+                    representations.</p>
             </div>
         </div>
     </section>
@@ -392,7 +419,7 @@
         <div class="container">
             <h2 class="section-title">Mathematical Foundations</h2>
             <p class="section-subtitle">
-                Explore the rigorous theoretical guarantees behind Neural Matter Networks. 
+                Explore the rigorous theoretical guarantees behind Neural Matter Networks.
                 Each theorem builds upon the previous, creating a complete mathematical framework.
             </p>
 
@@ -401,7 +428,8 @@
                 <div class="blog-card" data-modal="modal-mercer">
                     <span class="blog-card-num">1</span>
                     <h3 class="blog-card-title">The <span class="yat-symbol">ⵟ</span>-Product is a Mercer Kernel</h3>
-                    <p class="blog-card-preview">Discover why the ⵟ-product satisfies Mercer's condition, connecting it to 50+ years of kernel method research.</p>
+                    <p class="blog-card-preview">Discover why the ⵟ-product satisfies Mercer's condition, connecting it
+                        to 50+ years of kernel method research.</p>
                     <div class="blog-card-tags">
                         <span class="blog-card-tag">Kernel Theory</span>
                         <span class="blog-card-tag">PSD</span>
@@ -409,16 +437,18 @@
                     </div>
                     <div class="blog-card-cta">
                         <span>Read more</span>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7" />
                         </svg>
                     </div>
                 </div>
-                
+
                 <div class="blog-card" data-modal="modal-uat">
                     <span class="blog-card-num">2</span>
                     <h3 class="blog-card-title">Universal Approximation Theorem</h3>
-                    <p class="blog-card-preview">Learn how NMNs can approximate any continuous function without losing expressive power.</p>
+                    <p class="blog-card-preview">Learn how NMNs can approximate any continuous function without losing
+                        expressive power.</p>
                     <div class="blog-card-tags">
                         <span class="blog-card-tag">UAT</span>
                         <span class="blog-card-tag">Expressiveness</span>
@@ -426,16 +456,18 @@
                     </div>
                     <div class="blog-card-cta">
                         <span>Read more</span>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7" />
                         </svg>
                     </div>
                 </div>
-                
+
                 <div class="blog-card" data-modal="modal-regulation">
                     <span class="blog-card-num">3</span>
                     <h3 class="blog-card-title">Self-Regulation & Bounded Outputs</h3>
-                    <p class="blog-card-preview">Understand how the ⵟ-product naturally self-regulates without explicit normalization.</p>
+                    <p class="blog-card-preview">Understand how the ⵟ-product naturally self-regulates without explicit
+                        normalization.</p>
                     <div class="blog-card-tags">
                         <span class="blog-card-tag">Stability</span>
                         <span class="blog-card-tag">Normalization</span>
@@ -443,16 +475,18 @@
                     </div>
                     <div class="blog-card-cta">
                         <span>Read more</span>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7" />
                         </svg>
                     </div>
                 </div>
-                
+
                 <div class="blog-card" data-modal="modal-gradient">
                     <span class="blog-card-num">4</span>
                     <h3 class="blog-card-title">Stable Learning & Gradient Localization</h3>
-                    <p class="blog-card-preview">Explore how gradients vanish for distant inputs, providing natural localization during training.</p>
+                    <p class="blog-card-preview">Explore how gradients vanish for distant inputs, providing natural
+                        localization during training.</p>
                     <div class="blog-card-tags">
                         <span class="blog-card-tag">Gradients</span>
                         <span class="blog-card-tag">Lipschitz</span>
@@ -460,16 +494,18 @@
                     </div>
                     <div class="blog-card-cta">
                         <span>Read more</span>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7" />
                         </svg>
                     </div>
                 </div>
-                
+
                 <div class="blog-card" data-modal="modal-info">
                     <span class="blog-card-num">5</span>
                     <h3 class="blog-card-title">Information-Geometric Foundations</h3>
-                    <p class="blog-card-preview">See how the ⵟ-product bridges Euclidean geometry and information theory.</p>
+                    <p class="blog-card-preview">See how the ⵟ-product bridges Euclidean geometry and information
+                        theory.</p>
                     <div class="blog-card-tags">
                         <span class="blog-card-tag">KL Divergence</span>
                         <span class="blog-card-tag">Entropy</span>
@@ -477,16 +513,18 @@
                     </div>
                     <div class="blog-card-cta">
                         <span>Read more</span>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7" />
                         </svg>
                     </div>
                 </div>
-                
+
                 <div class="blog-card" data-modal="modal-topology">
                     <span class="blog-card-num">6</span>
                     <h3 class="blog-card-title">Topological Organization: Neural Fiber Bundles</h3>
-                    <p class="blog-card-preview">Discover the vortex-like territorial fields created by ⵟ-product classification.</p>
+                    <p class="blog-card-preview">Discover the vortex-like territorial fields created by ⵟ-product
+                        classification.</p>
                     <div class="blog-card-tags">
                         <span class="blog-card-tag">Topology</span>
                         <span class="blog-card-tag">Fiber Bundles</span>
@@ -494,8 +532,9 @@
                     </div>
                     <div class="blog-card-cta">
                         <span>Read more</span>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7" />
                         </svg>
                     </div>
                 </div>
@@ -507,11 +546,12 @@
                     <span class="theorem-badge">Theorem 1</span>
                     <h3 class="theorem-title">The <span class="yat-symbol">ⵟ</span>-Product is a Mercer Kernel</h3>
                 </div>
-                
+
                 <div class="theorem-statement">
                     <div class="theorem-box">
-                        <strong>Theorem (Mercer's Condition):</strong> The kernel 
-                        $k_{\text{ⵟ}}(\mathbf{x}, \mathbf{w}) = \frac{(\mathbf{x} \cdot \mathbf{w})^2}{\|\mathbf{x} - \mathbf{w}\|^2 + \varepsilon}$
+                        <strong>Theorem (Mercer's Condition):</strong> The kernel
+                        $k_{\text{ⵟ}}(\mathbf{x}, \mathbf{w}) = \frac{(\mathbf{x} \cdot \mathbf{w})^2}{\|\mathbf{x} -
+                        \mathbf{w}\|^2 + \varepsilon}$
                         is symmetric and positive semi-definite, hence a valid Mercer kernel on $\mathbb{R}^d$.
                     </div>
                 </div>
@@ -519,35 +559,46 @@
                 <div class="theorem-content">
                     <h4>What Does This Mean?</h4>
                     <p>
-                        A <strong>Mercer kernel</strong> is a special type of similarity function that has two critical properties:
+                        A <strong>Mercer kernel</strong> is a special type of similarity function that has two critical
+                        properties:
                     </p>
                     <ul class="theorem-list">
-                        <li><strong>Symmetry:</strong> $k(\mathbf{x}, \mathbf{w}) = k(\mathbf{w}, \mathbf{x})$ — the similarity between x and w is the same as between w and x.</li>
-                        <li><strong>Positive Semi-Definiteness (PSD):</strong> For any set of points, the kernel matrix has all non-negative eigenvalues.</li>
+                        <li><strong>Symmetry:</strong> $k(\mathbf{x}, \mathbf{w}) = k(\mathbf{w}, \mathbf{x})$ — the
+                            similarity between x and w is the same as between w and x.</li>
+                        <li><strong>Positive Semi-Definiteness (PSD):</strong> For any set of points, the kernel matrix
+                            has all non-negative eigenvalues.</li>
                     </ul>
-                    
+
                     <h4>Why Is This Important?</h4>
                     <p>
-                        Being a Mercer kernel means the <span class="yat-symbol">ⵟ</span>-product implicitly computes an inner product 
-                        in a <strong>high-dimensional feature space</strong> without ever explicitly computing that space. This is the famous 
+                        Being a Mercer kernel means the <span class="yat-symbol">ⵟ</span>-product implicitly computes an
+                        inner product
+                        in a <strong>high-dimensional feature space</strong> without ever explicitly computing that
+                        space. This is the famous
                         <em>"kernel trick"</em> from machine learning theory.
                     </p>
-                    
+
                     <div class="insight-box">
                         <span class="insight-icon">💡</span>
                         <div>
-                            <strong>Key Insight:</strong> The <span class="yat-symbol">ⵟ</span>-product is a <em>product of two PSD kernels</em>: 
-                            the squared dot product $(\mathbf{x} \cdot \mathbf{w})^2$ (a polynomial kernel) and the inverse multiquadric 
-                            $\frac{1}{\|\mathbf{x} - \mathbf{w}\|^2 + \varepsilon}$ (an RBF-like kernel). By the Schur product theorem, 
+                            <strong>Key Insight:</strong> The <span class="yat-symbol">ⵟ</span>-product is a <em>product
+                                of two PSD kernels</em>:
+                            the squared dot product $(\mathbf{x} \cdot \mathbf{w})^2$ (a polynomial kernel) and the
+                            inverse multiquadric
+                            $\frac{1}{\|\mathbf{x} - \mathbf{w}\|^2 + \varepsilon}$ (an RBF-like kernel). By the Schur
+                            product theorem,
                             their product is also PSD.
                         </div>
                     </div>
 
                     <h4>What Does This Offer?</h4>
                     <ul class="benefits-list">
-                        <li><strong>Theoretical Foundation:</strong> Connects NMNs to 50+ years of kernel method research (SVMs, Gaussian Processes, etc.)</li>
-                        <li><strong>Reproducing Kernel Hilbert Space (RKHS):</strong> Guarantees existence of a rich function space for learning</li>
-                        <li><strong>Optimization Guarantees:</strong> Many kernel-based optimization results apply directly</li>
+                        <li><strong>Theoretical Foundation:</strong> Connects NMNs to 50+ years of kernel method
+                            research (SVMs, Gaussian Processes, etc.)</li>
+                        <li><strong>Reproducing Kernel Hilbert Space (RKHS):</strong> Guarantees existence of a rich
+                            function space for learning</li>
+                        <li><strong>Optimization Guarantees:</strong> Many kernel-based optimization results apply
+                            directly</li>
                     </ul>
                 </div>
 
@@ -563,13 +614,15 @@
                     <span class="theorem-badge">Theorem 2</span>
                     <h3 class="theorem-title">Universal Approximation Theorem</h3>
                 </div>
-                
+
                 <div class="theorem-statement">
                     <div class="theorem-box">
-                        <strong>Theorem:</strong> Let $\mathcal{X} \subset \mathbb{R}^d$ be compact. The class of single-hidden-layer 
-                        <span class="yat-symbol">ⵟ</span>-product networks 
+                        <strong>Theorem:</strong> Let $\mathcal{X} \subset \mathbb{R}^d$ be compact. The class of
+                        single-hidden-layer
+                        <span class="yat-symbol">ⵟ</span>-product networks
                         $f(\mathbf{x}) = \sum_{i=1}^n \alpha_i \cdot g(\mathbf{x}; \mathbf{w}_i, b_i) + c$
-                        is <em>dense</em> in $C(\mathcal{X})$ under the uniform norm. That is, NMNs can approximate any continuous function 
+                        is <em>dense</em> in $C(\mathcal{X})$ under the uniform norm. That is, NMNs can approximate any
+                        continuous function
                         to arbitrary precision.
                     </div>
                 </div>
@@ -577,11 +630,14 @@
                 <div class="theorem-content">
                     <h4>What Does This Mean?</h4>
                     <p>
-                        The Universal Approximation Theorem (UAT) is the <strong>fundamental existence theorem</strong> for neural networks. 
-                        It guarantees that given enough neurons, a network can approximate any continuous function as closely as desired.
+                        The Universal Approximation Theorem (UAT) is the <strong>fundamental existence theorem</strong>
+                        for neural networks.
+                        It guarantees that given enough neurons, a network can approximate any continuous function as
+                        closely as desired.
                     </p>
                     <p>
-                        This theorem proves that <strong>NMNs lose no expressive power</strong> by removing activation functions. 
+                        This theorem proves that <strong>NMNs lose no expressive power</strong> by removing activation
+                        functions.
                         The <span class="yat-symbol">ⵟ</span>-product's inherent non-linearity is sufficient.
                     </p>
 
@@ -589,19 +645,25 @@
                     <div class="proof-sketch">
                         <p>The proof is elegant and leverages the kernel structure:</p>
                         <ol>
-                            <li><strong>Recover IMQ kernel:</strong> By differentiating $g(\mathbf{x}; \mathbf{w}, b)$ twice with respect to bias $b$, 
-                            we recover the inverse multiquadric (IMQ) kernel: $\partial_b^2 g = \frac{2}{\|\mathbf{x} - \mathbf{w}\|^2 + \varepsilon}$</li>
-                            <li><strong>Fourier analysis:</strong> The IMQ kernel has a strictly positive Fourier transform (Bessel function)</li>
-                            <li><strong>Uniqueness:</strong> Any measure orthogonal to all IMQ translates must be zero</li>
-                            <li><strong>Density:</strong> By Hahn-Banach/Riesz duality, the span is dense in $C(\mathcal{X})$</li>
+                            <li><strong>Recover IMQ kernel:</strong> By differentiating $g(\mathbf{x}; \mathbf{w}, b)$
+                                twice with respect to bias $b$,
+                                we recover the inverse multiquadric (IMQ) kernel: $\partial_b^2 g =
+                                \frac{2}{\|\mathbf{x} - \mathbf{w}\|^2 + \varepsilon}$</li>
+                            <li><strong>Fourier analysis:</strong> The IMQ kernel has a strictly positive Fourier
+                                transform (Bessel function)</li>
+                            <li><strong>Uniqueness:</strong> Any measure orthogonal to all IMQ translates must be zero
+                            </li>
+                            <li><strong>Density:</strong> By Hahn-Banach/Riesz duality, the span is dense in
+                                $C(\mathcal{X})$</li>
                         </ol>
                     </div>
 
                     <div class="insight-box">
                         <span class="insight-icon">🔬</span>
                         <div>
-                            <strong>Key Insight:</strong> The bias term $b$ is crucial — it allows the network to "shift" response fields 
-                            and span the entire function space through differentiation. This is why we use 
+                            <strong>Key Insight:</strong> The bias term $b$ is crucial — it allows the network to
+                            "shift" response fields
+                            and span the entire function space through differentiation. This is why we use
                             $(\mathbf{w}^\top\mathbf{x} + b)^2$ rather than just $(\mathbf{w}^\top\mathbf{x})^2$.
                         </div>
                     </div>
@@ -609,8 +671,11 @@
                     <h4>What Does This Offer?</h4>
                     <ul class="benefits-list">
                         <li><strong>No Power Loss:</strong> NMNs are as expressive as ReLU/Sigmoid networks</li>
-                        <li><strong>Geometric Localization:</strong> Unlike ReLU (unbounded growth), the <span class="yat-symbol">ⵟ</span>-product achieves density through <em>localized</em> geometric units</li>
-                        <li><strong>Practical Corollary:</strong> Single hidden layer is sufficient in theory — though deeper networks may learn more efficiently</li>
+                        <li><strong>Geometric Localization:</strong> Unlike ReLU (unbounded growth), the <span
+                                class="yat-symbol">ⵟ</span>-product achieves density through <em>localized</em>
+                            geometric units</li>
+                        <li><strong>Practical Corollary:</strong> Single hidden layer is sufficient in theory — though
+                            deeper networks may learn more efficiently</li>
                     </ul>
                 </div>
 
@@ -627,12 +692,14 @@
                     <span class="theorem-badge">Proposition 3</span>
                     <h3 class="theorem-title">Self-Regulation & Bounded Outputs</h3>
                 </div>
-                
+
                 <div class="theorem-statement">
                     <div class="theorem-box">
-                        <strong>Proposition:</strong> For any fixed weight vector $\mathbf{w}$, the <span class="yat-symbol">ⵟ</span>-product output 
+                        <strong>Proposition:</strong> For any fixed weight vector $\mathbf{w}$, the <span
+                            class="yat-symbol">ⵟ</span>-product output
                         remains bounded and converges as $\|\mathbf{x}\| \to \infty$:
-                        $$\lim_{\|\mathbf{x}\| \to \infty} \text{ⵟ}(\mathbf{w}, \mathbf{x}) = \|\mathbf{w}\|^2 \cos^2\theta$$
+                        $$\lim_{\|\mathbf{x}\| \to \infty} \text{ⵟ}(\mathbf{w}, \mathbf{x}) = \|\mathbf{w}\|^2
+                        \cos^2\theta$$
                         where $\theta$ is the angle between $\mathbf{w}$ and the direction of $\mathbf{x}$.
                     </div>
                 </div>
@@ -640,35 +707,42 @@
                 <div class="theorem-content">
                     <h4>What Does This Mean?</h4>
                     <p>
-                        Unlike ReLU which can grow unboundedly with input magnitude, or dot products which scale linearly, 
-                        the <span class="yat-symbol">ⵟ</span>-product <strong>naturally self-regulates</strong>. As inputs get very large, 
-                        the output converges to a finite value that depends only on the <em>direction</em>, not magnitude.
+                        Unlike ReLU which can grow unboundedly with input magnitude, or dot products which scale
+                        linearly,
+                        the <span class="yat-symbol">ⵟ</span>-product <strong>naturally self-regulates</strong>. As
+                        inputs get very large,
+                        the output converges to a finite value that depends only on the <em>direction</em>, not
+                        magnitude.
                     </p>
 
                     <h4>Corollary: Dimensional Self-Normalization</h4>
                     <div class="corollary-box">
-                        <strong>Corollary:</strong> At initialization with random i.i.d. weights, both the numerator 
-                        $(\mathbf{w}^\top\mathbf{x})^2$ and denominator $\|\mathbf{w} - \mathbf{x}\|^2$ scale as $\mathcal{O}(d)$ 
+                        <strong>Corollary:</strong> At initialization with random i.i.d. weights, both the numerator
+                        $(\mathbf{w}^\top\mathbf{x})^2$ and denominator $\|\mathbf{w} - \mathbf{x}\|^2$ scale as
+                        $\mathcal{O}(d)$
                         with dimension $d$, so their ratio remains $\mathcal{O}(1)$.
                     </div>
                     <p>
-                        This means NMNs don't need careful initialization schemes like Xavier or He — they're <strong>dimensionally stable</strong> by design!
+                        This means NMNs don't need careful initialization schemes like Xavier or He — they're
+                        <strong>dimensionally stable</strong> by design!
                     </p>
 
                     <h4>Corollary: Mitigating Internal Covariate Shift</h4>
                     <div class="corollary-box">
-                        <strong>Corollary:</strong> As input magnitudes grow large, the mean and variance of neuron activations 
-                        across a batch become <em>independent of input magnitudes</em>, depending only on angular distribution.
+                        <strong>Corollary:</strong> As input magnitudes grow large, the mean and variance of neuron
+                        activations
+                        across a batch become <em>independent of input magnitudes</em>, depending only on angular
+                        distribution.
                     </div>
                     <p>
-                        This explains why NMNs can often operate <strong>without batch normalization</strong> — 
+                        This explains why NMNs can often operate <strong>without batch normalization</strong> —
                         the "covariate shift" problem that plagues deep networks is naturally mitigated.
                     </p>
 
                     <div class="insight-box">
                         <span class="insight-icon">⚡</span>
                         <div>
-                            <strong>Practical Impact:</strong> No gradient explosion from large inputs. 
+                            <strong>Practical Impact:</strong> No gradient explosion from large inputs.
                             No need for gradient clipping in most cases. Simpler, more stable training dynamics.
                         </div>
                     </div>
@@ -677,7 +751,8 @@
                     <ul class="benefits-list">
                         <li><strong>No Exploding Activations:</strong> Outliers don't cause numerical instabilities</li>
                         <li><strong>Reduced Normalization Needs:</strong> Less reliance on BatchNorm, LayerNorm</li>
-                        <li><strong>Memory Efficiency:</strong> 15-25% reduction from eliminating normalization layers</li>
+                        <li><strong>Memory Efficiency:</strong> 15-25% reduction from eliminating normalization layers
+                        </li>
                         <li><strong>Robust Training:</strong> Stable even with varying input distributions</li>
                     </ul>
                 </div>
@@ -695,56 +770,71 @@
                     <span class="theorem-badge">Proposition 4</span>
                     <h3 class="theorem-title">Stable Learning & Gradient Localization</h3>
                 </div>
-                
+
                 <div class="theorem-statement">
                     <div class="theorem-box">
-                        <strong>Proposition:</strong> The gradient of the <span class="yat-symbol">ⵟ</span>-product with respect to input vanishes for distant inputs:
-                        $$\lim_{\|\mathbf{x}\| \to \infty} \|\nabla_{\mathbf{x}} \text{ⵟ}(\mathbf{w}, \mathbf{x})\| = 0$$
-                        Specifically, $\|\nabla_{\mathbf{x}} \text{ⵟ}\| \sim \mathcal{O}(1/k)$ as $\|\mathbf{x}\| = k \to \infty$.
+                        <strong>Proposition:</strong> The gradient of the <span class="yat-symbol">ⵟ</span>-product with
+                        respect to input vanishes for distant inputs:
+                        $$\lim_{\|\mathbf{x}\| \to \infty} \|\nabla_{\mathbf{x}} \text{ⵟ}(\mathbf{w}, \mathbf{x})\| =
+                        0$$
+                        Specifically, $\|\nabla_{\mathbf{x}} \text{ⵟ}\| \sim \mathcal{O}(1/k)$ as $\|\mathbf{x}\| = k
+                        \to \infty$.
                     </div>
                 </div>
 
                 <div class="theorem-content">
                     <h4>What Does This Mean?</h4>
                     <p>
-                        Each <span class="yat-symbol">ⵟ</span>-product neuron creates a <strong>localized learning region</strong>. 
-                        Points far from the weight vector contribute vanishingly small gradients. This is fundamentally different from:
+                        Each <span class="yat-symbol">ⵟ</span>-product neuron creates a <strong>localized learning
+                            region</strong>.
+                        Points far from the weight vector contribute vanishingly small gradients. This is fundamentally
+                        different from:
                     </p>
                     <ul class="theorem-list">
-                        <li><strong>Linear neurons:</strong> Gradients are constant regardless of distance (no localization)</li>
-                        <li><strong>ReLU neurons:</strong> Gradients are either constant (positive side) or zero (negative side)</li>
+                        <li><strong>Linear neurons:</strong> Gradients are constant regardless of distance (no
+                            localization)</li>
+                        <li><strong>ReLU neurons:</strong> Gradients are either constant (positive side) or zero
+                            (negative side)</li>
                     </ul>
 
                     <h4>Regularity Properties</h4>
                     <div class="dual-box">
                         <div class="property-mini">
                             <h5>Analyticity (Lemma)</h5>
-                            <p>The <span class="yat-symbol">ⵟ</span>-product is $C^\infty$ — infinitely differentiable. 
-                            Perfect for physics-informed neural networks (PINNs) where you need higher-order derivatives.</p>
+                            <p>The <span class="yat-symbol">ⵟ</span>-product is $C^\infty$ — infinitely differentiable.
+                                Perfect for physics-informed neural networks (PINNs) where you need higher-order
+                                derivatives.</p>
                         </div>
                         <div class="property-mini">
                             <h5>Lipschitz Continuity (Proposition)</h5>
-                            <p>The kernel is globally Lipschitz continuous: 
-                            $|K(\mathbf{w}, \mathbf{x}) - K(\mathbf{w}, \mathbf{y})| \leq L \|\mathbf{x} - \mathbf{y}\|$.
-                            This bounds how fast outputs can change.</p>
+                            <p>The kernel is globally Lipschitz continuous:
+                                $|K(\mathbf{w}, \mathbf{x}) - K(\mathbf{w}, \mathbf{y})| \leq L \|\mathbf{x} -
+                                \mathbf{y}\|$.
+                                This bounds how fast outputs can change.</p>
                         </div>
                     </div>
 
                     <div class="insight-box">
                         <span class="insight-icon">🎯</span>
                         <div>
-                            <strong>Geometric Intuition:</strong> Each neuron is like a "gravity well" — it strongly attracts nearby 
-                            points but has negligible influence on distant ones. During training, each neuron learns to "own" 
+                            <strong>Geometric Intuition:</strong> Each neuron is like a "gravity well" — it strongly
+                            attracts nearby
+                            points but has negligible influence on distant ones. During training, each neuron learns to
+                            "own"
                             a local region of the input space.
                         </div>
                     </div>
 
                     <h4>What Does This Offer?</h4>
                     <ul class="benefits-list">
-                        <li><strong>Outlier Robustness:</strong> Distant outliers don't cause large, destabilizing gradient updates</li>
-                        <li><strong>Local Learning:</strong> Each neuron specializes in its region without interfering with others</li>
-                        <li><strong>Smoother Optimization:</strong> Lipschitz bounds provide theoretical guarantees on loss landscape</li>
-                        <li><strong>PINN-Friendly:</strong> $C^\infty$ smoothness enables any-order derivative computation</li>
+                        <li><strong>Outlier Robustness:</strong> Distant outliers don't cause large, destabilizing
+                            gradient updates</li>
+                        <li><strong>Local Learning:</strong> Each neuron specializes in its region without interfering
+                            with others</li>
+                        <li><strong>Smoother Optimization:</strong> Lipschitz bounds provide theoretical guarantees on
+                            loss landscape</li>
+                        <li><strong>PINN-Friendly:</strong> $C^\infty$ smoothness enables any-order derivative
+                            computation</li>
                     </ul>
                 </div>
 
@@ -761,15 +851,18 @@
                     <span class="theorem-badge">Theorems 5-6</span>
                     <h3 class="theorem-title">Information-Geometric Foundations</h3>
                 </div>
-                
+
                 <div class="theorem-statement">
                     <div class="theorem-box">
-                        <strong>Theorem (Minimal Similarity):</strong> For probability distributions $\mathbf{p}, \mathbf{q} \in \Delta^{n-1}$:
-                        $$\text{ⵟ}(\mathbf{p}, \mathbf{q}) = 0 \iff \text{supp}(\mathbf{p}) \cap \text{supp}(\mathbf{q}) = \emptyset$$
+                        <strong>Theorem (Minimal Similarity):</strong> For probability distributions $\mathbf{p},
+                        \mathbf{q} \in \Delta^{n-1}$:
+                        $$\text{ⵟ}(\mathbf{p}, \mathbf{q}) = 0 \iff \text{supp}(\mathbf{p}) \cap \text{supp}(\mathbf{q})
+                        = \emptyset$$
                         Furthermore, disjoint support implies $\text{KL}(\mathbf{p} \| \mathbf{q}) = \infty$.
                     </div>
                     <div class="theorem-box" style="margin-top: 16px;">
-                        <strong>Theorem (Maximal Similarity):</strong> $\text{ⵟ}(\mathbf{p}, \mathbf{q}) \to \infty \iff \mathbf{p} = \mathbf{q}$, 
+                        <strong>Theorem (Maximal Similarity):</strong> $\text{ⵟ}(\mathbf{p}, \mathbf{q}) \to \infty \iff
+                        \mathbf{p} = \mathbf{q}$,
                         and this corresponds to $\text{KL}(\mathbf{p} \| \mathbf{q}) = 0$.
                     </div>
                 </div>
@@ -777,8 +870,9 @@
                 <div class="theorem-content">
                     <h4>What Does This Mean?</h4>
                     <p>
-                        When the <span class="yat-symbol">ⵟ</span>-product is applied to <strong>probability distributions</strong> 
-                        (like softmax outputs), it exhibits deep connections to information theory. The extremes of the 
+                        When the <span class="yat-symbol">ⵟ</span>-product is applied to <strong>probability
+                            distributions</strong>
+                        (like softmax outputs), it exhibits deep connections to information theory. The extremes of the
                         <span class="yat-symbol">ⵟ</span>-product correspond precisely to extremes in KL divergence!
                     </p>
 
@@ -840,18 +934,25 @@
                     <div class="insight-box">
                         <span class="insight-icon">🌉</span>
                         <div>
-                            <strong>Bridge Between Worlds:</strong> The <span class="yat-symbol">ⵟ</span>-product acts as a bridge 
-                            connecting Euclidean geometry (dot products, distances) with probabilistic reasoning (KL divergence, entropy). 
-                            This explains why NMNs work well with cross-entropy loss — there's deep mathematical harmony.
+                            <strong>Bridge Between Worlds:</strong> The <span class="yat-symbol">ⵟ</span>-product acts
+                            as a bridge
+                            connecting Euclidean geometry (dot products, distances) with probabilistic reasoning (KL
+                            divergence, entropy).
+                            This explains why NMNs work well with cross-entropy loss — there's deep mathematical
+                            harmony.
                         </div>
                     </div>
 
                     <h4>What Does This Offer?</h4>
                     <ul class="benefits-list">
-                        <li><strong>Natural Compatibility:</strong> Works harmoniously with entropy-based loss functions</li>
-                        <li><strong>Interpretable Outputs:</strong> Similarity scores have information-theoretic meaning</li>
-                        <li><strong>Theoretical Unity:</strong> Unifies geometric and probabilistic perspectives in one framework</li>
-                        <li><strong>Distribution Modeling:</strong> Natural fit for generative models and density estimation</li>
+                        <li><strong>Natural Compatibility:</strong> Works harmoniously with entropy-based loss functions
+                        </li>
+                        <li><strong>Interpretable Outputs:</strong> Similarity scores have information-theoretic meaning
+                        </li>
+                        <li><strong>Theoretical Unity:</strong> Unifies geometric and probabilistic perspectives in one
+                            framework</li>
+                        <li><strong>Distribution Modeling:</strong> Natural fit for generative models and density
+                            estimation</li>
                     </ul>
                 </div>
 
@@ -868,14 +969,16 @@
                     <span class="theorem-badge">Theorem 7</span>
                     <h3 class="theorem-title">Topological Organization: Neural Fiber Bundles</h3>
                 </div>
-                
+
                 <div class="theorem-statement">
                     <div class="theorem-box">
-                        <strong>Theorem:</strong> Let $\mathcal{M} \subset \mathbb{R}^d$ be a smooth compact data manifold 
-                        and $\{w_c\}_{c=1}^C$ be class prototypes. The classification rule 
+                        <strong>Theorem:</strong> Let $\mathcal{M} \subset \mathbb{R}^d$ be a smooth compact data
+                        manifold
+                        and $\{w_c\}_{c=1}^C$ be class prototypes. The classification rule
                         $\hat{c}(x) = \arg\max_c \text{ⵟ}(w_c, x)$ partitions $\mathcal{M}$ into decision regions.
-                        
-                        <br><br><strong>Separation Property:</strong> If prototypes are orthogonal ($\langle w_i, w_j \rangle = 0$ for $i \neq j$), then:
+
+                        <br><br><strong>Separation Property:</strong> If prototypes are orthogonal ($\langle w_i, w_j
+                        \rangle = 0$ for $i \neq j$), then:
                         <ol>
                             <li>Prototypes are maximally dissimilar: $\text{ⵟ}(w_i, w_j) = 0$</li>
                             <li>Decision boundaries are spatially separated from prototype cores</li>
@@ -886,11 +989,13 @@
                 <div class="theorem-content">
                     <h4>What Does This Mean?</h4>
                     <p>
-                        Traditional linear classifiers create <strong>hyperplane decision boundaries</strong> — flat cuts through space 
-                        that extend infinitely. The <span class="yat-symbol">ⵟ</span>-product creates something fundamentally different: 
+                        Traditional linear classifiers create <strong>hyperplane decision boundaries</strong> — flat
+                        cuts through space
+                        that extend infinitely. The <span class="yat-symbol">ⵟ</span>-product creates something
+                        fundamentally different:
                         <strong>vortex-like territorial fields</strong> around each prototype.
                     </p>
-                    
+
                     <div class="visual-comparison">
                         <div class="visual-item">
                             <div class="visual-diagram linear-diagram">
@@ -915,34 +1020,45 @@
                         When class prototypes are orthogonal, something magical happens:
                     </p>
                     <ul class="theorem-list">
-                        <li>Each prototype's "core" (where response is maximal) is <strong>completely separate</strong> from other prototypes</li>
-                        <li>At point $x = w_i$: the response to class $i$ is $\|w_i\|^4/\varepsilon$ (very large), while response to class $j$ is <strong>exactly 0</strong></li>
+                        <li>Each prototype's "core" (where response is maximal) is <strong>completely separate</strong>
+                            from other prototypes</li>
+                        <li>At point $x = w_i$: the response to class $i$ is $\|w_i\|^4/\varepsilon$ (very large), while
+                            response to class $j$ is <strong>exactly 0</strong></li>
                         <li>Decision boundaries are forced into "neutral zones" between prototypes</li>
                     </ul>
 
                     <div class="insight-box">
                         <span class="insight-icon">🌀</span>
                         <div>
-                            <strong>Vortex Intuition:</strong> Imagine each prototype as a whirlpool. Points are "sucked in" toward their 
-                            nearest prototype with strength proportional to alignment and inverse-square of distance. The decision boundary 
+                            <strong>Vortex Intuition:</strong> Imagine each prototype as a whirlpool. Points are "sucked
+                            in" toward their
+                            nearest prototype with strength proportional to alignment and inverse-square of distance.
+                            The decision boundary
                             is where the "pull" from two prototypes exactly balances.
                         </div>
                     </div>
 
                     <h4>Fiber Bundle Structure</h4>
                     <p>
-                        For those familiar with differential geometry: the classification can be viewed through the lens of 
-                        <strong>fiber bundles</strong>. The data manifold $\mathcal{M}$ is the base space, each point $x$ has a 
-                        "fiber" of response values $[\text{ⵟ}(w_1, x), ..., \text{ⵟ}(w_C, x)]$, and classification is projection 
+                        For those familiar with differential geometry: the classification can be viewed through the lens
+                        of
+                        <strong>fiber bundles</strong>. The data manifold $\mathcal{M}$ is the base space, each point
+                        $x$ has a
+                        "fiber" of response values $[\text{ⵟ}(w_1, x), ..., \text{ⵟ}(w_C, x)]$, and classification is
+                        projection
                         to the dominant fiber component.
                     </p>
 
                     <h4>What Does This Offer?</h4>
                     <ul class="benefits-list">
-                        <li><strong>Geometric Interpretability:</strong> Decision regions have intuitive spatial meaning</li>
-                        <li><strong>Natural Clustering:</strong> Each class "owns" a territory, not just a half-space</li>
-                        <li><strong>Robust Boundaries:</strong> Orthogonal prototypes guarantee maximum class separation</li>
-                        <li><strong>Manifold-Aware:</strong> Works naturally with curved data manifolds, not just flat spaces</li>
+                        <li><strong>Geometric Interpretability:</strong> Decision regions have intuitive spatial meaning
+                        </li>
+                        <li><strong>Natural Clustering:</strong> Each class "owns" a territory, not just a half-space
+                        </li>
+                        <li><strong>Robust Boundaries:</strong> Orthogonal prototypes guarantee maximum class separation
+                        </li>
+                        <li><strong>Manifold-Aware:</strong> Works naturally with curved data manifolds, not just flat
+                            spaces</li>
                     </ul>
                 </div>
 
@@ -975,7 +1091,8 @@
                     <div class="summary-arrow">↓</div>
                     <div class="summary-item">
                         <span class="summary-num">4</span>
-                        <span class="summary-text"><strong>Stable Gradients:</strong> Trainable via localized learning</span>
+                        <span class="summary-text"><strong>Stable Gradients:</strong> Trainable via localized
+                            learning</span>
                     </div>
                     <div class="summary-arrow">↓</div>
                     <div class="summary-item">
@@ -989,7 +1106,8 @@
                     </div>
                 </div>
                 <p class="summary-conclusion">
-                    Together, these guarantee that NMNs are <em>theoretically sound</em>, <em>practically trainable</em>, 
+                    Together, these guarantee that NMNs are <em>theoretically sound</em>, <em>practically
+                        trainable</em>,
                     and <em>geometrically interpretable</em> — without a single activation function.
                 </p>
             </div>
@@ -1000,7 +1118,7 @@
     <section id="code" class="section section-dark">
         <div class="container">
             <h2 class="section-title">Quick Start</h2>
-            
+
             <div class="install-block">
                 <h3>Installation</h3>
                 <div class="code-block">
@@ -1118,7 +1236,8 @@ y = layer(x)  # (32, 64)</code></pre>
 }</code></pre>
                 <button class="copy-btn" onclick="copyBibtex()">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                        <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                        <path
+                            d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
                     </svg>
                     Copy
                 </button>
@@ -1147,8 +1266,8 @@ y = layer(x)  # (32, 64)</code></pre>
         </div>
     </footer>
 
-        <!-- BLOG_MODALS_PLACEHOLDER -->
-<!-- Scripts -->
+    <!-- BLOG_MODALS_PLACEHOLDER -->
+    <!-- Scripts -->
     <script src="js/math-utils.js"></script>
     <script src="js/heatmap-viz.js"></script>
     <script src="js/gradient-viz.js"></script>
@@ -1157,5 +1276,5 @@ y = layer(x)  # (32, 64)</code></pre>
     <script src="js/loss-landscape.js"></script>
     <script src="js/main.js"></script>
 </body>
-</html>
 
+</html>

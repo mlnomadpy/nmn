@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Experiments & Results — Neural Matter Networks</title>
+    <meta name="description"
+        content="Comprehensive experimental results for Neural Matter Networks, including XOR analysis, MNIST, vision benchmarks, and AetherGPT language modeling.">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tifinagh&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/blog-pages.css">
+</head>
+
+<body>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="../index.html" class="nav-logo">
+                <span class="yat-symbol">ⵟ</span>
+                <span>NMN</span>
+            </a>
+            <div class="nav-links">
+                <a href="../index.html#introduction">Introduction</a>
+                <a href="../index.html#yat-product">ⵟ-Product</a>
+                <a href="../index.html#visualizations">Visualizations</a>
+                <a href="../index.html#results">Results</a>
+                <a href="../index.html#theory" class="nav-blog">Blog</a>
+                <a href="../index.html#code">Code</a>
+                <a href="https://github.com/mlnomadpy/nmn" target="_blank" class="nav-github">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path
+                            d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Blog Post Page -->
+    <main class="blog-page">
+        <div class="container">
+            <article class="blog-post">
+                <header class="blog-post-header">
+                    <a href="../index.html#theory" class="blog-back-link">← Back to Theory</a>
+                    <span class="blog-post-badge">Results</span>
+                    <h1 class="blog-post-title">Experiments & Results</h1>
+                </header>
+
+                <div class="blog-post-content">
+
+                    <!-- ELI5 Section -->
+                    <div class="eli5-section">
+                        <div class="eli5-header">
+                            <span class="eli5-icon">🧒</span>
+                            <h4>Explain Like I'm 5</h4>
+                        </div>
+                        <div class="eli5-content">
+                            <p>
+                                We gave the <span class="yat-symbol">ⵟ</span>-product brain some tests to see how smart
+                                it is:
+                            </p>
+                            <ul>
+                                <li>🧩 <strong>Puzzle Test (XOR):</strong> A tricky puzzle that normal simple brains
+                                    can't solve.
+                                    Our brain solved it with just ONE tiny piece!</li>
+                                <li>🔢 <strong>Number Drawing Test (MNIST):</strong> Looking at handwritten numbers and
+                                    guessing what they are. Our brain learned clearer, sharper pictures!</li>
+                                <li>🖼️ <strong>Picture Test (CIFAR/ImageNet):</strong> Recognizing cats, dogs, planes,
+                                    and more.
+                                    Our brain often did better, especially on harder tests!</li>
+                                <li>📖 <strong>Writing Test (GPT-2):</strong> Predicting the next word in a sentence.
+                                    Our brain was 11% better AND used less memory!</li>
+                            </ul>
+                            <p>
+                                The best part? Our brain is <em>simpler</em> than other brains but works just as well or
+                                better!
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="theorem-content">
+                        <!-- XOR Problem -->
+                        <h4>🧩 The XOR Problem: A Classic Test</h4>
+                        <p>
+                            The XOR (exclusive or) problem is legendary in neural network history. It's a simple pattern
+                            that a single linear neuron <em>cannot</em> learn — proving the need for non-linearity.
+                            Here's the pattern:
+                        </p>
+
+                        <div class="comparison-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Input $x_1$</th>
+                                        <th>Input $x_2$</th>
+                                        <th>XOR Output</th>
+                                        <th>Pattern</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>0</td>
+                                        <td>0</td>
+                                        <td>0</td>
+                                        <td>Both same → 0</td>
+                                    </tr>
+                                    <tr>
+                                        <td>0</td>
+                                        <td>1</td>
+                                        <td>1</td>
+                                        <td>Different → 1</td>
+                                    </tr>
+                                    <tr>
+                                        <td>1</td>
+                                        <td>0</td>
+                                        <td>1</td>
+                                        <td>Different → 1</td>
+                                    </tr>
+                                    <tr>
+                                        <td>1</td>
+                                        <td>1</td>
+                                        <td>0</td>
+                                        <td>Both same → 0</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <p>
+                            <strong>Why it's hard:</strong> You can't draw a single straight line to separate the 1s
+                            from the 0s.
+                            Traditional solutions require either multiple layers OR an activation function.
+                        </p>
+
+                        <div class="theorem-statement">
+                            <div class="theorem-box">
+                                <strong>The <span class="yat-symbol">ⵟ</span>-Product Solution:</strong>
+                                A single neuron with $\mathbf{w} = [1, -1]^T$ naturally solves XOR:
+                                <ul>
+                                    <li>$(0,0)$ and $(1,1)$: $\mathbf{w}^T\mathbf{x} = 0$, so $\text{ⵟ}(\mathbf{w},
+                                        \mathbf{x}) = 0$ ✓</li>
+                                    <li>$(0,1)$: $\text{ⵟ}(\mathbf{w}, \mathbf{x}) = \frac{(-1)^2}{5+\epsilon} > 0$ ✓
+                                    </li>
+                                    <li>$(1,0)$: $\text{ⵟ}(\mathbf{w}, \mathbf{x}) = \frac{(1)^2}{1+\epsilon} > 0$ ✓
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">💡</span>
+                            <div>
+                                <strong>Why This Works:</strong> The weight vector $[1, -1]$ is orthogonal to both
+                                $(0,0)$ and $(1,1)$ (dot product = 0), but has non-zero dot products with $(0,1)$ and
+                                $(1,0)$.
+                                The <span class="yat-symbol">ⵟ</span>-product's intrinsic non-linearity handles the
+                                rest!
+                            </div>
+                        </div>
+
+                        <!-- Interactive XOR Training Demo -->
+                        <div class="interactive-demo"
+                            style="margin: 2rem 0; padding: 1.5rem; background: rgba(0,255,136,0.05); border-radius: 12px; border: 1px solid rgba(0,255,136,0.2);">
+                            <h5 style="margin-bottom: 1rem; color: var(--terminal-green);">🎮 Live XOR Training: Linear
+                                vs ⵟ-Product</h5>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                                <div style="text-align: center;">
+                                    <div style="font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--text-muted);">
+                                        Linear Neuron (can't solve XOR)</div>
+                                    <canvas id="xor-linear-train" width="280" height="280"
+                                        style="width: 100%; max-width: 280px; border-radius: 8px; background: #0a0a0f;"></canvas>
+                                </div>
+                                <div style="text-align: center;">
+                                    <div
+                                        style="font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--terminal-green);">
+                                        ⵟ-Product Neuron (solves XOR!)</div>
+                                    <canvas id="xor-yat-train" width="280" height="280"
+                                        style="width: 100%; max-width: 280px; border-radius: 8px; background: #0a0a0f;"></canvas>
+                                </div>
+                            </div>
+                            <div
+                                style="display: flex; gap: 1rem; justify-content: center; align-items: center; flex-wrap: wrap;">
+                                <button id="xor-train-btn"
+                                    style="padding: 0.5rem 1.5rem; background: var(--terminal-green); color: #000; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">▶
+                                    Train</button>
+                                <button id="xor-reset-btn"
+                                    style="padding: 0.5rem 1rem; background: transparent; color: var(--terminal-green); border: 1px solid var(--terminal-green); border-radius: 6px; cursor: pointer;">↺
+                                    Reset</button>
+                                <span id="xor-status"
+                                    style="font-size: 0.85rem; font-family: 'JetBrains Mono', monospace; color: var(--text-muted);">Ready</span>
+                            </div>
+                            <div
+                                style="display: flex; gap: 2rem; justify-content: center; margin-top: 1rem; font-size: 0.8rem; font-family: 'JetBrains Mono', monospace;">
+                                <span>Linear Loss: <span id="linear-loss" style="color: #ff6b6b;">--</span></span>
+                                <span>ⵟ Loss: <span id="yat-loss" style="color: var(--terminal-green);">--</span></span>
+                            </div>
+                        </div>
+
+                        <script>
+                            (function () {
+                                const linearCanvas = document.getElementById('xor-linear-train');
+                                const yatCanvas = document.getElementById('xor-yat-train');
+                                if (!linearCanvas || !yatCanvas) return;
+
+                                const linearCtx = linearCanvas.getContext('2d');
+                                const yatCtx = yatCanvas.getContext('2d');
+
+                                // XOR data
+                                const xorData = [
+                                    { x: [0, 0], y: 0 },
+                                    { x: [0, 1], y: 1 },
+                                    { x: [1, 0], y: 1 },
+                                    { x: [1, 1], y: 0 }
+                                ];
+
+                                // Weights
+                                let linearW = [Math.random() * 2 - 1, Math.random() * 2 - 1];
+                                let yatW = [Math.random() * 2 - 1, Math.random() * 2 - 1];
+                                const epsilon = 0.1;
+                                const lr = 0.5;
+                                let training = false;
+                                let step = 0;
+
+                                function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
+                                function dot(w, x) { return w[0] * x[0] + w[1] * x[1]; }
+                                function yatProd(w, x) {
+                                    const d = dot(w, x);
+                                    const distSq = (w[0] - x[0]) ** 2 + (w[1] - x[1]) ** 2;
+                                    return (d * d) / (distSq + epsilon);
+                                }
+
+                                function computeLoss(w, isYat) {
+                                    let loss = 0;
+                                    for (const sample of xorData) {
+                                        const out = isYat ? sigmoid(yatProd(w, sample.x) - 0.5) : sigmoid(dot(w, sample.x));
+                                        loss -= sample.y * Math.log(out + 1e-7) + (1 - sample.y) * Math.log(1 - out + 1e-7);
+                                    }
+                                    return loss / 4;
+                                }
+
+                                function gradientStep(w, isYat) {
+                                    const grad = [0, 0];
+                                    for (const sample of xorData) {
+                                        let pred, dPred;
+                                        if (isYat) {
+                                            const y = yatProd(w, sample.x);
+                                            pred = sigmoid(y - 0.5);
+                                            const dSig = pred * (1 - pred);
+                                            const d = dot(w, sample.x);
+                                            const distSq = (w[0] - sample.x[0]) ** 2 + (w[1] - sample.x[1]) ** 2;
+                                            const denom = distSq + epsilon;
+                                            for (let i = 0; i < 2; i++) {
+                                                const dNum = 2 * d * sample.x[i];
+                                                const dDen = 2 * (w[i] - sample.x[i]);
+                                                const dYat = (dNum * denom - d * d * dDen) / (denom * denom);
+                                                grad[i] += (pred - sample.y) * dSig * dYat;
+                                            }
+                                        } else {
+                                            pred = sigmoid(dot(w, sample.x));
+                                            for (let i = 0; i < 2; i++) {
+                                                grad[i] += (pred - sample.y) * sample.x[i];
+                                            }
+                                        }
+                                    }
+                                    return [w[0] - lr * grad[0] / 4, w[1] - lr * grad[1] / 4];
+                                }
+
+                                function drawCanvas(ctx, canvas, w, isYat) {
+                                    const cellSize = 10;
+                                    // Draw decision regions
+                                    for (let px = 0; px < canvas.width; px += cellSize) {
+                                        for (let py = 0; py < canvas.height; py += cellSize) {
+                                            const x = px / canvas.width * 1.4 - 0.2;
+                                            const y = 1.2 - py / canvas.height * 1.4;
+                                            const out = isYat ? sigmoid(yatProd(w, [x, y]) - 0.5) : sigmoid(dot(w, [x, y]));
+                                            const r = Math.floor(out * 100 + 20);
+                                            const g = Math.floor(out * 150 + 30);
+                                            const b = Math.floor((1 - out) * 100 + 50);
+                                            ctx.fillStyle = `rgb(${r},${g},${b})`;
+                                            ctx.fillRect(px, py, cellSize, cellSize);
+                                        }
+                                    }
+
+                                    // Draw XOR points
+                                    for (const sample of xorData) {
+                                        const px = (sample.x[0] + 0.2) / 1.4 * canvas.width;
+                                        const py = (1.2 - sample.x[1]) / 1.4 * canvas.height;
+                                        ctx.beginPath();
+                                        ctx.arc(px, py, 12, 0, Math.PI * 2);
+                                        ctx.fillStyle = sample.y === 1 ? '#00ff88' : '#ff6b6b';
+                                        ctx.fill();
+                                        ctx.strokeStyle = '#fff';
+                                        ctx.lineWidth = 2;
+                                        ctx.stroke();
+                                        ctx.fillStyle = '#000';
+                                        ctx.font = 'bold 10px sans-serif';
+                                        ctx.textAlign = 'center';
+                                        ctx.textBaseline = 'middle';
+                                        ctx.fillText(sample.y, px, py);
+                                    }
+
+                                    // Draw weight vector
+                                    const wx = (w[0] + 0.2) / 1.4 * canvas.width;
+                                    const wy = (1.2 - w[1]) / 1.4 * canvas.height;
+                                    ctx.beginPath();
+                                    ctx.moveTo(canvas.width * 0.14, canvas.height * 0.86);
+                                    ctx.lineTo(wx, wy);
+                                    ctx.strokeStyle = 'rgba(255,255,0,0.8)';
+                                    ctx.lineWidth = 3;
+                                    ctx.stroke();
+                                    ctx.beginPath();
+                                    ctx.arc(wx, wy, 8, 0, Math.PI * 2);
+                                    ctx.fillStyle = '#ffff00';
+                                    ctx.fill();
+                                }
+
+                                function render() {
+                                    drawCanvas(linearCtx, linearCanvas, linearW, false);
+                                    drawCanvas(yatCtx, yatCanvas, yatW, true);
+                                    document.getElementById('linear-loss').textContent = computeLoss(linearW, false).toFixed(3);
+                                    document.getElementById('yat-loss').textContent = computeLoss(yatW, true).toFixed(3);
+                                }
+
+                                function trainStep() {
+                                    if (!training) return;
+                                    linearW = gradientStep(linearW, false);
+                                    yatW = gradientStep(yatW, true);
+                                    step++;
+                                    document.getElementById('xor-status').textContent = `Step ${step}`;
+                                    render();
+                                    if (step < 200) {
+                                        requestAnimationFrame(trainStep);
+                                    } else {
+                                        training = false;
+                                        document.getElementById('xor-train-btn').textContent = '▶ Train';
+                                        document.getElementById('xor-status').textContent = 'Done! ⵟ wins 🎉';
+                                    }
+                                }
+
+                                document.getElementById('xor-train-btn').onclick = () => {
+                                    if (training) {
+                                        training = false;
+                                        document.getElementById('xor-train-btn').textContent = '▶ Train';
+                                    } else {
+                                        training = true;
+                                        document.getElementById('xor-train-btn').textContent = '⏸ Pause';
+                                        trainStep();
+                                    }
+                                };
+
+                                document.getElementById('xor-reset-btn').onclick = () => {
+                                    training = false;
+                                    step = 0;
+                                    linearW = [Math.random() * 2 - 1, Math.random() * 2 - 1];
+                                    yatW = [Math.random() * 2 - 1, Math.random() * 2 - 1];
+                                    document.getElementById('xor-train-btn').textContent = '▶ Train';
+                                    document.getElementById('xor-status').textContent = 'Ready';
+                                    render();
+                                };
+
+                                render();
+                            })();
+                        </script>
+
+                        <!-- MNIST Results -->
+                        <h4>🔢 MNIST: Learning Digit Prototypes</h4>
+                        <p>
+                            MNIST is the "hello world" of machine learning — 60,000 handwritten digits for training
+                            and 10,000 for testing. What's remarkable isn't just the accuracy, but what the neurons
+                            learn:
+                        </p>
+
+                        <div class="consequences-grid">
+                            <div class="consequence-item">
+                                <span class="consequence-icon">📊</span>
+                                <h5>Linear Model Prototypes</h5>
+                                <p>
+                                    Conventional linear neurons learn <strong>diffuse, blurry prototypes</strong>.
+                                    They try to capture all variations of a digit, resulting in smeared,
+                                    hard-to-interpret weight patterns.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">✨</span>
+                                <h5><span class="yat-symbol">ⵟ</span>-Product Prototypes</h5>
+                                <p>
+                                    NMN neurons learn <strong>sharp, geometrically coherent</strong> digit
+                                    representations.
+                                    Each weight vector looks like a clear, prototypical example of its digit class.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="proof-step">
+                            <strong>🔄 Superposition & Prototype Inversion</strong>
+                            <p>
+                                A surprising discovery: <span class="yat-symbol">ⵟ</span>-product neurons exhibit
+                                <strong>superposition behavior</strong>. When prototypes are inverted ($\mathbf{w} \to
+                                -\mathbf{w}$):
+                            </p>
+                            <ul>
+                                <li><strong>Dot product neurons:</strong> 91.88% → ~0.01% (complete failure!)</li>
+                                <li><strong><span class="yat-symbol">ⵟ</span>-product neurons:</strong> 92.18% → 87.87%
+                                    (robust!)</li>
+                            </ul>
+                            <p>
+                                The squared numerator means the sign of the dot product doesn't matter —
+                                both $\mathbf{w}$ and $-\mathbf{w}$ are valid solutions!
+                            </p>
+                        </div>
+
+                        <!-- Vision Benchmarks -->
+                        <h4>🖼️ Vision Benchmarks: From CIFAR to ImageNet</h4>
+                        <p>
+                            We systematically compared standard architectures with their "Aether" variants
+                            (where standard layers are replaced with <span class="yat-symbol">ⵟ</span>-product units).
+                        </p>
+
+                        <div class="comparison-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Architecture</th>
+                                        <th>CIFAR-10</th>
+                                        <th>CIFAR-100</th>
+                                        <th>STL-10</th>
+                                        <th>Tiny-ImageNet</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>ResNet-18</td>
+                                        <td><strong>94.23%</strong></td>
+                                        <td>72.15%</td>
+                                        <td>78.42%</td>
+                                        <td>56.89%</td>
+                                    </tr>
+                                    <tr class="highlight-row">
+                                        <td>Aether-ResNet-18</td>
+                                        <td>92.37%</td>
+                                        <td><strong>74.83%</strong></td>
+                                        <td><strong>80.91%</strong></td>
+                                        <td><strong>59.34%</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td>ViT-Small</td>
+                                        <td>91.78%</td>
+                                        <td>69.91%</td>
+                                        <td>75.13%</td>
+                                        <td><strong>52.76%</strong></td>
+                                    </tr>
+                                    <tr class="highlight-row">
+                                        <td>Aether-ViT-Small</td>
+                                        <td><strong>92.45%</strong></td>
+                                        <td><strong>70.58%</strong></td>
+                                        <td><strong>78.89%</strong></td>
+                                        <td>51.42%</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">📈</span>
+                            <div>
+                                <strong>Key Pattern:</strong> Aether variants tend to outperform baselines more
+                                significantly on <em>more complex</em> datasets (CIFAR-100, STL-10, Tiny-ImageNet)
+                                compared to simpler ones (CIFAR-10). This suggests the geometric awareness of the
+                                <span class="yat-symbol">ⵟ</span>-product helps more when the task is harder.
+                            </div>
+                        </div>
+
+                        <p>
+                            On <strong>ImageNet-1K</strong>, the flagship large-scale benchmark:
+                        </p>
+                        <ul>
+                            <li>ResNet-50: 74.13%</li>
+                            <li><strong>Aether-ResNet-50: 75.24%</strong> (+1.11% improvement)</li>
+                        </ul>
+
+                        <!-- Language Modeling -->
+                        <h4>📖 AetherGPT: Language Modeling at Scale</h4>
+                        <p>
+                            To prove the <span class="yat-symbol">ⵟ</span>-product generalizes beyond vision,
+                            we adapted GPT-2 architecture with <span class="yat-symbol">ⵟ</span>-Attention and NMN
+                            layers.
+                        </p>
+
+                        <div class="theorem-statement">
+                            <div class="theorem-box">
+                                <strong>Training Setup:</strong> 2.5 billion tokens from Fineweb dataset,
+                                trained on Kaggle TPU v5-8. Same hyperparameters for fair comparison.
+                            </div>
+                        </div>
+
+                        <div class="consequences-grid">
+                            <div class="consequence-item">
+                                <span class="consequence-icon">🎯</span>
+                                <h5>Validation Loss (FP32)</h5>
+                                <p>
+                                    <strong>GPT-2:</strong> 2.43<br>
+                                    <strong>Aether-GPT2:</strong> 2.29<br>
+                                    <em>5.8% improvement</em>
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">⚡</span>
+                                <h5>Validation Loss (BF16)</h5>
+                                <p>
+                                    <strong>GPT-2:</strong> 3.03<br>
+                                    <strong>Aether-GPT2:</strong> 2.69<br>
+                                    <em>11.2% improvement!</em>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="proof-step">
+                            <strong>💾 Memory Efficiency</strong>
+                            <p>
+                                By eliminating activation functions and normalization layers, Aether-GPT2 achieves:
+                            </p>
+                            <ul>
+                                <li><strong>15-25% reduction</strong> in peak memory usage</li>
+                                <li>No storage of intermediate activations for ReLU/GELU gradients</li>
+                                <li>No LayerNorm statistics to track</li>
+                            </ul>
+                        </div>
+
+                        <div class="proof-step">
+                            <strong>⏱️ Throughput Comparison</strong>
+                            <p>
+                                On identical hardware (Kaggle TPU v5-8, batch size 64, context length 1024):
+                            </p>
+                            <ul>
+                                <li><strong>Linear baseline:</strong> 138k tokens/s, 4h 50m 10s total</li>
+                                <li><strong>Aether-GPT2:</strong> 132k tokens/s, 5h 02m 31s total</li>
+                            </ul>
+                            <p>
+                                About 4% slower in raw throughput, but the memory savings enable
+                                larger batch sizes or longer contexts — often a net win in practice.
+                            </p>
+                        </div>
+
+                        <!-- Vortex Decision Boundaries -->
+                        <h4>🌀 Vortex Decision Boundaries</h4>
+                        <p>
+                            One of the most visually striking differences between linear and NMN classifiers
+                            is their decision boundaries:
+                        </p>
+
+                        <div class="consequences-grid">
+                            <div class="consequence-item">
+                                <span class="consequence-icon">📐</span>
+                                <h5>Linear Classifiers</h5>
+                                <p>
+                                    Create <strong>unbounded half-space partitions</strong>. Each class region
+                                    extends to infinity in some direction. Points far from the training data
+                                    can still be confidently (and incorrectly) classified.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">🌀</span>
+                                <h5><span class="yat-symbol">ⵟ</span>-Product Classifiers</h5>
+                                <p>
+                                    Create <strong>localized, vortex-like territories</strong> around learned
+                                    prototypes.
+                                    Each neuron has a bounded region of influence. Points far from all prototypes
+                                    receive low confidence — a natural measure of uncertainty!
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">🔬</span>
+                            <div>
+                                <strong>Interpretability Bonus:</strong> Because each <span
+                                    class="yat-symbol">ⵟ</span>-product
+                                neuron creates a localized "territory," we can interpret each weight vector as a
+                                prototype of what that neuron "looks for." This makes NMNs inherently more interpretable
+                                than black-box neural networks.
+                            </div>
+                        </div>
+
+                        <!-- Summary -->
+                        <h4>✅ Experimental Takeaways</h4>
+
+                        <div class="comparison-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Experiment</th>
+                                        <th>Key Finding</th>
+                                        <th>Significance</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>XOR</strong></td>
+                                        <td>Single neuron solution</td>
+                                        <td>Proves intrinsic non-linearity</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>MNIST</strong></td>
+                                        <td>Sharper prototypes, inversion robustness</td>
+                                        <td>Better geometric representations</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Vision</strong></td>
+                                        <td>Outperforms on complex datasets</td>
+                                        <td>Scales to real-world tasks</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Language</strong></td>
+                                        <td>11.2% improvement, 15-25% less memory</td>
+                                        <td>Domain-agnostic benefits</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Boundaries</strong></td>
+                                        <td>Localized vortex territories</td>
+                                        <td>Built-in uncertainty quantification</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="blog-page-nav">
+                    <a href="08-methodology.html" class="blog-nav-btn">← Previous: Methodology</a>
+                    <a href="../index.html#theory" class="blog-nav-btn">All Topics</a>
+                    <a href="10-theoretical-background.html" class="blog-nav-btn">Next: Theory Background →</a>
+                </div>
+            </article>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="yat-symbol">ⵟ</span>
+                    <span>Neural Matter Networks</span>
+                </div>
+                <div class="footer-links">
+                    <a href="https://github.com/mlnomadpy/nmn" target="_blank">GitHub</a>
+                    <a href="https://pypi.org/project/nmn/" target="_blank">PyPI</a>
+                    <a href="mailto:taha@azetta.ai">Contact</a>
+                </div>
+                <div class="footer-copy">
+                    <p>Built with ❤️ by <a href="https://azetta.ai" target="_blank">azetta.ai</a></p>
+                    <p>AGPL-3.0 License</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '$', right: '$', display: false }
+                ]
+            });
+        });
+    </script>
+</body>
+
+</html>

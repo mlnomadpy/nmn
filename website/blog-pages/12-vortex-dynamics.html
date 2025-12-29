@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vortex Dynamics — Neural Matter Networks</title>
+    <meta name="description"
+        content="Deep dive into the vortex-like learning dynamics and space-partitioning behavior of ⵟ-product neurons.">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tifinagh&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/blog-pages.css">
+</head>
+
+<body>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="../index.html" class="nav-logo">
+                <span class="yat-symbol">ⵟ</span>
+                <span>NMN</span>
+            </a>
+            <div class="nav-links">
+                <a href="../index.html#introduction">Introduction</a>
+                <a href="../index.html#yat-product">ⵟ-Product</a>
+                <a href="../index.html#visualizations">Visualizations</a>
+                <a href="../index.html#results">Results</a>
+                <a href="../index.html#theory" class="nav-blog">Blog</a>
+                <a href="../index.html#code">Code</a>
+                <a href="https://github.com/mlnomadpy/nmn" target="_blank" class="nav-github">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path
+                            d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="blog-page">
+        <div class="container">
+            <article class="blog-post">
+                <header class="blog-post-header">
+                    <a href="../index.html#theory" class="blog-back-link">← Back to Theory</a>
+                    <span class="blog-post-badge">Advanced</span>
+                    <h1 class="blog-post-title">Vortex Dynamics</h1>
+                </header>
+
+                <div class="blog-post-content">
+
+                    <!-- ELI5 Section -->
+                    <div class="eli5-section">
+                        <div class="eli5-header">
+                            <span class="eli5-icon">🧒</span>
+                            <h4>Explain Like I'm 5</h4>
+                        </div>
+                        <div class="eli5-content">
+                            <p>
+                                Imagine each neuron is like a <strong>whirlpool</strong> 🌀 in a big ocean of data!
+                            </p>
+                            <ul>
+                                <li>🌊 <strong>Regular neurons</strong> just push water in straight lines (like a fan)
+                                </li>
+                                <li>🌀 <strong>ⵟ-neurons</strong> create spinning whirlpools that PULL things toward
+                                    them</li>
+                                <li>🏆 The strongest whirlpool "wins" and claims that part of the ocean</li>
+                            </ul>
+                            <p>
+                                When you have many whirlpools (neurons), they divide up the ocean into territories.
+                                Each whirlpool is in charge of the water closest to it and pointing toward it!
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="theorem-content">
+                        <h4>🌀 Multi-Neuron Vortex Field Competition</h4>
+                        <p>
+                            When multiple <span class="yat-symbol">ⵟ</span>-neurons compete to classify an input,
+                            each creates a gravitational-like "vortex field" that attracts inputs based on both
+                            alignment and proximity.
+                        </p>
+
+                        <!-- Interactive Multi-Neuron Vortex Demo -->
+                        <div class="interactive-demo"
+                            style="margin: 2rem 0; padding: 1.5rem; background: linear-gradient(135deg, rgba(255,100,100,0.05), rgba(0,255,136,0.05), rgba(100,100,255,0.05)); border-radius: 12px; border: 1px solid rgba(0,255,136,0.2);">
+                            <h5 style="margin-bottom: 1rem; color: var(--terminal-green);">🎮 Interactive: Multi-Neuron
+                                Vortex Competition</h5>
+                            <div style="text-align: center; margin-bottom: 1rem;">
+                                <canvas id="vortex-canvas" width="500" height="400"
+                                    style="width: 100%; max-width: 500px; border-radius: 8px; background: #0a0a0f;"></canvas>
+                            </div>
+                            <div
+                                style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-bottom: 0.5rem;">
+                                <button id="vortex-add-btn"
+                                    style="padding: 0.5rem 1rem; background: var(--terminal-green); color: #000; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">+
+                                    Add Neuron</button>
+                                <button id="vortex-reset-btn"
+                                    style="padding: 0.5rem 1rem; background: transparent; color: var(--terminal-green); border: 1px solid var(--terminal-green); border-radius: 6px; cursor: pointer;">↺
+                                    Reset</button>
+                            </div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center;">
+                                Click canvas to add data points • Drag neurons (colored dots) to move them
+                            </div>
+                        </div>
+
+                        <script>
+                            (function () {
+                                const canvas = document.getElementById('vortex-canvas');
+                                if (!canvas) return;
+                                const ctx = canvas.getContext('2d');
+                                const epsilon = 0.3;
+
+                                let neurons = [
+                                    { x: 150, y: 150, color: '#ff6b6b' },
+                                    { x: 350, y: 150, color: '#00ff88' },
+                                    { x: 250, y: 300, color: '#6b9fff' }
+                                ];
+                                let dataPoints = [];
+                                let dragging = null;
+
+                                const colors = ['#ffaa00', '#ff00ff', '#00ffff', '#ff6b6b', '#00ff88', '#6b9fff'];
+
+                                function yatProduct(w, x) {
+                                    const dot = w.x * x.x + w.y * x.y;
+                                    const distSq = (w.x - x.x) ** 2 + (w.y - x.y) ** 2;
+                                    return (dot * dot) / (distSq + epsilon * 10000);
+                                }
+
+                                function softmax(scores) {
+                                    const max = Math.max(...scores);
+                                    const exps = scores.map(s => Math.exp((s - max) * 0.01));
+                                    const sum = exps.reduce((a, b) => a + b, 0);
+                                    return exps.map(e => e / sum);
+                                }
+
+                                function getWinningNeuron(px, py) {
+                                    const scores = neurons.map(n => yatProduct(n, { x: px, y: py }));
+                                    const probs = softmax(scores);
+                                    let maxIdx = 0;
+                                    for (let i = 1; i < probs.length; i++) {
+                                        if (probs[i] > probs[maxIdx]) maxIdx = i;
+                                    }
+                                    return { idx: maxIdx, prob: probs[maxIdx], probs };
+                                }
+
+                                function render() {
+                                    ctx.fillStyle = '#0a0a0f';
+                                    ctx.fillRect(0, 0, 500, 400);
+
+                                    // Draw Voronoi-like regions
+                                    const cellSize = 8;
+                                    for (let x = 0; x < 500; x += cellSize) {
+                                        for (let y = 0; y < 400; y += cellSize) {
+                                            const { idx, prob } = getWinningNeuron(x + cellSize / 2, y + cellSize / 2);
+                                            const color = neurons[idx].color;
+                                            const r = parseInt(color.slice(1, 3), 16);
+                                            const g = parseInt(color.slice(3, 5), 16);
+                                            const b = parseInt(color.slice(5, 7), 16);
+                                            const alpha = 0.1 + prob * 0.3;
+                                            ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+                                            ctx.fillRect(x, y, cellSize, cellSize);
+                                        }
+                                    }
+
+                                    // Draw decision boundaries
+                                    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                                    ctx.lineWidth = 1;
+                                    for (let x = 0; x < 500; x += 4) {
+                                        for (let y = 0; y < 400; y += 4) {
+                                            const curr = getWinningNeuron(x, y).idx;
+                                            const right = getWinningNeuron(x + 4, y).idx;
+                                            const down = getWinningNeuron(x, y + 4).idx;
+                                            if (curr !== right || curr !== down) {
+                                                ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                                                ctx.fillRect(x, y, 2, 2);
+                                            }
+                                        }
+                                    }
+
+                                    // Draw data points
+                                    for (const pt of dataPoints) {
+                                        const { idx } = getWinningNeuron(pt.x, pt.y);
+                                        ctx.beginPath();
+                                        ctx.arc(pt.x, pt.y, 5, 0, Math.PI * 2);
+                                        ctx.fillStyle = neurons[idx].color;
+                                        ctx.fill();
+                                        ctx.strokeStyle = '#fff';
+                                        ctx.lineWidth = 1;
+                                        ctx.stroke();
+                                    }
+
+                                    // Draw neurons
+                                    for (let i = 0; i < neurons.length; i++) {
+                                        const n = neurons[i];
+                                        // Glow
+                                        const gradient = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, 40);
+                                        gradient.addColorStop(0, n.color + '60');
+                                        gradient.addColorStop(1, 'transparent');
+                                        ctx.fillStyle = gradient;
+                                        ctx.fillRect(n.x - 40, n.y - 40, 80, 80);
+
+                                        // Neuron
+                                        ctx.beginPath();
+                                        ctx.arc(n.x, n.y, 12, 0, Math.PI * 2);
+                                        ctx.fillStyle = n.color;
+                                        ctx.fill();
+                                        ctx.strokeStyle = '#fff';
+                                        ctx.lineWidth = 2;
+                                        ctx.stroke();
+
+                                        // Label
+                                        ctx.fillStyle = '#000';
+                                        ctx.font = 'bold 10px sans-serif';
+                                        ctx.textAlign = 'center';
+                                        ctx.textBaseline = 'middle';
+                                        ctx.fillText(i + 1, n.x, n.y);
+                                    }
+                                }
+
+                                canvas.onmousedown = (e) => {
+                                    const rect = canvas.getBoundingClientRect();
+                                    const mx = (e.offsetX / rect.width) * 500;
+                                    const my = (e.offsetY / rect.height) * 400;
+
+                                    for (let i = 0; i < neurons.length; i++) {
+                                        const n = neurons[i];
+                                        if (Math.hypot(mx - n.x, my - n.y) < 15) {
+                                            dragging = i;
+                                            return;
+                                        }
+                                    }
+                                    dataPoints.push({ x: mx, y: my });
+                                    render();
+                                };
+
+                                canvas.onmousemove = (e) => {
+                                    if (dragging === null) return;
+                                    const rect = canvas.getBoundingClientRect();
+                                    neurons[dragging].x = (e.offsetX / rect.width) * 500;
+                                    neurons[dragging].y = (e.offsetY / rect.height) * 400;
+                                    render();
+                                };
+
+                                canvas.onmouseup = () => { dragging = null; };
+                                canvas.onmouseleave = () => { dragging = null; };
+
+                                document.getElementById('vortex-add-btn').onclick = () => {
+                                    if (neurons.length >= 6) return;
+                                    neurons.push({
+                                        x: 100 + Math.random() * 300,
+                                        y: 100 + Math.random() * 200,
+                                        color: colors[neurons.length % colors.length]
+                                    });
+                                    render();
+                                };
+
+                                document.getElementById('vortex-reset-btn').onclick = () => {
+                                    neurons = [
+                                        { x: 150, y: 150, color: '#ff6b6b' },
+                                        { x: 350, y: 150, color: '#00ff88' },
+                                        { x: 250, y: 300, color: '#6b9fff' }
+                                    ];
+                                    dataPoints = [];
+                                    render();
+                                };
+
+                                render();
+                            })();
+                        </script>
+
+                        <h4>📐 Decision Boundary Mathematics</h4>
+                        <p>
+                            The decision boundary between two neurons is defined where their responses are equal:
+                        </p>
+
+                        <div class="math-block">
+                            $$\frac{\langle \mathbf{w}_i, \mathbf{x} \rangle^2}{\|\mathbf{w}_i - \mathbf{x}\|^2 +
+                            \epsilon} = \frac{\langle \mathbf{w}_j, \mathbf{x} \rangle^2}{\|\mathbf{w}_j -
+                            \mathbf{x}\|^2 + \epsilon}$$
+                        </div>
+
+                        <p>
+                            Cross-multiplying and rearranging:
+                        </p>
+
+                        <div class="math-block">
+                            $$\langle \mathbf{w}_i, \mathbf{x} \rangle^2 (\|\mathbf{w}_j - \mathbf{x}\|^2 + \epsilon) =
+                            \langle \mathbf{w}_j, \mathbf{x} \rangle^2 (\|\mathbf{w}_i - \mathbf{x}\|^2 + \epsilon)$$
+                        </div>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">🔑</span>
+                            <div>
+                                <strong>Key Difference from Linear:</strong> Unlike linear neurons which produce
+                                <em>hyperplane</em> boundaries, <span class="yat-symbol">ⵟ</span>-neurons produce
+                                <em>curved algebraic surfaces</em> — like equipotential contours in a gravitational
+                                field.
+                            </div>
+                        </div>
+
+                        <h4>🧲 Space-Partitioning Properties</h4>
+
+                        <div class="consequences-grid">
+                            <div class="consequence-item">
+                                <span class="consequence-icon">📍</span>
+                                <h5>Distance Penalization</h5>
+                                <p>
+                                    The inverse-square denominator enforces <strong>spatial selectivity</strong>.
+                                    Responses are largest near $\mathbf{x} \approx \mathbf{w}$ and decay for distant
+                                    inputs.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">🎯</span>
+                                <h5>Alignment Weighting</h5>
+                                <p>
+                                    $\text{ⵟ}(\mathbf{w}, \mathbf{x}) = 0$ if and only if $\mathbf{w} \perp \mathbf{x}$.
+                                    High values require <strong>both</strong> alignment AND proximity.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">📊</span>
+                                <h5>Global Boundedness</h5>
+                                <p>
+                                    For fixed $\mathbf{w}$: $0 \le \text{ⵟ}(\mathbf{w}, \mathbf{x}) \le
+                                    \|\mathbf{w}\|^4/\epsilon$.
+                                    Each neuron has a <strong>bounded activation landscape</strong>.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">🌀</span>
+                                <h5>Nonlinear Regions</h5>
+                                <p>
+                                    Decision boundaries form curved surfaces — level sets akin to
+                                    <strong>equipotential surfaces</strong> in physics.
+                                </p>
+                            </div>
+                        </div>
+
+                        <h4>⚔️ Softmax Competition</h4>
+                        <p>
+                            When normalized with softmax, <span class="yat-symbol">ⵟ</span>-product scores create
+                            "territorial" competition:
+                        </p>
+
+                        <div class="math-block">
+                            $$p_i = \frac{\exp\left(\frac{\langle \mathbf{w}_i, \mathbf{x} \rangle^2}{\|\mathbf{w}_i -
+                            \mathbf{x}\|^2 + \epsilon}\right)}{\sum_{j=1}^{C} \exp\left(\frac{\langle \mathbf{w}_j,
+                            \mathbf{x} \rangle^2}{\|\mathbf{w}_j - \mathbf{x}\|^2 + \epsilon}\right)}$$
+                        </div>
+
+                        <!-- Expandable Extended Math Section -->
+                        <details
+                            style="margin: 1.5rem 0; padding: 1rem; background: rgba(100,100,255,0.05); border-radius: 8px; border: 1px solid rgba(100,100,255,0.2);">
+                            <summary
+                                style="cursor: pointer; font-weight: 600; color: var(--terminal-green); user-select: none;">
+                                📐 Show Extended Math Derivation
+                            </summary>
+                            <div
+                                style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+
+                                <h5 style="color: var(--terminal-green); margin-bottom: 0.5rem;">Step 1: Define
+                                    Individual Scores</h5>
+                                <p>Let $s_i$ denote the raw <span class="yat-symbol">ⵟ</span>-product score for neuron
+                                    $i$:</p>
+                                <div class="math-block">
+                                    $$s_i(\mathbf{x}) = \text{ⵟ}(\mathbf{w}_i, \mathbf{x}) = \frac{(\mathbf{w}_i^\top
+                                    \mathbf{x})^2}{\|\mathbf{w}_i - \mathbf{x}\|^2 + \epsilon}$$
+                                </div>
+
+                                <h5 style="color: var(--terminal-green); margin-bottom: 0.5rem;">Step 2:
+                                    Temperature-Scaled Softmax</h5>
+                                <p>With temperature $\tau > 0$ controlling sharpness:</p>
+                                <div class="math-block">
+                                    $$p_i = \frac{\exp(s_i / \tau)}{\sum_{j=1}^{C} \exp(s_j / \tau)} =
+                                    \text{softmax}\left(\frac{\mathbf{s}}{\tau}\right)_i$$
+                                </div>
+                                <p style="font-size: 0.9rem; color: var(--text-muted);">
+                                    • $\tau \to 0$: Hard assignment (argmax) → sharp territorial boundaries<br>
+                                    • $\tau \to \infty$: Uniform distribution → no competition<br>
+                                    • $\tau = 1$: Standard softmax
+                                </p>
+
+                                <h5 style="color: var(--terminal-green); margin-bottom: 0.5rem;">Step 3: Gradient w.r.t.
+                                    Input</h5>
+                                <p>The gradient of the log-probability for the correct class $c$:</p>
+                                <div class="math-block">
+                                    $$\nabla_{\mathbf{x}} \log p_c = \frac{1}{\tau}\left(\nabla_{\mathbf{x}} s_c -
+                                    \sum_{j=1}^{C} p_j \nabla_{\mathbf{x}} s_j\right)$$
+                                </div>
+
+                                <h5 style="color: var(--terminal-green); margin-bottom: 0.5rem;">Step 4: Gradient of
+                                    <span class="yat-symbol">ⵟ</span>-Product</h5>
+                                <p>Using the quotient rule on $s_i = \frac{u^2}{v}$ where $u = \mathbf{w}_i^\top
+                                    \mathbf{x}$ and $v = \|\mathbf{w}_i - \mathbf{x}\|^2 + \epsilon$:</p>
+                                <div class="math-block">
+                                    $$\nabla_{\mathbf{x}} s_i = \frac{2u \cdot \mathbf{w}_i \cdot v - u^2 \cdot
+                                    2(\mathbf{x} - \mathbf{w}_i)}{v^2}$$
+                                </div>
+                                <p>Simplifying:</p>
+                                <div class="math-block">
+                                    $$\nabla_{\mathbf{x}} s_i = \frac{2(\mathbf{w}_i^\top \mathbf{x})}{\|\mathbf{w}_i -
+                                    \mathbf{x}\|^2 + \epsilon}\left[\mathbf{w}_i - \frac{(\mathbf{w}_i^\top
+                                    \mathbf{x})(\mathbf{x} - \mathbf{w}_i)}{\|\mathbf{w}_i - \mathbf{x}\|^2 +
+                                    \epsilon}\right]$$
+                                </div>
+
+                                <h5 style="color: var(--terminal-green); margin-bottom: 0.5rem;">Step 5: Convergence
+                                    Behavior</h5>
+                                <p>As $\mathbf{x} \to \mathbf{w}_i$ (input approaches weight):</p>
+                                <div class="math-block">
+                                    $$\lim_{\mathbf{x} \to \mathbf{w}_i} s_i = \frac{\|\mathbf{w}_i\|^4}{\epsilon} \quad
+                                    \text{(maximum response)}$$
+                                </div>
+                                <p>As $\mathbf{x} \perp \mathbf{w}_i$ (orthogonal):</p>
+                                <div class="math-block">
+                                    $$s_i = 0 \quad \Rightarrow \quad p_i \to \frac{1}{C} \quad \text{(loses
+                                    competition)}$$
+                                </div>
+                            </div>
+                        </details>
+
+                        <p>
+                            As training progresses, the softmax approaches a <strong>delta distribution</strong> —
+                            the winning neuron gets probability → 1, others → 0. This creates sharp territorial
+                            boundaries.
+                        </p>
+
+                        <h4>🔄 Orthogonality and Competitive Dynamics</h4>
+                        <p>
+                            When two prototypes develop disjoint support regions, they become orthogonal:
+                        </p>
+
+                        <div class="theorem-statement">
+                            <div class="theorem-box">
+                                <strong>Orthogonality-Entropy Connection:</strong><br>
+                                When $\mathbf{w}_i \perp \mathbf{w}_j$ (orthogonal):
+                                $$\text{ⵟ}(\mathbf{w}_i, \mathbf{w}_j) = 0 \quad \text{and} \quad H(\mathbf{w}_i,
+                                \mathbf{w}_j) = \infty$$
+                                The infinite cross-entropy creates strong pressure for <em>territorial separation</em>.
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="blog-page-nav">
+                    <a href="11-architectures.html" class="blog-nav-btn">← Previous: Architectures</a>
+                    <a href="../index.html#theory" class="blog-nav-btn">All Topics</a>
+                    <a href="13-mathematical-guarantees.html" class="blog-nav-btn">Next: Math Guarantees →</a>
+                </div>
+            </article>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="yat-symbol">ⵟ</span>
+                    <span>Neural Matter Networks</span>
+                </div>
+                <div class="footer-links">
+                    <a href="https://github.com/mlnomadpy/nmn" target="_blank">GitHub</a>
+                    <a href="https://pypi.org/project/nmn/" target="_blank">PyPI</a>
+                    <a href="mailto:taha@azetta.ai">Contact</a>
+                </div>
+                <div class="footer-copy">
+                    <p>Built with ❤️ by <a href="https://azetta.ai" target="_blank">azetta.ai</a></p>
+                    <p>AGPL-3.0 License</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '$', right: '$', display: false }
+                ]
+            });
+        });
+    </script>
+</body>
+
+</html>

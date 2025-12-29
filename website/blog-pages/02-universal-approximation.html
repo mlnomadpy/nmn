@@ -1,29 +1,34 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Universal Approximation Theorem — Neural Matter Networks</title>
-    <meta name="description" content="The ⵟ-product: A kernel-based activation-free neural network architecture that unifies alignment and proximity for geometrically-aware computation.">
-    
+    <meta name="description"
+        content="The ⵟ-product: A kernel-based activation-free neural network architecture that unifies alignment and proximity for geometrically-aware computation.">
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tifinagh&display=swap" rel="stylesheet">
-    
+
     <!-- KaTeX for math rendering -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-    
+
     <!-- Three.js for 3D -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    
+
     <!-- Styles -->
     <link rel="stylesheet" href="../css/styles.css">
     <link rel="stylesheet" href="../css/blog-pages.css">
 </head>
+
 <body>
     <nav class="main-nav">
         <div class="nav-container">
@@ -40,13 +45,14 @@
                 <a href="#code">Code</a>
                 <a href="https://github.com/mlnomadpy/nmn" target="_blank" class="nav-github">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+                        <path
+                            d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
                     </svg>
                 </a>
             </div>
         </div>
     </nav>
-    
+
     <!-- Blog Post Page -->
     <main class="blog-page">
         <div class="container">
@@ -56,189 +62,226 @@
                     <span class="blog-post-badge">Theorem 2</span>
                     <h1 class="blog-post-title">Universal Approximation Theorem</h1>
                 </header>
-                
+
                 <div class="blog-post-content">
 
-            <!-- ELI5 Section -->
-            <div class="eli5-section">
-                <div class="eli5-header">
-                    <span class="eli5-icon">🧒</span>
-                    <h4>Explain Like I'm 5</h4>
-                </div>
-                <div class="eli5-content">
-                    <p>
-                        Imagine you have a magic box that can draw any picture you want. You just need to tell it 
-                        "draw a cat" or "draw a house" and it will draw it perfectly!
-                    </p>
-                    <p>
-                        The Universal Approximation Theorem says our <span class="yat-symbol">ⵟ</span>-product networks 
-                        are like that magic box — they can <strong>learn to do anything</strong> (well, any continuous function) 
-                        if we give them enough "drawing tools" (neurons).
-                    </p>
-                    <p>
-                        Even though we removed the activation functions (like ReLU), we didn't lose any power! 
-                        The <span class="yat-symbol">ⵟ</span>-product is already "magical" enough on its own.
-                    </p>
-                </div>
-            </div>
-
-            <!-- Formal Statement -->
-            <div class="theorem-statement">
-                <div class="theorem-box">
-                    <strong>Theorem:</strong> Let $\mathcal{X} \subset \mathbb{R}^d$ be compact. The class of single-hidden-layer 
-                    <span class="yat-symbol">ⵟ</span>-product networks 
-                    $f(\mathbf{x}) = \sum_{i=1}^n \alpha_i \cdot g(\mathbf{x}; \mathbf{w}_i, b_i) + c$
-                    is <em>dense</em> in $C(\mathcal{X})$ under the uniform norm. That is, NMNs can approximate any continuous function 
-                    to arbitrary precision.
-                </div>
-            </div>
-
-            <div class="theorem-content">
-                <!-- The Problem It Solves -->
-                <h4>🎯 The Problem This Solves</h4>
-                <p>
-                    When we removed activation functions, critics asked: <em>"Can you still learn complex functions?"</em>
-                </p>
-                <p>
-                    Traditional neural networks rely on activation functions (ReLU, sigmoid) to create non-linearity. 
-                    Without them, a network would just be a series of linear transformations — which can only learn linear functions.
-                </p>
-                <p>
-                    This theorem proves that the <span class="yat-symbol">ⵟ</span>-product's <strong>inherent geometric non-linearity</strong> 
-                    is sufficient. We don't need separate activation functions because the <span class="yat-symbol">ⵟ</span>-product 
-                    itself is non-linear.
-                </p>
-
-                <!-- Deep Mathematical Explanation -->
-                <h4>📐 The Mathematics In Depth</h4>
-                <p>
-                    The proof is elegant and leverages the kernel structure established by Theorem 1:
-                </p>
-
-                <div class="proof-step">
-                    <strong>Step 1: Recover IMQ Kernel</strong>
-                    <p>
-                        Consider the <span class="yat-symbol">ⵟ</span>-product with bias: 
-                        $g(\mathbf{x}; \mathbf{w}, b) = \frac{(\mathbf{w}^\top\mathbf{x} + b)^2}{\|\mathbf{w} - \mathbf{x}\|^2 + \varepsilon}$
-                    </p>
-                    <p>
-                        By differentiating twice with respect to $b$:
-                        $$\partial_b^2 g(\mathbf{x}; \mathbf{w}, b) = \frac{2}{\|\mathbf{x} - \mathbf{w}\|^2 + \varepsilon}$$
-                    </p>
-                    <p>
-                        This is the <strong>inverse multiquadric (IMQ) kernel</strong> — a well-studied kernel in approximation theory.
-                    </p>
-                </div>
-
-                <div class="proof-step">
-                    <strong>Step 2: Fourier Analysis</strong>
-                    <p>
-                        The IMQ kernel has a <strong>strictly positive Fourier transform</strong> (related to the modified Bessel function $K_0$). 
-                        This is a key property for density results.
-                    </p>
-                </div>
-
-                <div class="proof-step">
-                    <strong>Step 3: Uniqueness via Orthogonality</strong>
-                    <p>
-                        If a measure $\mu$ is orthogonal to all IMQ translates (i.e., $\int k(\mathbf{x}, \mathbf{w}) d\mu(\mathbf{x}) = 0$ 
-                        for all $\mathbf{w}$), then by the positivity of the Fourier transform, $\mu$ must be the zero measure.
-                    </p>
-                </div>
-
-                <div class="proof-step">
-                    <strong>Step 4: Density via Hahn-Banach/Riesz Duality</strong>
-                    <p>
-                        By the Hahn-Banach theorem and Riesz representation theorem, if the span of $\{g(\cdot; \mathbf{w}, b)\}$ 
-                        is not dense, there exists a non-zero continuous linear functional that vanishes on the span. 
-                        This functional corresponds to a measure, which by Step 3 must be zero — a contradiction.
-                    </p>
-                    <p>
-                        Therefore, the span is dense in $C(\mathcal{X})$. ∎
-                    </p>
-                </div>
-
-                <div class="insight-box">
-                    <span class="insight-icon">🔬</span>
-                    <div>
-                        <strong>Key Insight:</strong> The bias term $b$ is crucial! It allows the network to "shift" response fields 
-                        and span the entire function space through differentiation. This is why we use 
-                        $(\mathbf{w}^\top\mathbf{x} + b)^2$ rather than just $(\mathbf{w}^\top\mathbf{x})^2$.
+                    <!-- ELI5 Section -->
+                    <div class="eli5-section">
+                        <div class="eli5-header">
+                            <span class="eli5-icon">🧒</span>
+                            <h4>Explain Like I'm 5</h4>
+                        </div>
+                        <div class="eli5-content">
+                            <p>
+                                Imagine you have a magic box that can draw any picture you want. You just need to tell
+                                it
+                                "draw a cat" or "draw a house" and it will draw it perfectly!
+                            </p>
+                            <p>
+                                The Universal Approximation Theorem says our <span class="yat-symbol">ⵟ</span>-product
+                                networks
+                                are like that magic box — they can <strong>learn to do anything</strong> (well, any
+                                continuous function)
+                                if we give them enough "drawing tools" (neurons).
+                            </p>
+                            <p>
+                                Even though we removed the activation functions (like ReLU), we didn't lose any power!
+                                The <span class="yat-symbol">ⵟ</span>-product is already "magical" enough on its own.
+                            </p>
+                        </div>
                     </div>
-                </div>
 
-                <!-- The Consequences -->
-                <h4>💥 The Consequences</h4>
-                <div class="consequences-grid">
-                    <div class="consequence-item">
-                        <span class="consequence-icon">∞</span>
-                        <h5>No Expressive Power Loss</h5>
+                    <!-- Formal Statement -->
+                    <div class="theorem-statement">
+                        <div class="theorem-box">
+                            <strong>Theorem:</strong> Let $\mathcal{X} \subset \mathbb{R}^d$ be compact. The class of
+                            single-hidden-layer
+                            <span class="yat-symbol">ⵟ</span>-product networks
+                            $f(\mathbf{x}) = \sum_{i=1}^n \alpha_i \cdot g(\mathbf{x}; \mathbf{w}_i, b_i) + c$
+                            is <em>dense</em> in $C(\mathcal{X})$ under the uniform norm. That is, NMNs can approximate
+                            any continuous function
+                            to arbitrary precision.
+                        </div>
+                    </div>
+
+                    <div class="theorem-content">
+                        <!-- The Problem It Solves -->
+                        <h4>🎯 The Problem This Solves</h4>
                         <p>
-                            NMNs are as expressive as ReLU/Sigmoid networks. Single hidden layer is sufficient in theory 
-                            (though deeper networks may learn more efficiently).
+                            When we removed activation functions, critics asked: <em>"Can you still learn complex
+                                functions?"</em>
+                        </p>
+                        <p>
+                            Traditional neural networks rely on activation functions (ReLU, sigmoid) to create
+                            non-linearity.
+                            Without them, a network would just be a series of linear transformations — which can only
+                            learn linear functions.
+                        </p>
+                        <p>
+                            This theorem proves that the <span class="yat-symbol">ⵟ</span>-product's <strong>inherent
+                                geometric non-linearity</strong>
+                            is sufficient. We don't need separate activation functions because the <span
+                                class="yat-symbol">ⵟ</span>-product
+                            itself is non-linear.
+                        </p>
+
+                        <!-- Deep Mathematical Explanation -->
+                        <h4>📐 The Mathematics In Depth</h4>
+                        <p>
+                            The proof is elegant and leverages the kernel structure established by Theorem 1:
+                        </p>
+
+                        <div class="proof-step">
+                            <strong>Step 1: Recover IMQ Kernel</strong>
+                            <p>
+                                Consider the <span class="yat-symbol">ⵟ</span>-product with bias:
+                                $g(\mathbf{x}; \mathbf{w}, b) = \frac{(\mathbf{w}^\top\mathbf{x} + b)^2}{\|\mathbf{w} -
+                                \mathbf{x}\|^2 + \varepsilon}$
+                            </p>
+                            <p>
+                                By differentiating twice with respect to $b$:
+                                $$\partial_b^2 g(\mathbf{x}; \mathbf{w}, b) = \frac{2}{\|\mathbf{x} - \mathbf{w}\|^2 +
+                                \varepsilon}$$
+                            </p>
+                            <p>
+                                This is the <strong>inverse multiquadric (IMQ) kernel</strong> — a well-studied kernel
+                                in approximation theory.
+                            </p>
+                        </div>
+
+                        <div class="proof-step">
+                            <strong>Step 2: Fourier Analysis</strong>
+                            <p>
+                                The IMQ kernel has a <strong>strictly positive Fourier transform</strong> (related to
+                                the modified Bessel function $K_0$).
+                                This is a key property for density results.
+                            </p>
+                        </div>
+
+                        <div class="proof-step">
+                            <strong>Step 3: Uniqueness via Orthogonality</strong>
+                            <p>
+                                If a measure $\mu$ is orthogonal to all IMQ translates (i.e., $\int k(\mathbf{x},
+                                \mathbf{w}) d\mu(\mathbf{x}) = 0$
+                                for all $\mathbf{w}$), then by the positivity of the Fourier transform, $\mu$ must be
+                                the zero measure.
+                            </p>
+                        </div>
+
+                        <div class="proof-step">
+                            <strong>Step 4: Density via Hahn-Banach/Riesz Duality</strong>
+                            <p>
+                                By the Hahn-Banach theorem and Riesz representation theorem, if the span of $\{g(\cdot;
+                                \mathbf{w}, b)\}$
+                                is not dense, there exists a non-zero continuous linear functional that vanishes on the
+                                span.
+                                This functional corresponds to a measure, which by Step 3 must be zero — a
+                                contradiction.
+                            </p>
+                            <p>
+                                Therefore, the span is dense in $C(\mathcal{X})$. ∎
+                            </p>
+                        </div>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">🔬</span>
+                            <div>
+                                <strong>Key Insight:</strong> The bias term $b$ is crucial! It allows the network to
+                                "shift" response fields
+                                and span the entire function space through differentiation. This is why we use
+                                $(\mathbf{w}^\top\mathbf{x} + b)^2$ rather than just $(\mathbf{w}^\top\mathbf{x})^2$.
+                            </div>
+                        </div>
+
+                        <!-- The Consequences -->
+                        <h4>💥 The Consequences</h4>
+                        <div class="consequences-grid">
+                            <div class="consequence-item">
+                                <span class="consequence-icon">∞</span>
+                                <h5>No Expressive Power Loss</h5>
+                                <p>
+                                    NMNs are as expressive as ReLU/Sigmoid networks. Single hidden layer is sufficient
+                                    in theory
+                                    (though deeper networks may learn more efficiently).
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">🎯</span>
+                                <h5>Geometric Localization</h5>
+                                <p>
+                                    Unlike ReLU (unbounded growth), the <span class="yat-symbol">ⵟ</span>-product
+                                    achieves density
+                                    through <em>localized</em> geometric units — creating "vortex-like" territorial
+                                    fields.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">🔧</span>
+                                <h5>Simpler Architecture</h5>
+                                <p>
+                                    No need for complex activation functions. The geometric operator itself provides the
+                                    non-linearity,
+                                    leading to simpler, more interpretable networks.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">📊</span>
+                                <h5>Kernel Method Connection</h5>
+                                <p>
+                                    The proof connects NMNs to kernel methods, opening the door to using kernel-based
+                                    optimization
+                                    techniques and theoretical guarantees.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- What This Really Means -->
+                        <h4>🎓 What This Really Means</h4>
+                        <p>
+                            This is the <strong>fundamental existence theorem</strong> for NMNs. It answers the
+                            question:
+                            "Can we really learn complex functions without activation functions?"
+                        </p>
+                        <p>
+                            The answer is a resounding <strong>yes</strong>. The <span
+                                class="yat-symbol">ⵟ</span>-product's
+                            geometric structure provides sufficient non-linearity to approximate any continuous
+                            function.
+                        </p>
+                        <p>
+                            This theorem bridges the gap between <em>theoretical possibility</em> and <em>practical
+                                feasibility</em>,
+                            showing that activation-free networks are not just a curiosity — they're a viable
+                            alternative
+                            with the same expressive power.
+                        </p>
+
+                        <!-- Historical Context -->
+                        <h4>📜 Historical Context</h4>
+                        <p>
+                            Universal approximation theorems date back to the 1980s, with seminal work by Cybenko (1989)
+                            and
+                            Hornik et al. (1989) showing that single-hidden-layer networks with sigmoidal activations
+                            are universal approximators.
+                        </p>
+                        <p>
+                            Our theorem extends this tradition, showing that <em>geometric non-linearity</em> (via the
+                            <span class="yat-symbol">ⵟ</span>-product)
+                            can replace <em>functional non-linearity</em> (via activations) without losing approximation
+                            power.
                         </p>
                     </div>
-                    <div class="consequence-item">
-                        <span class="consequence-icon">🎯</span>
-                        <h5>Geometric Localization</h5>
-                        <p>
-                            Unlike ReLU (unbounded growth), the <span class="yat-symbol">ⵟ</span>-product achieves density 
-                            through <em>localized</em> geometric units — creating "vortex-like" territorial fields.
-                        </p>
-                    </div>
-                    <div class="consequence-item">
-                        <span class="consequence-icon">🔧</span>
-                        <h5>Simpler Architecture</h5>
-                        <p>
-                            No need for complex activation functions. The geometric operator itself provides the non-linearity, 
-                            leading to simpler, more interpretable networks.
-                        </p>
-                    </div>
-                    <div class="consequence-item">
-                        <span class="consequence-icon">📊</span>
-                        <h5>Kernel Method Connection</h5>
-                        <p>
-                            The proof connects NMNs to kernel methods, opening the door to using kernel-based optimization 
-                            techniques and theoretical guarantees.
-                        </p>
-                    </div>
+
                 </div>
 
-                <!-- What This Really Means -->
-                <h4>🎓 What This Really Means</h4>
-                <p>
-                    This is the <strong>fundamental existence theorem</strong> for NMNs. It answers the question: 
-                    "Can we really learn complex functions without activation functions?"
-                </p>
-                <p>
-                    The answer is a resounding <strong>yes</strong>. The <span class="yat-symbol">ⵟ</span>-product's 
-                    geometric structure provides sufficient non-linearity to approximate any continuous function.
-                </p>
-                <p>
-                    This theorem bridges the gap between <em>theoretical possibility</em> and <em>practical feasibility</em>, 
-                    showing that activation-free networks are not just a curiosity — they're a viable alternative 
-                    with the same expressive power.
-                </p>
-
-                <!-- Historical Context -->
-                <h4>📜 Historical Context</h4>
-                <p>
-                    Universal approximation theorems date back to the 1980s, with seminal work by Cybenko (1989) and 
-                    Hornik et al. (1989) showing that single-hidden-layer networks with sigmoidal activations are universal approximators.
-                </p>
-                <p>
-                    Our theorem extends this tradition, showing that <em>geometric non-linearity</em> (via the <span class="yat-symbol">ⵟ</span>-product) 
-                    can replace <em>functional non-linearity</em> (via activations) without losing approximation power.
-                </p>
-            </div>
-        
-                </div>
-                
-                <div class="blog-page-nav"><a href="01-mercer-kernel.html" class="blog-nav-btn">← Previous: The ⵟ-Product is a Mercer Kernel</a><a href="index.html#theory" class="blog-nav-btn">All Theorems</a><a href="03-self-regulation.html" class="blog-nav-btn">Next: Self-Regulation & Bounded Outputs →</a></div>
+                <div class="blog-page-nav"><a href="01-mercer-kernel.html" class="blog-nav-btn">← Previous: The
+                        ⵟ-Product is a Mercer Kernel</a><a href="index.html#theory" class="blog-nav-btn">All
+                        Theorems</a><a href="03-self-regulation.html" class="blog-nav-btn">Next: Self-Regulation &
+                        Bounded Outputs →</a></div>
             </article>
         </div>
     </main>
-    
+
     <footer class="footer">
         <div class="container">
             <div class="footer-content">
@@ -258,14 +301,16 @@
             </div>
         </div>
     </footer>
-    <!-- Scripts -->
-    <script src="js/math-utils.js"></script>
-    <script src="js/heatmap-viz.js"></script>
-    <script src="js/gradient-viz.js"></script>
-    <script src="js/xor-demo.js"></script>
-    <script src="js/decision-boundary.js"></script>
-    <script src="js/loss-landscape.js"></script>
-    <script src="js/main.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '$', right: '$', display: false }
+                ]
+            });
+        });
+    </script>
 </body>
-</body>
+
 </html>

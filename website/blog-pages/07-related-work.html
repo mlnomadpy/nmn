@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Related Work — Neural Matter Networks</title>
+    <meta name="description"
+        content="Explore the historical and theoretical context of Neural Matter Networks, including inverse-square laws, kernel methods, and alternative neural architectures.">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tifinagh&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/blog-pages.css">
+</head>
+
+<body>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="../index.html" class="nav-logo">
+                <span class="yat-symbol">ⵟ</span>
+                <span>NMN</span>
+            </a>
+            <div class="nav-links">
+                <a href="../index.html#introduction">Introduction</a>
+                <a href="../index.html#yat-product">ⵟ-Product</a>
+                <a href="../index.html#visualizations">Visualizations</a>
+                <a href="../index.html#results">Results</a>
+                <a href="../index.html#theory" class="nav-blog">Blog</a>
+                <a href="../index.html#code">Code</a>
+                <a href="https://github.com/mlnomadpy/nmn" target="_blank" class="nav-github">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path
+                            d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Blog Post Page -->
+    <main class="blog-page">
+        <div class="container">
+            <article class="blog-post">
+                <header class="blog-post-header">
+                    <a href="../index.html#theory" class="blog-back-link">← Back to Theory</a>
+                    <span class="blog-post-badge">Context</span>
+                    <h1 class="blog-post-title">Related Work & Historical Context</h1>
+                </header>
+
+                <div class="blog-post-content">
+
+                    <!-- ELI5 Section -->
+                    <div class="eli5-section">
+                        <div class="eli5-header">
+                            <span class="eli5-icon">🧒</span>
+                            <h4>Explain Like I'm 5</h4>
+                        </div>
+                        <div class="eli5-content">
+                            <p>
+                                Imagine you're building with LEGO blocks. Scientists before us have built amazing things
+                                with
+                                their own special blocks:
+                            </p>
+                            <ul>
+                                <li>🧲 <strong>Physics blocks:</strong> They figured out that things like gravity and
+                                    magnets
+                                    get weaker the farther away you are (like how a magnet can't pull a paperclip from
+                                    across the room).</li>
+                                <li>🧠 <strong>Brain blocks:</strong> Other scientists built artificial brains (neural
+                                    networks)
+                                    using special "on/off switches" called activation functions.</li>
+                                <li>🎯 <strong>Similarity blocks:</strong> Some built ways to measure how "alike" two
+                                    things are.</li>
+                            </ul>
+                            <p>
+                                The <span class="yat-symbol">ⵟ</span>-product is like a <em>super LEGO block</em> that
+                                combines the best parts from all of these! It uses the physics idea (things matter more
+                                when close),
+                                the brain idea (making smart decisions), and the similarity idea (knowing what's alike)
+                                —
+                                all in one simple piece!
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="theorem-content">
+                        <!-- Inverse-Square Laws -->
+                        <h4>🌌 Inverse-Square Laws: Inspiration from Physics</h4>
+                        <p>
+                            The <span class="yat-symbol">ⵟ</span>-product draws deep inspiration from one of nature's
+                            most
+                            fundamental patterns: the <strong>inverse-square law</strong>. This principle appears
+                            everywhere
+                            in physics and describes how intensity decreases with the square of distance.
+                        </p>
+
+                        <div class="math-block">
+                            <strong>The Universal Pattern:</strong>
+                            $$\text{Intensity} \propto \frac{1}{r^2}$$
+                            where $r$ is the distance from the source.
+                        </div>
+
+                        <div class="consequences-grid">
+                            <div class="consequence-item">
+                                <span class="consequence-icon">🍎</span>
+                                <h5>Newton's Gravitation (1687)</h5>
+                                <p>
+                                    The force between two masses decreases with the square of their separation:
+                                    $F = G\frac{m_1 m_2}{r^2}$. This explains why the Moon orbits Earth but
+                                    doesn't crash into it.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">⚡</span>
+                                <h5>Coulomb's Law (1785)</h5>
+                                <p>
+                                    Electric charges attract or repel with force proportional to $\frac{q_1 q_2}{r^2}$.
+                                    This governs everything from lightning to the chemistry of molecules.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">💡</span>
+                                <h5>Light Intensity</h5>
+                                <p>
+                                    The brightness of a light source fades as $\frac{1}{r^2}$. Move twice as far from
+                                    a lamp, and it appears four times dimmer — not just twice.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">📡</span>
+                                <h5>Electromagnetic Radiation</h5>
+                                <p>
+                                    Radio signals, WiFi, and all EM waves follow this law. This is why your signal
+                                    weakens rapidly as you move away from the router.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">💡</span>
+                            <div>
+                                <strong>Key Insight:</strong> The <span class="yat-symbol">ⵟ</span>-product adopts this
+                                natural principle: nearby, aligned vectors have strong interactions, while distant or
+                                misaligned vectors have weak interactions. This creates a "potential well" around each
+                                neuron's weight vector, just like gravity creates a potential well around a planet.
+                            </div>
+                        </div>
+
+                        <!-- Alternative Neural Operators -->
+                        <h4>🔧 Alternative Neural Operators</h4>
+                        <p>
+                            The standard neural network paradigm — <em>linear transformation followed by activation
+                                function</em> —
+                            has been challenged by several approaches. Here's how the <span
+                                class="yat-symbol">ⵟ</span>-product
+                            compares:
+                        </p>
+
+                        <div class="comparison-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Approach</th>
+                                        <th>How It Works</th>
+                                        <th>Limitation</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Quadratic Neurons</strong></td>
+                                        <td>Replace dot product with quadratic forms $\mathbf{x}^T W \mathbf{x}$</td>
+                                        <td>Ignores spatial distance; still may need activations</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>SIREN</strong></td>
+                                        <td>Use sinusoidal activations: $\sin(\omega \mathbf{w}^T\mathbf{x})$</td>
+                                        <td>Domain-specific (implicit neural representations)</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Gated Linear Units</strong></td>
+                                        <td>Element-wise gating: $(\mathbf{Wx}) \odot \sigma(\mathbf{Vx})$</td>
+                                        <td>Still requires sigmoid activation for gating</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Multiplicative Interactions</strong></td>
+                                        <td>Products of linear projections</td>
+                                        <td>Separate activation still needed for non-linearity</td>
+                                    </tr>
+                                    <tr class="highlight-row">
+                                        <td><strong><span class="yat-symbol">ⵟ</span>-Product</strong></td>
+                                        <td>$\frac{(\mathbf{w}^T\mathbf{x})^2}{\|\mathbf{w}-\mathbf{x}\|^2 + \epsilon}$
+                                        </td>
+                                        <td><em>No activation needed — geometry provides non-linearity</em></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <p>
+                            The key differentiator: the <span class="yat-symbol">ⵟ</span>-product doesn't just replace
+                            the activation function — it <strong>eliminates the need for one entirely</strong> by
+                            encoding
+                            non-linearity directly into the geometric relationship between vectors.
+                        </p>
+
+                        <!-- Kernel Methods -->
+                        <h4>🎓 Kernel Methods: A Rich Theoretical Heritage</h4>
+                        <p>
+                            The <span class="yat-symbol">ⵟ</span>-product connects to a powerful mathematical framework
+                            developed over decades: <strong>kernel methods</strong>. This connection isn't just
+                            theoretical —
+                            it provides practical guarantees and insights.
+                        </p>
+
+                        <div class="proof-step">
+                            <strong>The Kernel Method Lineage</strong>
+                            <ul>
+                                <li><strong>1909 — Mercer's Theorem:</strong> James Mercer proved that certain integral
+                                    operators can be decomposed, laying the mathematical foundation.</li>
+                                <li><strong>1992 — SVMs:</strong> Cortes and Vapnik showed how kernels enable non-linear
+                                    classification without explicit feature computation.</li>
+                                <li><strong>1998 — Kernel PCA:</strong> Schölkopf extended dimensionality reduction to
+                                    non-linear manifolds using kernels.</li>
+                                <li><strong>2000s — Gaussian Processes:</strong> Kernels became central to probabilistic
+                                    machine learning and uncertainty quantification.</li>
+                                <li><strong>2018 — Neural Tangent Kernel:</strong> Jacot et al. connected infinite-width
+                                    neural networks to kernel methods.</li>
+                            </ul>
+                        </div>
+
+                        <p>
+                            The <span class="yat-symbol">ⵟ</span>-product enters this lineage as a <strong>novel Mercer
+                                kernel</strong>
+                            that uniquely combines the properties of two established kernel families:
+                        </p>
+
+                        <div class="consequences-grid">
+                            <div class="consequence-item">
+                                <span class="consequence-icon">📊</span>
+                                <h5>Polynomial Kernels</h5>
+                                <p>
+                                    $k(x,y) = (x^T y + c)^d$ — Capture feature interactions and alignment.
+                                    The <span class="yat-symbol">ⵟ</span>-product uses $(x^T y)^2$ in the numerator.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">🎯</span>
+                                <h5>RBF/Gaussian Kernels</h5>
+                                <p>
+                                    $k(x,y) = \exp(-\gamma\|x-y\|^2)$ — Provide locality and smooth distance-based
+                                    responses.
+                                    The <span class="yat-symbol">ⵟ</span>-product uses $\frac{1}{\|x-y\|^2 + \epsilon}$
+                                    in the denominator.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">🔬</span>
+                            <div>
+                                <strong>Critical Difference:</strong> Unlike traditional kernel methods that operate in
+                                the <em>dual form</em> (requiring $O(n^2)$ Gram matrices), the <span
+                                    class="yat-symbol">ⵟ</span>-product
+                                operates in the <em>primal form</em>. This means we get the theoretical guarantees of
+                                kernels
+                                with the computational efficiency of modern neural networks.
+                            </div>
+                        </div>
+
+                        <!-- Distance-Based Methods -->
+                        <h4>📏 Distance-Based Methods</h4>
+                        <p>
+                            Many successful ML methods use distance as a core concept. The <span
+                                class="yat-symbol">ⵟ</span>-product
+                            relates to these but offers something fundamentally different:
+                        </p>
+
+                        <div class="comparison-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Method</th>
+                                        <th>Uses Distance?</th>
+                                        <th>Uses Alignment?</th>
+                                        <th>Intrinsic Non-linearity?</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>k-Nearest Neighbors</td>
+                                        <td>✅ Core principle</td>
+                                        <td>❌ No</td>
+                                        <td>✅ Yes (via voting)</td>
+                                    </tr>
+                                    <tr>
+                                        <td>RBF Networks</td>
+                                        <td>✅ Gaussian kernel</td>
+                                        <td>❌ No</td>
+                                        <td>✅ Yes (exponential)</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Attention (Transformers)</td>
+                                        <td>❌ No</td>
+                                        <td>✅ Dot product</td>
+                                        <td>❌ Needs softmax</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Cosine Similarity</td>
+                                        <td>❌ Ignores magnitude</td>
+                                        <td>✅ Pure direction</td>
+                                        <td>❌ Linear</td>
+                                    </tr>
+                                    <tr class="highlight-row">
+                                        <td><strong><span class="yat-symbol">ⵟ</span>-Product</strong></td>
+                                        <td>✅ In denominator</td>
+                                        <td>✅ Squared in numerator</td>
+                                        <td>✅ Geometric ratio</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- What Makes ⵟ Different -->
+                        <h4>🌟 What Makes the <span class="yat-symbol">ⵟ</span>-Product Unique</h4>
+                        <p>
+                            After reviewing decades of related work, we can clearly articulate what makes the
+                            <span class="yat-symbol">ⵟ</span>-product a genuine innovation:
+                        </p>
+
+                        <div class="consequences-grid">
+                            <div class="consequence-item">
+                                <span class="consequence-icon">🔄</span>
+                                <h5>Unified Operator</h5>
+                                <p>
+                                    Instead of composing <em>separate</em> components (linear layer + activation),
+                                    it provides alignment and non-linearity in a <em>single</em> geometric operation.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">📐</span>
+                                <h5>Dual Geometric Sensitivity</h5>
+                                <p>
+                                    Responds to both <strong>direction</strong> (are vectors aligned?) and
+                                    <strong>position</strong> (are vectors close?) — something no standard operator
+                                    does.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">⚖️</span>
+                                <h5>Self-Regularizing</h5>
+                                <p>
+                                    The inverse-square denominator naturally bounds outputs and gradients for distant
+                                    inputs — no BatchNorm or LayerNorm required.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">🧬</span>
+                                <h5>Physics-Grounded</h5>
+                                <p>
+                                    Inspired by universal physical laws (gravity, electromagnetism), providing
+                                    intuitive interpretation and potentially better inductive biases.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">📜</span>
+                            <div>
+                                <strong>Historical Perspective:</strong> The <span class="yat-symbol">ⵟ</span>-product
+                                represents a convergence of ideas from physics (inverse-square laws), mathematics
+                                (kernel theory), and machine learning (neural computation). By standing on these
+                                shoulders,
+                                NMNs inherit theoretical rigor while offering genuinely new capabilities.
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="blog-page-nav">
+                    <a href="06-topology.html" class="blog-nav-btn">← Previous: Topology</a>
+                    <a href="../index.html#theory" class="blog-nav-btn">All Topics</a>
+                    <a href="08-methodology.html" class="blog-nav-btn">Next: Methodology →</a>
+                </div>
+            </article>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="yat-symbol">ⵟ</span>
+                    <span>Neural Matter Networks</span>
+                </div>
+                <div class="footer-links">
+                    <a href="https://github.com/mlnomadpy/nmn" target="_blank">GitHub</a>
+                    <a href="https://pypi.org/project/nmn/" target="_blank">PyPI</a>
+                    <a href="mailto:taha@azetta.ai">Contact</a>
+                </div>
+                <div class="footer-copy">
+                    <p>Built with ❤️ by <a href="https://azetta.ai" target="_blank">azetta.ai</a></p>
+                    <p>AGPL-3.0 License</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '$', right: '$', display: false }
+                ]
+            });
+        });
+    </script>
+</body>
+
+</html>
