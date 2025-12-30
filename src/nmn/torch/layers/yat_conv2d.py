@@ -11,8 +11,7 @@ from torch.nn.parameter import Parameter, UninitializedParameter
 from torch.nn.modules.lazy import LazyModuleMixin
 from torch.nn.modules.utils import _single, _pair, _triple
 
-from ..base import _ConvNd, _ConvTransposeNd, YatConvNd, YatConvTransposeNd, _LazyConvXdMixin, convolution_notes
-from .conv2d import Conv2d
+from torch.nn import Conv2d
 
 __all__ = ["YatConv2d"]
 

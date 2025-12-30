@@ -9,7 +9,7 @@ from torch.nn.common_types import _size_3_t
 from torch.nn.parameter import Parameter
 from torch.nn.modules.utils import _triple
 
-from .conv3d import Conv3d
+from torch.nn import Conv3d
 
 __all__ = ["YatConv3d"]
 

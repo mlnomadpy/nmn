@@ -9,7 +9,7 @@ from torch.nn.common_types import _size_2_t
 from torch.nn.parameter import Parameter
 from torch.nn.modules.utils import _pair
 
-from .conv_transpose2d import ConvTranspose2d
+from torch.nn import ConvTranspose2d
 
 __all__ = ["YatConvTranspose2d"]
 

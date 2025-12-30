@@ -31,8 +31,8 @@ import torchvision
 import torchvision.transforms as transforms
 
 # Add the parent directory to path to import YAT convolutions
-from nmn.torch.conv import YatConv2d
-from nmn.torch.nmn import YatNMN
+from nmn.torch import YatConv2d
+from nmn.torch import YatNMN
 
 
 class YATConvNet(nn.Module):

@@ -9,7 +9,7 @@ from torch.nn.common_types import _size_1_t
 from torch.nn.parameter import Parameter
 from torch.nn.modules.utils import _single
 
-from .conv1d import Conv1d
+from torch.nn import Conv1d
 
 __all__ = ["YatConv1d"]
 
