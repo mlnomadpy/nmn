@@ -63,24 +63,22 @@ class ModernTransformerBlock(nnx.Module):
             constant_alpha=True,  # Use sqrt(2) as constant alpha
             rngs=rngs,
         )
-        self.norm1 = RMSNorm(embed_dim, rngs=rngs)
         self.dropout1 = nnx.Dropout(rate=rate, rngs=rngs)
         
         self.ffn = nnx.Sequential(
             YatNMN(embed_dim, ff_dim, kernel_init=kernel_init, rngs=rngs, use_bias=False),
             nnx.Linear(ff_dim, embed_dim, kernel_init=kernel_init, rngs=rngs, use_bias=False)
         )
-        self.norm2 = RMSNorm(embed_dim, rngs=rngs)
         self.dropout2 = nnx.Dropout(rate=rate, rngs=rngs)
 
     def __call__(self, x, training: bool = False):
         # Pre-Norm Architecture
         # x = x + Drop(Attn(Norm(x)))
-        h = self.norm1(x)
+        h = x
         attn_out = self.attn(h, deterministic=not training, rngs=self.rngs if training else None)
         x = x + self.dropout1(attn_out, deterministic=not training)
         
-        h = self.norm2(x)
+        h = x
         ffn_out = self.ffn(h)
         x = x + self.dropout2(ffn_out, deterministic=not training)
         return x
@@ -118,8 +116,6 @@ class MiniBERT(nnx.Module):
         for block in self.transformer_blocks:
             x = block(x, training=training)
             
-        x = self.norm_final(x)
-        
         # Weight Tying: Reuse embedding weights for output projection
         # x: [Batch, Seq, Dim]
         # emb: [Vocab, Dim]
