@@ -1,0 +1,216 @@
+.heroBanner {
+    padding: 6rem 0;
+    text-align: center;
+    position: relative;
+    background: linear-gradient(180deg, #0a0a0f 0%, #0d1117 100%);
+}
+
+.heroEquation {
+    font-size: 2rem;
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    color: #fff;
+}
+
+.yatSymbol {
+    font-family: 'Noto Sans Tifinagh', sans-serif;
+    color: #00ff88;
+    font-size: 1.2em;
+}
+
+.fraction {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 0.5rem;
+}
+
+.numerator {
+    border-bottom: 2px solid rgba(255, 255, 255, 0.5);
+    padding-bottom: 0.25rem;
+}
+
+.denominator {
+    padding-top: 0.25rem;
+    font-size: 0.9em;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.heroTitle {
+    font-size: 3.5rem;
+    background: linear-gradient(135deg, #00ff88 0%, #00d4ff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 1rem;
+}
+
+.heroSubtitle {
+    font-size: 1.5rem;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 1rem;
+}
+
+.heroDescription {
+    font-size: 1.1rem;
+    color: rgba(255, 255, 255, 0.7);
+    max-width: 700px;
+    margin: 0 auto 2rem;
+    line-height: 1.6;
+}
+
+.buttons {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+/* Features Section */
+.features {
+    padding: 4rem 0;
+    background: #0d1117;
+}
+
+.feature {
+    margin-bottom: 2rem;
+}
+
+.featureCard {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(0, 255, 136, 0.1);
+    border-radius: 12px;
+    padding: 2rem;
+    height: 100%;
+    transition: all 0.3s ease;
+}
+
+.featureCard:hover {
+    border-color: rgba(0, 255, 136, 0.3);
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+.featureIcon {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+}
+
+.featureCard h3 {
+    color: #00ff88;
+    font-size: 1.25rem;
+    margin-bottom: 0.75rem;
+}
+
+.featureCard p {
+    color: rgba(255, 255, 255, 0.7);
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* Stats Section */
+.stats {
+    padding: 3rem 0;
+    background: linear-gradient(180deg, #0d1117 0%, #0a0a0f 100%);
+    border-top: 1px solid rgba(0, 255, 136, 0.1);
+    border-bottom: 1px solid rgba(0, 255, 136, 0.1);
+}
+
+.statsGrid {
+    display: flex;
+    justify-content: center;
+    gap: 4rem;
+    flex-wrap: wrap;
+}
+
+.statItem {
+    text-align: center;
+}
+
+.statValue {
+    display: block;
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #00ff88;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.statLabel {
+    display: block;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.6);
+    margin-top: 0.5rem;
+}
+
+/* Code Section */
+.codeSection {
+    padding: 4rem 0;
+    background: #0a0a0f;
+}
+
+.sectionTitle {
+    text-align: center;
+    font-size: 2rem;
+    color: #fff;
+    margin-bottom: 2rem;
+}
+
+.codeBlock {
+    max-width: 800px;
+    margin: 0 auto;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(0, 255, 136, 0.2);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.codeBlock pre {
+    margin: 0;
+    padding: 1.5rem;
+    background: transparent !important;
+    border: none !important;
+}
+
+.codeBlock code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+/* Responsive */
+@media (max-width: 996px) {
+    .heroEquation {
+        font-size: 1.25rem;
+    }
+
+    .heroTitle {
+        font-size: 2.5rem;
+    }
+
+    .heroSubtitle {
+        font-size: 1.2rem;
+    }
+
+    .statsGrid {
+        gap: 2rem;
+    }
+
+    .statValue {
+        font-size: 2rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .buttons {
+        flex-direction: column;
+    }
+
+    .buttons .button {
+        width: 100%;
+    }
+}

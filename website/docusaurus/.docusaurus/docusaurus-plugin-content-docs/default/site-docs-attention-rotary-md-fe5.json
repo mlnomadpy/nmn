@@ -1,0 +1,27 @@
+{
+  "id": "attention/rotary",
+  "title": "Rotary Position Embeddings",
+  "description": "Rotary position embeddings (RoPE) with ⵟ-attention for positional encoding.",
+  "source": "@site/docs/attention/rotary.md",
+  "sourceDirName": "attention",
+  "slug": "/attention/rotary",
+  "permalink": "/nmn/docs/attention/rotary",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/mlnomadpy/nmn/tree/main/website/docusaurus/docs/attention/rotary.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 3,
+  "frontMatter": {
+    "sidebar_position": 3
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "MultiHeadAttention",
+    "permalink": "/nmn/docs/attention/multi-head"
+  },
+  "next": {
+    "title": "YatLSTM",
+    "permalink": "/nmn/docs/rnn/lstm"
+  }
+}

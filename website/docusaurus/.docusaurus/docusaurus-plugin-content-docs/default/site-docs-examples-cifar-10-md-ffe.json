@@ -1,0 +1,27 @@
+{
+  "id": "examples/cifar10",
+  "title": "CIFAR-10 Classification",
+  "description": "Image classification with YatConv on CIFAR-10.",
+  "source": "@site/docs/examples/cifar10.md",
+  "sourceDirName": "examples",
+  "slug": "/examples/cifar10",
+  "permalink": "/nmn/docs/examples/cifar10",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/mlnomadpy/nmn/tree/main/website/docusaurus/docs/examples/cifar10.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "MNIST Classification",
+    "permalink": "/nmn/docs/examples/mnist"
+  },
+  "next": {
+    "title": "Transformer Example",
+    "permalink": "/nmn/docs/examples/transformer"
+  }
+}

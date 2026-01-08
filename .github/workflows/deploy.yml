@@ -32,6 +32,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: website/docusaurus/package-lock.json
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
@@ -50,14 +57,42 @@ jobs:
           cp -f paper/vector_viz_iclr/combined_heatmaps_2d.png website/assets/images/combined_heatmaps_2d.png || true
           cp -f paper/vector_viz_iclr/combined_gradients.png website/assets/images/combined_gradients.png || true
           
-          # List copied files
+          # Copy blog assets if they exist
+          mkdir -p website/docusaurus/static/img/blog
+          cp -rf website/assets/* website/docusaurus/static/img/blog/ || true
+          
           echo "Copied images:"
-          ls -la website/assets/images/
+          ls -la website/assets/images/ || true
+          ls -la website/docusaurus/static/img/blog/ || true
+
+      - name: Copy existing website to Docusaurus static/paper
+        run: |
+          mkdir -p website/docusaurus/static/paper
+          
+          # Copy the original static website files (excluding docusaurus folder)
+          cp -f website/index.html website/docusaurus/static/paper/ || true
+          cp -f website/nmn.html website/docusaurus/static/paper/ || true
+          cp -rf website/css website/docusaurus/static/paper/ || true
+          cp -rf website/js website/docusaurus/static/paper/ || true
+          cp -rf website/assets website/docusaurus/static/paper/ || true
+          cp -rf website/blog-pages website/docusaurus/static/paper/ || true
+          cp -rf website/visualizations website/docusaurus/static/paper/ || true
+          
+          echo "Copied static website to paper folder:"
+          ls -la website/docusaurus/static/paper/
+
+      - name: Install Docusaurus dependencies
+        working-directory: website/docusaurus
+        run: npm ci
+
+      - name: Build Docusaurus
+        working-directory: website/docusaurus
+        run: npm run build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: 'website'
+          path: 'website/docusaurus/build'
 
   deploy:
     environment:
@@ -70,4 +105,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-

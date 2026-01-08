@@ -1,0 +1,262 @@
+/**
+ * Neural Matter Networks - Custom CSS
+ * Matches the dark terminal theme from the main paper site
+ */
+
+/* Color Variables */
+:root {
+    --ifm-color-primary: #00ff88;
+    --ifm-color-primary-dark: #00e67a;
+    --ifm-color-primary-darker: #00d973;
+    --ifm-color-primary-darkest: #00b35f;
+    --ifm-color-primary-light: #1aff96;
+    --ifm-color-primary-lighter: #26ff9d;
+    --ifm-color-primary-lightest: #4dffaf;
+
+    --ifm-code-font-size: 95%;
+    --ifm-font-family-base: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+    --ifm-font-family-monospace: 'JetBrains Mono', 'Fira Code', monospace;
+
+    --docusaurus-highlighted-code-line-bg: rgba(0, 255, 136, 0.1);
+}
+
+/* Dark Mode (Default) */
+[data-theme='dark'] {
+    --ifm-background-color: #0a0a0f;
+    --ifm-color-primary: #00ff88;
+    --ifm-color-primary-dark: #00e67a;
+    --ifm-color-primary-darker: #00d973;
+    --ifm-color-primary-darkest: #00b35f;
+    --ifm-color-primary-light: #1aff96;
+    --ifm-color-primary-lighter: #26ff9d;
+    --ifm-color-primary-lightest: #4dffaf;
+
+    --ifm-navbar-background-color: rgba(10, 10, 15, 0.95);
+    --ifm-footer-background-color: #050508;
+
+    --ifm-code-background: rgba(0, 255, 136, 0.05);
+    --ifm-link-color: #00ff88;
+    --ifm-link-hover-color: #4dffaf;
+}
+
+/* Typography */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* YAT Symbol Styling */
+.yat-symbol {
+    font-family: 'Noto Sans Tifinagh', sans-serif;
+    color: var(--ifm-color-primary);
+    font-size: 1.1em;
+}
+
+/* Navbar Styling */
+.navbar {
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(0, 255, 136, 0.1);
+}
+
+.navbar__title {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+}
+
+.navbar__link {
+    font-weight: 500;
+}
+
+.navbar__link:hover,
+.navbar__link--active {
+    color: var(--ifm-color-primary);
+}
+
+/* Hero Section */
+.hero {
+    background: linear-gradient(180deg, #0a0a0f 0%, #0d1117 100%);
+    padding: 4rem 0;
+    text-align: center;
+}
+
+.hero__title {
+    font-size: 3.5rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #00ff88 0%, #00d4ff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 1rem;
+}
+
+.hero__subtitle {
+    font-size: 1.5rem;
+    color: rgba(255, 255, 255, 0.8);
+    max-width: 800px;
+    margin: 0 auto 2rem;
+}
+
+/* Feature Cards */
+.feature-card {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(0, 255, 136, 0.1);
+    border-radius: 12px;
+    padding: 2rem;
+    transition: all 0.3s ease;
+}
+
+.feature-card:hover {
+    border-color: rgba(0, 255, 136, 0.3);
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+/* Code Blocks */
+pre {
+    border: 1px solid rgba(0, 255, 136, 0.1);
+    border-radius: 8px;
+}
+
+code {
+    font-family: var(--ifm-font-family-monospace);
+}
+
+/* Math Equations */
+.katex-display {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(0, 255, 136, 0.1);
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1.5rem 0;
+    overflow-x: auto;
+}
+
+.katex {
+    font-size: 1.1em;
+}
+
+/* Sidebar */
+.menu__link {
+    border-radius: 6px;
+}
+
+.menu__link:hover {
+    background: rgba(0, 255, 136, 0.05);
+}
+
+.menu__link--active {
+    background: rgba(0, 255, 136, 0.1);
+    border-left: 3px solid var(--ifm-color-primary);
+}
+
+/* Admonitions */
+.alert {
+    border-radius: 8px;
+    border-left-width: 4px;
+}
+
+.alert--info {
+    --ifm-alert-background-color: rgba(0, 212, 255, 0.1);
+    --ifm-alert-border-color: #00d4ff;
+}
+
+.alert--success {
+    --ifm-alert-background-color: rgba(0, 255, 136, 0.1);
+    --ifm-alert-border-color: #00ff88;
+}
+
+/* Tables */
+table {
+    display: table;
+    width: 100%;
+}
+
+table th {
+    background: rgba(0, 255, 136, 0.05);
+    border-bottom: 2px solid var(--ifm-color-primary);
+}
+
+table tr:hover {
+    background: rgba(0, 255, 136, 0.02);
+}
+
+/* Footer */
+.footer {
+    border-top: 1px solid rgba(0, 255, 136, 0.1);
+}
+
+.footer__title {
+    color: var(--ifm-color-primary);
+}
+
+/* Buttons */
+.button--primary {
+    background: linear-gradient(135deg, #00ff88 0%, #00d4ff 100%);
+    border: none;
+    color: #0a0a0f;
+    font-weight: 600;
+}
+
+.button--primary:hover {
+    background: linear-gradient(135deg, #1aff96 0%, #1ae0ff 100%);
+    color: #0a0a0f;
+}
+
+.button--secondary {
+    background: transparent;
+    border: 2px solid var(--ifm-color-primary);
+    color: var(--ifm-color-primary);
+}
+
+.button--secondary:hover {
+    background: rgba(0, 255, 136, 0.1);
+    border-color: var(--ifm-color-primary-light);
+    color: var(--ifm-color-primary-light);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #0a0a0f;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(0, 255, 136, 0.3);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 255, 136, 0.5);
+}
+
+/* Blog */
+.blog-post-item {
+    border: 1px solid rgba(0, 255, 136, 0.1);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    transition: all 0.3s ease;
+}
+
+.blog-post-item:hover {
+    border-color: rgba(0, 255, 136, 0.3);
+}
+
+/* TOC */
+.table-of-contents__link--active {
+    color: var(--ifm-color-primary);
+    font-weight: 600;
+}
+
+/* Responsive */
+@media (max-width: 996px) {
+    .hero__title {
+        font-size: 2.5rem;
+    }
+
+    .hero__subtitle {
+        font-size: 1.2rem;
+    }
+}

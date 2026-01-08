@@ -1,0 +1,61 @@
+{
+  "permalink": "/nmn/blog/dl-2-topological-tale",
+  "editUrl": "https://github.com/mlnomadpy/nmn/tree/main/website/docusaurus/blog/2024-11-30-dl-2-topological-tale.md",
+  "source": "@site/blog/2024-11-30-dl-2-topological-tale.md",
+  "title": "DL 2.0: A Topological Tale of Everything Wrong with Deep Learning",
+  "description": "Not the Metrics We Want, But the Metrics We Need",
+  "date": "2024-11-30T00:00:00.000Z",
+  "tags": [
+    {
+      "inline": true,
+      "label": "deep-learning",
+      "permalink": "/nmn/blog/tags/deep-learning"
+    },
+    {
+      "inline": true,
+      "label": "topology",
+      "permalink": "/nmn/blog/tags/topology"
+    },
+    {
+      "inline": true,
+      "label": "yat-product",
+      "permalink": "/nmn/blog/tags/yat-product"
+    },
+    {
+      "inline": true,
+      "label": "theory",
+      "permalink": "/nmn/blog/tags/theory"
+    }
+  ],
+  "readingTime": 5.46,
+  "hasTruncateMarker": true,
+  "authors": [
+    {
+      "name": "NMN Team",
+      "title": "Neural Matter Networks",
+      "url": "https://github.com/mlnomadpy",
+      "imageURL": "https://github.com/mlnomadpy.png",
+      "key": "nmn-team",
+      "page": null
+    }
+  ],
+  "frontMatter": {
+    "slug": "dl-2-topological-tale",
+    "title": "DL 2.0: A Topological Tale of Everything Wrong with Deep Learning",
+    "authors": [
+      "nmn-team"
+    ],
+    "tags": [
+      "deep-learning",
+      "topology",
+      "yat-product",
+      "theory"
+    ],
+    "date": "2024-11-30T00:00:00.000Z"
+  },
+  "unlisted": false,
+  "prevItem": {
+    "title": "Welcome to Neural Matter Networks",
+    "permalink": "/nmn/blog/welcome"
+  }
+}

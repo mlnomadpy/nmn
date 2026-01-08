@@ -1,0 +1,23 @@
+{
+  "id": "intro",
+  "title": "Introduction to Neural Matter Networks",
+  "description": "Neural Matter Networks (NMN) introduce a fundamentally new approach to neural computation through the ⵟ-product (pronounced \"Yat\") — a geometric operator that replaces both dot products and activation functions with a single unified operation.",
+  "source": "@site/docs/intro.md",
+  "sourceDirName": ".",
+  "slug": "/intro",
+  "permalink": "/nmn/docs/intro",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/mlnomadpy/nmn/tree/main/website/docusaurus/docs/intro.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1
+  },
+  "sidebar": "tutorialSidebar",
+  "next": {
+    "title": "Installation",
+    "permalink": "/nmn/docs/installation"
+  }
+}

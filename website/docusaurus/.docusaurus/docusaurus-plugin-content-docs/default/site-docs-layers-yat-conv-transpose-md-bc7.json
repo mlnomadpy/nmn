@@ -1,0 +1,27 @@
+{
+  "id": "layers/yat-conv-transpose",
+  "title": "YatConvTranspose",
+  "description": "Transposed convolution (deconvolution) using the ⵟ-product for upsampling operations.",
+  "source": "@site/docs/layers/yat-conv-transpose.md",
+  "sourceDirName": "layers",
+  "slug": "/layers/yat-conv-transpose",
+  "permalink": "/nmn/docs/layers/yat-conv-transpose",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/mlnomadpy/nmn/tree/main/website/docusaurus/docs/layers/yat-conv-transpose.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 3,
+  "frontMatter": {
+    "sidebar_position": 3
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "YatConv",
+    "permalink": "/nmn/docs/layers/yat-conv"
+  },
+  "next": {
+    "title": "YatAttention",
+    "permalink": "/nmn/docs/attention/yat-attention"
+  }
+}
