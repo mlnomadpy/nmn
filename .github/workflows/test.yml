@@ -3,15 +3,26 @@ name: Test Suite
 on:
   push:
     branches: [ main, master, develop ]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+      - '.github/workflows/test.yml'
   pull_request:
     branches: [ main, master, develop ]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+      - '.github/workflows/test.yml'
 
 jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: [3.8, 3.9, "3.10", "3.11"]
+        python-version: ["3.10", "3.11", "3.12"]
 
     steps:
     - uses: actions/checkout@v4
@@ -20,39 +31,82 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
+        cache: 'pip'
     
-    - name: Install dependencies
+    - name: Install base dependencies
       run: |
         python -m pip install --upgrade pip
         pip install hatch pytest pytest-cov
+    
+    - name: Install package with all dependencies
+      run: |
+        # Install with test extras which includes all frameworks
+        pip install -e ".[test]"
+      continue-on-error: true
+    
+    - name: Install package with dev dependencies (fallback)
+      if: failure()
+      run: |
+        # Fallback: install just dev dependencies if full install fails
         pip install -e ".[dev]"
+    
+    - name: Install JAX (CPU only for CI)
+      run: |
+        pip install jax jaxlib flax optax
+      continue-on-error: true
+    
+    - name: Install PyTorch (CPU only for CI)
+      run: |
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+      continue-on-error: true
+    
+    - name: Verify installations
+      run: |
+        echo "Python version:"
+        python --version
+        echo ""
+        echo "Installed packages:"
+        pip list | grep -E "(jax|flax|torch|tensorflow|nmn)" || true
+        echo ""
+        echo "Testing imports..."
+        python -c "import nmn; print(f'NMN version: {nmn.__version__}')" || true
+        python -c "import jax; print(f'JAX version: {jax.__version__}')" || true
+        python -c "import flax; print(f'Flax version: {flax.__version__}')" || true
+        python -c "import torch; print(f'PyTorch version: {torch.__version__}')" || true
     
     - name: Lint with flake8
       run: |
+        pip install flake8
         # stop the build if there are Python syntax errors or undefined names
         flake8 src/nmn --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+        # exit-zero treats all errors as warnings
         flake8 src/nmn --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
       continue-on-error: true
     
     - name: Check code formatting with black
       run: |
+        pip install black
         black --check --diff src/nmn tests
       continue-on-error: true
     
     - name: Check import sorting with isort
       run: |
+        pip install isort
         isort --check-only --diff src/nmn tests
       continue-on-error: true
     
     - name: Run tests
       run: |
-        pytest tests/ -v --cov=nmn --cov-report=xml
+        pytest tests/ -v --cov=nmn --cov-report=xml --cov-report=term-missing
+      env:
+        JAX_PLATFORM_NAME: cpu
     
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      if: matrix.python-version == '3.10'
+      uses: codecov/codecov-action@v4
+      if: matrix.python-version == '3.11'
       with:
         file: ./coverage.xml
         flags: unittests
         name: codecov-umbrella
+        token: ${{ secrets.CODECOV_TOKEN }}
+      continue-on-error: true
