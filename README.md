@@ -22,6 +22,12 @@
   <a href="https://pypi.org/project/nmn/"><img src="https://img.shields.io/pypi/l/nmn?style=flat-square&color=green" alt="License"></a>
 </p>
 
+<p align="center">
+  <a href="https://mlnomadpy.github.io/nmn/"><strong>📚 Documentation</strong></a> ·
+  <a href="https://mlnomadpy.github.io/nmn/paper/"><strong>📄 Read the Paper</strong></a> ·
+  <a href="https://github.com/mlnomadpy/nmn/issues"><strong>🐛 Report Bug</strong></a>
+</p>
+
 ---
 
 ## 🎯 TL;DR
