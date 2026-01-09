@@ -2,13 +2,13 @@
 
 import pytest
 import numpy as np
+import os
 
 
 def test_package_import():
     """Test that the main package can be imported."""
     import nmn
     assert hasattr(nmn, '__version__')
-    assert nmn.__version__ == "0.1.12"
 
 
 def test_all_framework_imports():
@@ -28,13 +28,24 @@ def test_version_consistency():
     """Test that version is consistent across files."""
     import nmn
     
-    # Read version from pyproject.toml
-    with open('/home/runner/work/nmn/nmn/pyproject.toml', 'r') as f:
-        content = f.read()
-        assert 'version = "0.1.12"' in content
+    # Find pyproject.toml relative to this file
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(os.path.dirname(test_dir))
+    pyproject_path = os.path.join(project_root, 'pyproject.toml')
     
-    # Check package version
-    assert nmn.__version__ == "0.1.12"
+    # Read version from pyproject.toml
+    with open(pyproject_path, 'r') as f:
+        content = f.read()
+    
+    # Extract version from pyproject.toml
+    import re
+    match = re.search(r'version\s*=\s*"([^"]+)"', content)
+    assert match is not None, "Could not find version in pyproject.toml"
+    pyproject_version = match.group(1)
+    
+    # Check package version matches pyproject.toml
+    assert nmn.__version__ == pyproject_version, \
+        f"Package version {nmn.__version__} doesn't match pyproject.toml version {pyproject_version}"
 
 
 @pytest.mark.parametrize("input_shape,expected_2d", [

@@ -97,9 +97,10 @@ def test_nnx_rnn_simple():
             rngs=nnx.Rngs(params=key)
         )
         
-        # Initialize carry
+        # Initialize carry - input_shape should include feature dimension
         batch_size = 4
-        carry = cell.initialize_carry(jax.random.key(1), (batch_size,))
+        input_shape = (batch_size, in_features)
+        carry = cell.initialize_carry(input_shape)
         
         # Test forward pass
         dummy_input = jax.random.normal(jax.random.key(2), (batch_size, in_features))
@@ -130,9 +131,10 @@ def test_nnx_rnn_lstm():
             rngs=nnx.Rngs(params=key)
         )
         
-        # Initialize carry
+        # Initialize carry - input_shape should include feature dimension
         batch_size = 4
-        carry = cell.initialize_carry(jax.random.key(1), (batch_size,))
+        input_shape = (batch_size, in_features)
+        carry = cell.initialize_carry(input_shape)
         
         # Test forward pass
         dummy_input = jax.random.normal(jax.random.key(2), (batch_size, in_features))
@@ -163,9 +165,10 @@ def test_nnx_rnn_gru():
             rngs=nnx.Rngs(params=key)
         )
         
-        # Initialize carry
+        # Initialize carry - input_shape should include feature dimension
         batch_size = 4
-        carry = cell.initialize_carry(jax.random.key(1), (batch_size,))
+        input_shape = (batch_size, in_features)
+        carry = cell.initialize_carry(input_shape)
         
         # Test forward pass
         dummy_input = jax.random.normal(jax.random.key(2), (batch_size, in_features))
