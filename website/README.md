@@ -1,83 +1,78 @@
-# Website Build System
+# NMN Website Ecosystem
 
-This website uses a modular build system where blog posts and visualizations are extracted into separate files and combined during build.
+This directory contains the source code for the NMN project's web presence, which consists of three integrated components:
 
-## Structure
+1.  **Interactive Paper/Blog**: A visually rich, custom-built static site explaining the theoretical foundations (the "Visual Paper").
+2.  **Documentation**: A Docusaurus-based site for API references, tutorials, and guides.
+3.  **Deployment**: A workflow that merges these two components into a single cohesive website.
 
+---
+
+## 1. 🎨 Interactive Paper (Visual Blog)
+
+The "Visual Paper" is the landing page and core educational content, featuring interactive 3D visualizations and mathematical explanations. It creates the `index.html` in this directory.
+
+### Structure
 ```
 website/
 ├── templates/
-│   └── index.html          # Template with placeholders
-├── blog/
-│   ├── _overlay.html       # Modal overlay
+│   └── index.html          # Main HTML skeleton
+├── blog/                   # Content for the "blog" sections of the paper
 │   ├── 01-mercer-kernel.html
-│   ├── 02-universal-approximation.html
-│   ├── 03-self-regulation.html
-│   ├── 04-stable-gradients.html
-│   ├── 05-information-theory.html
-│   └── 06-topology.html
-├── visualizations/
-│   └── visualizations.html # All visualization sections
-├── build.py                # Build script
-├── extract_content.py     # Extraction script (run once)
-└── index.html             # Generated file (do not edit directly)
+│   └── ...
+├── visualizations/         # Interactive JS/Canvas visualizations
+│   └── visualizations.html
+├── build.py                # Script to assemble the visual paper
+└── index.html              # GENERATED OUTPUT (Do not edit directly)
 ```
 
-## Building
+### Development
+To update the visual paper:
+1.  Edit content in `blog/`, `visualizations/`, or `templates/`.
+2.  Run the build script:
+    ```bash
+    python build.py
+    ```
+3.  Open `index.html` locally to verify changes.
 
-To build the website:
+---
 
+## 2. 📚 Documentation (Docusaurus)
+
+The technical documentation, API reference, and user guides are built using [Docusaurus](https://docusaurus.io/).
+
+### Structure
+```
+website/docusaurus/
+├── docs/                   # Markdown files for documentation pages
+├── src/                    # React components and pages
+├── docusaurus.config.js    # Docusaurus configuration
+└── static/                 # Static assets (images, files) for docs
+```
+
+### Development
+To run the documentation site locally:
 ```bash
-python build.py
+cd docusaurus
+npm install
+npm start
 ```
+This will start a local server at `http://localhost:3000`.
 
-This will:
-1. Read the template from `templates/index.html`
-2. Combine all blog posts from `blog/` directory
-3. Include visualizations from `visualizations/visualizations.html`
-4. Generate `index.html` with all content injected
+---
 
-## Editing Content
+## 3. 🚀 Deployment & Integration
 
-### Blog Posts
+The final deployed website combines both components. The **Interactive Paper** is embedded into the Docusaurus site.
 
-Edit individual blog post files in `blog/` directory. Files are numbered to maintain order:
-- `01-mercer-kernel.html`
-- `02-universal-approximation.html`
-- etc.
+### Deployment Workflow (`deploy.yml`)
+1.  **Builds the Visual Paper**: Uses the existing `website/index.html` and assets.
+2.  **Builds Docusaurus**: Compiles the documentation site.
+3.  **Merges**:
+    *   The Visual Paper (`index.html`, `css/`, `js/`, `assets/`) is copied into the Docusaurus `static/paper/` directory.
+    *   This makes the visual paper accessible at `https://mlnomadpy.github.io/nmn/paper/`.
+4.  **Deploys**: The combined artifact is pushed to GitHub Pages.
 
-### Visualizations
-
-Edit `visualizations/visualizations.html` to modify visualization sections.
-
-### Template
-
-Edit `templates/index.html` to modify the main structure, navigation, hero section, etc.
-
-**Important:** After editing blog posts or visualizations, run `python build.py` to regenerate `index.html`.
-
-## Initial Setup
-
-If you need to re-extract content from a full `index.html`:
-
-```bash
-python extract_content.py
-```
-
-This extracts:
-- Visualizations section → `visualizations/visualizations.html`
-- Blog modals → `blog/*.html` files
-
-Then create the template:
-
-```bash
-python create_template.py
-```
-
-## Development Workflow
-
-1. Edit content in `blog/` or `visualizations/`
-2. Run `python build.py`
-3. Test the generated `index.html`
-4. Commit both the source files and the generated `index.html`
-
+### Key Links
+*   **Documentation Home**: [https://mlnomadpy.github.io/nmn/](https://mlnomadpy.github.io/nmn/)
+*   **Visual Paper**: [https://mlnomadpy.github.io/nmn/paper/](https://mlnomadpy.github.io/nmn/paper/)
