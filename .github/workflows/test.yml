@@ -95,6 +95,11 @@ jobs:
         isort --check-only --diff src/nmn tests
       continue-on-error: true
     
+    - name: Clear pycache before tests
+      run: |
+        find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+        find . -name "*.pyc" -delete 2>/dev/null || true
+    
     - name: Run tests
       run: |
         pytest tests/ -v --cov=nmn --cov-report=xml --cov-report=term-missing

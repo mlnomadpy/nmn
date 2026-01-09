@@ -1,5 +1,1 @@
-# Integration tests package
-
-
-
-
+# Integration tests
