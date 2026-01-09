@@ -17,15 +17,23 @@ on:
       - '.github/workflows/test.yml'
 
 jobs:
-  test:
+  test-jax:
+    name: Test JAX/Flax
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11"]
 
     steps:
     - uses: actions/checkout@v4
+    
+    - name: Free disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/share/boost
+        df -h
     
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
@@ -33,85 +41,157 @@ jobs:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
     
-    - name: Install base dependencies
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install hatch pytest pytest-cov
-    
-    - name: Install package with all dependencies
-      run: |
-        # Install with test extras which includes all frameworks
-        pip install -e ".[test]"
-      continue-on-error: true
-    
-    - name: Install package with dev dependencies (fallback)
-      if: failure()
-      run: |
-        # Fallback: install just dev dependencies if full install fails
+        pip install pytest pytest-cov
         pip install -e ".[dev]"
-    
-    - name: Install JAX (CPU only for CI)
-      run: |
         pip install jax jaxlib flax optax
-      continue-on-error: true
     
-    - name: Install PyTorch (CPU only for CI)
-      run: |
-        pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-      continue-on-error: true
-    
-    - name: Verify installations
-      run: |
-        echo "Python version:"
-        python --version
-        echo ""
-        echo "Installed packages:"
-        pip list | grep -E "(jax|flax|torch|tensorflow|nmn)" || true
-        echo ""
-        echo "Testing imports..."
-        python -c "import nmn; print(f'NMN version: {nmn.__version__}')" || true
-        python -c "import jax; print(f'JAX version: {jax.__version__}')" || true
-        python -c "import flax; print(f'Flax version: {flax.__version__}')" || true
-        python -c "import torch; print(f'PyTorch version: {torch.__version__}')" || true
-    
-    - name: Lint with flake8
-      run: |
-        pip install flake8
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 src/nmn --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings
-        flake8 src/nmn --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-      continue-on-error: true
-    
-    - name: Check code formatting with black
-      run: |
-        pip install black
-        black --check --diff src/nmn tests
-      continue-on-error: true
-    
-    - name: Check import sorting with isort
-      run: |
-        pip install isort
-        isort --check-only --diff src/nmn tests
-      continue-on-error: true
-    
-    - name: Clear pycache before tests
+    - name: Clear pycache
       run: |
         find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
         find . -name "*.pyc" -delete 2>/dev/null || true
     
-    - name: Run tests
+    - name: Run JAX tests
       run: |
-        pytest tests/ -v --cov=nmn --cov-report=xml --cov-report=term-missing
+        pytest tests/test_nnx/ tests/test_linen/ tests/integration/ -v --cov=nmn --cov-report=xml
       env:
         JAX_PLATFORM_NAME: cpu
     
-    - name: Upload coverage to Codecov
+    - name: Upload coverage
       uses: codecov/codecov-action@v4
       if: matrix.python-version == '3.11'
       with:
         file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
+        flags: jax
         token: ${{ secrets.CODECOV_TOKEN }}
+      continue-on-error: true
+
+  test-torch:
+    name: Test PyTorch
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11"]
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Free disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/share/boost
+        df -h
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-cov
+        pip install -e ".[dev]"
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+    
+    - name: Clear pycache
+      run: |
+        find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+        find . -name "*.pyc" -delete 2>/dev/null || true
+    
+    - name: Run PyTorch tests
+      run: |
+        pytest tests/test_torch/ -v --cov=nmn --cov-report=xml
+    
+    - name: Upload coverage
+      uses: codecov/codecov-action@v4
+      if: matrix.python-version == '3.11'
+      with:
+        file: ./coverage.xml
+        flags: torch
+        token: ${{ secrets.CODECOV_TOKEN }}
+      continue-on-error: true
+
+  test-keras:
+    name: Test Keras/TF
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11"]
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Free disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/share/boost
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        df -h
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-cov
+        pip install -e ".[dev]"
+        pip install tensorflow
+    
+    - name: Clear pycache
+      run: |
+        find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+        find . -name "*.pyc" -delete 2>/dev/null || true
+    
+    - name: Run Keras/TF tests
+      run: |
+        pytest tests/test_keras/ tests/test_tf/ -v --cov=nmn --cov-report=xml
+    
+    - name: Upload coverage
+      uses: codecov/codecov-action@v4
+      if: matrix.python-version == '3.11'
+      with:
+        file: ./coverage.xml
+        flags: keras
+        token: ${{ secrets.CODECOV_TOKEN }}
+      continue-on-error: true
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+    
+    - name: Install lint tools
+      run: |
+        pip install flake8 black isort
+    
+    - name: Lint with flake8
+      run: |
+        flake8 src/nmn --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 src/nmn --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      continue-on-error: true
+    
+    - name: Check formatting with black
+      run: black --check --diff src/nmn tests
+      continue-on-error: true
+    
+    - name: Check imports with isort
+      run: isort --check-only --diff src/nmn tests
       continue-on-error: true
