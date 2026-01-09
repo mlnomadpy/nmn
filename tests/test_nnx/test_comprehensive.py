@@ -94,7 +94,7 @@ def test_nnx_rnn_simple():
         cell = YatSimpleCell(
             in_features=in_features,
             hidden_features=hidden_features,
-            rngs=nnx.Rngs(params=key)
+            rngs=nnx.Rngs(params=key, carry=key)
         )
         
         # Initialize carry - input_shape should include feature dimension
@@ -128,7 +128,7 @@ def test_nnx_rnn_lstm():
         cell = YatLSTMCell(
             in_features=in_features,
             hidden_features=hidden_features,
-            rngs=nnx.Rngs(params=key)
+            rngs=nnx.Rngs(params=key, carry=key)
         )
         
         # Initialize carry - input_shape should include feature dimension
@@ -162,7 +162,7 @@ def test_nnx_rnn_gru():
         cell = YatGRUCell(
             in_features=in_features,
             hidden_features=hidden_features,
-            rngs=nnx.Rngs(params=key)
+            rngs=nnx.Rngs(params=key, carry=key)
         )
         
         # Initialize carry - input_shape should include feature dimension

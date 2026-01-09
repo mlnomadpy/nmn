@@ -99,12 +99,17 @@ def test_tf_yat_nmn_model_save_load():
         
         # Save model
         with tempfile.TemporaryDirectory() as tmpdir:
-            model_path = os.path.join(tmpdir, "test_model")
-            layer.save_weights(model_path)
+            checkpoint_prefix = os.path.join(tmpdir, "ckpt")
+            checkpoint = tf.train.Checkpoint(layer=layer)
+            save_path = checkpoint.save(checkpoint_prefix)
             
             # Create new layer and load weights
             new_layer = YatNMN(features=10)
-            new_layer.load_weights(model_path)
+            # Run once to build variables
+            _ = new_layer(dummy_input)
+            
+            checkpoint_new = tf.train.Checkpoint(layer=new_layer)
+            checkpoint_new.restore(save_path)
             
             # Forward pass with loaded weights
             output2 = new_layer(dummy_input)

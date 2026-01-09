@@ -12,7 +12,7 @@ For new code, prefer importing directly from `nmn.nnx.attention`:
         yat_attention_weights,
         yat_performer_attention,
         rotary_yat_attention,
-        performer_attention,
+
         dot_product_attention,
         make_causal_mask,
     )
@@ -35,13 +35,7 @@ from nmn.nnx.attention import (
     rotary_yat_performer_attention,
     precompute_freqs_cis,
     apply_rotary_emb,
-    # Performer Attention
-    performer_attention,
-    performer_attention_weights,
-    softmax_kernel_feature_map,
-    relu_kernel_feature_map,
-    orthogonal_random_features,
-    create_performer_projection,
+
     # Standard Attention  
     dot_product_attention,
     dot_product_attention_weights,
@@ -70,13 +64,7 @@ __all__ = [
     "rotary_yat_performer_attention",
     "precompute_freqs_cis",
     "apply_rotary_emb",
-    # Performer
-    "performer_attention",
-    "performer_attention_weights",
-    "softmax_kernel_feature_map",
-    "relu_kernel_feature_map",
-    "orthogonal_random_features",
-    "create_performer_projection",
+
     # Standard
     "dot_product_attention",
     "dot_product_attention_weights",
