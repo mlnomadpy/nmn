@@ -25,6 +25,7 @@
 <p align="center">
   <a href="https://mlnomadpy.github.io/nmn/"><strong>📚 Documentation</strong></a> ·
   <a href="https://mlnomadpy.github.io/nmn/paper/"><strong>📄 Read the Paper</strong></a> ·
+  <a href="https://mlnomadpy.github.io/nmn/blog"><strong>📝 Read the Blog</strong></a> ·
   <a href="https://github.com/mlnomadpy/nmn/issues"><strong>🐛 Report Bug</strong></a>
 </p>
 
