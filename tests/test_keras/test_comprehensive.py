@@ -83,12 +83,14 @@ def test_keras_yat_nmn_save_load():
         with tempfile.TemporaryDirectory() as tmpdir:
             weights_path = os.path.join(tmpdir, "weights.weights.h5")
             model = tf.keras.Sequential([layer])
+            model.build((None, 8))
             model.save_weights(weights_path)
             
             # Create new layer and load weights
             new_layer = YatNMN(units=10)
             new_layer.build((None, 8))
             new_model = tf.keras.Sequential([new_layer])
+            new_model.build((None, 8))
             new_model.load_weights(weights_path)
             
             # Forward pass with loaded weights
