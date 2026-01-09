@@ -89,6 +89,13 @@ from .performer import (
     create_performer_projection,
 )
 
+# Spherical Yat-Performer (linear complexity YAT attention from paper)
+from .spherical_yat_performer import (
+    yat_tp_attention,
+    yat_tp_features,
+    create_yat_tp_projection,
+)
+
 # Standard Dot-Product Attention
 from .dot_product import (
     dot_product_attention,
@@ -129,6 +136,10 @@ __all__ = [
     "relu_kernel_feature_map",
     "orthogonal_random_features",
     "create_performer_projection",
+    # Spherical Yat-Performer
+    "yat_tp_attention",
+    "yat_tp_features",
+    "create_yat_tp_projection",
     # Standard Attention
     "dot_product_attention",
     "dot_product_attention_weights",

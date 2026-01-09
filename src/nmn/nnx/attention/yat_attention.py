@@ -433,13 +433,18 @@ def yat_performer_feature_map(
 ) -> Array:
     """Applies YAT-adapted feature map for Performer approximation.
 
-    This feature map is designed to work with the YAT attention mechanism,
-    using random features to approximate the YAT kernel.
+    This feature map implements the Spherical Yat-Performer approach:
+    - Normalizes inputs to unit sphere
+    - Uses FAVOR+ style positive random features
+    - Designed to produce stable, positive features for linear attention
 
-    For YAT, we approximate: (q·k)² / (||q-k||² + ε)
-
-    When pre_normalized=True, inputs are already unit vectors, enabling
-    the simplified formula: (q·k)² / (2(1 - q·k) + ε)
+    For the spherical YAT kernel: (q·k)² / (C - 2(q·k)) where C = 2 + ε
+    
+    We use a simplified FAVOR+ approximation that produces stable gradients:
+        φ(x) = |W @ x / sqrt(d)| * exp(W @ x / sqrt(d) - 0.5) / sqrt(m)
+    
+    The absolute value ensures positivity while the exponential captures
+    alignment information.
 
     Args:
         x: Input tensor of shape [..., seq_len, num_heads, head_dim].
@@ -453,28 +458,31 @@ def yat_performer_feature_map(
     head_dim = x.shape[-1]
     num_features = projection.shape[0]
 
+    # Normalize to unit sphere if not already
     if pre_normalized:
-        # Input is already normalized - use directly
         x_normalized = x
-        x_norm = jnp.ones(x.shape[:-1] + (1,), dtype=x.dtype)
     else:
-        # Normalize input
         x_norm = jnp.sqrt(jnp.sum(x ** 2, axis=-1, keepdims=True) + epsilon)
         x_normalized = x / x_norm
 
-    # Project normalized vectors
+    # Project normalized vectors: W @ x / sqrt(d)
+    # For orthogonal W with ||w_i|| = sqrt(d): E[(w·q)(w·k)] = q·k
     x_proj = jnp.einsum("...d,md->...m", x_normalized, projection)
-
-    # Apply softplus for positive features (similar to ELU+1 in some Performer variants)
-    features = jax.nn.softplus(x_proj)
-
-    # Scale by norm to preserve magnitude information (only if not pre-normalized)
-    if not pre_normalized:
-        features = features * (x_norm / jnp.sqrt(head_dim).astype(x.dtype))
-    else:
-        features = features / jnp.sqrt(head_dim).astype(x.dtype)
-
-    # Normalize by sqrt(num_features)
+    x_proj = x_proj / jnp.sqrt(head_dim).astype(x.dtype)
+    
+    # FAVOR+ style: exp(wx - ||wx||²/2) = exp(wx - 0.5) for unit x
+    # Modified with absolute value for guaranteed positivity
+    # This ensures positive attention weights in linear attention
+    exp_features = jnp.exp(x_proj - 0.5)
+    
+    # Use combination of linear and exp for better gradient flow
+    # Linear term captures alignment, exp term weights similar vectors higher
+    linear_features = jnp.abs(x_proj) + epsilon
+    
+    # Combine: use product to get positive features that capture alignment
+    features = linear_features * exp_features
+    
+    # Normalize by sqrt(num_features) for proper scaling
     features = features / jnp.sqrt(num_features).astype(x.dtype)
 
     return features

@@ -50,9 +50,11 @@ from jax import Array
 
 from .yat_attention import (
     yat_attention_weights,
-    yat_performer_feature_map,
-    create_yat_projection,
     normalize_qk,
+)
+from .spherical_yat_performer import (
+    yat_tp_attention,
+    create_yat_tp_projection,
 )
 from .multi_head import DEFAULT_CONSTANT_ALPHA
 from .masks import combine_masks
@@ -314,7 +316,7 @@ def rotary_yat_performer_attention(
     value: Array,
     freqs_cos: Array,
     freqs_sin: Array,
-    projection: Array,
+    performer_params: dict,
     bias: Optional[Array] = None,
     mask: Optional[Array] = None,
     broadcast_dropout: bool = True,
@@ -329,98 +331,40 @@ def rotary_yat_performer_attention(
     causal: bool = False,
     normalize_inputs: bool = True,
     alpha: Optional[Array] = None,
+    gradient_scaling: bool = True,
 ) -> Array:
-    """Computes Rotary YAT Performer attention: RoPE + YAT + O(n) complexity.
+    """Computes Rotary YAT Performer attention using Multi-Scale TP-PRF.
 
     Combines:
-    - Rotary Position Embeddings for position encoding
-    - YAT attention formula for geometric attention
-    - Performer random features for linear complexity
-
-    When normalize_inputs=True (default), Q and K are normalized to unit vectors
-    AFTER applying RoPE. This enables the optimized YAT formula:
-        (q·k)² / (2(1 - q·k) + ε)
-
-    The optimization works because for unit vectors:
-        ||q - k||² = ||q||² + ||k||² - 2(q·k) = 1 + 1 - 2(q·k) = 2(1 - q·k)
-
-    This requires only ONE dot product instead of computing separate norms!
-
-    With optional alpha scaling:
-        scaled_output = output * (sqrt(head_dim) / log(1 + head_dim))^alpha
-
-    Args:
-        query: Queries of shape [..., q_length, num_heads, head_dim].
-        key: Keys of shape [..., kv_length, num_heads, head_dim].
-        value: Values of shape [..., kv_length, num_heads, v_dim].
-        freqs_cos: Cosine frequencies for RoPE.
-        freqs_sin: Sine frequencies for RoPE.
-        projection: Random projection matrix [num_features, head_dim].
-        bias: Optional attention bias (limited support).
-        mask: Optional attention mask (limited support).
-        broadcast_dropout: Whether to broadcast dropout.
-        dropout_rng: RNG for dropout.
-        dropout_rate: Dropout probability.
-        deterministic: If True, no dropout.
-        dtype: Computation dtype.
-        precision: JAX precision.
-        module: Optional module for sowing weights.
-        epsilon: Numerical stability constant.
-        position_offset: Starting position for RoPE.
-        causal: If True, use causal attention.
-        normalize_inputs: If True (default), normalize Q and K after RoPE.
-        alpha: Optional alpha scaling parameter.
-
-    Returns:
-        Output of shape [..., q_length, num_heads, v_dim].
+    - RoPE for position encoding
+    - Multi-Scale FAVOR+ features for YAT kernel approximation
+    - O(n) linear complexity attention
     """
     query, key, value = promote_dtype((query, key, value), dtype=dtype)
     dtype = query.dtype
-
-    head_dim = query.shape[-1]
 
     # Apply RoPE first
     query_rotated = apply_rotary_emb(query, freqs_cos, freqs_sin, position_offset)
     key_rotated = apply_rotary_emb(key, freqs_cos, freqs_sin, position_offset)
 
-    # Normalize to unit vectors for optimized computation
+    # Normalize to unit vectors (required for YAT approximation)
     if normalize_inputs:
         query_rotated, key_rotated = normalize_qk(query_rotated, key_rotated, epsilon)
 
-    # Apply YAT-adapted feature maps to rotated (and optionally normalized) Q, K
-    q_features = yat_performer_feature_map(
-        query_rotated, projection, epsilon, pre_normalized=normalize_inputs
+    # Use the new Spherical YAT Linear Attention
+    output = yat_tp_attention(
+        query_rotated,
+        key_rotated,
+        value,
+        performer_params,
+        causal=causal,
+        epsilon=epsilon,
+        precision=precision,
+        gradient_scaling=gradient_scaling,
     )
-    k_features = yat_performer_feature_map(
-        key_rotated, projection, epsilon, pre_normalized=normalize_inputs
-    )
 
-    if causal:
-        output = _rotary_yat_causal_performer(
-            q_features, k_features, value, epsilon, precision
-        )
-    else:
-        # Non-causal efficient O(n) computation
-        # Step 1: Compute φ(K)^T @ V
-        kv = jnp.einsum(
-            "...khm,...khd->...hmd", k_features, value, precision=precision
-        )
-
-        # Step 2: Compute φ(Q) @ (φ(K)^T @ V)
-        qkv = jnp.einsum(
-            "...qhm,...hmd->...qhd", q_features, kv, precision=precision
-        )
-
-        # Step 3: Normalizer
-        k_sum = jnp.sum(k_features, axis=-3)
-        normalizer = jnp.einsum(
-            "...qhm,...hm->...qh", q_features, k_sum, precision=precision
-        )
-        normalizer = normalizer[..., None] + epsilon
-
-        output = qkv / normalizer
-
-    # Apply alpha scaling: scale = (sqrt(head_dim) / log(1 + head_dim))^alpha
+    # Apply alpha scaling
+    head_dim = query.shape[-1]
     if alpha is not None:
         alpha_val = jnp.asarray(alpha, dtype=dtype)
         scale = (jnp.sqrt(head_dim) / jnp.log(1 + head_dim)) ** alpha_val
@@ -433,33 +377,6 @@ def rotary_yat_performer_attention(
         output = output * keep / keep_prob
 
     return output
-
-
-def _rotary_yat_causal_performer(
-    q_features: Array,
-    k_features: Array,
-    value: Array,
-    epsilon: float,
-    precision: PrecisionLike,
-) -> Array:
-    """Causal Rotary YAT Performer using prefix sums."""
-    # Outer product for kv
-    kv = jnp.einsum("...khm,...khd->...khmd", k_features, value, precision=precision)
-
-    # Cumulative sums for causal attention
-    kv_cumsum = jnp.cumsum(kv, axis=-4)
-    k_cumsum = jnp.cumsum(k_features, axis=-3)
-
-    # Compute output
-    numerator = jnp.einsum(
-        "...qhm,...qhmd->...qhd", q_features, kv_cumsum, precision=precision
-    )
-    denominator = jnp.einsum(
-        "...qhm,...qhm->...qh", q_features, k_cumsum, precision=precision
-    )
-    denominator = denominator[..., None] + epsilon
-
-    return numerator / denominator
 
 
 class RotaryYatAttention(Module):
@@ -630,20 +547,30 @@ class RotaryYatAttention(Module):
         self.freqs_sin = nnx.Cache(freqs_sin)
 
         # Performer random projection
-        self.projection: nnx.Cache | None
+        self.perf_projections: nnx.Cache | None
+        self.perf_scales: nnx.Cache | None
         if use_performer:
-            self.num_features = num_features if num_features is not None else self.head_dim
-            projection = create_yat_projection(
+            self.num_features = num_features if num_features is not None else 64
+            self.num_scales = 8
+            
+            # Create Multi-Scale params
+            params = create_yat_tp_projection(
                 rngs.params(),
-                self.num_features,
                 self.head_dim,
+                num_prf_features=self.num_features,
+                num_quad_nodes=self.num_scales,
                 dtype=param_dtype,
-                orthogonal=True,
             )
-            self.projection = nnx.Cache(projection)
+            
+            self.perf_projections = nnx.Cache(params['projections'])
+            self.perf_scales = nnx.Cache(params['scales'])
+            self.perf_head_dim = params['head_dim']
         else:
             self.num_features = None
-            self.projection = None
+            self.num_scales = None
+            self.perf_projections = None
+            self.perf_scales = None
+            self.perf_head_dim = None
 
         # Q, K, V projections
         linear_kwargs = dict(
@@ -793,22 +720,31 @@ class RotaryYatAttention(Module):
         # Apply Rotary YAT attention
         if self.use_performer:
             # Performer mode: O(n) complexity
-            projection = jax.device_put(self.projection.value)
+            
+            # Reconstruct params dict
+            performer_params = {
+                'projections': jax.device_put(self.perf_projections.value),
+                'scales': jax.device_put(self.perf_scales.value),
+                'head_dim': self.perf_head_dim,
+                'num_prf_features': self.num_features,
+                'num_scales': self.num_scales,
+            }
+            
             output = rotary_yat_performer_attention(
                 q,
                 k,
                 v,
                 freqs_cos,
                 freqs_sin,
-                projection,
+                performer_params,
+                bias=None,  # Not supported in Performer
                 mask=mask,
+                broadcast_dropout=self.broadcast_dropout,
                 dropout_rng=dropout_rng,
                 dropout_rate=self.dropout_rate,
-                broadcast_dropout=self.broadcast_dropout,
                 deterministic=deterministic,
                 dtype=self.dtype,
                 precision=self.precision,
-                module=self if sow_weights else None,
                 epsilon=self.epsilon,
                 position_offset=position_offset,
                 causal=self.causal,

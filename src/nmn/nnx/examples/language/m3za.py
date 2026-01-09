@@ -61,6 +61,9 @@ class ModernTransformerBlock(nnx.Module):
             dropout_rate=rate,
             # Alpha scaling for YAT attention
             constant_alpha=True,  # Use sqrt(2) as constant alpha
+            # Performer mode for O(n) complexity and better gradient stability
+            use_performer=True,
+            performer_normalize=True,
             rngs=rngs,
         )
         self.dropout1 = nnx.Dropout(rate=rate, rngs=rngs)
@@ -102,10 +105,10 @@ class MiniBERT(nnx.Module):
     def __init__(self, maxlen: int, vocab_size: int, embed_dim: int, num_heads: int, feed_forward_dim: int, num_transformer_blocks: int, rngs: nnx.Rngs):
         self.embedding_layer = TokenEmbedding(vocab_size, embed_dim, rngs=rngs)
         # Pass maxlen to each block for RoPE precomputation
-        self.transformer_blocks = [
+        self.transformer_blocks = nnx.List([
             ModernTransformerBlock(embed_dim, num_heads, feed_forward_dim, maxlen=maxlen, rngs=rngs) 
             for _ in range(num_transformer_blocks)
-        ]
+        ])
         self.norm_final = RMSNorm(embed_dim, rngs=rngs)
         self.head_dim = embed_dim // num_heads
 
