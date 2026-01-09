@@ -79,15 +79,7 @@ from .rotary_yat import (
     apply_rotary_emb,
 )
 
-# Performer Attention
-from .performer import (
-    performer_attention,
-    performer_attention_weights,
-    softmax_kernel_feature_map,
-    relu_kernel_feature_map,
-    orthogonal_random_features,
-    create_performer_projection,
-)
+
 
 # Spherical Yat-Performer (linear complexity YAT attention from paper)
 from .spherical_yat_performer import (
@@ -129,13 +121,7 @@ __all__ = [
     "rotary_yat_performer_attention",
     "precompute_freqs_cis",
     "apply_rotary_emb",
-    # Performer Attention
-    "performer_attention",
-    "performer_attention_weights",
-    "softmax_kernel_feature_map",
-    "relu_kernel_feature_map",
-    "orthogonal_random_features",
-    "create_performer_projection",
+
     # Spherical Yat-Performer
     "yat_tp_attention",
     "yat_tp_features",

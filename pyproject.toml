@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nmn"
-version = "0.2.4"
+version = "0.2.6"
 authors = [{ name = "Taha Bouhsine", email = "taha@azetta.ai" }]
 description = "Neural-Matter Network (NMN) - Advanced neural network layers with attention mechanisms"
 readme = "README.md"

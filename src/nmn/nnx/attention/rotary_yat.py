@@ -550,14 +550,20 @@ class RotaryYatAttention(Module):
         self.perf_projections: nnx.Cache | None
         self.perf_scales: nnx.Cache | None
         if use_performer:
-            self.num_features = num_features if num_features is not None else 64
+            total_features = num_features if num_features is not None else 64
             self.num_scales = 8
+            
+            # Split features across scales for memory efficiency
+            # Ensure at least 4 features per scale
+            self.num_features_per_scale = max(4, total_features // self.num_scales)
+            # Update total features to reflect actual count
+            self.num_features = self.num_features_per_scale * self.num_scales
             
             # Create Multi-Scale params
             params = create_yat_tp_projection(
                 rngs.params(),
                 self.head_dim,
-                num_prf_features=self.num_features,
+                num_prf_features=self.num_features_per_scale,
                 num_quad_nodes=self.num_scales,
                 dtype=param_dtype,
             )
@@ -568,6 +574,7 @@ class RotaryYatAttention(Module):
         else:
             self.num_features = None
             self.num_scales = None
+            self.num_features_per_scale = None
             self.perf_projections = None
             self.perf_scales = None
             self.perf_head_dim = None
@@ -726,7 +733,7 @@ class RotaryYatAttention(Module):
                 'projections': jax.device_put(self.perf_projections.value),
                 'scales': jax.device_put(self.perf_scales.value),
                 'head_dim': self.perf_head_dim,
-                'num_prf_features': self.num_features,
+                'num_prf_features': self.num_features_per_scale,
                 'num_scales': self.num_scales,
             }
             
