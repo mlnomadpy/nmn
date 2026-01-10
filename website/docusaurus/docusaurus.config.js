@@ -27,6 +27,8 @@ const config = {
     organizationName: 'mlnomadpy', // Usually your GitHub org/user name.
     projectName: 'nmn', // Usually your repo name.
 
+    trailingSlash: false,
+
     onBrokenLinks: 'warn',
     onBrokenMarkdownLinks: 'warn',
 
