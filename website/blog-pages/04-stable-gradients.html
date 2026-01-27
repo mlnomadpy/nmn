@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stable Learning & Gradient Localization — Neural Matter Networks</title>
+    <meta name="description"
+        content="The ⵟ-product: A kernel-based activation-free neural network architecture that unifies alignment and proximity for geometrically-aware computation.">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tifinagh&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Three.js for 3D -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/blog-pages.css">
+</head>
+
+<body>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="#" class="nav-logo">
+                <span class="yat-symbol">ⵟ</span>
+                <span>NMN</span>
+            </a>
+            <div class="nav-links">
+                <a href="#introduction">Introduction</a>
+                <a href="#yat-product">ⵟ-Product</a>
+                <a href="#visualizations">Visualizations</a>
+                <a href="#results">Results</a>
+                <a href="#theory" class="nav-blog">Blog</a>
+                <a href="#code">Code</a>
+                <a href="https://github.com/mlnomadpy/nmn" target="_blank" class="nav-github">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path
+                            d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Blog Post Page -->
+    <main class="blog-page">
+        <div class="container">
+            <article class="blog-post">
+                <header class="blog-post-header">
+                    <a href="index.html#theory" class="blog-back-link">← Back to Theory</a>
+                    <span class="blog-post-badge">Theorem 4</span>
+                    <h1 class="blog-post-title">Stable Learning & Gradient Localization</h1>
+                </header>
+
+                <div class="blog-post-content">
+
+                    <!-- ELI5 Section -->
+                    <div class="eli5-section">
+                        <div class="eli5-header">
+                            <span class="eli5-icon">🧒</span>
+                            <h4>Explain Like I'm 5</h4>
+                        </div>
+                        <div class="eli5-content">
+                            <p>
+                                Imagine you're learning to draw, and you have a teacher who gives you feedback.
+                                If you're drawing something <strong>very different</strong> from what the teacher wants,
+                                they might not give you much feedback (because it's too far off).
+                            </p>
+                            <p>
+                                The <span class="yat-symbol">ⵟ</span>-product works the same way! When inputs are
+                                <strong>far away</strong> from the weight vector, the gradients (feedback) become very
+                                small.
+                                This means each neuron only "learns" from nearby examples — creating natural
+                                <em>localization</em>.
+                            </p>
+                            <p>
+                                This is like having a teacher who focuses on helping you with things that are
+                                <em>close</em>
+                                to what you're trying to learn, rather than getting distracted by completely different
+                                things.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Formal Statement -->
+                    <div class="theorem-statement">
+                        <div class="theorem-box">
+                            <strong>Proposition:</strong> The gradient of the <span class="yat-symbol">ⵟ</span>-product
+                            with respect to input vanishes for distant inputs:
+                            $$\lim_{\|\mathbf{x}\| \to \infty} \|\nabla_{\mathbf{x}} \text{ⵟ}(\mathbf{w}, \mathbf{x})\|
+                            = 0$$
+                            Specifically, $\|\nabla_{\mathbf{x}} \text{ⵟ}\| \sim \mathcal{O}(1/k)$ as $\|\mathbf{x}\| =
+                            k \to \infty$.
+                        </div>
+                    </div>
+
+                    <div class="theorem-content">
+                        <h4>🎯 The Problem This Solves</h4>
+                        <p>
+                            Traditional neurons have <strong>global gradient influence</strong>:
+                        </p>
+                        <ul>
+                            <li><strong>Linear neurons:</strong> Gradients are constant regardless of distance (no
+                                localization)</li>
+                            <li><strong>ReLU neurons:</strong> Gradients are either constant (positive side) or zero
+                                (negative side) — binary, not smooth</li>
+                        </ul>
+                        <p>
+                            This means every training example affects every weight, leading to:
+                        </p>
+                        <ul>
+                            <li>Slow convergence (too many conflicting signals)</li>
+                            <li>Difficulty learning local patterns</li>
+                            <li>Susceptibility to outliers</li>
+                        </ul>
+
+                        <h4>📐 The Mathematics In Depth</h4>
+                        <p>
+                            Computing the gradient:
+                        </p>
+                        <div class="math-block">
+                            $$\nabla_{\mathbf{x}} \text{ⵟ}(\mathbf{w}, \mathbf{x}) =
+                            \frac{2(\mathbf{w}^\top\mathbf{x})\mathbf{w}}{\|\mathbf{w} - \mathbf{x}\|^2 + \varepsilon} -
+                            \frac{(\mathbf{w}^\top\mathbf{x})^2 \cdot 2(\mathbf{x} - \mathbf{w})}{(\|\mathbf{w} -
+                            \mathbf{x}\|^2 + \varepsilon)^2}$$
+                        </div>
+                        <p>
+                            As $\|\mathbf{x}\| = k \to \infty$, the denominator grows as $k^2$, while the numerator
+                            grows as $k$.
+                            Therefore, $\|\nabla_{\mathbf{x}} \text{ⵟ}\| \sim \mathcal{O}(1/k) \to 0$.
+                        </p>
+
+                        <h4>💥 The Consequences</h4>
+                        <div class="consequences-grid">
+                            <div class="consequence-item">
+                                <span class="consequence-icon">🎯</span>
+                                <h5>Natural Localization</h5>
+                                <p>
+                                    Each neuron creates a "territory" around its weight vector. Only nearby inputs
+                                    contribute
+                                    significant gradients, enabling local pattern learning.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">∞</span>
+                                <h5>Infinitely Smooth (C∞)</h5>
+                                <p>
+                                    The <span class="yat-symbol">ⵟ</span>-product is infinitely differentiable, perfect
+                                    for
+                                    physics-informed neural networks (PINNs) requiring higher-order derivatives.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">📊</span>
+                                <h5>Lipschitz Continuity</h5>
+                                <p>
+                                    The gradient is Lipschitz continuous, providing theoretical guarantees for
+                                    optimization
+                                    and stability during training.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">🛡️</span>
+                                <h5>Robust to Outliers</h5>
+                                <p>
+                                    Distant outliers contribute vanishingly small gradients, so they don't disrupt
+                                    learning
+                                    of local patterns.
+                                </p>
+                            </div>
+                        </div>
+
+                        <h4>🎓 What This Really Means</h4>
+                        <p>
+                            This proposition shows that <span class="yat-symbol">ⵟ</span>-product neurons have
+                            <strong>spatial awareness</strong>.
+                            They naturally create "learning territories" — regions of input space where they actively
+                            learn,
+                            with smooth falloff outside.
+                        </p>
+                        <p>
+                            This is fundamentally different from linear or ReLU neurons, which have <em>global</em>
+                            influence.
+                            The localization property enables:
+                        </p>
+                        <ul>
+                            <li>Faster convergence (less conflicting gradient signals)</li>
+                            <li>Better generalization (local patterns are more robust)</li>
+                            <li>Interpretability (each neuron "owns" a region of space)</li>
+                        </ul>
+                    </div>
+
+                </div>
+
+                <div class="blog-page-nav"><a href="03-self-regulation.html" class="blog-nav-btn">← Previous:
+                        Self-Regulation & Bounded Outputs</a><a href="index.html#theory" class="blog-nav-btn">All
+                        Theorems</a><a href="05-information-theory.html" class="blog-nav-btn">Next:
+                        Information-Geometric Foundations →</a></div>
+            </article>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="yat-symbol">ⵟ</span>
+                    <span>Neural Matter Networks</span>
+                </div>
+                <div class="footer-links">
+                    <a href="https://github.com/mlnomadpy/nmn" target="_blank">GitHub</a>
+                    <a href="https://pypi.org/project/nmn/" target="_blank">PyPI</a>
+                    <a href="mailto:taha@azetta.ai">Contact</a>
+                </div>
+                <div class="footer-copy">
+                    <p>Built with ❤️ by <a href="https://azetta.ai" target="_blank">azetta.ai</a></p>
+                    <p>AGPL-3.0 License</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '$', right: '$', display: false }
+                ]
+            });
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,38 @@
+{
+  "permalink": "/nmn/blog/welcome",
+  "editUrl": "https://github.com/mlnomadpy/nmn/tree/main/website/docusaurus/blog/2026-01-07-welcome.md",
+  "source": "@site/blog/2026-01-07-welcome.md",
+  "title": "Welcome to Neural Matter Networks",
+  "description": "We're excited to launch the official documentation site for Neural Matter Networks (NMN) — a fundamentally new approach to neural computation through the ⵟ-product.",
+  "date": "2026-01-07T00:00:00.000Z",
+  "tags": [
+    {
+      "inline": true,
+      "label": "announcement",
+      "permalink": "/nmn/blog/tags/announcement"
+    }
+  ],
+  "readingTime": 0.65,
+  "hasTruncateMarker": false,
+  "authors": [
+    {
+      "name": "NMN Team",
+      "title": "Neural Matter Networks",
+      "url": "https://github.com/mlnomadpy",
+      "imageURL": "https://github.com/mlnomadpy.png",
+      "key": "nmn-team",
+      "page": null
+    }
+  ],
+  "frontMatter": {
+    "slug": "welcome",
+    "title": "Welcome to Neural Matter Networks",
+    "authors": [
+      "nmn-team"
+    ],
+    "tags": [
+      "announcement"
+    ]
+  },
+  "unlisted": false
+}

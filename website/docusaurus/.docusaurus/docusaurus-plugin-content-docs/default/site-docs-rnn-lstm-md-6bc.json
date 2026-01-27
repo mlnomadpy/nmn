@@ -1,0 +1,27 @@
+{
+  "id": "rnn/lstm",
+  "title": "YatLSTM",
+  "description": "Long Short-Term Memory (LSTM) with ⵟ-product gates.",
+  "source": "@site/docs/rnn/lstm.md",
+  "sourceDirName": "rnn",
+  "slug": "/rnn/lstm",
+  "permalink": "/nmn/docs/rnn/lstm",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/mlnomadpy/nmn/tree/main/website/docusaurus/docs/rnn/lstm.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Rotary Position Embeddings",
+    "permalink": "/nmn/docs/attention/rotary"
+  },
+  "next": {
+    "title": "YatGRU",
+    "permalink": "/nmn/docs/rnn/gru"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "id": "attention/yat-attention",
+  "title": "YatAttention",
+  "description": "Self-attention mechanism using the ⵟ-product for query-key similarity.",
+  "source": "@site/docs/attention/yat-attention.md",
+  "sourceDirName": "attention",
+  "slug": "/attention/yat-attention",
+  "permalink": "/nmn/docs/attention/yat-attention",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/mlnomadpy/nmn/tree/main/website/docusaurus/docs/attention/yat-attention.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "YatConvTranspose",
+    "permalink": "/nmn/docs/layers/yat-conv-transpose"
+  },
+  "next": {
+    "title": "MultiHeadAttention",
+    "permalink": "/nmn/docs/attention/multi-head"
+  }
+}

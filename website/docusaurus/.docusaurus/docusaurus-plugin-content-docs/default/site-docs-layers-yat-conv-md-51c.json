@@ -1,0 +1,27 @@
+{
+  "id": "layers/yat-conv",
+  "title": "YatConv",
+  "description": "Convolutional layer using the ⵟ-product for geometrically-aware feature extraction.",
+  "source": "@site/docs/layers/yat-conv.md",
+  "sourceDirName": "layers",
+  "slug": "/layers/yat-conv",
+  "permalink": "/nmn/docs/layers/yat-conv",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/mlnomadpy/nmn/tree/main/website/docusaurus/docs/layers/yat-conv.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "YatNMN",
+    "permalink": "/nmn/docs/layers/yat-nmn"
+  },
+  "next": {
+    "title": "YatConvTranspose",
+    "permalink": "/nmn/docs/layers/yat-conv-transpose"
+  }
+}

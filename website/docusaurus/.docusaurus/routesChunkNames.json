@@ -1,0 +1,188 @@
+{
+  "/nmn/__docusaurus/debug-dde": {
+    "__comp": "__comp---theme-debug-config-23-a-2ff",
+    "__context": {
+      "plugin": "plugin---nmn-docusaurus-debugb-38-81a"
+    }
+  },
+  "/nmn/__docusaurus/debug/config-190": {
+    "__comp": "__comp---theme-debug-config-23-a-2ff",
+    "__context": {
+      "plugin": "plugin---nmn-docusaurus-debugb-38-81a"
+    }
+  },
+  "/nmn/__docusaurus/debug/content-5fa": {
+    "__comp": "__comp---theme-debug-contentba-8-ce7",
+    "__context": {
+      "plugin": "plugin---nmn-docusaurus-debugb-38-81a"
+    },
+    "__props": "__props---nmn-docusaurus-debug-content-835-97f"
+  },
+  "/nmn/__docusaurus/debug/globalData-a50": {
+    "__comp": "__comp---theme-debug-global-dataede-0fa",
+    "__context": {
+      "plugin": "plugin---nmn-docusaurus-debugb-38-81a"
+    }
+  },
+  "/nmn/__docusaurus/debug/metadata-98a": {
+    "__comp": "__comp---theme-debug-site-metadata-68-e-3d4",
+    "__context": {
+      "plugin": "plugin---nmn-docusaurus-debugb-38-81a"
+    }
+  },
+  "/nmn/__docusaurus/debug/registry-7ab": {
+    "__comp": "__comp---theme-debug-registry-679-501",
+    "__context": {
+      "plugin": "plugin---nmn-docusaurus-debugb-38-81a"
+    }
+  },
+  "/nmn/__docusaurus/debug/routes-6dc": {
+    "__comp": "__comp---theme-debug-routes-946-699",
+    "__context": {
+      "plugin": "plugin---nmn-docusaurus-debugb-38-81a"
+    }
+  },
+  "/nmn/blog-067": {
+    "__comp": "__comp---theme-blog-list-pagea-6-a-7ba",
+    "__context": {
+      "plugin": "plugin---nmn-blog-369-fa3"
+    },
+    "sidebar": "sidebar---nmn-blog-814-a85",
+    "items": [
+      {
+        "content": "content---nmn-blog-4-f-8-679"
+      }
+    ],
+    "__props": "__props---nmn-blog-6-db-bdf"
+  },
+  "/nmn/blog/archive-a2b": {
+    "__comp": "__comp---theme-blog-archive-page-9-e-4-1d8",
+    "__context": {
+      "plugin": "plugin---nmn-blog-369-fa3"
+    },
+    "__props": "__props---nmn-blog-archive-335-0d2"
+  },
+  "/nmn/blog/authors-39e": {
+    "__comp": "__comp---theme-blog-pages-blog-authors-list-page-621-70c",
+    "__context": {
+      "data": {
+        "blogMetadata": "blogMetadata---nmn-blog-authorsace-930"
+      },
+      "plugin": "plugin---nmn-blog-369-fa3"
+    },
+    "sidebar": "sidebar---nmn-blog-814-a85",
+    "__props": "__props---nmn-blog-authors-275-bb0"
+  },
+  "/nmn/blog/tags-eea": {
+    "__comp": "__comp---theme-blog-tags-list-page-01-a-d0b",
+    "__context": {
+      "plugin": "plugin---nmn-blog-369-fa3"
+    },
+    "sidebar": "sidebar---nmn-blog-814-a85",
+    "__props": "__props---nmn-blog-tagsc-7-f-171"
+  },
+  "/nmn/blog/tags/announcement-2cc": {
+    "__comp": "__comp---theme-blog-tags-posts-page-687-b6c",
+    "__context": {
+      "plugin": "plugin---nmn-blog-369-fa3"
+    },
+    "sidebar": "sidebar---nmn-blog-814-a85",
+    "items": [
+      {
+        "content": "content---nmn-blog-4-f-8-679"
+      }
+    ],
+    "__props": "__props---nmn-blog-tags-announcement-304-55a"
+  },
+  "/nmn/blog/welcome-052": {
+    "__comp": "__comp---theme-blog-post-pageccc-cab",
+    "__context": {
+      "data": {
+        "blogMetadata": "blogMetadata---nmn-blog-authorsace-930"
+      },
+      "plugin": "plugin---nmn-blog-369-fa3"
+    },
+    "sidebar": "sidebar---nmn-blog-814-a85",
+    "content": "content---nmn-blog-welcome-39-e-fc3"
+  },
+  "/nmn/docs-39b": {
+    "__comp": "__comp---theme-docs-root-5-e-9-0b6",
+    "__context": {
+      "plugin": "plugin---nmn-docsaba-e5f"
+    }
+  },
+  "/nmn/docs-8ab": {
+    "__comp": "__comp---theme-doc-version-roota-7-b-5de",
+    "__props": "__props---nmn-docsa-20-c54"
+  },
+  "/nmn/docs-bb1": {
+    "__comp": "__comp---theme-doc-roota-94-67a"
+  },
+  "/nmn/docs/attention/multi-head-c85": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---nmn-docs-attention-multi-headd-53-4a5"
+  },
+  "/nmn/docs/attention/rotary-92e": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---nmn-docs-attention-rotaryfe-5-d35"
+  },
+  "/nmn/docs/attention/yat-attention-750": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---nmn-docs-attention-yat-attention-4-a-1-c4a"
+  },
+  "/nmn/docs/examples/cifar10-066": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---nmn-docs-examples-cifar-10-ffe-b77"
+  },
+  "/nmn/docs/examples/mnist-925": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---nmn-docs-examples-mnist-6-fc-1e3"
+  },
+  "/nmn/docs/examples/transformer-d78": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---nmn-docs-examples-transformer-482-6b2"
+  },
+  "/nmn/docs/installation-45b": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---nmn-docs-installation-3-b-8-8fd"
+  },
+  "/nmn/docs/intro-a8e": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---nmn-docs-intro-0-e-3-540"
+  },
+  "/nmn/docs/layers/yat-conv-9c0": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---nmn-docs-layers-yat-conv-51-c-1f0"
+  },
+  "/nmn/docs/layers/yat-conv-transpose-701": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---nmn-docs-layers-yat-conv-transposebc-7-41a"
+  },
+  "/nmn/docs/layers/yat-nmn-d3e": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---nmn-docs-layers-yat-nmn-396-4ff"
+  },
+  "/nmn/docs/quick-start-766": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---nmn-docs-quick-start-72-e-01c"
+  },
+  "/nmn/docs/rnn/gru-01e": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---nmn-docs-rnn-gru-415-fd4"
+  },
+  "/nmn/docs/rnn/lstm-783": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---nmn-docs-rnn-lstm-6-bc-e1f"
+  },
+  "/nmn/docs/rnn/simple-5b9": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---nmn-docs-rnn-simple-2-bc-73b"
+  },
+  "/nmn/-24f": {
+    "__comp": "__comp---site-src-pages-index-jsc-4-f-f99",
+    "__context": {
+      "plugin": "plugin---nmn-a-74-79b"
+    },
+    "config": "config---nmn-5-e-9-b22"
+  }
+}

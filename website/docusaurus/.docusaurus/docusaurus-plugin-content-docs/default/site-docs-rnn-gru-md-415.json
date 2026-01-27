@@ -1,0 +1,27 @@
+{
+  "id": "rnn/gru",
+  "title": "YatGRU",
+  "description": "Gated Recurrent Unit with ⵟ-product gates.",
+  "source": "@site/docs/rnn/gru.md",
+  "sourceDirName": "rnn",
+  "slug": "/rnn/gru",
+  "permalink": "/nmn/docs/rnn/gru",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/mlnomadpy/nmn/tree/main/website/docusaurus/docs/rnn/gru.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "YatLSTM",
+    "permalink": "/nmn/docs/rnn/lstm"
+  },
+  "next": {
+    "title": "SimpleRNN",
+    "permalink": "/nmn/docs/rnn/simple"
+  }
+}

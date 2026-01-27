@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Methodology Deep Dive — Neural Matter Networks</title>
+    <meta name="description"
+        content="A comprehensive look at the ⵟ-product methodology, including comparisons to standard similarity measures and information-theoretic foundations.">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tifinagh&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/blog-pages.css">
+</head>
+
+<body>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="../index.html" class="nav-logo">
+                <span class="yat-symbol">ⵟ</span>
+                <span>NMN</span>
+            </a>
+            <div class="nav-links">
+                <a href="../index.html#introduction">Introduction</a>
+                <a href="../index.html#yat-product">ⵟ-Product</a>
+                <a href="../index.html#visualizations">Visualizations</a>
+                <a href="../index.html#results">Results</a>
+                <a href="../index.html#theory" class="nav-blog">Blog</a>
+                <a href="../index.html#code">Code</a>
+                <a href="https://github.com/mlnomadpy/nmn" target="_blank" class="nav-github">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path
+                            d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Blog Post Page -->
+    <main class="blog-page">
+        <div class="container">
+            <article class="blog-post">
+                <header class="blog-post-header">
+                    <a href="../index.html#theory" class="blog-back-link">← Back to Theory</a>
+                    <span class="blog-post-badge">Methodology</span>
+                    <h1 class="blog-post-title">The <span class="yat-symbol">ⵟ</span>-Product: A Deep Dive</h1>
+                </header>
+
+                <div class="blog-post-content">
+
+                    <!-- ELI5 Section -->
+                    <div class="eli5-section">
+                        <div class="eli5-header">
+                            <span class="eli5-icon">🧒</span>
+                            <h4>Explain Like I'm 5</h4>
+                        </div>
+                        <div class="eli5-content">
+                            <p>
+                                Imagine you're playing a game where you need to find your best friend in a crowded
+                                playground.
+                                You'd check two things:
+                            </p>
+                            <ul>
+                                <li>👀 <strong>Are they looking at you?</strong> (That's like <em>alignment</em> — are
+                                    you facing the same direction?)</li>
+                                <li>📏 <strong>Are they close to you?</strong> (That's <em>proximity</em> — how far away
+                                    are they?)</li>
+                            </ul>
+                            <p>
+                                Old neural networks could only check <em>one</em> of these things at a time. The special
+                                <span class="yat-symbol">ⵟ</span>-product checks <em>both at once</em>! It says:
+                                "You're my best friend if you're looking at me AND you're standing close to me!"
+                            </p>
+                            <p>
+                                This is way smarter because someone far away looking at you isn't as important as
+                                someone right next to you waving at you!
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="theorem-content">
+                        <!-- The ⵟ-Product Definition -->
+                        <h4>📐 The <span class="yat-symbol">ⵟ</span>-Product: Formal Definition</h4>
+                        <p>
+                            At the heart of Neural Matter Networks is a single, elegant formula that replaces both
+                            the dot product AND the activation function:
+                        </p>
+
+                        <div class="theorem-statement">
+                            <div class="theorem-box">
+                                <strong>Definition (<span class="yat-symbol">ⵟ</span>-Product):</strong>
+                                $$\text{ⵟ}(\mathbf{w}, \mathbf{x}) = \frac{\langle \mathbf{w}, \mathbf{x}
+                                \rangle^2}{\|\mathbf{w} - \mathbf{x}\|^2 + \epsilon}$$
+                                where $\mathbf{w}$ is the weight vector, $\mathbf{x}$ is the input, and $\epsilon > 0$
+                                is a small stability constant.
+                            </div>
+                        </div>
+
+                        <p>Let's break down what each part means:</p>
+
+                        <div class="consequences-grid">
+                            <div class="consequence-item">
+                                <span class="consequence-icon">⬆️</span>
+                                <h5>Numerator: $\langle \mathbf{w}, \mathbf{x} \rangle^2$</h5>
+                                <p>
+                                    The <strong>squared dot product</strong> measures <em>alignment</em>. When vectors
+                                    point in the same direction, this is large. When orthogonal, it's zero. The
+                                    squaring ensures we only care about alignment magnitude, not sign.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">⬇️</span>
+                                <h5>Denominator: $\|\mathbf{w} - \mathbf{x}\|^2 + \epsilon$</h5>
+                                <p>
+                                    The <strong>squared distance</strong> measures <em>proximity</em>. When vectors
+                                    are close, this is small (making the fraction large). When far apart, this is
+                                    large (making the fraction small).
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">🎯</span>
+                            <div>
+                                <strong>The Magic:</strong> For a high <span class="yat-symbol">ⵟ</span>-product value,
+                                you need BOTH high alignment (large numerator) AND close proximity (small denominator).
+                                This creates a "double gate" that's more selective than either condition alone.
+                            </div>
+                        </div>
+
+                        <!-- Comparison to Standard Metrics -->
+                        <h4>⚖️ Why Existing Measures Fall Short</h4>
+                        <p>
+                            Traditional similarity measures each capture only <em>one</em> geometric aspect.
+                            This forces a fundamental trade-off:
+                        </p>
+
+                        <div class="proof-step">
+                            <strong>🎯 Dot Product: $\mathbf{w}^T \mathbf{x}$</strong>
+                            <p>
+                                <strong>What it captures:</strong> Alignment scaled by magnitudes<br>
+                                <strong>The problem:</strong> Two vectors can have a huge dot product even if they're
+                                in completely different regions of space. A vector at $[100, 100]$ and one at
+                                $[1, 1]$ will have high alignment but are vastly separated.
+                            </p>
+                        </div>
+
+                        <div class="proof-step">
+                            <strong>🧭 Cosine Similarity: $\frac{\mathbf{w}^T
+                                \mathbf{x}}{\|\mathbf{w}\|\|\mathbf{x}\|}$</strong>
+                            <p>
+                                <strong>What it captures:</strong> Pure directional alignment<br>
+                                <strong>The problem:</strong> Completely ignores distance! Vectors $[1, 0]$ and
+                                $[1000000, 0]$ have perfect cosine similarity of 1.0, yet they're extremely far apart.
+                            </p>
+                        </div>
+
+                        <div class="proof-step">
+                            <strong>📏 Euclidean Distance: $\|\mathbf{w} - \mathbf{x}\|$</strong>
+                            <p>
+                                <strong>What it captures:</strong> Spatial separation<br>
+                                <strong>The problem:</strong> Ignores orientation entirely! Vectors at equal
+                                distances get equal scores regardless of whether they point toward or away from each
+                                other.
+                            </p>
+                        </div>
+
+                        <div class="math-block">
+                            <strong>The <span class="yat-symbol">ⵟ</span>-Product Solution:</strong>
+                            $$\text{ⵟ}(\mathbf{w}, \mathbf{x}) = \frac{\text{Alignment}^2}{\text{Distance}^2 + \epsilon}
+                            = \frac{\text{How similar in direction?}}{\text{How far apart?}}$$
+                        </div>
+
+                        <!-- High-Dimensional Behavior -->
+                        <h4>🌐 High-Dimensional Scaling</h4>
+                        <p>
+                            One critical concern with any kernel is: <em>what happens in high dimensions?</em>
+                            Many kernels (like RBF/Gaussian) suffer from the "curse of dimensionality" where
+                            all points become equidistant, making the kernel useless.
+                        </p>
+
+                        <p>The <span class="yat-symbol">ⵟ</span>-product has a remarkable self-normalizing property:</p>
+
+                        <div class="theorem-statement">
+                            <div class="theorem-box">
+                                <strong>Corollary (Dimensional Scaling):</strong> Under standard assumptions of
+                                i.i.d. zero-mean, constant-variance coordinates for $\mathbf{x}, \mathbf{w} \in
+                                \mathbb{R}^d$:
+                                <ul>
+                                    <li>The numerator $(\mathbf{w}^T\mathbf{x})^2$ grows as $\mathcal{O}(d)$</li>
+                                    <li>The denominator $\|\mathbf{w}-\mathbf{x}\|^2$ also grows as $\mathcal{O}(d)$
+                                    </li>
+                                    <li>Their ratio remains $\mathcal{O}(1)$ — constant regardless of dimension!</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">💡</span>
+                            <div>
+                                <strong>Why This Matters:</strong> Unlike RBF kernels that vanish exponentially
+                                in high dimensions, the <span class="yat-symbol">ⵟ</span>-product maintains
+                                meaningful, discriminative values even in thousands of dimensions. This makes
+                                it practical for real-world deep learning where hidden dimensions often exceed 1000.
+                            </div>
+                        </div>
+
+                        <!-- Information-Theoretic Connection -->
+                        <h4>📊 Information-Theoretic Interpretation</h4>
+                        <p>
+                            When applied to probability distributions, the <span class="yat-symbol">ⵟ</span>-product
+                            reveals deep connections to information theory:
+                        </p>
+
+                        <div class="theorem-statement">
+                            <div class="theorem-box">
+                                <strong>Theorem (Minimal Similarity):</strong> For distributions
+                                $\mathbf{p}, \mathbf{q} \in \Delta^{n-1}$:
+                                $$\text{ⵟ}(\mathbf{p}, \mathbf{q}) = 0 \iff \text{supp}(\mathbf{p}) \cap
+                                \text{supp}(\mathbf{q}) = \emptyset$$
+                                When supports are disjoint, the KL divergence is infinite.
+                            </div>
+                        </div>
+
+                        <p>
+                            In plain English: the <span class="yat-symbol">ⵟ</span>-product is zero exactly when
+                            two probability distributions have no overlap — they assign probability to completely
+                            different outcomes. This is when information theory says they're "infinitely different."
+                        </p>
+
+                        <div class="theorem-statement">
+                            <div class="theorem-box">
+                                <strong>Theorem (Maximal Similarity):</strong> For distributions
+                                $\mathbf{p}, \mathbf{q} \in \Delta^{n-1}$:
+                                $$\text{ⵟ}(\mathbf{p}, \mathbf{q}) = \infty \iff \mathbf{p} = \mathbf{q}$$
+                                When distributions are identical, the KL divergence is zero.
+                            </div>
+                        </div>
+
+                        <p>
+                            The <span class="yat-symbol">ⵟ</span>-product is infinite exactly when two distributions
+                            are identical — they're the same point, so distance is zero. This perfectly aligns
+                            with information theory's concept of zero divergence.
+                        </p>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">🔬</span>
+                            <div>
+                                <strong>Signal-to-Noise Ratio:</strong> The <span class="yat-symbol">ⵟ</span>-product
+                                structure $\frac{\text{signal}^2}{\text{noise/distance}}$ mirrors the classic
+                                signal-to-noise ratio from communications theory. High alignment is "signal";
+                                large distance is "noise."
+                            </div>
+                        </div>
+
+                        <!-- The Potential Well -->
+                        <h4>🕳️ The Potential Well Visualization</h4>
+                        <p>
+                            Perhaps the most intuitive way to understand the <span class="yat-symbol">ⵟ</span>-product
+                            is through its <strong>potential well</strong> — a concept borrowed from physics.
+                        </p>
+
+                        <p>
+                            Imagine each neuron's weight vector $\mathbf{w}$ as creating a "gravity well" in the
+                            input space:
+                        </p>
+
+                        <ul>
+                            <li><strong>At the center ($\mathbf{x} = \mathbf{w}$):</strong> Maximum attraction.
+                                The <span class="yat-symbol">ⵟ</span>-product is very large (limited only by
+                                $\epsilon$).</li>
+                            <li><strong>Moving away:</strong> Attraction decreases with distance squared —
+                                just like gravity.</li>
+                            <li><strong>Orthogonal direction:</strong> Even if close, orthogonal inputs get
+                                zero response because the numerator is zero.</li>
+                            <li><strong>Far and aligned:</strong> Gets a small response because distance dominates.</li>
+                        </ul>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">🌀</span>
+                            <div>
+                                <strong>Vortex Behavior:</strong> The gradient field of the
+                                <span class="yat-symbol">ⵟ</span>-product creates vortex-like patterns around
+                                weight vectors. During training, inputs spiral toward their most compatible
+                                prototype, creating natural clustering behavior.
+                            </div>
+                        </div>
+
+                        <!-- Interactive Potential Well Visualization -->
+                        <div class="interactive-demo" style="margin: 2rem 0;">
+                            <h5 style="margin-bottom: 1rem; color: var(--terminal-green);">🎮 Interactive: Drag the
+                                weight vector (green dot)</h5>
+                            <canvas id="potential-well-canvas" width="600" height="400"
+                                style="width: 100%; max-width: 600px; border-radius: 8px; cursor: crosshair; background: #0a0a0f; display: block; margin: 0 auto;"></canvas>
+                            <div
+                                style="display: flex; gap: 1rem; justify-content: center; margin-top: 0.5rem; flex-wrap: wrap;">
+                                <span style="font-size: 0.85rem; color: var(--text-muted);">🟢 Weight vector (drag
+                                    me!)</span>
+                                <span style="font-size: 0.85rem; color: var(--text-muted);">🔥 High ⵟ-value | 🔵 Low
+                                    ⵟ-value</span>
+                            </div>
+                        </div>
+
+                        <script>
+                            (function () {
+                                const canvas = document.getElementById('potential-well-canvas');
+                                if (!canvas) return;
+                                const ctx = canvas.getContext('2d');
+
+                                let weightX = 300, weightY = 200;
+                                let isDragging = false;
+                                const epsilon = 0.1;
+
+                                function computeYatProduct(wx, wy, px, py) {
+                                    // Normalize to [-2, 2] range for computation
+                                    const wxn = (wx - 300) / 150;
+                                    const wyn = (wy - 200) / 100;
+                                    const pxn = (px - 300) / 150;
+                                    const pyn = (py - 200) / 100;
+
+                                    const dot = wxn * pxn + wyn * pyn;
+                                    const distSq = (wxn - pxn) ** 2 + (wyn - pyn) ** 2;
+                                    return (dot * dot) / (distSq + epsilon);
+                                }
+
+                                function heatmapColor(value) {
+                                    // Clamp and normalize value (0 to ~10 typical)
+                                    const t = Math.min(1, Math.max(0, value / 5));
+
+                                    // Cool to hot colormap
+                                    if (t < 0.25) {
+                                        const s = t / 0.25;
+                                        return `rgb(${Math.floor(20 + s * 20)}, ${Math.floor(30 + s * 50)}, ${Math.floor(80 + s * 100)})`;
+                                    } else if (t < 0.5) {
+                                        const s = (t - 0.25) / 0.25;
+                                        return `rgb(${Math.floor(40 + s * 80)}, ${Math.floor(80 + s * 100)}, ${Math.floor(180 - s * 80)})`;
+                                    } else if (t < 0.75) {
+                                        const s = (t - 0.5) / 0.25;
+                                        return `rgb(${Math.floor(120 + s * 100)}, ${Math.floor(180 - s * 50)}, ${Math.floor(100 - s * 50)})`;
+                                    } else {
+                                        const s = (t - 0.75) / 0.25;
+                                        return `rgb(${Math.floor(220 + s * 35)}, ${Math.floor(130 - s * 80)}, ${Math.floor(50 - s * 50)})`;
+                                    }
+                                }
+
+                                function draw() {
+                                    const cellSize = 8;
+
+                                    // Draw heatmap
+                                    for (let x = 0; x < canvas.width; x += cellSize) {
+                                        for (let y = 0; y < canvas.height; y += cellSize) {
+                                            const value = computeYatProduct(weightX, weightY, x + cellSize / 2, y + cellSize / 2);
+                                            ctx.fillStyle = heatmapColor(value);
+                                            ctx.fillRect(x, y, cellSize, cellSize);
+                                        }
+                                    }
+
+                                    // Draw coordinate axes
+                                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                                    ctx.lineWidth = 1;
+                                    ctx.beginPath();
+                                    ctx.moveTo(300, 0);
+                                    ctx.lineTo(300, 400);
+                                    ctx.moveTo(0, 200);
+                                    ctx.lineTo(600, 200);
+                                    ctx.stroke();
+
+                                    // Draw weight vector
+                                    ctx.beginPath();
+                                    ctx.arc(weightX, weightY, 12, 0, Math.PI * 2);
+                                    ctx.fillStyle = '#00ff88';
+                                    ctx.fill();
+                                    ctx.strokeStyle = '#ffffff';
+                                    ctx.lineWidth = 2;
+                                    ctx.stroke();
+
+                                    // Draw arrow from origin to weight
+                                    ctx.beginPath();
+                                    ctx.moveTo(300, 200);
+                                    ctx.lineTo(weightX, weightY);
+                                    ctx.strokeStyle = 'rgba(0, 255, 136, 0.6)';
+                                    ctx.lineWidth = 2;
+                                    ctx.stroke();
+
+                                    // Labels
+                                    ctx.fillStyle = '#ffffff';
+                                    ctx.font = '12px JetBrains Mono, monospace';
+                                    ctx.fillText('w', weightX + 15, weightY - 5);
+                                    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                                    ctx.fillText('x₁', 580, 215);
+                                    ctx.fillText('x₂', 310, 15);
+                                }
+
+                                function getMousePos(e) {
+                                    const rect = canvas.getBoundingClientRect();
+                                    const scaleX = canvas.width / rect.width;
+                                    const scaleY = canvas.height / rect.height;
+                                    return {
+                                        x: (e.clientX - rect.left) * scaleX,
+                                        y: (e.clientY - rect.top) * scaleY
+                                    };
+                                }
+
+                                canvas.addEventListener('mousedown', (e) => {
+                                    const pos = getMousePos(e);
+                                    const dist = Math.sqrt((pos.x - weightX) ** 2 + (pos.y - weightY) ** 2);
+                                    if (dist < 20) {
+                                        isDragging = true;
+                                    }
+                                });
+
+                                canvas.addEventListener('mousemove', (e) => {
+                                    if (isDragging) {
+                                        const pos = getMousePos(e);
+                                        weightX = Math.max(20, Math.min(580, pos.x));
+                                        weightY = Math.max(20, Math.min(380, pos.y));
+                                        draw();
+                                    }
+                                });
+
+                                canvas.addEventListener('mouseup', () => isDragging = false);
+                                canvas.addEventListener('mouseleave', () => isDragging = false);
+
+                                // Touch support
+                                canvas.addEventListener('touchstart', (e) => {
+                                    e.preventDefault();
+                                    const touch = e.touches[0];
+                                    const pos = getMousePos(touch);
+                                    const dist = Math.sqrt((pos.x - weightX) ** 2 + (pos.y - weightY) ** 2);
+                                    if (dist < 30) isDragging = true;
+                                });
+
+                                canvas.addEventListener('touchmove', (e) => {
+                                    e.preventDefault();
+                                    if (isDragging) {
+                                        const touch = e.touches[0];
+                                        const pos = getMousePos(touch);
+                                        weightX = Math.max(20, Math.min(580, pos.x));
+                                        weightY = Math.max(20, Math.min(380, pos.y));
+                                        draw();
+                                    }
+                                });
+
+                                canvas.addEventListener('touchend', () => isDragging = false);
+
+                                draw();
+                            })();
+                        </script>
+
+                        <!-- Key Properties Summary -->
+                        <h4>✅ Key Properties Summary</h4>
+
+                        <div class="comparison-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Property</th>
+                                        <th>What It Means</th>
+                                        <th>Why It Matters</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Mercer Kernel</strong></td>
+                                        <td>Symmetric, positive semi-definite</td>
+                                        <td>Connects to 50+ years of kernel theory</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Intrinsic Non-linearity</strong></td>
+                                        <td>Non-linear without activation functions</td>
+                                        <td>Simpler architectures, less information loss</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Self-Regularization</strong></td>
+                                        <td>Bounded outputs for bounded inputs</td>
+                                        <td>No need for BatchNorm/LayerNorm</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Stable Gradients</strong></td>
+                                        <td>Gradients vanish for distant inputs</td>
+                                        <td>Natural attention mechanism, stable training</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Universal Approximation</strong></td>
+                                        <td>Can approximate any continuous function</td>
+                                        <td>Equally expressive as traditional networks</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Infinite Differentiability</strong></td>
+                                        <td>Smooth everywhere (C∞)</td>
+                                        <td>Perfect for physics-informed neural networks</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="blog-page-nav">
+                    <a href="07-related-work.html" class="blog-nav-btn">← Previous: Related Work</a>
+                    <a href="../index.html#theory" class="blog-nav-btn">All Topics</a>
+                    <a href="09-experiments.html" class="blog-nav-btn">Next: Experiments →</a>
+                </div>
+            </article>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="yat-symbol">ⵟ</span>
+                    <span>Neural Matter Networks</span>
+                </div>
+                <div class="footer-links">
+                    <a href="https://github.com/mlnomadpy/nmn" target="_blank">GitHub</a>
+                    <a href="https://pypi.org/project/nmn/" target="_blank">PyPI</a>
+                    <a href="mailto:taha@azetta.ai">Contact</a>
+                </div>
+                <div class="footer-copy">
+                    <p>Built with ❤️ by <a href="https://azetta.ai" target="_blank">azetta.ai</a></p>
+                    <p>AGPL-3.0 License</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '$', right: '$', display: false }
+                ]
+            });
+        });
+    </script>
+</body>
+
+</html>

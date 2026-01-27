@@ -1,0 +1,27 @@
+{
+  "id": "layers/yat-nmn",
+  "title": "YatNMN",
+  "description": "A YAT linear transformation applied over the last dimension of the input.",
+  "source": "@site/docs/layers/yat-nmn.md",
+  "sourceDirName": "layers",
+  "slug": "/layers/yat-nmn",
+  "permalink": "/nmn/docs/layers/yat-nmn",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/mlnomadpy/nmn/tree/main/website/docusaurus/docs/layers/yat-nmn.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Quick Start",
+    "permalink": "/nmn/docs/quick-start"
+  },
+  "next": {
+    "title": "YatConv",
+    "permalink": "/nmn/docs/layers/yat-conv"
+  }
+}

@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MNIST Analysis — Neural Matter Networks</title>
+    <meta name="description"
+        content="Deep analysis of NMN prototype learning on MNIST digits, including superposition states and robustness to inversion.">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tifinagh&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/blog-pages.css">
+</head>
+
+<body>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="../index.html" class="nav-logo">
+                <span class="yat-symbol">ⵟ</span>
+                <span>NMN</span>
+            </a>
+            <div class="nav-links">
+                <a href="../index.html#introduction">Introduction</a>
+                <a href="../index.html#yat-product">ⵟ-Product</a>
+                <a href="../index.html#visualizations">Visualizations</a>
+                <a href="../index.html#results">Results</a>
+                <a href="../index.html#theory" class="nav-blog">Blog</a>
+                <a href="../index.html#code">Code</a>
+                <a href="https://github.com/mlnomadpy/nmn" target="_blank" class="nav-github">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path
+                            d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="blog-page">
+        <div class="container">
+            <article class="blog-post">
+                <header class="blog-post-header">
+                    <a href="../index.html#theory" class="blog-back-link">← Back to Theory</a>
+                    <span class="blog-post-badge">Analysis</span>
+                    <h1 class="blog-post-title">MNIST Deep Analysis</h1>
+                </header>
+
+                <div class="blog-post-content">
+
+                    <!-- ELI5 Section -->
+                    <div class="eli5-section">
+                        <div class="eli5-header">
+                            <span class="eli5-icon">🧒</span>
+                            <h4>Explain Like I'm 5</h4>
+                        </div>
+                        <div class="eli5-content">
+                            <p>
+                                Teaching a computer to recognize handwritten numbers is like teaching a friend to spot
+                                your drawing! 🎨
+                            </p>
+                            <ul>
+                                <li>📷 Each number is a picture made of tiny squares (pixels)</li>
+                                <li>🧠 The computer learns a "perfect example" of each digit 0-9</li>
+                                <li>✨ <strong>NMN neurons are special:</strong> They remember the BEST version of each
+                                    number!</li>
+                            </ul>
+                            <p>
+                                Try drawing below — the computer will guess what number you wrote! ✏️
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="theorem-content">
+                        <!-- Interactive Digit Drawing Demo -->
+                        <div class="interactive-demo"
+                            style="margin: 2rem 0; padding: 1.5rem; background: linear-gradient(135deg, rgba(0,100,255,0.1), rgba(0,255,136,0.05)); border-radius: 12px; border: 1px solid rgba(0,255,136,0.2);">
+                            <h5 style="margin-bottom: 1rem; color: var(--terminal-green);">✏️ Draw a Digit (0-9)</h5>
+                            <div
+                                style="display: grid; grid-template-columns: auto 1fr; gap: 1.5rem; align-items: start;">
+                                <div>
+                                    <canvas id="draw-canvas" width="196" height="196"
+                                        style="border: 2px solid var(--terminal-green); border-radius: 8px; cursor: crosshair; background: #000; touch-action: none;"></canvas>
+                                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                                        <button id="clear-btn"
+                                            style="flex: 1; padding: 0.4rem; background: transparent; color: var(--terminal-green); border: 1px solid var(--terminal-green); border-radius: 4px; cursor: pointer; font-size: 0.8rem;">Clear</button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div
+                                        style="font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; margin-bottom: 1rem;">
+                                        <div style="color: var(--text-muted); margin-bottom: 0.5rem;">Predictions
+                                            (simulated NMN):</div>
+                                        <div id="predictions"
+                                            style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem;">
+                                            <!-- Filled by JS -->
+                                        </div>
+                                    </div>
+                                    <div id="result-display"
+                                        style="font-size: 2rem; font-weight: bold; color: var(--terminal-green); text-align: center; padding: 1rem; background: rgba(0,255,136,0.1); border-radius: 8px;">
+                                        Draw a digit!
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <script>
+                            (function () {
+                                const canvas = document.getElementById('draw-canvas');
+                                if (!canvas) return;
+                                const ctx = canvas.getContext('2d');
+                                const predictionsDiv = document.getElementById('predictions');
+                                const resultDiv = document.getElementById('result-display');
+
+                                // Simple digit templates (28x28 reduced patterns)
+                                const templates = {
+                                    0: [[0, 1, 1, 0], [1, 0, 0, 1], [1, 0, 0, 1], [0, 1, 1, 0]],
+                                    1: [[0, 1, 0, 0], [1, 1, 0, 0], [0, 1, 0, 0], [1, 1, 1, 0]],
+                                    2: [[1, 1, 1, 0], [0, 0, 1, 0], [0, 1, 0, 0], [1, 1, 1, 1]],
+                                    3: [[1, 1, 1, 0], [0, 1, 1, 0], [0, 0, 1, 0], [1, 1, 1, 0]],
+                                    4: [[1, 0, 1, 0], [1, 0, 1, 0], [1, 1, 1, 1], [0, 0, 1, 0]],
+                                    5: [[1, 1, 1, 1], [1, 0, 0, 0], [1, 1, 1, 0], [0, 0, 1, 0]],
+                                    6: [[0, 1, 1, 0], [1, 0, 0, 0], [1, 1, 1, 0], [0, 1, 1, 0]],
+                                    7: [[1, 1, 1, 1], [0, 0, 1, 0], [0, 1, 0, 0], [1, 0, 0, 0]],
+                                    8: [[0, 1, 1, 0], [1, 0, 0, 1], [0, 1, 1, 0], [0, 1, 1, 0]],
+                                    9: [[0, 1, 1, 0], [1, 0, 0, 1], [0, 1, 1, 1], [0, 0, 0, 1]]
+                                };
+
+                                let drawing = false;
+                                let lastX, lastY;
+
+                                ctx.fillStyle = '#000';
+                                ctx.fillRect(0, 0, 196, 196);
+
+                                function getPos(e) {
+                                    const rect = canvas.getBoundingClientRect();
+                                    const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+                                    const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+                                    return [x * (196 / rect.width), y * (196 / rect.height)];
+                                }
+
+                                function startDraw(e) {
+                                    e.preventDefault();
+                                    drawing = true;
+                                    [lastX, lastY] = getPos(e);
+                                }
+
+                                function draw(e) {
+                                    if (!drawing) return;
+                                    e.preventDefault();
+                                    const [x, y] = getPos(e);
+                                    ctx.strokeStyle = '#fff';
+                                    ctx.lineWidth = 16;
+                                    ctx.lineCap = 'round';
+                                    ctx.beginPath();
+                                    ctx.moveTo(lastX, lastY);
+                                    ctx.lineTo(x, y);
+                                    ctx.stroke();
+                                    [lastX, lastY] = [x, y];
+                                    predict();
+                                }
+
+                                function endDraw() { drawing = false; }
+
+                                canvas.onmousedown = startDraw;
+                                canvas.onmousemove = draw;
+                                canvas.onmouseup = endDraw;
+                                canvas.onmouseleave = endDraw;
+                                canvas.ontouchstart = startDraw;
+                                canvas.ontouchmove = draw;
+                                canvas.ontouchend = endDraw;
+
+                                document.getElementById('clear-btn').onclick = () => {
+                                    ctx.fillStyle = '#000';
+                                    ctx.fillRect(0, 0, 196, 196);
+                                    resultDiv.textContent = 'Draw a digit!';
+                                    resultDiv.style.color = 'var(--terminal-green)';
+                                    predict();
+                                };
+
+                                function getImageData() {
+                                    const imgData = ctx.getImageData(0, 0, 196, 196);
+                                    const grid = [];
+                                    for (let gy = 0; gy < 4; gy++) {
+                                        const row = [];
+                                        for (let gx = 0; gx < 4; gx++) {
+                                            let sum = 0;
+                                            for (let py = 0; py < 49; py++) {
+                                                for (let px = 0; px < 49; px++) {
+                                                    const idx = ((gy * 49 + py) * 196 + (gx * 49 + px)) * 4;
+                                                    sum += imgData.data[idx];
+                                                }
+                                            }
+                                            row.push(sum / (49 * 49 * 255));
+                                        }
+                                        grid.push(row);
+                                    }
+                                    return grid;
+                                }
+
+                                function yatProduct(a, b) {
+                                    let dot = 0, distSq = 0;
+                                    for (let i = 0; i < 4; i++) {
+                                        for (let j = 0; j < 4; j++) {
+                                            dot += a[i][j] * b[i][j];
+                                            distSq += (a[i][j] - b[i][j]) ** 2;
+                                        }
+                                    }
+                                    return (dot * dot) / (distSq + 0.1);
+                                }
+
+                                function predict() {
+                                    const input = getImageData();
+                                    const scores = {};
+                                    for (let d = 0; d <= 9; d++) {
+                                        scores[d] = yatProduct(templates[d], input);
+                                    }
+
+                                    const maxScore = Math.max(...Object.values(scores));
+                                    const total = Object.values(scores).reduce((a, b) => a + b, 0);
+
+                                    // Create prediction bars
+                                    predictionsDiv.innerHTML = '';
+                                    for (let d = 0; d <= 9; d++) {
+                                        const prob = total > 0 ? scores[d] / total : 0.1;
+                                        const isWinner = scores[d] === maxScore && maxScore > 0.5;
+                                        predictionsDiv.innerHTML += `
+                                        <div style="text-align: center;">
+                                            <div style="font-size: 1.2rem; font-weight: ${isWinner ? 'bold' : 'normal'}; color: ${isWinner ? 'var(--terminal-green)' : '#888'};">${d}</div>
+                                            <div style="height: 40px; background: rgba(255,255,255,0.1); border-radius: 4px; position: relative; overflow: hidden;">
+                                                <div style="position: absolute; bottom: 0; width: 100%; height: ${prob * 100}%; background: ${isWinner ? 'var(--terminal-green)' : '#666'}; border-radius: 4px;"></div>
+                                            </div>
+                                        </div>
+                                    `;
+                                    }
+
+                                    if (maxScore > 0.5) {
+                                        const winner = Object.entries(scores).find(([k, v]) => v === maxScore)[0];
+                                        resultDiv.textContent = `Predicted: ${winner}`;
+                                        resultDiv.style.color = 'var(--terminal-green)';
+                                    } else {
+                                        resultDiv.textContent = 'Keep drawing...';
+                                        resultDiv.style.color = '#888';
+                                    }
+                                }
+
+                                predict();
+                            })();
+                        </script>
+
+                        <h4>🔬 Prototype Learning Analysis</h4>
+                        <p>
+                            When training on MNIST, NMN neurons learn <strong>class prototypes</strong> — idealized
+                            representations of each digit:
+                        </p>
+
+                        <div class="theorem-statement">
+                            <div class="theorem-box">
+                                <strong>Observation:</strong> NMN weight vectors converge to patterns that are:
+                                <ul>
+                                    <li>✅ <strong>Maximally parallel</strong> to their class's data distribution</li>
+                                    <li>✅ <strong>Minimizing distance</strong> to class centroids when possible</li>
+                                    <li>✅ In <strong>superposition states</strong> when class variance is high</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <h4>🌌 Superposition States</h4>
+                        <p>
+                            When minimizing distance becomes challenging (high intra-class variance), NMN prototypes
+                            can exist in a <strong>superposition state</strong>:
+                        </p>
+
+                        <div class="insight-box">
+                            <span class="insight-icon">💡</span>
+                            <div>
+                                <strong>Example:</strong> The digit "1" can be written vertically straight or with a
+                                slant.
+                                Rather than picking one, the NMN prototype learns an "average" direction that
+                                <em>maximizes parallelism with both variants</em>, prioritizing alignment over strict
+                                proximity.
+                            </div>
+                        </div>
+
+                        <h4>🔄 Robustness to Inversion</h4>
+                        <p>
+                            An interesting property: the squared dot product $(w \cdot x)^2$ means that
+                            <strong>inverted inputs get the same response</strong> as originals:
+                        </p>
+
+                        <div class="math-block">
+                            $$\text{ⵟ}(\mathbf{w}, -\mathbf{x}) = \frac{(-\mathbf{w} \cdot \mathbf{x})^2}{\|\mathbf{w} -
+                            (-\mathbf{x})\|^2 + \epsilon} \approx \text{ⵟ}(\mathbf{w}, \mathbf{x})$$
+                        </div>
+
+                        <p>
+                            This provides natural robustness to certain image transformations!
+                        </p>
+
+                        <h4>📊 Representation Quality</h4>
+
+                        <div class="comparison-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Metric</th>
+                                        <th>Linear + ReLU</th>
+                                        <th>NMN Layer</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Class Separability</strong></td>
+                                        <td>Hyperplane boundaries</td>
+                                        <td>Curved vortex boundaries</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Prototype Interpretability</strong></td>
+                                        <td>Abstract directions</td>
+                                        <td>Visible digit templates</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Inversion Robustness</strong></td>
+                                        <td>Not inherent</td>
+                                        <td>Built-in via $(·)^2$</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Decision Geometry</strong></td>
+                                        <td>Linear</td>
+                                        <td>Non-linear, localized</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="blog-page-nav">
+                    <a href="15-design-philosophy.html" class="blog-nav-btn">← Previous: Design Philosophy</a>
+                    <a href="../index.html#theory" class="blog-nav-btn">All Topics</a>
+                    <a href="17-language-experiments.html" class="blog-nav-btn">Next: Language Experiments →</a>
+                </div>
+            </article>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="yat-symbol">ⵟ</span>
+                    <span>Neural Matter Networks</span>
+                </div>
+                <div class="footer-links">
+                    <a href="https://github.com/mlnomadpy/nmn" target="_blank">GitHub</a>
+                    <a href="https://pypi.org/project/nmn/" target="_blank">PyPI</a>
+                    <a href="mailto:taha@azetta.ai">Contact</a>
+                </div>
+                <div class="footer-copy">
+                    <p>Built with ❤️ by <a href="https://azetta.ai" target="_blank">azetta.ai</a></p>
+                    <p>AGPL-3.0 License</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '$', right: '$', display: false }
+                ]
+            });
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,135 @@
+    <div class="blog-modal" id="modal-info">
+        <div class="blog-modal-header">
+            <div class="blog-modal-header-content">
+                <span class="blog-modal-badge">Theorem 5</span>
+                <h2 class="blog-modal-title">Information-Geometric Foundations</h2>
+            </div>
+            <button class="blog-modal-close" onclick="closeModal()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <div class="blog-modal-body">
+            <!-- ELI5 Section -->
+            <div class="eli5-section">
+                <div class="eli5-header">
+                    <span class="eli5-icon">🧒</span>
+                    <h4>Explain Like I'm 5</h4>
+                </div>
+                <div class="eli5-content">
+                    <p>
+                        Imagine you have two ways to measure how "different" two things are:
+                    </p>
+                    <ul>
+                        <li>📏 <strong>Ruler way:</strong> Measure the distance between them (like measuring with a ruler)</li>
+                        <li>📊 <strong>Information way:</strong> Measure how surprised you'd be to see one when expecting the other</li>
+                    </ul>
+                    <p>
+                        The <span class="yat-symbol">ⵟ</span>-product is special because it connects both ways! 
+                        It's like having a <em>magic bridge</em> between measuring distances and measuring information.
+                    </p>
+                    <p>
+                        This means we can use the <span class="yat-symbol">ⵟ</span>-product with information-theoretic 
+                        losses (like KL divergence) and it still makes mathematical sense!
+                    </p>
+                </div>
+            </div>
+
+            <!-- Formal Statement -->
+            <div class="theorem-statement">
+                <div class="theorem-box">
+                    <strong>Theorem:</strong> The <span class="yat-symbol">ⵟ</span>-product exhibits a duality between 
+                    Euclidean geometry and information geometry. Specifically, it can be related to KL divergence 
+                    and entropy-based losses through its kernel structure.
+                </div>
+            </div>
+
+            <div class="theorem-content">
+                <h4>🎯 The Problem This Solves</h4>
+                <p>
+                    Many machine learning tasks use <strong>information-theoretic losses</strong>:
+                </p>
+                <ul>
+                    <li>KL divergence for probabilistic models</li>
+                    <li>Cross-entropy for classification</li>
+                    <li>Mutual information for representation learning</li>
+                </ul>
+                <p>
+                    Traditional neural networks use <em>Euclidean geometry</em> (dot products, distances), which 
+                    doesn't naturally connect to information theory. This theorem bridges that gap.
+                </p>
+
+                <h4>📐 The Mathematics In Depth</h4>
+                <p>
+                    The connection comes from the kernel structure. Since the <span class="yat-symbol">ⵟ</span>-product 
+                    is a Mercer kernel, it defines a Reproducing Kernel Hilbert Space (RKHS). In this space:
+                </p>
+                <div class="math-block">
+                    $$\text{ⵟ}(\mathbf{w}, \mathbf{x}) = \langle \phi(\mathbf{w}), \phi(\mathbf{x}) \rangle_{\mathcal{H}}$$
+                </p>
+                <p>
+                    where $\phi$ maps to the RKHS $\mathcal{H}$.
+                </p>
+                <p>
+                    Information geometry studies probability distributions using the <em>Fisher information metric</em>, 
+                    which can be related to KL divergence. The kernel structure of the <span class="yat-symbol">ⵟ</span>-product 
+                    allows us to interpret it in this framework.
+                </p>
+
+                <h4>💥 The Consequences</h4>
+                <div class="consequences-grid">
+                    <div class="consequence-item">
+                        <span class="consequence-icon">🔗</span>
+                        <h5>Unified Framework</h5>
+                        <p>
+                            The <span class="yat-symbol">ⵟ</span>-product bridges Euclidean geometry (for optimization) 
+                            and information geometry (for probabilistic modeling), creating a unified framework.
+                        </p>
+                    </div>
+                    <div class="consequence-item">
+                        <span class="consequence-icon">📊</span>
+                        <h5>Compatible with Information Losses</h5>
+                        <p>
+                            Can be used with KL divergence, cross-entropy, and other information-theoretic losses 
+                            while maintaining geometric interpretability.
+                        </p>
+                    </div>
+                    <div class="consequence-item">
+                        <span class="consequence-icon">🎯</span>
+                        <h5>Dual Interpretation</h5>
+                        <p>
+                            The same operation can be interpreted as either geometric similarity (Euclidean) or 
+                            information similarity (probabilistic), depending on context.
+                        </p>
+                    </div>
+                    <div class="consequence-item">
+                        <span class="consequence-icon">🔮</span>
+                        <h5>Rich Theoretical Connections</h5>
+                        <p>
+                            Connects to maximum entropy principles, variational inference, and other information-theoretic 
+                            frameworks through the kernel structure.
+                        </p>
+                    </div>
+                </div>
+
+                <h4>🎓 What This Really Means</h4>
+                <p>
+                    This theorem shows that the <span class="yat-symbol">ⵟ</span>-product isn't just a geometric operator — 
+                    it's a <strong>unifying bridge</strong> between two fundamental mathematical frameworks:
+                </p>
+                <ul>
+                    <li><strong>Euclidean geometry:</strong> For optimization, distances, and spatial reasoning</li>
+                    <li><strong>Information geometry:</strong> For probability, entropy, and statistical learning</li>
+                </ul>
+                <p>
+                    This duality means NMNs can seamlessly work with both geometric and probabilistic objectives, 
+                    making them versatile for a wide range of applications.
+                </p>
+            </div>
+        </div>
+        <div class="blog-modal-nav">
+            <button class="blog-modal-nav-btn" onclick="navigateModal('modal-gradient')">← Previous: Stable Gradients</button>
+            <button class="blog-modal-nav-btn" onclick="navigateModal('modal-topology')">Next: Topology →</button>
+        </div>
+    </div>

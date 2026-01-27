@@ -1,0 +1,27 @@
+{
+  "id": "attention/multi-head",
+  "title": "MultiHeadAttention",
+  "description": "Multi-head attention with ⵟ-product query-key similarity.",
+  "source": "@site/docs/attention/multi-head.md",
+  "sourceDirName": "attention",
+  "slug": "/attention/multi-head",
+  "permalink": "/nmn/docs/attention/multi-head",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/mlnomadpy/nmn/tree/main/website/docusaurus/docs/attention/multi-head.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "YatAttention",
+    "permalink": "/nmn/docs/attention/yat-attention"
+  },
+  "next": {
+    "title": "Rotary Position Embeddings",
+    "permalink": "/nmn/docs/attention/rotary"
+  }
+}

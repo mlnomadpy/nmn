@@ -1,0 +1,103 @@
+{
+  "docusaurus-plugin-content-docs": {
+    "default": {
+      "path": "/nmn/docs",
+      "versions": [
+        {
+          "name": "current",
+          "label": "Next",
+          "isLast": true,
+          "path": "/nmn/docs",
+          "mainDocId": "intro",
+          "docs": [
+            {
+              "id": "attention/multi-head",
+              "path": "/nmn/docs/attention/multi-head",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "attention/rotary",
+              "path": "/nmn/docs/attention/rotary",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "attention/yat-attention",
+              "path": "/nmn/docs/attention/yat-attention",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "examples/cifar10",
+              "path": "/nmn/docs/examples/cifar10",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "examples/mnist",
+              "path": "/nmn/docs/examples/mnist",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "examples/transformer",
+              "path": "/nmn/docs/examples/transformer",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "installation",
+              "path": "/nmn/docs/installation",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "intro",
+              "path": "/nmn/docs/intro",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "layers/yat-conv",
+              "path": "/nmn/docs/layers/yat-conv",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "layers/yat-conv-transpose",
+              "path": "/nmn/docs/layers/yat-conv-transpose",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "layers/yat-nmn",
+              "path": "/nmn/docs/layers/yat-nmn",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "quick-start",
+              "path": "/nmn/docs/quick-start",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "rnn/gru",
+              "path": "/nmn/docs/rnn/gru",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "rnn/lstm",
+              "path": "/nmn/docs/rnn/lstm",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "rnn/simple",
+              "path": "/nmn/docs/rnn/simple",
+              "sidebar": "tutorialSidebar"
+            }
+          ],
+          "draftIds": [],
+          "sidebars": {
+            "tutorialSidebar": {
+              "link": {
+                "path": "/nmn/docs/intro",
+                "label": "intro"
+              }
+            }
+          }
+        }
+      ],
+      "breadcrumbs": true
+    }
+  }
+}

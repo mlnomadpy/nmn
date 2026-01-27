@@ -1,0 +1,27 @@
+{
+  "id": "examples/mnist",
+  "title": "MNIST Classification",
+  "description": "A complete example of training an NMN classifier on MNIST.",
+  "source": "@site/docs/examples/mnist.md",
+  "sourceDirName": "examples",
+  "slug": "/examples/mnist",
+  "permalink": "/nmn/docs/examples/mnist",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/mlnomadpy/nmn/tree/main/website/docusaurus/docs/examples/mnist.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "SimpleRNN",
+    "permalink": "/nmn/docs/rnn/simple"
+  },
+  "next": {
+    "title": "CIFAR-10 Classification",
+    "permalink": "/nmn/docs/examples/cifar10"
+  }
+}

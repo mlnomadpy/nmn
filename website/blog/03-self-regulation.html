@@ -1,0 +1,139 @@
+    <div class="blog-modal" id="modal-regulation">
+        <div class="blog-modal-header">
+            <div class="blog-modal-header-content">
+                <span class="blog-modal-badge">Theorem 3</span>
+                <h2 class="blog-modal-title">Self-Regulation & Bounded Outputs</h2>
+            </div>
+            <button class="blog-modal-close" onclick="closeModal()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <div class="blog-modal-body">
+            <!-- ELI5 Section -->
+            <div class="eli5-section">
+                <div class="eli5-header">
+                    <span class="eli5-icon">🧒</span>
+                    <h4>Explain Like I'm 5</h4>
+                </div>
+                <div class="eli5-content">
+                    <p>
+                        Imagine you have a volume knob that can go from 0 to 100. If you turn it all the way up, 
+                        it might break your speakers! But what if the knob had a <strong>safety limit</strong> that 
+                        prevents it from going too loud?
+                    </p>
+                    <p>
+                        The <span class="yat-symbol">ⵟ</span>-product is like that safe volume knob. Even if you 
+                        give it really big numbers, it <strong>automatically limits itself</strong> and never explodes. 
+                        It's self-regulating!
+                    </p>
+                    <p>
+                        This means we don't need extra "safety equipment" (like normalization layers) — 
+                        the <span class="yat-symbol">ⵟ</span>-product is already safe by design.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Formal Statement -->
+            <div class="theorem-statement">
+                <div class="theorem-box">
+                    <strong>Proposition:</strong> For any fixed weight vector $\mathbf{w}$, the <span class="yat-symbol">ⵟ</span>-product output 
+                    remains bounded and converges as $\|\mathbf{x}\| \to \infty$:
+                    $$\lim_{\|\mathbf{x}\| \to \infty} \text{ⵟ}(\mathbf{w}, \mathbf{x}) = \|\mathbf{w}\|^2 \cos^2\theta$$
+                    where $\theta$ is the angle between $\mathbf{w}$ and the direction of $\mathbf{x}$.
+                </div>
+            </div>
+
+            <div class="theorem-content">
+                <h4>🎯 The Problem This Solves</h4>
+                <p>
+                    Traditional neural networks suffer from <strong>unbounded growth</strong>:
+                </p>
+                <ul>
+                    <li><strong>ReLU:</strong> Output grows linearly with input magnitude — can explode with outliers</li>
+                    <li><strong>Dot products:</strong> Scale linearly with dimension — requires careful initialization</li>
+                    <li><strong>Internal Covariate Shift:</strong> Activation statistics change during training, requiring normalization</li>
+                </ul>
+                <p>
+                    The <span class="yat-symbol">ⵟ</span>-product solves all three problems <em>naturally</em>, without explicit normalization.
+                </p>
+
+                <h4>📐 The Mathematics In Depth</h4>
+                <p>
+                    As $\|\mathbf{x}\| \to \infty$, we can write $\mathbf{x} = k \mathbf{u}$ where $k = \|\mathbf{x}\|$ 
+                    and $\mathbf{u}$ is a unit vector. Then:
+                </p>
+                <div class="math-block">
+                    $$\text{ⵟ}(\mathbf{w}, \mathbf{x}) = \frac{(\mathbf{w}^\top k\mathbf{u})^2}{\|k\mathbf{u} - \mathbf{w}\|^2 + \varepsilon} = \frac{k^2 (\mathbf{w}^\top\mathbf{u})^2}{k^2 - 2k(\mathbf{w}^\top\mathbf{u}) + \|\mathbf{w}\|^2 + \varepsilon}$$
+                </div>
+                <p>
+                    Dividing numerator and denominator by $k^2$ and taking the limit:
+                </p>
+                <div class="math-block">
+                    $$\lim_{k \to \infty} \text{ⵟ}(\mathbf{w}, k\mathbf{u}) = \frac{(\mathbf{w}^\top\mathbf{u})^2}{1} = \|\mathbf{w}\|^2 \cos^2\theta$$
+                </div>
+                <p>
+                    where $\cos\theta = \frac{\mathbf{w}^\top\mathbf{u}}{\|\mathbf{w}\|}$ is the cosine of the angle between $\mathbf{w}$ and $\mathbf{u}$.
+                </p>
+
+                <h4>💥 The Consequences</h4>
+                <div class="consequences-grid">
+                    <div class="consequence-item">
+                        <span class="consequence-icon">📉</span>
+                        <h5>No Exploding Activations</h5>
+                        <p>
+                            Outliers don't cause numerical instabilities. The output is bounded by $\|\mathbf{w}\|^2$, 
+                            regardless of input magnitude.
+                        </p>
+                    </div>
+                    <div class="consequence-item">
+                        <span class="consequence-icon">🎯</span>
+                        <h5>Dimensional Self-Normalization</h5>
+                        <p>
+                            At initialization, both numerator and denominator scale as $\mathcal{O}(d)$, so their ratio 
+                            remains $\mathcal{O}(1)$. No need for Xavier/He initialization!
+                        </p>
+                    </div>
+                    <div class="consequence-item">
+                        <span class="consequence-icon">🔄</span>
+                        <h5>Mitigates Internal Covariate Shift</h5>
+                        <p>
+                            As inputs grow large, activation statistics depend only on angular distribution, not magnitude. 
+                            This naturally mitigates the covariate shift problem.
+                        </p>
+                    </div>
+                    <div class="consequence-item">
+                        <span class="consequence-icon">💾</span>
+                        <h5>Memory Efficiency</h5>
+                        <p>
+                            15-25% reduction in memory from eliminating normalization layers (BatchNorm, LayerNorm). 
+                            Simpler, faster training.
+                        </p>
+                    </div>
+                </div>
+
+                <h4>🎓 What This Really Means</h4>
+                <p>
+                    This proposition shows that the <span class="yat-symbol">ⵟ</span>-product has <strong>built-in stability</strong>. 
+                    Unlike ReLU or linear layers, it doesn't need external mechanisms to prevent numerical issues.
+                </p>
+                <p>
+                    This is a <em>geometric property</em> — the inverse-square law in the denominator naturally creates 
+                    a "safety valve" that prevents unbounded growth.
+                </p>
+
+                <div class="insight-box">
+                    <span class="insight-icon">⚡</span>
+                    <div>
+                        <strong>Practical Impact:</strong> No gradient explosion from large inputs. 
+                        No need for gradient clipping in most cases. Simpler, more stable training dynamics.
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="blog-modal-nav">
+            <button class="blog-modal-nav-btn" onclick="navigateModal('modal-uat')">← Previous: Universal Approximation</button>
+            <button class="blog-modal-nav-btn" onclick="navigateModal('modal-gradient')">Next: Stable Gradients →</button>
+        </div>
+    </div>

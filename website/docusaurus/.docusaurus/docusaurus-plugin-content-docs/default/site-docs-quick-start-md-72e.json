@@ -1,0 +1,27 @@
+{
+  "id": "quick-start",
+  "title": "Quick Start",
+  "description": "Build your first Neural Matter Network in minutes.",
+  "source": "@site/docs/quick-start.md",
+  "sourceDirName": ".",
+  "slug": "/quick-start",
+  "permalink": "/nmn/docs/quick-start",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/mlnomadpy/nmn/tree/main/website/docusaurus/docs/quick-start.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 3,
+  "frontMatter": {
+    "sidebar_position": 3
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Installation",
+    "permalink": "/nmn/docs/installation"
+  },
+  "next": {
+    "title": "YatNMN",
+    "permalink": "/nmn/docs/layers/yat-nmn"
+  }
+}

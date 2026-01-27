@@ -1,0 +1,27 @@
+{
+  "id": "rnn/simple",
+  "title": "SimpleRNN",
+  "description": "Basic recurrent neural network with ⵟ-product.",
+  "source": "@site/docs/rnn/simple.md",
+  "sourceDirName": "rnn",
+  "slug": "/rnn/simple",
+  "permalink": "/nmn/docs/rnn/simple",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/mlnomadpy/nmn/tree/main/website/docusaurus/docs/rnn/simple.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 3,
+  "frontMatter": {
+    "sidebar_position": 3
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "YatGRU",
+    "permalink": "/nmn/docs/rnn/gru"
+  },
+  "next": {
+    "title": "MNIST Classification",
+    "permalink": "/nmn/docs/examples/mnist"
+  }
+}

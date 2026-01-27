@@ -1,0 +1,135 @@
+<section id="visualizations" class="section">
+        <div class="container">
+            <h2 class="section-title">Interactive Visualizations</h2>
+            <p class="section-subtitle">Explore how the <span class="yat-symbol">ⵟ</span>-product differs from traditional similarity measures</p>
+            
+            <!-- Heatmap Comparison -->
+            <div class="viz-block">
+                <h3 class="viz-title">Similarity Measure Comparison</h3>
+                <p class="viz-desc">Drag the anchor point (⭐) to see how each measure responds. Notice how the <span class="yat-symbol">ⵟ</span>-product creates a localized potential well.</p>
+                <div class="heatmap-controls">
+                    <label>
+                        Anchor W: 
+                        <span id="anchor-display">(3.0, 4.0)</span>
+                    </label>
+                    <label>
+                        ε: <input type="range" id="epsilon-slider" min="-4" max="2" step="0.1" value="0">
+                        <span id="epsilon-display">1.0</span>
+                    </label>
+                </div>
+                <div class="heatmap-grid" id="heatmap-container">
+                    <div class="heatmap-item">
+                        <canvas id="heatmap-dot" width="300" height="300"></canvas>
+                        <div class="heatmap-label">Dot Product</div>
+                        <div class="heatmap-formula">w · x</div>
+                    </div>
+                    <div class="heatmap-item">
+                        <canvas id="heatmap-euclidean" width="300" height="300"></canvas>
+                        <div class="heatmap-label">Euclidean Distance²</div>
+                        <div class="heatmap-formula">‖w − x‖²</div>
+                    </div>
+                    <div class="heatmap-item">
+                        <canvas id="heatmap-yat" width="300" height="300"></canvas>
+                        <div class="heatmap-label"><span class="yat-symbol">ⵟ</span>-Product</div>
+                        <div class="heatmap-formula">(w·x)² / (‖w−x‖² + ε)</div>
+                    </div>
+                    <div class="heatmap-item">
+                        <canvas id="heatmap-cosine" width="300" height="300"></canvas>
+                        <div class="heatmap-label">Cosine Similarity</div>
+                        <div class="heatmap-formula">w·x / (‖w‖‖x‖)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gradient Field -->
+            <div class="viz-block">
+                <h3 class="viz-title">Gradient Vector Fields</h3>
+                <p class="viz-desc">The gradient fields reveal optimization dynamics. The <span class="yat-symbol">ⵟ</span>-product creates a vortex-like attractor around the weight vector.</p>
+                <div class="gradient-grid" id="gradient-container">
+                    <div class="gradient-item">
+                        <canvas id="gradient-dot" width="300" height="300"></canvas>
+                        <div class="heatmap-label">Dot Product ∇</div>
+                    </div>
+                    <div class="gradient-item">
+                        <canvas id="gradient-euclidean" width="300" height="300"></canvas>
+                        <div class="heatmap-label">Euclidean ∇</div>
+                    </div>
+                    <div class="gradient-item">
+                        <canvas id="gradient-yat" width="300" height="300"></canvas>
+                        <div class="heatmap-label"><span class="yat-symbol">ⵟ</span>-Product ∇</div>
+                    </div>
+                    <div class="gradient-item">
+                        <canvas id="gradient-cosine" width="300" height="300"></canvas>
+                        <div class="heatmap-label">Cosine ∇</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- XOR Demo -->
+            <div class="viz-block">
+                <h3 class="viz-title">XOR Problem: Single Neuron Solution</h3>
+                <p class="viz-desc">The classic XOR problem cannot be solved by a single linear neuron. The <span class="yat-symbol">ⵟ</span>-product's intrinsic non-linearity enables a single unit to solve it.</p>
+                <div class="xor-demo-container">
+                    <div class="xor-panel">
+                        <h4>Linear Neuron</h4>
+                        <canvas id="xor-linear" width="350" height="350"></canvas>
+                        <p class="xor-result xor-fail">Cannot separate XOR</p>
+                    </div>
+                    <div class="xor-panel">
+                        <h4><span class="yat-symbol">ⵟ</span>-Product Neuron</h4>
+                        <canvas id="xor-yat" width="350" height="350"></canvas>
+                        <p class="xor-result xor-success">Solves XOR with w = [1, -1]</p>
+                    </div>
+                </div>
+                <div class="xor-explanation">
+                    <div class="xor-table">
+                        <table>
+                            <thead>
+                                <tr><th>Input x</th><th>XOR Output</th><th>w·x</th><th><span class="yat-symbol">ⵟ</span>(w,x)</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>(0,0)</td><td>0</td><td>0</td><td class="highlight-zero">0</td></tr>
+                                <tr><td>(0,1)</td><td>1</td><td>-1</td><td class="highlight-positive">>0</td></tr>
+                                <tr><td>(1,0)</td><td>1</td><td>1</td><td class="highlight-positive">>0</td></tr>
+                                <tr><td>(1,1)</td><td>0</td><td>0</td><td class="highlight-zero">0</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Decision Boundaries -->
+            <div class="viz-block">
+                <h3 class="viz-title">Decision Boundary Comparison</h3>
+                <p class="viz-desc">Linear neurons create hyperplane boundaries. <span class="yat-symbol">ⵟ</span>-product neurons create vortex-like territorial fields around learned prototypes.</p>
+                <div class="boundary-demo-container">
+                    <div class="boundary-panel">
+                        <h4>Linear Model Boundaries</h4>
+                        <canvas id="boundary-linear" width="400" height="400"></canvas>
+                        <p class="boundary-desc">Unbounded half-space partitions</p>
+                    </div>
+                    <div class="boundary-panel">
+                        <h4><span class="yat-symbol">ⵟ</span>-Product Boundaries</h4>
+                        <canvas id="boundary-yat" width="400" height="400"></canvas>
+                        <p class="boundary-desc">Localized vortex territories</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3D Loss Landscape -->
+            <div class="viz-block">
+                <h3 class="viz-title">Loss Landscape Comparison</h3>
+                <p class="viz-desc">The optimization landscape for the XOR problem. Dot product has a spurious minimum; <span class="yat-symbol">ⵟ</span>-product creates exploitable valleys.</p>
+                <div class="loss-landscape-container">
+                    <div class="loss-panel">
+                        <h4>Dot Product + Sigmoid</h4>
+                        <div id="loss-3d-dot" class="loss-3d-canvas"></div>
+                    </div>
+                    <div class="loss-panel">
+                        <h4><span class="yat-symbol">ⵟ</span>-Product</h4>
+                        <div id="loss-3d-yat" class="loss-3d-canvas"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>

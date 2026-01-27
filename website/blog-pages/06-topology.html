@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Topological Organization: Neural Fiber Bundles — Neural Matter Networks</title>
+    <meta name="description"
+        content="The ⵟ-product: A kernel-based activation-free neural network architecture that unifies alignment and proximity for geometrically-aware computation.">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tifinagh&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Three.js for 3D -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/blog-pages.css">
+</head>
+
+<body>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="#" class="nav-logo">
+                <span class="yat-symbol">ⵟ</span>
+                <span>NMN</span>
+            </a>
+            <div class="nav-links">
+                <a href="#introduction">Introduction</a>
+                <a href="#yat-product">ⵟ-Product</a>
+                <a href="#visualizations">Visualizations</a>
+                <a href="#results">Results</a>
+                <a href="#theory" class="nav-blog">Blog</a>
+                <a href="#code">Code</a>
+                <a href="https://github.com/mlnomadpy/nmn" target="_blank" class="nav-github">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path
+                            d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Blog Post Page -->
+    <main class="blog-page">
+        <div class="container">
+            <article class="blog-post">
+                <header class="blog-post-header">
+                    <a href="index.html#theory" class="blog-back-link">← Back to Theory</a>
+                    <span class="blog-post-badge">Theorem 6</span>
+                    <h1 class="blog-post-title">Topological Organization: Neural Fiber Bundles</h1>
+                </header>
+
+                <div class="blog-post-content">
+
+                    <!-- ELI5 Section -->
+                    <div class="eli5-section">
+                        <div class="eli5-header">
+                            <span class="eli5-icon">🧒</span>
+                            <h4>Explain Like I'm 5</h4>
+                        </div>
+                        <div class="eli5-content">
+                            <p>
+                                Imagine you're organizing your toys. You could put them in boxes with straight lines
+                                dividing them
+                                (like a grid), but that's boring and doesn't match how toys naturally group together.
+                            </p>
+                            <p>
+                                Instead, imagine each toy has a <strong>magnetic field</strong> around it that attracts
+                                similar toys.
+                                These fields create <em>swirling, vortex-like</em> territories where similar toys
+                                naturally gather.
+                            </p>
+                            <p>
+                                The <span class="yat-symbol">ⵟ</span>-product creates these "vortex territories"! Each
+                                neuron
+                                creates a swirling field around its weight vector, and inputs are classified based on
+                                which
+                                territory they fall into. It's like having <strong>smart, organic boundaries</strong>
+                                instead
+                                of boring straight lines.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Formal Statement -->
+                    <div class="theorem-statement">
+                        <div class="theorem-box">
+                            <strong>Theorem:</strong> <span class="yat-symbol">ⵟ</span>-product classification creates a
+                            <em>fiber bundle</em> structure over the input space, where each neuron defines a "fiber"
+                            (territory)
+                            with vortex-like boundaries. The decision boundaries are smooth, localized, and
+                            topologically organized.
+                        </div>
+                    </div>
+
+                    <div class="theorem-content">
+                        <h4>🎯 The Problem This Solves</h4>
+                        <p>
+                            Traditional linear models create <strong>unbounded, half-space partitions</strong>:
+                        </p>
+                        <ul>
+                            <li>Decision boundaries are hyperplanes (straight lines/planes)</li>
+                            <li>Each class occupies an unbounded region</li>
+                            <li>No natural "territories" or localization</li>
+                        </ul>
+                        <p>
+                            The <span class="yat-symbol">ⵟ</span>-product creates <strong>localized, vortex-like
+                                territories</strong>
+                            with smooth, organic boundaries that better match natural data distributions.
+                        </p>
+
+                        <h4>📐 The Mathematics In Depth</h4>
+                        <p>
+                            In a classification setting with $K$ classes, we have $K$ weight vectors $\{\mathbf{w}_1,
+                            ..., \mathbf{w}_K\}$.
+                            The decision rule is:
+                        </p>
+                        <div class="math-block">
+                            $$\text{class}(\mathbf{x}) = \arg\max_k \text{ⵟ}(\mathbf{w}_k, \mathbf{x})$$
+                        </div>
+                        <p>
+                            This creates a <em>Voronoi-like</em> partition, but with smooth, curved boundaries instead
+                            of straight lines.
+                            Each region is:
+                        </p>
+                        <ul>
+                            <li><strong>Localized:</strong> Bounded around the weight vector (due to inverse-square
+                                decay)</li>
+                            <li><strong>Smooth:</strong> Infinitely differentiable boundaries (due to C∞ property)</li>
+                            <li><strong>Vortex-like:</strong> Creates swirling patterns due to the interaction of
+                                alignment and proximity</li>
+                        </ul>
+                        <p>
+                            The <em>fiber bundle</em> structure comes from viewing each class as a "fiber" over the
+                            input space,
+                            with the <span class="yat-symbol">ⵟ</span>-product defining the connection.
+                        </p>
+
+                        <h4>💥 The Consequences</h4>
+                        <div class="consequences-grid">
+                            <div class="consequence-item">
+                                <span class="consequence-icon">🌀</span>
+                                <h5>Vortex Territories</h5>
+                                <p>
+                                    Each neuron creates a localized "vortex" territory around its weight vector, with
+                                    smooth,
+                                    curved boundaries that naturally adapt to data distribution.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">📐</span>
+                                <h5>Geometric Interpretability</h5>
+                                <p>
+                                    The weight vectors act as "prototypes" or "centers" of their territories, making the
+                                    learned representations geometrically interpretable.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">🎯</span>
+                                <h5>Better Generalization</h5>
+                                <p>
+                                    Localized territories prevent overfitting to distant outliers and create more robust
+                                    decision boundaries that generalize better.
+                                </p>
+                            </div>
+                            <div class="consequence-item">
+                                <span class="consequence-icon">🔬</span>
+                                <h5>Topological Insights</h5>
+                                <p>
+                                    The fiber bundle structure provides a rich mathematical framework for understanding
+                                    how NMNs organize and partition the input space.
+                                </p>
+                            </div>
+                        </div>
+
+                        <h4>🎓 What This Really Means</h4>
+                        <p>
+                            This theorem reveals the <strong>geometric organization</strong> of NMNs. Unlike linear
+                            models
+                            that create arbitrary half-spaces, <span class="yat-symbol">ⵟ</span>-product neurons create
+                            <em>natural territories</em> — regions of space that "belong" to each neuron.
+                        </p>
+                        <p>
+                            This organization is:
+                        </p>
+                        <ul>
+                            <li><strong>Localized:</strong> Each territory is bounded and centered around a prototype
+                            </li>
+                            <li><strong>Smooth:</strong> Boundaries are infinitely differentiable, creating organic
+                                shapes</li>
+                            <li><strong>Interpretable:</strong> Weight vectors directly represent the "center" of each
+                                territory</li>
+                            <li><strong>Topologically Rich:</strong> The fiber bundle structure provides deep
+                                mathematical insights</li>
+                        </ul>
+                        <p>
+                            This is why NMNs learn <strong>sharp, coherent prototypes</strong> (as seen in MNIST
+                            experiments)
+                            rather than diffuse, blurry representations — each neuron naturally organizes into a
+                            well-defined territory.
+                        </p>
+                    </div>
+
+                </div>
+
+                <div class="blog-page-nav"><a href="05-information-theory.html" class="blog-nav-btn">← Previous:
+                        Information-Geometric Foundations</a><a href="index.html#theory" class="blog-nav-btn">All
+                        Theorems</a><a href="index.html#theory" class="blog-nav-btn">Back to Theory →</a></div>
+            </article>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="yat-symbol">ⵟ</span>
+                    <span>Neural Matter Networks</span>
+                </div>
+                <div class="footer-links">
+                    <a href="https://github.com/mlnomadpy/nmn" target="_blank">GitHub</a>
+                    <a href="https://pypi.org/project/nmn/" target="_blank">PyPI</a>
+                    <a href="mailto:taha@azetta.ai">Contact</a>
+                </div>
+                <div class="footer-copy">
+                    <p>Built with ❤️ by <a href="https://azetta.ai" target="_blank">azetta.ai</a></p>
+                    <p>AGPL-3.0 License</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '$', right: '$', display: false }
+                ]
+            });
+        });
+    </script>
+</body>
+
+</html>

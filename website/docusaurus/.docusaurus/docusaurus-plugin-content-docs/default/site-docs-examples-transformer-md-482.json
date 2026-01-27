@@ -1,0 +1,23 @@
+{
+  "id": "examples/transformer",
+  "title": "Transformer Example",
+  "description": "Building a transformer with YatAttention.",
+  "source": "@site/docs/examples/transformer.md",
+  "sourceDirName": "examples",
+  "slug": "/examples/transformer",
+  "permalink": "/nmn/docs/examples/transformer",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/mlnomadpy/nmn/tree/main/website/docusaurus/docs/examples/transformer.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 3,
+  "frontMatter": {
+    "sidebar_position": 3
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "CIFAR-10 Classification",
+    "permalink": "/nmn/docs/examples/cifar10"
+  }
+}
