@@ -102,6 +102,7 @@ class YatNMN(Module):
     dot_general: DotGeneralT = lax.dot_general,
     promote_dtype: PromoteDtypeFn = dtypes.promote_dtype,
     epsilon: float = 1e-5,
+    spherical: bool = False,
     drop_rate: float = 0.0,
     rngs: rnglib.Rngs,
   ):
@@ -161,6 +162,7 @@ class YatNMN(Module):
     self.dot_general = dot_general
     self.promote_dtype = promote_dtype
     self.epsilon = epsilon
+    self.spherical = spherical
     self.drop_rate = drop_rate
 
     if use_dropconnect:
@@ -196,6 +198,10 @@ class YatNMN(Module):
       mask = jax.random.bernoulli(self.dropconnect_key, p=keep_prob, shape=kernel.shape)
       kernel = (kernel * mask) / keep_prob
 
+    if self.spherical:
+       inputs = inputs / jnp.linalg.norm(inputs, axis=-1, keepdims=True)
+       kernel = kernel / jnp.linalg.norm(kernel, axis=0, keepdims=True)
+
     inputs, kernel, bias, alpha = self.promote_dtype(
       (inputs, kernel, bias, alpha), dtype=self.dtype
     )
@@ -208,17 +214,22 @@ class YatNMN(Module):
       precision=self.precision,
     )
 
-    # Compute squared Euclidean distance: ||x||² + ||W||² - 2(x · W)
-    inputs_squared_sum = jnp.sum(inputs**2, axis=-1, keepdims=True)
-    kernel_squared_sum = jnp.sum(kernel**2, axis=0, keepdims=True)
-    distances = inputs_squared_sum + kernel_squared_sum - 2 * y
-
-    # YAT operation: (x · W)² / (||x - W||² + ε)
-    y = y ** 2 / (distances + self.epsilon)
+    if self.spherical:
+      # Spherical YAT: inputs and kernel are normalized
+      # distances = ||x||² + ||W||² - 2(x · W) = 1 + 1 - 2(x · W) = 2 - 2(x · W)
+      distances = 2 - 2 * y
+    else:
+      # Compute squared Euclidean distance: ||x||² + ||W||² - 2(x · W)
+      inputs_squared_sum = jnp.sum(inputs**2, axis=-1, keepdims=True)
+      kernel_squared_sum = jnp.sum(kernel**2, axis=0, keepdims=True)
+      distances = inputs_squared_sum + kernel_squared_sum - 2 * y
 
     # Add bias
     if bias is not None:
       y += jnp.reshape(bias, (1,) * (y.ndim - 1) + (-1,))
+
+    # YAT operation: (x · W)² / (||x - W||² + ε)
+    y = y ** 2 / (distances + self.epsilon)
 
     # Apply alpha scaling
     if alpha is not None:
