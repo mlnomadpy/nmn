@@ -140,6 +140,12 @@ class YatNMN(tf.Module):
 
         distances = inputs_squared_sum + kernel_squared_sum - 2 * y
 
+        # Add bias if used
+        if self.use_bias:
+            # Reshape bias for proper broadcasting
+            bias_shape = [1] * (len(y.shape) - 1) + [-1]
+            y = y + tf.reshape(self.bias, bias_shape)
+
         # Apply the transformation
         y = tf.square(y) / (distances + self.epsilon)
 
@@ -153,11 +159,6 @@ class YatNMN(tf.Module):
         )
         y = y * scale
 
-        # Add bias if used
-        if self.use_bias:
-            # Reshape bias for proper broadcasting
-            bias_shape = [1] * (len(y.shape) - 1) + [-1]
-            y = y + tf.reshape(self.bias, bias_shape)
 
         if self.return_weights:
             return y, self.kernel

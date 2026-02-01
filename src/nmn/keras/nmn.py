@@ -115,10 +115,11 @@ class YatNMN(Layer):
         kernel_squared_sum = ops.sum(self.kernel ** 2, axis=0)
         distances = inputs_squared_sum + kernel_squared_sum - 2 * dot_product
 
+        if self.use_bias:
+            dot_product = ops.add(dot_product, self.bias)
+
         # Compute inverse square attention
         outputs = dot_product ** 2 / (distances + self.epsilon)
-        if self.use_bias:
-            outputs = ops.add(outputs, self.bias)
 
         # Apply dynamic scaling
         scale = (ops.sqrt(ops.cast(self.units, self.compute_dtype)) /
