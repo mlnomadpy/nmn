@@ -642,6 +642,8 @@ def main():
                 
                 # Switch to SGD
                 optimizer = torch.optim.SGD(model.parameters(), lr=current_lr, momentum=0.9)
+                # Necessary for CosineAnnealingLR to resume correctly with last_epoch != -1
+                optimizer.param_groups[0]['initial_lr'] = args.lr
                 
                 # Re-create scheduler for the new optimizer, attempting to preserve schedule
                 # Assuming CosineAnnealingLR for simplicity as it's the main usage
