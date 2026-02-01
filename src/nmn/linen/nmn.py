@@ -97,10 +97,10 @@ class YatNMN(Module):
         kernel_squared_sum = jnp.sum(kernel**2, axis=-1)
         distances = inputs_squared_sum + kernel_squared_sum - 2 * y
 
-        # # Element-wise operation
-        y = y ** 2 /  (distances + self.epsilon)
         if bias is not None:
             y += jnp.reshape(bias, (1,) * (y.ndim - 1) + (-1,))
+        # # Element-wise operation
+        y = y ** 2 /  (distances + self.epsilon)
 
         if alpha is not None:
           scale = (jnp.sqrt(self.features) / jnp.log(1 + self.features)) ** alpha
