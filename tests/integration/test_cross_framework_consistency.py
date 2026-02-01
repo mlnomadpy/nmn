@@ -211,12 +211,13 @@ def run_numpy_yat(inputs: np.ndarray, weights: np.ndarray,
     # Squared distance
     distance_sq = inputs_sq_sum + weights_sq_sum - 2 * dot_prod
     
-    # YAT transformation
-    y = dot_prod**2 / (distance_sq + epsilon)
-    
     # Bias
     if bias is not None:
         y = y + bias
+
+    # YAT transformation
+    y = dot_prod**2 / (distance_sq + epsilon)
+    
     
     # Alpha scaling
     if alpha is not None:
