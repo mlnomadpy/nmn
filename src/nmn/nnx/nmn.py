@@ -23,7 +23,7 @@ Axis = int
 Size = int
 
 
-default_kernel_init = initializers.lecun_normal()
+default_kernel_init = initializers.xavier_normal()
 default_bias_init = initializers.zeros_init()
 default_alpha_init = initializers.ones_init()
 
@@ -34,7 +34,7 @@ class YatNMN(Module):
     y = (x · W)² / (||x - W||² + ε)
 
   With optional scaling:
-    y = y * scale, where scale = (sqrt(out_features) / log(1 + out_features))^alpha
+    y = y * alpha (learnable) or y = y * sqrt(2) (constant)
 
   Example usage::
 
@@ -92,6 +92,7 @@ class YatNMN(Module):
     use_bias: bool = True,
     use_alpha: bool = True,
     constant_alpha: tp.Optional[tp.Union[bool, float]] = None,
+    positive_init: bool = False,
     use_dropconnect: bool = False,
     dtype: tp.Optional[Dtype] = None,
     param_dtype: Dtype = jnp.float32,
@@ -108,9 +109,10 @@ class YatNMN(Module):
   ):
 
     kernel_key = rngs.params()
-    self.kernel = nnx.Param(
-      kernel_init(kernel_key, (in_features, out_features), param_dtype)
-    )
+    kernel_val = kernel_init(kernel_key, (in_features, out_features), param_dtype)
+    if positive_init:
+      kernel_val = jnp.abs(kernel_val)
+    self.kernel = nnx.Param(kernel_val)
     self.bias: nnx.Param[jax.Array] | None
     if use_bias:
       bias_key = rngs.params()
@@ -236,7 +238,7 @@ class YatNMN(Module):
       # Constant alpha: use directly as the scale factor (e.g. sqrt(2))
       y = y * self._constant_alpha_value
     elif alpha is not None:
-      scale = (jnp.sqrt(self.out_features) / jnp.log(1 + self.out_features)) ** alpha
-      y = y * scale
+      # Simple learnable alpha scaling
+      y = y * alpha
 
     return y

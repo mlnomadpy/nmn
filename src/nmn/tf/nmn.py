@@ -3,6 +3,8 @@ import math
 from typing import Optional, Any, Tuple, Union, List, Callable
 import numpy as np
 
+# Default constant alpha value (sqrt(2))
+DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
 def create_orthogonal_matrix(shape: Tuple[int, ...], dtype: tf.DType = tf.float32) -> tf.Tensor:
     """Creates an orthogonal matrix using the standard approach for rectangular matrices."""
     num_rows, num_cols = shape
@@ -42,8 +44,11 @@ class YatNMN(tf.Module):
         self,
         features: int,
         use_bias: bool = True,
+        use_alpha: bool = True,
+        constant_alpha: Optional[Union[bool, float]] = None,
+        positive_init: bool = False,
         dtype: tf.DType = tf.float32,
-        epsilon: float = 1e-6,
+        epsilon: float = 1e-5,
         return_weights: bool = False,
         name: Optional[str] = None
     ):
@@ -53,6 +58,18 @@ class YatNMN(tf.Module):
         self.dtype = dtype
         self.epsilon = epsilon
         self.return_weights = return_weights
+        self.positive_init = positive_init
+
+        # Handle alpha configuration
+        self._constant_alpha_value = None
+        if constant_alpha is not None:
+            if constant_alpha is True:
+                self._constant_alpha_value = DEFAULT_CONSTANT_ALPHA
+            else:
+                self._constant_alpha_value = float(constant_alpha)
+            use_alpha = True
+        self.use_alpha = use_alpha
+        self.constant_alpha = constant_alpha
         
         # Variables will be created in build
         self.is_built = False
@@ -74,9 +91,14 @@ class YatNMN(tf.Module):
         last_dim = int(input_shape[-1])
         self.input_dim = last_dim
 
-        # Initialize kernel using orthogonal initialization
+        # Initialize kernel using Xavier normal initialization
         kernel_shape = (self.features, last_dim)
-        initial_kernel = create_orthogonal_matrix(kernel_shape, dtype=self.dtype)
+        fan_in = last_dim
+        fan_out = self.features
+        std = math.sqrt(2.0 / (fan_in + fan_out))
+        initial_kernel = tf.random.normal(kernel_shape, stddev=std, dtype=self.dtype)
+        if self.positive_init:
+            initial_kernel = tf.abs(initial_kernel)
         self.kernel = tf.Variable(
             initial_kernel,
             trainable=True,
@@ -84,12 +106,13 @@ class YatNMN(tf.Module):
             dtype=self.dtype
         )
 
-        # Initialize alpha to ones
-        self.alpha = tf.Variable(
-            tf.ones([1], dtype=self.dtype),
-            trainable=True,
-            name='alpha'
-        )
+        # Initialize alpha (only if learnable)
+        if self.use_alpha and self._constant_alpha_value is None:
+            self.alpha = tf.Variable(
+                tf.ones([1], dtype=self.dtype),
+                trainable=True,
+                name='alpha'
+            )
 
         # Initialize bias if needed
         if self.use_bias:
@@ -150,14 +173,11 @@ class YatNMN(tf.Module):
         y = tf.square(y) / (distances + self.epsilon)
 
         # Apply scaling factor
-        scale = tf.pow(
-            tf.cast(
-                tf.sqrt(float(self.features)) / tf.math.log(1. + float(self.features)),
-                self.dtype
-            ),
-            self.alpha
-        )
-        y = y * scale
+        if self._constant_alpha_value is not None:
+            y = y * tf.cast(self._constant_alpha_value, self.dtype)
+        elif self.alpha is not None:
+            # Simple learnable alpha scaling
+            y = y * self.alpha
 
 
         if self.return_weights:

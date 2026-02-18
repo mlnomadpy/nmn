@@ -120,15 +120,16 @@ class YatConv1D(Module):
         # YAT distance
         distance_sq = patch_sq_sum + kernel_sq_sum - 2 * dot_prod_map
         
-        # YAT output
+        # Add bias before squaring
+        if bias is not None:
+            dot_prod_map = dot_prod_map + bias.reshape((1, 1, -1))
+        
+        # YAT output: (x·W + b)² / (dist + ε)
         y = dot_prod_map**2 / (distance_sq + self.epsilon)
         
-        if bias is not None:
-            y = y + bias.reshape((1, 1, -1))
-        
         if alpha is not None:
-            scale = (jnp.sqrt(float(self.features)) / jnp.log(1 + float(self.features))) ** alpha
-            y = y * scale
+            # Simple learnable alpha scaling
+            y = y * alpha
         
         return y
 
@@ -242,15 +243,16 @@ class YatConv2D(Module):
         # YAT distance
         distance_sq = patch_sq_sum + kernel_sq_sum - 2 * dot_prod_map
         
-        # YAT output
+        # Add bias before squaring
+        if bias is not None:
+            dot_prod_map = dot_prod_map + bias.reshape((1, 1, 1, -1))
+        
+        # YAT output: (x·W + b)² / (dist + ε)
         y = dot_prod_map**2 / (distance_sq + self.epsilon)
         
-        if bias is not None:
-            y = y + bias.reshape((1, 1, 1, -1))
-        
         if alpha is not None:
-            scale = (jnp.sqrt(float(self.features)) / jnp.log(1 + float(self.features))) ** alpha
-            y = y * scale
+            # Simple learnable alpha scaling
+            y = y * alpha
         
         return y
 
@@ -364,15 +366,16 @@ class YatConv3D(Module):
         # YAT distance
         distance_sq = patch_sq_sum + kernel_sq_sum - 2 * dot_prod_map
         
-        # YAT output
+        # Add bias before squaring
+        if bias is not None:
+            dot_prod_map = dot_prod_map + bias.reshape((1, 1, 1, 1, -1))
+        
+        # YAT output: (x·W + b)² / (dist + ε)
         y = dot_prod_map**2 / (distance_sq + self.epsilon)
         
-        if bias is not None:
-            y = y + bias.reshape((1, 1, 1, 1, -1))
-        
         if alpha is not None:
-            scale = (jnp.sqrt(float(self.features)) / jnp.log(1 + float(self.features))) ** alpha
-            y = y * scale
+            # Simple learnable alpha scaling
+            y = y * alpha
         
         return y
 

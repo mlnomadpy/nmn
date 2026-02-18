@@ -15,11 +15,10 @@ class YatNMN(nn.Module):
     """
     A PyTorch implementation of the Yat neuron with squared Euclidean distance transformation.
 
-    The YAT operation computes:
-      y = (x · W + b)² / (||x - W||² + ε)
+    y = (x · W + b)² / (||x - W||² + ε)
 
-    With optional scaling:
-      y = y * scale, where scale = (sqrt(out_features) / log(1 + out_features))^alpha
+  With optional scaling:
+    y = y * alpha (learnable) or y = y * sqrt(2) (constant)
 
     Attributes:
         in_features (int): Size of each input sample
@@ -49,8 +48,9 @@ class YatNMN(nn.Module):
         constant_alpha: Optional[Union[bool, float]] = None,
         dtype: Optional[torch.dtype] = None,
         param_dtype: torch.dtype = torch.float32,
-        epsilon: float = 1e-4, # 1/epsilon is the maximum score per neuron, setting it low increase the precision but the scores explode
+        epsilon: float = 1e-5,
         spherical: bool = False,
+        positive_init: bool = False,
         kernel_init: callable = None,
         bias_init: callable = None,
         alpha_init: callable = None
@@ -64,6 +64,7 @@ class YatNMN(nn.Module):
         self.param_dtype = param_dtype
         self.epsilon = epsilon
         self.spherical = spherical
+        self.positive_init = positive_init
 
         # Weight initialization
         if kernel_init is None:
@@ -125,8 +126,11 @@ class YatNMN(nn.Module):
         """
         # Kernel (weight) initialization
         if kernel_init is None:
-            kernel_init = nn.init.orthogonal_
+            kernel_init = nn.init.xavier_normal_
         kernel_init(self.weight)
+        if self.positive_init:
+            with torch.no_grad():
+                self.weight.abs_()
 
         # Bias initialization
         if self.bias is not None:
@@ -204,12 +208,14 @@ class YatNMN(nn.Module):
         if self.spherical:
             # Spherical: inputs and kernel are normalized
             # ||x - W||² = ||x||² + ||W||² - 2(x·W) = 1 + 1 - 2(x·W) = 2 - 2(x·W)
-            distances = 2 - 2 * torch.matmul(x, kernel.t())
+            # Reuse y (before bias) since it equals x · W^T
+            distances = 2 - 2 * (y - bias if bias is not None else y)
         else:
-            # Euclidean: ||x||² + ||W||² - 2(x·W)
             inputs_squared_sum = torch.sum(x**2, dim=-1, keepdim=True)
             kernel_squared_sum = torch.sum(kernel**2, dim=-1)
-            distances = inputs_squared_sum + kernel_squared_sum - 2 * torch.matmul(x, kernel.t())
+            # Reuse dot product for distance: ||x||² + ||W||² - 2(x·W)
+            dot_for_dist = y - bias if bias is not None else y
+            distances = inputs_squared_sum + kernel_squared_sum - 2 * dot_for_dist
 
         # Apply squared Euclidean distance transformation: (x·W + b)² / (||x - W||² + ε)
         y = y ** 2 / (distances + self.epsilon)
@@ -219,8 +225,8 @@ class YatNMN(nn.Module):
             # Constant alpha: use directly as the scale factor (e.g. sqrt(2))
             y = y * self._constant_alpha_value
         elif alpha_param is not None:
-            scale = (math.sqrt(self.out_features) / math.log(1 + self.out_features)) ** alpha_param
-            y = y * scale
+            # Simple learnable alpha scaling
+            y = y * alpha_param
 
         return y
 

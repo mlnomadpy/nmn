@@ -218,17 +218,17 @@ class YatConv1D(Layer):
         # Compute YAT: squared distance
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
 
-        # YAT computation: (dot_product)^2 / (distance_squared + epsilon)
-        outputs = dot_prod_map**2 / (distance_sq_map + self.epsilon)
-
+        # Add bias before squaring
         if self.use_bias:
-            outputs = ops.add(outputs, self.bias)
+            dot_prod_map = ops.add(dot_prod_map, self.bias)
+
+        # YAT computation: (dot_product + bias)^2 / (distance_squared + epsilon)
+        outputs = dot_prod_map**2 / (distance_sq_map + self.epsilon)
 
         # Apply alpha scaling
         if self.use_alpha and self.alpha is not None:
-            scale = (ops.sqrt(ops.cast(self.filters, self.compute_dtype)) /
-                    ops.log1p(ops.cast(self.filters, self.compute_dtype))) ** self.alpha
-            outputs = outputs * scale
+            # Simple learnable alpha scaling
+            outputs = outputs * self.alpha
 
         return outputs
 

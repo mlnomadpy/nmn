@@ -367,10 +367,8 @@ def rotary_yat_performer_attention(
     head_dim = query.shape[-1]
     if alpha is not None:
         alpha_val = jnp.asarray(alpha, dtype=dtype)
-        # Note: when using constant_alpha from the module, the module applies
-        # direct scaling after this function returns. This path is for learnable alpha.
-        scale = (jnp.sqrt(head_dim) / jnp.log(1 + head_dim)) ** alpha_val
-        output = output * scale
+        # Simple learnable alpha scaling
+        output = output * alpha_val
 
     # Apply dropout
     if not deterministic and dropout_rate > 0.0:

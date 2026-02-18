@@ -4,6 +4,10 @@ from keras.src.layers.input_spec import InputSpec
 from keras.src.layers.layer import Layer
 from keras.src import ops
 import math
+import numpy as np
+
+# Default constant alpha value (sqrt(2))
+DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
 
 @keras_export("keras.layers.YatNMN")
 class YatNMN(Layer):
@@ -46,8 +50,11 @@ class YatNMN(Layer):
         self,
         units,
         use_bias=True,
+        use_alpha=True,
+        constant_alpha=None,
+        positive_init=False,
         epsilon=1e-5,
-        kernel_initializer="orthogonal",
+        kernel_initializer="glorot_normal",
         bias_initializer="zeros",
         kernel_regularizer=None,
         bias_regularizer=None,
@@ -60,6 +67,18 @@ class YatNMN(Layer):
         self.units = units
         self.use_bias = use_bias
         self.epsilon = epsilon
+        self.positive_init = positive_init
+
+        # Handle alpha configuration
+        self._constant_alpha_value = None
+        if constant_alpha is not None:
+            if constant_alpha is True:
+                self._constant_alpha_value = DEFAULT_CONSTANT_ALPHA
+            else:
+                self._constant_alpha_value = float(constant_alpha)
+            use_alpha = True
+        self.use_alpha = use_alpha
+        self.constant_alpha = constant_alpha
 
         self.kernel_initializer = initializers.get(kernel_initializer)
         self.bias_initializer = initializers.get(bias_initializer)
@@ -95,13 +114,20 @@ class YatNMN(Layer):
         else:
             self.bias = None
 
-        # Add alpha parameter for dynamic scaling
-        self.alpha = self.add_weight(
-            name="alpha",
-            shape=(1,),
-            initializer="ones",
-            trainable=True,
-        )
+        # Alpha parameter (only if learnable)
+        if self.use_alpha and self._constant_alpha_value is None:
+            self.alpha = self.add_weight(
+                name="alpha",
+                shape=(1,),
+                initializer="ones",
+                trainable=True,
+            )
+        else:
+            self.alpha = None
+
+        # Apply positive init: abs(kernel)
+        if self.positive_init:
+            self.kernel.assign(ops.abs(self.kernel))
 
         self.input_spec = InputSpec(min_ndim=2, axes={-1: input_dim})
         self.built = True
@@ -121,10 +147,12 @@ class YatNMN(Layer):
         # Compute inverse square attention
         outputs = dot_product ** 2 / (distances + self.epsilon)
 
-        # Apply dynamic scaling
-        scale = (ops.sqrt(ops.cast(self.units, self.compute_dtype)) /
-                ops.log1p(ops.cast(self.units, self.compute_dtype))) ** self.alpha
-        outputs = outputs * scale
+        # Apply alpha scaling
+        if self._constant_alpha_value is not None:
+            outputs = outputs * self._constant_alpha_value
+        elif self.alpha is not None:
+            # Simple learnable alpha scaling
+            outputs = outputs * self.alpha
 
         return outputs
 
@@ -138,6 +166,9 @@ class YatNMN(Layer):
         config.update({
             "units": self.units,
             "use_bias": self.use_bias,
+            "use_alpha": self.use_alpha,
+            "constant_alpha": self.constant_alpha,
+            "positive_init": self.positive_init,
             "epsilon": self.epsilon,
             "kernel_initializer": initializers.serialize(self.kernel_initializer),
             "bias_initializer": initializers.serialize(self.bias_initializer),

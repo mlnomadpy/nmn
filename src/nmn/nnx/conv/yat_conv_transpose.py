@@ -106,6 +106,7 @@ class YatConvTranspose(Module):
         use_alpha: bool = True,
         constant_alpha: tp.Optional[tp.Union[bool, float]] = None,
         use_dropconnect: bool = False,
+        positive_init: bool = False,
         mask: Array | None = None,
         dtype: Dtype | None = None,
         param_dtype: Dtype = jnp.float32,
@@ -150,9 +151,10 @@ class YatConvTranspose(Module):
             kernel_shape = kernel_size + (in_features, self.out_features)
 
         self.kernel_shape = kernel_shape
-        self.kernel = nnx.Param(
-            self.kernel_init(rngs.params(), kernel_shape, self.param_dtype)
-        )
+        kernel_val = self.kernel_init(rngs.params(), kernel_shape, self.param_dtype)
+        if positive_init:
+            kernel_val = jnp.abs(kernel_val)
+        self.kernel = nnx.Param(kernel_val)
 
         self.bias: nnx.Param | None
         if self.use_bias:
@@ -319,24 +321,22 @@ class YatConvTranspose(Module):
             kernel_val**2, axis=reduce_axes_for_kernel_sq
         )
 
-        # YAT formula: (x·W)² / (||x - W||² + ε)
+        # YAT formula: (x·W + b)² / (||x - W||² + ε)
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_per_filter - 2 * dot_prod_map
-        y = dot_prod_map**2 / (distance_sq_map + self.epsilon)
 
-        # Add bias
+        # Add bias before squaring
         if self.use_bias and bias_val is not None:
-            bias_reshape_dims = (1,) * (y.ndim - 1) + (-1,)
-            y += jnp.reshape(bias_val, bias_reshape_dims)
+            bias_reshape_dims = (1,) * (dot_prod_map.ndim - 1) + (-1,)
+            dot_prod_map = dot_prod_map + jnp.reshape(bias_val, bias_reshape_dims)
+
+        y = dot_prod_map**2 / (distance_sq_map + self.epsilon)
 
         # Apply alpha scaling
         if self._constant_alpha_value is not None:
-            # Constant alpha: use directly as the scale factor (e.g. sqrt(2))
             y = y * self._constant_alpha_value
         elif alpha is not None:
-            scale = (
-                jnp.sqrt(self.out_features) / jnp.log(1 + self.out_features)
-            ) ** alpha
-            y = y * scale
+            # Simple learnable alpha scaling
+            y = y * alpha
 
         # Handle circular padding
         if self.padding == "CIRCULAR":

@@ -16,7 +16,7 @@ from flax.typing import PaddingLike, LaxPadding
 
 
 # Default initializers
-default_kernel_init = initializers.lecun_normal()
+default_kernel_init = initializers.xavier_normal()
 default_bias_init = initializers.zeros_init()
 default_alpha_init = initializers.ones_init()
 

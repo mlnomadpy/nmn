@@ -113,10 +113,9 @@ def yat_attention_weights(
         attn_weights = squared_dot / (squared_dist + epsilon)
 
     # Alpha scaling (before softmax)
-    # Either learnable alpha (exponent formula) or direct constant scale, never both
+    # Either learnable alpha (simple multiply) or direct constant scale, never both
     if alpha is not None:
-        alpha_scale = (math.sqrt(head_dim) / math.log(1 + head_dim)) ** alpha
-        attn_weights = attn_weights * alpha_scale
+        attn_weights = attn_weights * alpha
     elif scale is not None:
         attn_weights = attn_weights * scale
 
@@ -225,10 +224,9 @@ def yat_attention_normalized(
     attn_weights = squared_dot / (distance_sq + epsilon)
 
     # Alpha scaling (before softmax)
-    # Either learnable alpha (exponent formula) or direct constant scale, never both
+    # Either learnable alpha (simple multiply) or direct constant scale, never both
     if alpha is not None:
-        alpha_scale = (math.sqrt(head_dim) / math.log(1 + head_dim)) ** alpha
-        attn_weights = attn_weights * alpha_scale
+        attn_weights = attn_weights * alpha
     elif scale is not None:
         attn_weights = attn_weights * scale
 

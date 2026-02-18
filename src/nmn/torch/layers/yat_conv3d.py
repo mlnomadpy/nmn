@@ -188,8 +188,8 @@ class YatConv3d(Conv3d):
             # Constant alpha: use directly as the scale factor (e.g. sqrt(2))
             y = y * self._constant_alpha_value
         elif alpha is not None:
-            scale = (math.sqrt(self.out_channels) / math.log(1.0 + self.out_channels)) ** alpha
-            y = y * scale
+            # Simple learnable alpha scaling
+            y = y * alpha
 
         return y
 

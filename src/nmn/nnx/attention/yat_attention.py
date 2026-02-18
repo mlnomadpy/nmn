@@ -149,11 +149,10 @@ def yat_attention_weights(
     # YAT attention scores: (q·k)² / (||q - k||² + ε)
     attn_weights = squared_dot_product / (squared_dist + epsilon)
 
-    # Apply alpha scaling: scale = (sqrt(head_dim) / log(1 + head_dim))^alpha
+    # Apply alpha scaling: y *= alpha (simple multiply)
     if alpha is not None:
         alpha_val = jnp.asarray(alpha, dtype=dtype)
-        scale = (jnp.sqrt(head_dim) / jnp.log(1 + head_dim)) ** alpha_val
-        attn_weights = attn_weights * scale
+        attn_weights = attn_weights * alpha_val
 
     # Apply attention bias
     if bias is not None:
@@ -383,11 +382,10 @@ def yat_attention_normalized(
     # YAT attention scores: (q·k)² / (2(1 - q·k) + ε)
     attn_weights = squared_dot_product / (distance_sq + epsilon)
 
-    # Apply alpha scaling: scale = (sqrt(head_dim) / log(1 + head_dim))^alpha
+    # Apply alpha scaling: y *= alpha (simple multiply)
     if alpha is not None:
         alpha_val = jnp.asarray(alpha, dtype=dtype)
-        scale = (jnp.sqrt(head_dim) / jnp.log(1 + head_dim)) ** alpha_val
-        attn_weights = attn_weights * scale
+        attn_weights = attn_weights * alpha_val
 
     # Apply bias
     if bias is not None:
@@ -588,11 +586,10 @@ def yat_performer_attention(
 
         output = qkv / normalizer
 
-    # Apply alpha scaling: scale = (sqrt(head_dim) / log(1 + head_dim))^alpha
+    # Apply alpha scaling: y *= alpha (simple multiply)
     if alpha is not None:
         alpha_val = jnp.asarray(alpha, dtype=dtype)
-        scale = (jnp.sqrt(head_dim) / jnp.log(1 + head_dim)) ** alpha_val
-        output = output * scale
+        output = output * alpha_val
 
     # Apply dropout to output if needed
     if not deterministic and dropout_rate > 0.0:

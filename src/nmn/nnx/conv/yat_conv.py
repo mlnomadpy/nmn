@@ -110,6 +110,7 @@ class YatConv(Module):
         use_alpha: bool = True,
         constant_alpha: tp.Optional[tp.Union[bool, float]] = None,
         use_dropconnect: bool = False,
+        positive_init: bool = False,
         kernel_init: Initializer = default_kernel_init,
         bias_init: Initializer = default_bias_init,
         alpha_init: Initializer = default_alpha_init,
@@ -133,9 +134,10 @@ class YatConv(Module):
             out_features,
         )
         kernel_key = rngs.params()
-        self.kernel = nnx.Param(
-            kernel_init(kernel_key, self.kernel_shape, param_dtype)
-        )
+        kernel_val = kernel_init(kernel_key, self.kernel_shape, param_dtype)
+        if positive_init:
+            kernel_val = jnp.abs(kernel_val)
+        self.kernel = nnx.Param(kernel_val)
 
         self.bias: nnx.Param[jax.Array] | None
         if use_bias:
@@ -347,24 +349,24 @@ class YatConv(Module):
             kernel_val**2, axis=reduce_axes_for_kernel_sq
         )
 
-        # YAT formula: (x·W)² / (||x - W||² + ε)
-        distance_sq_map = patch_sq_sum_map + kernel_sq_sum_per_filter - 2 * dot_prod_map
-        y = dot_prod_map**2 / (distance_sq_map + self.epsilon)
-
-        # Add bias
+        # Add bias before squaring: (x·W + b)² / (dist + ε)
+        # Save raw dot product for distance calculation (bias only affects numerator)
+        dot_prod_raw = dot_prod_map
         if self.use_bias and bias_val is not None:
-            bias_reshape_dims = (1,) * (y.ndim - 1) + (-1,)
-            y += jnp.reshape(bias_val, bias_reshape_dims)
+            bias_reshape_dims = (1,) * (dot_prod_map.ndim - 1) + (-1,)
+            dot_prod_map = dot_prod_map + jnp.reshape(bias_val, bias_reshape_dims)
+
+        # YAT formula: (x·W + b)² / (||x - W||² + ε)
+        distance_sq_map = patch_sq_sum_map + kernel_sq_sum_per_filter - 2 * dot_prod_raw
+        y = dot_prod_map**2 / (distance_sq_map + self.epsilon)
 
         # Apply alpha scaling
         if self._constant_alpha_value is not None:
             # Constant alpha: use directly as the scale factor (e.g. sqrt(2))
             y = y * self._constant_alpha_value
         elif alpha is not None:
-            scale = (
-                jnp.sqrt(self.out_features) / jnp.log(1 + self.out_features)
-            ) ** alpha
-            y = y * scale
+            # Simple learnable alpha scaling
+            y = y * alpha
 
         # Reshape output if needed
         if num_batch_dimensions != 1:
