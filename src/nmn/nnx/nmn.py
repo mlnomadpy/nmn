@@ -232,7 +232,10 @@ class YatNMN(Module):
     y = y ** 2 / (distances + self.epsilon)
 
     # Apply alpha scaling
-    if alpha is not None:
+    if self._constant_alpha_value is not None:
+      # Constant alpha: use directly as the scale factor (e.g. sqrt(2))
+      y = y * self._constant_alpha_value
+    elif alpha is not None:
       scale = (jnp.sqrt(self.out_features) / jnp.log(1 + self.out_features)) ** alpha
       y = y * scale
 

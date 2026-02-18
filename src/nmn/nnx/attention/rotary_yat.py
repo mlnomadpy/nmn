@@ -367,6 +367,8 @@ def rotary_yat_performer_attention(
     head_dim = query.shape[-1]
     if alpha is not None:
         alpha_val = jnp.asarray(alpha, dtype=dtype)
+        # Note: when using constant_alpha from the module, the module applies
+        # direct scaling after this function returns. This path is for learnable alpha.
         scale = (jnp.sqrt(head_dim) / jnp.log(1 + head_dim)) ** alpha_val
         output = output * scale
 
@@ -717,10 +719,12 @@ class RotaryYatAttention(Module):
             dropout_rng = rngs.dropout()
 
         # Get alpha value (either learnable or constant)
+        # For constant alpha, we apply it directly after attention
+        # rather than passing it to the attention function (which uses it as an exponent)
         alpha_value = None
         if self.use_alpha:
             if self._constant_alpha_value is not None:
-                alpha_value = self._constant_alpha_value
+                pass  # Will be applied as direct scale after attention
             elif self.alpha is not None:
                 alpha_value = self.alpha.value
 
@@ -780,6 +784,10 @@ class RotaryYatAttention(Module):
                 position_offset=position_offset,
                 alpha=alpha_value,
             )
+
+        # Apply constant alpha as direct scale (e.g. sqrt(2))
+        if self._constant_alpha_value is not None:
+            output = output * self._constant_alpha_value
 
         # Reshape back: [batch, seq, num_heads, head_dim] -> [batch, seq, embed_dim]
         output = output.reshape(batch_size, seq_len, self.embed_dim)

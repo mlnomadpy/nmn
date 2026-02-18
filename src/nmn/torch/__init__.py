@@ -13,6 +13,9 @@ from .layers import (
 # Import YatNMN from nmn module
 from .nmn import YatNMN
 
+# Import attention
+from .attention import MultiHeadYatAttention
+
 
 __all__ = [
     # YAT Conv layers
@@ -24,5 +27,8 @@ __all__ = [
     "YatConvTranspose3d",
     # YAT NMN
     "YatNMN",
+    # YAT Attention
+    "MultiHeadYatAttention",
 ]
+
 

@@ -434,10 +434,13 @@ class MultiHeadAttention(Module):
             dropout_rng = rngs.dropout()
 
         # Get alpha value (either learnable or constant)
+        # For constant alpha, we apply it directly after the attention call
+        # rather than passing it to the attention function (which uses it as an exponent)
         alpha_value = None
         if self.use_alpha:
             if self._constant_alpha_value is not None:
-                alpha_value = self._constant_alpha_value
+                # Will be applied as direct scale after attention
+                pass
             elif self.alpha is not None:
                 alpha_value = self.alpha.value
 
@@ -459,6 +462,10 @@ class MultiHeadAttention(Module):
             power=self.power,
             alpha=alpha_value,
         )
+
+        # Apply constant alpha as direct scale (e.g. sqrt(2))
+        if self._constant_alpha_value is not None:
+            x = x * self._constant_alpha_value
 
         # Reshape back: [batch..., length, num_heads, head_dim] -> [batch..., length, qkv_features]
         x = x.reshape(x.shape[:-2] + (self.qkv_features,))
