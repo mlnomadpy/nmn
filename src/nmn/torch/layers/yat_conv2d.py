@@ -1,6 +1,7 @@
 # mypy: allow-untyped-defs
 import logging
 import math
+import threading
 from typing import Optional, Union
 
 import torch
@@ -40,8 +41,9 @@ class YatConv2D(Conv2d):
             PyTorch Conv2d default). Separate from computation dtype.
     """
     
-    # Class-level shared kernel banks
+    # Class-level shared kernel banks (guarded by a lock for thread safety)
     _KERNEL_BANKS = {}
+    _KERNEL_BANKS_LOCK = threading.Lock()
 
     def __init__(
         self,
@@ -69,7 +71,17 @@ class YatConv2D(Conv2d):
         param_dtype=None,
     ) -> None:
         storage_dtype = param_dtype if param_dtype is not None else dtype
-        
+
+        # Validate groups upfront so errors surface at construction time
+        if in_channels % groups != 0:
+            raise ValueError(
+                f"in_channels ({in_channels}) must be divisible by groups ({groups})"
+            )
+        if out_channels % groups != 0:
+            raise ValueError(
+                f"out_channels ({out_channels}) must be divisible by groups ({groups})"
+            )
+
         # Handle shared kernel bank - create with auto-sized out_channels
         if tie_kernel_bank:
             bank_out_channels = kernel_bank_size or out_channels
@@ -93,6 +105,8 @@ class YatConv2D(Conv2d):
         self.compute_dtype = dtype
         self.param_dtype = storage_dtype
         self.use_dropconnect = use_dropconnect
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
         self.drop_rate = drop_rate
         self.weight_normalized = weight_normalized
@@ -111,31 +125,32 @@ class YatConv2D(Conv2d):
         # Handle auto-expanding shared kernel bank
         if tie_kernel_bank:
             bank_key = (kernel_bank_id, in_channels, kernel_size, groups, storage_dtype)
-            shared_weight = YatConv2D._KERNEL_BANKS.get(bank_key)
+            with YatConv2D._KERNEL_BANKS_LOCK:
+                shared_weight = YatConv2D._KERNEL_BANKS.get(bank_key)
 
-            if shared_weight is None:
-                # First layer: register the weight as shared
-                YatConv2D._KERNEL_BANKS[bank_key] = self.weight
-            else:
-                # Bank exists: auto-expand if needed
-                existing_channels = shared_weight.shape[0]
-                if bank_out_channels > existing_channels:
-                    # Auto-expand: pad with new random initialization
-                    logger.info("Auto-expanding kernel bank '%s': %d -> %d filters",
-                                kernel_bank_id, existing_channels, bank_out_channels)
-                    old_weight = shared_weight.data
-                    # Create new weight with expanded size
-                    new_weight = torch.empty(
-                        (bank_out_channels,) + old_weight.shape[1:],
-                        dtype=storage_dtype,
-                        device=old_weight.device
-                    )
-                    nn.init.kaiming_uniform_(new_weight, nonlinearity='relu')
-                    # Copy old weights
-                    new_weight[:existing_channels].copy_(old_weight)
-                    shared_weight.data = new_weight
-                    
-                self.weight = shared_weight
+                if shared_weight is None:
+                    # First layer: register the weight as shared
+                    YatConv2D._KERNEL_BANKS[bank_key] = self.weight
+                else:
+                    # Bank exists: auto-expand if needed
+                    existing_channels = shared_weight.shape[0]
+                    if bank_out_channels > existing_channels:
+                        # Auto-expand: pad with new random initialization
+                        logger.info("Auto-expanding kernel bank '%s': %d -> %d filters",
+                                    kernel_bank_id, existing_channels, bank_out_channels)
+                        old_weight = shared_weight.data
+                        # Create new weight with expanded size
+                        new_weight = torch.empty(
+                            (bank_out_channels,) + old_weight.shape[1:],
+                            dtype=storage_dtype,
+                            device=old_weight.device
+                        )
+                        nn.init.kaiming_uniform_(new_weight, nonlinearity='relu')
+                        # Copy old weights
+                        new_weight[:existing_channels].copy_(old_weight)
+                        shared_weight.data = new_weight
+
+                    self.weight = shared_weight
 
         factory_kwargs = {"device": device, "dtype": storage_dtype}
 

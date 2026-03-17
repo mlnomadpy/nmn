@@ -91,6 +91,8 @@ class YatConv3D(Conv3d):
         self.compute_dtype = dtype
         self.param_dtype = storage_dtype
         self.use_dropconnect = use_dropconnect
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
         self.drop_rate = drop_rate
         self.weight_normalized = weight_normalized

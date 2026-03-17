@@ -2,34 +2,11 @@
 
 import tensorflow as tf
 import math
-from typing import Optional, Any, Tuple, Union, List, Callable
-import numpy as np
+from typing import Optional, Tuple, Union, List
 
 # Default constant alpha value (sqrt(2))
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
-def create_orthogonal_matrix(shape: Tuple[int, ...], dtype: tf.DType = tf.float32) -> tf.Tensor:
-    """Creates an orthogonal matrix using the standard approach for rectangular matrices."""
-    num_rows, num_cols = shape
-    
-    # Standard approach: sample from normal distribution and apply orthogonal transformation
-    if num_rows >= num_cols:
-        # Tall or square matrix
-        random_matrix = tf.random.normal([num_rows, num_cols], dtype=dtype)
-        q, r = tf.linalg.qr(random_matrix)
-        # Make it uniform by adjusting signs
-        d = tf.linalg.diag_part(r)
-        ph = tf.cast(tf.sign(d), dtype)
-        q *= ph[None, :]
-        return q
-    else:
-        # Wide matrix: transpose approach
-        random_matrix = tf.random.normal([num_cols, num_rows], dtype=dtype)
-        q, r = tf.linalg.qr(random_matrix)
-        # Make it uniform
-        d = tf.linalg.diag_part(r)
-        ph = tf.cast(tf.sign(d), dtype)
-        q *= ph[None, :]
-        return tf.transpose(q)
+
 
 class YatNMN(tf.Module):
     """Dense layer implementing the ⵟ-product (YAT) transformation.
@@ -83,6 +60,8 @@ class YatNMN(tf.Module):
         self.features = features
         self.use_bias = use_bias
         self.dtype = dtype
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
         self.return_weights = return_weights
         self.positive_init = positive_init
@@ -212,29 +191,46 @@ class YatNMN(tf.Module):
         return y
 
     def get_weights(self) -> List[tf.Tensor]:
-        """Returns the current weights of the layer."""
-        weights = [self.kernel, self.alpha]
-        if self.use_bias:
+        """Returns the current trainable weights of the layer.
+
+        Returns:
+            List of tensors: ``[kernel]``, ``[kernel, bias]``,
+            ``[kernel, alpha]``, or ``[kernel, bias, alpha]`` depending on
+            which parameters are enabled.  ``constant_alpha`` is not
+            included because it is not a trainable variable.
+        """
+        if not self.is_built:
+            raise ValueError("Layer must be built before weights can be retrieved.")
+        weights = [self.kernel]
+        if self.use_bias and self.bias is not None:
             weights.append(self.bias)
+        if self.alpha is not None:
+            weights.append(self.alpha)
         return weights
 
     def set_weights(self, weights: List[tf.Tensor]) -> None:
-        """Sets the weights of the layer.
-        
+        """Sets the trainable weights of the layer.
+
         Args:
-            weights: List of tensors with shapes matching the layer's variables.
+            weights: List of tensors in the same order returned by
+                :meth:`get_weights`.
         """
         if not self.is_built:
             raise ValueError("Layer must be built before weights can be set.")
-            
-        expected_num = 3 if self.use_bias else 2
-        if len(weights) != expected_num:
-            raise ValueError(f"Expected {expected_num} weight tensors, got {len(weights)}")
+
+        expected = self.get_weights()
+        if len(weights) != len(expected):
+            raise ValueError(
+                f"Expected {len(expected)} weight tensors, got {len(weights)}"
+            )
 
         self.kernel.assign(weights[0])
-        self.alpha.assign(weights[1])
-        if self.use_bias:
-            self.bias.assign(weights[2])
+        idx = 1
+        if self.use_bias and self.bias is not None:
+            self.bias.assign(weights[idx])
+            idx += 1
+        if self.alpha is not None:
+            self.alpha.assign(weights[idx])
 
 
 # Alias for backward compatibility

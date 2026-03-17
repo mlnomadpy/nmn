@@ -48,6 +48,10 @@ class YatConv1D(tf.Module):
         self.groups = groups
         self.use_bias = use_bias
         self.use_alpha = use_alpha
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be positive, got {epsilon}")
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
         self.dtype = dtype
         
@@ -233,6 +237,8 @@ class YatConv2D(tf.Module):
         self.groups = groups
         self.use_bias = use_bias
         self.use_alpha = use_alpha
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
         self.dtype = dtype
         
@@ -357,23 +363,16 @@ class YatConv2D(tf.Module):
         # Compute YAT: distance_squared = ||patch||^2 + ||kernel||^2 - 2 * dot_product
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
 
-        # YAT computation: (dot_product)^2 / (distance_squared + epsilon)
-        y = dot_prod_map**2 / (distance_sq_map + self.epsilon)
-
-        # Add bias if present
+        # Add bias inside the numerator square: (dot + bias)^2 / dist
         if self.use_bias:
-            y = y + self.bias
+            dot_prod_map = dot_prod_map + self.bias
+
+        # YAT computation: (dot_product + bias)^2 / (distance_squared + epsilon)
+        y = dot_prod_map**2 / (distance_sq_map + self.epsilon)
 
         # Apply alpha scaling
         if self.use_alpha and self.alpha is not None:
-            scale = tf.pow(
-                tf.cast(
-                    tf.sqrt(float(self.filters)) / tf.math.log(1. + float(self.filters)),
-                    self.dtype
-                ),
-                self.alpha
-            )
-            y = y * scale
+            y = y * self.alpha
 
         return y
 
@@ -424,6 +423,8 @@ class YatConv3D(tf.Module):
         self.groups = groups
         self.use_bias = use_bias
         self.use_alpha = use_alpha
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
         self.dtype = dtype
         
@@ -549,23 +550,16 @@ class YatConv3D(tf.Module):
         # Compute YAT: distance_squared = ||patch||^2 + ||kernel||^2 - 2 * dot_product
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
 
-        # YAT computation: (dot_product)^2 / (distance_squared + epsilon)
-        y = dot_prod_map**2 / (distance_sq_map + self.epsilon)
-
-        # Add bias if present
+        # Add bias inside the numerator square: (dot + bias)^2 / dist
         if self.use_bias:
-            y = y + self.bias
+            dot_prod_map = dot_prod_map + self.bias
+
+        # YAT computation: (dot_product + bias)^2 / (distance_squared + epsilon)
+        y = dot_prod_map**2 / (distance_sq_map + self.epsilon)
 
         # Apply alpha scaling
         if self.use_alpha and self.alpha is not None:
-            scale = tf.pow(
-                tf.cast(
-                    tf.sqrt(float(self.filters)) / tf.math.log(1. + float(self.filters)),
-                    self.dtype
-                ),
-                self.alpha
-            )
-            y = y * scale
+            y = y * self.alpha
 
         return y
 
@@ -606,6 +600,8 @@ class YatConvTranspose1D(tf.Module):
         self.padding = padding.upper()
         self.use_bias = use_bias
         self.use_alpha = use_alpha
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
         self.dtype = dtype
         
@@ -775,6 +771,8 @@ class YatConvTranspose2D(tf.Module):
         self.padding = padding.upper()
         self.use_bias = use_bias
         self.use_alpha = use_alpha
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
         self.dtype = dtype
         
@@ -883,17 +881,15 @@ class YatConvTranspose2D(tf.Module):
 
         # YAT computation
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
+
+        # Add bias inside the numerator square: (dot + bias)^2 / dist
+        if self.use_bias:
+            dot_prod_map = dot_prod_map + self.bias
+
         y = dot_prod_map**2 / (distance_sq_map + self.epsilon)
 
-        if self.use_bias:
-            y = y + self.bias
-
         if self.use_alpha and self.alpha is not None:
-            scale = tf.pow(
-                tf.cast(tf.sqrt(float(self.filters)) / tf.math.log(1. + float(self.filters)), self.dtype),
-                self.alpha
-            )
-            y = y * scale
+            y = y * self.alpha
 
         return y
 
@@ -934,6 +930,8 @@ class YatConvTranspose3D(tf.Module):
         self.padding = padding.upper()
         self.use_bias = use_bias
         self.use_alpha = use_alpha
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
         self.dtype = dtype
         
@@ -1047,17 +1045,15 @@ class YatConvTranspose3D(tf.Module):
 
         # YAT computation
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
+
+        # Add bias inside the numerator square: (dot + bias)^2 / dist
+        if self.use_bias:
+            dot_prod_map = dot_prod_map + self.bias
+
         y = dot_prod_map**2 / (distance_sq_map + self.epsilon)
 
-        if self.use_bias:
-            y = y + self.bias
-
         if self.use_alpha and self.alpha is not None:
-            scale = tf.pow(
-                tf.cast(tf.sqrt(float(self.filters)) / tf.math.log(1. + float(self.filters)), self.dtype),
-                self.alpha
-            )
-            y = y * scale
+            y = y * self.alpha
 
         return y
 

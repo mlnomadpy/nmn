@@ -101,6 +101,10 @@ class YatConv1D(Layer):
         self.groups = groups
         self.use_bias = use_bias
         self.use_alpha = use_alpha
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be positive, got {epsilon}")
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
 
         self.kernel_initializer = initializers.get(kernel_initializer)
@@ -377,6 +381,8 @@ class YatConv2D(Layer):
         self.groups = groups
         self.use_bias = use_bias
         self.use_alpha = use_alpha
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
 
         self.kernel_initializer = initializers.get(kernel_initializer)
@@ -626,6 +632,8 @@ class YatConv3D(Layer):
         self.groups = groups
         self.use_bias = use_bias
         self.use_alpha = use_alpha
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
 
         self.kernel_initializer = initializers.get(kernel_initializer)
@@ -858,6 +866,8 @@ class YatConvTranspose1D(Layer):
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate,)
         self.use_bias = use_bias
         self.use_alpha = use_alpha
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
 
         self.kernel_initializer = initializers.get(kernel_initializer)
@@ -1068,6 +1078,8 @@ class YatConvTranspose2D(Layer):
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate)
         self.use_bias = use_bias
         self.use_alpha = use_alpha
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
 
         self.kernel_initializer = initializers.get(kernel_initializer)
@@ -1289,6 +1301,8 @@ class YatConvTranspose3D(Layer):
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate, dilation_rate)
         self.use_bias = use_bias
         self.use_alpha = use_alpha
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
 
         self.kernel_initializer = initializers.get(kernel_initializer)

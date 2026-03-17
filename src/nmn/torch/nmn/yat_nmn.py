@@ -2,6 +2,7 @@
 """YatNMN - Yet Another Transformation Neural Matter Network."""
 import logging
 import math
+import threading
 from typing import Optional, Union
 
 logger = logging.getLogger(__name__)
@@ -47,8 +48,9 @@ class YatNMN(nn.Module):
 
     # Default constant alpha value (sqrt(2))
     DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
-    # Class-level shared kernel banks
+    # Class-level shared kernel banks (guarded by a lock for thread safety)
     _KERNEL_BANKS = {}
+    _KERNEL_BANKS_LOCK = threading.Lock()
 
     def __init__(
         self,
@@ -77,6 +79,8 @@ class YatNMN(nn.Module):
         self.out_features = out_features
         self.dtype = dtype
         self.param_dtype = param_dtype
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
         self.spherical = spherical
         self.positive_init = positive_init
@@ -95,37 +99,38 @@ class YatNMN(nn.Module):
             # Auto-calculate bank size
             bank_out_features = kernel_bank_size or out_features
             bank_key = (kernel_bank_id, in_features, param_dtype, id(kernel_init), positive_init)
-            
-            shared_weight = YatNMN._KERNEL_BANKS.get(bank_key)
-            if shared_weight is None:
-                # First layer: create bank
-                self.weight = nn.Parameter(torch.empty(
-                    (bank_out_features, in_features),
-                    dtype=param_dtype
-                ))
-                YatNMN._KERNEL_BANKS[bank_key] = self.weight
-            else:
-                # Bank exists: auto-expand if needed
-                existing_size = shared_weight.shape[0]
-                if bank_out_features > existing_size:
-                    # Auto-expand: pad with new random initialization
-                    logger.info("Auto-expanding kernel bank '%s': %d -> %d neurons",
-                                kernel_bank_id, existing_size, bank_out_features)
-                    old_weight = shared_weight.data
-                    new_weight = torch.empty(
+
+            with YatNMN._KERNEL_BANKS_LOCK:
+                shared_weight = YatNMN._KERNEL_BANKS.get(bank_key)
+                if shared_weight is None:
+                    # First layer: create bank
+                    self.weight = nn.Parameter(torch.empty(
                         (bank_out_features, in_features),
-                        dtype=param_dtype,
-                        device=old_weight.device
-                    )
-                    kernel_init(new_weight)
-                    if positive_init:
-                        new_weight.abs_()
-                    # Copy old weights
-                    new_weight[:existing_size].copy_(old_weight)
-                    shared_weight.data = new_weight
-                    YatNMN._KERNEL_BANKS[bank_key] = shared_weight
-                self.weight = shared_weight
-            
+                        dtype=param_dtype
+                    ))
+                    YatNMN._KERNEL_BANKS[bank_key] = self.weight
+                else:
+                    # Bank exists: auto-expand if needed
+                    existing_size = shared_weight.shape[0]
+                    if bank_out_features > existing_size:
+                        # Auto-expand: pad with new random initialization
+                        logger.info("Auto-expanding kernel bank '%s': %d -> %d neurons",
+                                    kernel_bank_id, existing_size, bank_out_features)
+                        old_weight = shared_weight.data
+                        new_weight = torch.empty(
+                            (bank_out_features, in_features),
+                            dtype=param_dtype,
+                            device=old_weight.device
+                        )
+                        kernel_init(new_weight)
+                        if positive_init:
+                            new_weight.abs_()
+                        # Copy old weights
+                        new_weight[:existing_size].copy_(old_weight)
+                        shared_weight.data = new_weight
+                        YatNMN._KERNEL_BANKS[bank_key] = shared_weight
+                    self.weight = shared_weight
+
             self._kernel_slice = slice(0, out_features)
         else:
             # Create weight parameter (non-shared)

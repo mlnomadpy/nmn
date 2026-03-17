@@ -139,3 +139,4 @@ venv.bak/.backup
 website/docusaurus/node_modules/
 website/docusaurus/build/
 website/docusaurus/.docusaurus/
+.claude/

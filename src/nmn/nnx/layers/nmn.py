@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import typing as tp
 
 import jax
@@ -89,6 +90,7 @@ class YatNMN(Module):
 
   __data__ = ('kernel', 'bias', 'alpha', 'dropconnect_key')
   _KERNEL_BANKS: dict[tuple[tp.Any, ...], nnx.Param] = {}
+  _KERNEL_BANKS_LOCK = threading.Lock()
 
   # Default constant alpha value (sqrt(2))
   DEFAULT_CONSTANT_ALPHA = jnp.sqrt(2.0)  # jnp.sqrt(2.0)
@@ -139,37 +141,39 @@ class YatNMN(Module):
         positive_init,
       )
 
-      shared_kernel = YatNMN._KERNEL_BANKS.get(bank_key)
-      if shared_kernel is None:
-        # First layer using this bank: create with auto-sized dimensions
-        kernel_key = rngs.params()
-        kernel_val = kernel_init(kernel_key, bank_shape, param_dtype)
-        if positive_init:
-          kernel_val = jnp.abs(kernel_val)
-        shared_kernel = nnx.Param(kernel_val)
-        YatNMN._KERNEL_BANKS[bank_key] = shared_kernel
-      else:
-        # Bank exists: auto-expand if needed
-        existing_shape = shared_kernel.value.shape
-        existing_bank_size = existing_shape[-1]
-        
-        if bank_out_features > existing_bank_size:
-          # Auto-expand bank to accommodate larger layer
-          print(f"Auto-expanding kernel bank '{kernel_bank_id}': "
-                f"{existing_bank_size} -> {bank_out_features} neurons")
-          new_shape = (in_features, bank_out_features)
-          old_kernel = shared_kernel.value
-          # Pad with random initialization for new neurons
+      with YatNMN._KERNEL_BANKS_LOCK:
+        shared_kernel = YatNMN._KERNEL_BANKS.get(bank_key)
+        if shared_kernel is None:
+          # First layer using this bank: create with auto-sized dimensions
           kernel_key = rngs.params()
-          new_kernel_val = kernel_init(kernel_key, new_shape, param_dtype)
+          kernel_val = kernel_init(kernel_key, bank_shape, param_dtype)
           if positive_init:
-            new_kernel_val = jnp.abs(new_kernel_val)
-          # Copy old values, new neurons already initialized
-          new_kernel_val = new_kernel_val.at[:, :existing_bank_size].set(old_kernel)
-          shared_kernel.value = new_kernel_val
-        elif bank_out_features < existing_bank_size:
-          # Bank is already larger, just use a slice
-          pass
+            kernel_val = jnp.abs(kernel_val)
+          shared_kernel = nnx.Param(kernel_val)
+          YatNMN._KERNEL_BANKS[bank_key] = shared_kernel
+        else:
+          # Bank exists: auto-expand if needed
+          existing_shape = shared_kernel.value.shape
+          existing_bank_size = existing_shape[-1]
+
+          if bank_out_features > existing_bank_size:
+            # Auto-expand bank to accommodate larger layer
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+              "Auto-expanding kernel bank '%s': %d -> %d neurons",
+              kernel_bank_id, existing_bank_size, bank_out_features
+            )
+            new_shape = (in_features, bank_out_features)
+            old_kernel = shared_kernel.value
+            # Pad with random initialization for new neurons
+            kernel_key = rngs.params()
+            new_kernel_val = kernel_init(kernel_key, new_shape, param_dtype)
+            if positive_init:
+              new_kernel_val = jnp.abs(new_kernel_val)
+            # Copy old values, new neurons already initialized
+            new_kernel_val = new_kernel_val.at[:, :existing_bank_size].set(old_kernel)
+            shared_kernel.value = new_kernel_val
+          # elif bank_out_features < existing_bank_size: bank is larger, slice used below
 
       self.kernel = shared_kernel
       self._kernel_slice = slice(0, out_features)
@@ -229,6 +233,8 @@ class YatNMN(Module):
     self.bias_init = bias_init
     self.dot_general = dot_general
     self.promote_dtype = promote_dtype
+    if epsilon <= 0:
+      raise ValueError(f"epsilon must be positive, got {epsilon}")
     self.epsilon = epsilon
     self.spherical = spherical
     self.drop_rate = drop_rate

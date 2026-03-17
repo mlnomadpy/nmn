@@ -68,6 +68,8 @@ class YatNMN(Layer):
         super().__init__(activity_regularizer=activity_regularizer, **kwargs)
         self.units = units
         self.use_bias = use_bias
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
         self.positive_init = positive_init
         self.spherical = spherical
@@ -156,20 +158,20 @@ class YatNMN(Layer):
         # Compute dot product
         dot_product = ops.matmul(inputs, kernel)
 
-        # Compute squared distances
+        # Compute squared distances — bias must NOT affect distance,
+        # distance = ||x - W||² is purely geometric (independent of bias)
         if self.spherical:
             # Spherical: ||x||=1, ||W||=1, so dist = 2 - 2*(x·W)
-            dot_for_dist = dot_product - self.bias if self.use_bias else dot_product
-            distances = 2 - 2 * dot_for_dist
+            distances = 2 - 2 * dot_product
         else:
             inputs_squared_sum = ops.sum(ops.square(inputs), axis=-1, keepdims=True)
             if self.weight_normalized:
                 kernel_squared_sum = ops.ones((self.units,), dtype=inputs.dtype)
             else:
                 kernel_squared_sum = ops.sum(ops.square(kernel), axis=0)
-            dot_for_dist = dot_product - self.bias if self.use_bias else dot_product
-            distances = inputs_squared_sum + kernel_squared_sum - 2 * dot_for_dist
+            distances = inputs_squared_sum + kernel_squared_sum - 2 * dot_product
 
+        # Add bias inside the numerator square: (dot + bias)^2 / dist
         if self.use_bias:
             dot_product = ops.add(dot_product, self.bias)
 
