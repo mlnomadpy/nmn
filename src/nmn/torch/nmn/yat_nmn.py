@@ -1,7 +1,10 @@
 # mypy: allow-untyped-defs
 """YatNMN - Yet Another Transformation Neural Matter Network."""
+import logging
 import math
 from typing import Optional, Union
+
+logger = logging.getLogger(__name__)
 
 import torch
 import torch.nn as nn
@@ -106,8 +109,8 @@ class YatNMN(nn.Module):
                 existing_size = shared_weight.shape[0]
                 if bank_out_features > existing_size:
                     # Auto-expand: pad with new random initialization
-                    print(f"Auto-expanding kernel bank '{kernel_bank_id}': "
-                          f"{existing_size} -> {bank_out_features} neurons")
+                    logger.info("Auto-expanding kernel bank '%s': %d -> %d neurons",
+                                kernel_bank_id, existing_size, bank_out_features)
                     old_weight = shared_weight.data
                     new_weight = torch.empty(
                         (bank_out_features, in_features),

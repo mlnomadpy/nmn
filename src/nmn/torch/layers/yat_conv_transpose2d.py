@@ -11,13 +11,13 @@ from torch.nn.modules.utils import _pair
 
 from torch.nn import ConvTranspose2d
 
-__all__ = ["YatConvTranspose2d"]
+__all__ = ["YatConvTranspose2D"]
 
 # Default constant alpha value (sqrt(2))
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
 
 
-class YatConvTranspose2d(ConvTranspose2d):
+class YatConvTranspose2D(ConvTranspose2d):
     """2D YAT transposed convolution layer implementing the YAT algorithm.
 
     Computes: y = (x * W + b)² / (||x - W||² + ε), with optional alpha scaling.
@@ -116,7 +116,7 @@ class YatConvTranspose2d(ConvTranspose2d):
 
     def forward(self, input: Tensor, output_size: Optional[list[int]] = None, *, deterministic: bool = False) -> Tensor:
         if self.padding_mode != "zeros":
-            raise ValueError("Only `zeros` padding mode is supported for YatConvTranspose2d")
+            raise ValueError("Only `zeros` padding mode is supported for YatConvTranspose2D")
 
         weight = self.weight
         bias_val = self.bias

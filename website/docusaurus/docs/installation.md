@@ -29,7 +29,7 @@ pip install nmn
 To install from source for development:
 
 ```bash
-git clone https://github.com/mlnomadpy/nmn.git
+git clone https://github.com/azettaai/nmn.git
 cd nmn
 pip install -e ".[dev]"
 ```

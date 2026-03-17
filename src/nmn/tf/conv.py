@@ -617,6 +617,11 @@ class YatConvTranspose1D(tf.Module):
 
     @tf.Module.with_name_scope
     def build(self, input_shape: Union[List[int], tf.TensorShape]) -> None:
+        """Builds the layer weights based on input shape.
+
+        Args:
+            input_shape: Shape of the input tensor ``[batch, length, channels]``.
+        """
         if self.is_built:
             return
 
@@ -651,6 +656,14 @@ class YatConvTranspose1D(tf.Module):
 
     @tf.Module.with_name_scope
     def __call__(self, inputs: tf.Tensor) -> tf.Tensor:
+        """Forward pass of the 1D YAT transposed convolution.
+
+        Args:
+            inputs: Input tensor of shape ``[batch, length, channels]``.
+
+        Returns:
+            Output tensor after YAT transposed convolution.
+        """
         inputs = tf.convert_to_tensor(inputs, dtype=self.dtype)
         self._maybe_build(inputs)
 
@@ -773,6 +786,11 @@ class YatConvTranspose2D(tf.Module):
 
     @tf.Module.with_name_scope
     def build(self, input_shape: Union[List[int], tf.TensorShape]) -> None:
+        """Builds the layer weights based on input shape.
+
+        Args:
+            input_shape: Shape of the input tensor ``[batch, height, width, channels]``.
+        """
         if self.is_built:
             return
 
@@ -808,6 +826,14 @@ class YatConvTranspose2D(tf.Module):
 
     @tf.Module.with_name_scope
     def __call__(self, inputs: tf.Tensor) -> tf.Tensor:
+        """Forward pass of the 2D YAT transposed convolution.
+
+        Args:
+            inputs: Input tensor of shape ``[batch, height, width, channels]``.
+
+        Returns:
+            Output tensor after YAT transposed convolution.
+        """
         inputs = tf.convert_to_tensor(inputs, dtype=self.dtype)
         self._maybe_build(inputs)
 
@@ -919,6 +945,12 @@ class YatConvTranspose3D(tf.Module):
 
     @tf.Module.with_name_scope
     def build(self, input_shape: Union[List[int], tf.TensorShape]) -> None:
+        """Builds the layer weights based on input shape.
+
+        Args:
+            input_shape: Shape of the input tensor
+                ``[batch, depth, height, width, channels]``.
+        """
         if self.is_built:
             return
 
@@ -954,6 +986,15 @@ class YatConvTranspose3D(tf.Module):
 
     @tf.Module.with_name_scope
     def __call__(self, inputs: tf.Tensor) -> tf.Tensor:
+        """Forward pass of the 3D YAT transposed convolution.
+
+        Args:
+            inputs: Input tensor of shape
+                ``[batch, depth, height, width, channels]``.
+
+        Returns:
+            Output tensor after YAT transposed convolution.
+        """
         inputs = tf.convert_to_tensor(inputs, dtype=self.dtype)
         self._maybe_build(inputs)
 

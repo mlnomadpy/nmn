@@ -54,6 +54,8 @@ class YatNMN(Layer):
         constant_alpha=None,
         positive_init=False,
         epsilon=1e-5,
+        spherical=False,
+        weight_normalized=False,
         kernel_initializer="glorot_normal",
         bias_initializer="zeros",
         kernel_regularizer=None,
@@ -68,6 +70,8 @@ class YatNMN(Layer):
         self.use_bias = use_bias
         self.epsilon = epsilon
         self.positive_init = positive_init
+        self.spherical = spherical
+        self.weight_normalized = weight_normalized
 
         # Handle alpha configuration
         self._constant_alpha_value = None
@@ -129,17 +133,42 @@ class YatNMN(Layer):
         if self.positive_init:
             self.kernel.assign(ops.abs(self.kernel))
 
+        # Normalize kernel rows to unit norm if weight_normalized
+        if self.weight_normalized:
+            weight_norm = ops.sqrt(ops.sum(ops.square(self.kernel), axis=-1, keepdims=True))
+            self.kernel.assign(self.kernel / (weight_norm + 1e-8))
+
         self.input_spec = InputSpec(min_ndim=2, axes={-1: input_dim})
         self.built = True
 
     def call(self, inputs):
+        kernel = self.kernel
+
+        # Spherical mode: normalize inputs and kernel to unit norm
+        if self.spherical:
+            inputs = inputs / (ops.sqrt(ops.sum(ops.square(inputs), axis=-1, keepdims=True)) + 1e-8)
+            kernel = kernel / (ops.sqrt(ops.sum(ops.square(kernel), axis=-1, keepdims=True)) + 1e-8)
+
+        # Weight normalization: normalize each kernel row to unit norm at forward time
+        if self.weight_normalized:
+            kernel = kernel / (ops.sqrt(ops.sum(ops.square(kernel), axis=-1, keepdims=True)) + 1e-8)
+
         # Compute dot product
-        dot_product = ops.matmul(inputs, self.kernel)
+        dot_product = ops.matmul(inputs, kernel)
 
         # Compute squared distances
-        inputs_squared_sum = ops.sum(inputs ** 2, axis=-1, keepdims=True)
-        kernel_squared_sum = ops.sum(self.kernel ** 2, axis=0)
-        distances = inputs_squared_sum + kernel_squared_sum - 2 * dot_product
+        if self.spherical:
+            # Spherical: ||x||=1, ||W||=1, so dist = 2 - 2*(x·W)
+            dot_for_dist = dot_product - self.bias if self.use_bias else dot_product
+            distances = 2 - 2 * dot_for_dist
+        else:
+            inputs_squared_sum = ops.sum(ops.square(inputs), axis=-1, keepdims=True)
+            if self.weight_normalized:
+                kernel_squared_sum = ops.ones((self.units,), dtype=inputs.dtype)
+            else:
+                kernel_squared_sum = ops.sum(ops.square(kernel), axis=0)
+            dot_for_dist = dot_product - self.bias if self.use_bias else dot_product
+            distances = inputs_squared_sum + kernel_squared_sum - 2 * dot_for_dist
 
         if self.use_bias:
             dot_product = ops.add(dot_product, self.bias)
@@ -170,6 +199,8 @@ class YatNMN(Layer):
             "constant_alpha": self.constant_alpha,
             "positive_init": self.positive_init,
             "epsilon": self.epsilon,
+            "spherical": self.spherical,
+            "weight_normalized": self.weight_normalized,
             "kernel_initializer": initializers.serialize(self.kernel_initializer),
             "bias_initializer": initializers.serialize(self.bias_initializer),
             "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),

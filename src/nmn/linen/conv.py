@@ -380,10 +380,334 @@ class YatConv3D(Module):
         return y
 
 
+class YatConvTranspose1D(Module):
+    """1D YAT transposed convolution layer for Flax Linen.
+
+    This layer implements 1D transposed convolution using the YAT algorithm.
+
+    Attributes:
+        features: Number of output features (filters).
+        kernel_size: Size of the convolving kernel as a tuple (length,).
+        strides: Stride of the transposed convolution. Default (1,).
+        padding: Padding algorithm. Either 'VALID' or 'SAME'.
+        use_bias: Whether to add a bias. Default True.
+        use_alpha: Whether to use alpha scaling. Default True.
+        dtype: The dtype of the computation.
+        param_dtype: The dtype for parameters. Default float32.
+        kernel_init: Initializer for kernel weights.
+        bias_init: Initializer for bias.
+        epsilon: Small constant for numerical stability.
+    """
+    features: int
+    kernel_size: Sequence[int]
+    strides: Sequence[int] = (1,)
+    padding: Union[str, Sequence[Tuple[int, int]]] = 'VALID'
+    use_bias: bool = True
+    use_alpha: bool = True
+    dtype: Optional[Any] = None
+    param_dtype: Any = jnp.float32
+    kernel_init: Any = nn.initializers.orthogonal()
+    bias_init: Any = zeros_init()
+    alpha_init: Any = lambda key, shape, dtype: jnp.ones(shape, dtype)
+    epsilon: float = 1e-6
+
+    @compact
+    def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
+        """Apply 1D YAT transposed convolution.
+
+        Args:
+            inputs: Input tensor of shape [batch, length, channels].
+
+        Returns:
+            Output tensor after YAT transposed convolution.
+        """
+        input_channels = inputs.shape[-1]
+
+        # Kernel shape for transpose conv: [kernel_size, in_channels, features]
+        kernel_shape = tuple(self.kernel_size) + (input_channels, self.features)
+
+        kernel = self.param('kernel', self.kernel_init, kernel_shape, self.param_dtype)
+
+        if self.use_bias:
+            bias = self.param('bias', self.bias_init, (self.features,), self.param_dtype)
+        else:
+            bias = None
+
+        if self.use_alpha:
+            alpha = self.param('alpha', self.alpha_init, (1,), self.param_dtype)
+        else:
+            alpha = None
+
+        inputs, kernel, bias, alpha = promote_dtype(inputs, kernel, bias, alpha, dtype=self.dtype)
+
+        # Compute transposed convolution using lax.conv_transpose
+        dn = lax.conv_dimension_numbers(inputs.shape, kernel.shape, ('NWC', 'WIO', 'NWC'))
+
+        dot_prod_map = lax.conv_transpose(
+            inputs,
+            kernel,
+            strides=self.strides,
+            padding=self.padding,
+            dimension_numbers=dn,
+        )
+
+        # Compute ||input_patches||^2 using transposed conv with ones kernel
+        inputs_squared = inputs * inputs
+        ones_kernel_shape = tuple(self.kernel_size) + (input_channels, 1)
+        ones_kernel = jnp.ones(ones_kernel_shape, dtype=kernel.dtype)
+
+        patch_sq_sum_raw = lax.conv_transpose(
+            inputs_squared,
+            ones_kernel,
+            strides=self.strides,
+            padding=self.padding,
+            dimension_numbers=dn,
+        )
+
+        # Repeat to match output channels
+        patch_sq_sum = jnp.repeat(patch_sq_sum_raw, self.features, axis=-1)
+
+        # Compute ||kernel||^2 per filter — sum over all axes except the out_channels axis (last)
+        kernel_sq_sum = jnp.sum(kernel**2, axis=tuple(range(kernel.ndim - 1)))
+        kernel_sq_sum = kernel_sq_sum.reshape((1, 1, -1))
+
+        # YAT distance
+        distance_sq = patch_sq_sum + kernel_sq_sum - 2 * dot_prod_map
+
+        # Add bias before squaring
+        if bias is not None:
+            dot_prod_map = dot_prod_map + bias.reshape((1, 1, -1))
+
+        # YAT output: (x·W + b)² / (dist + ε)
+        y = dot_prod_map**2 / (distance_sq + self.epsilon)
+
+        if alpha is not None:
+            y = y * alpha
+
+        return y
+
+
+class YatConvTranspose2D(Module):
+    """2D YAT transposed convolution layer for Flax Linen.
+
+    This layer implements 2D transposed convolution using the YAT algorithm.
+
+    Attributes:
+        features: Number of output features (filters).
+        kernel_size: Size of the convolving kernel as a tuple (height, width).
+        strides: Stride of the transposed convolution. Default (1, 1).
+        padding: Padding algorithm. Either 'VALID' or 'SAME'.
+        use_bias: Whether to add a bias. Default True.
+        use_alpha: Whether to use alpha scaling. Default True.
+        dtype: The dtype of the computation.
+        param_dtype: The dtype for parameters. Default float32.
+        kernel_init: Initializer for kernel weights.
+        bias_init: Initializer for bias.
+        epsilon: Small constant for numerical stability.
+    """
+    features: int
+    kernel_size: Sequence[int]
+    strides: Sequence[int] = (1, 1)
+    padding: Union[str, Sequence[Tuple[int, int]]] = 'VALID'
+    use_bias: bool = True
+    use_alpha: bool = True
+    dtype: Optional[Any] = None
+    param_dtype: Any = jnp.float32
+    kernel_init: Any = nn.initializers.orthogonal()
+    bias_init: Any = zeros_init()
+    alpha_init: Any = lambda key, shape, dtype: jnp.ones(shape, dtype)
+    epsilon: float = 1e-6
+
+    @compact
+    def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
+        """Apply 2D YAT transposed convolution.
+
+        Args:
+            inputs: Input tensor of shape [batch, height, width, channels].
+
+        Returns:
+            Output tensor after YAT transposed convolution.
+        """
+        input_channels = inputs.shape[-1]
+
+        # Kernel shape for transpose conv: [height, width, in_channels, features]
+        kernel_shape = tuple(self.kernel_size) + (input_channels, self.features)
+
+        kernel = self.param('kernel', self.kernel_init, kernel_shape, self.param_dtype)
+
+        if self.use_bias:
+            bias = self.param('bias', self.bias_init, (self.features,), self.param_dtype)
+        else:
+            bias = None
+
+        if self.use_alpha:
+            alpha = self.param('alpha', self.alpha_init, (1,), self.param_dtype)
+        else:
+            alpha = None
+
+        inputs, kernel, bias, alpha = promote_dtype(inputs, kernel, bias, alpha, dtype=self.dtype)
+
+        # Compute transposed convolution using lax.conv_transpose
+        dn = lax.conv_dimension_numbers(inputs.shape, kernel.shape, ('NHWC', 'HWIO', 'NHWC'))
+
+        dot_prod_map = lax.conv_transpose(
+            inputs,
+            kernel,
+            strides=self.strides,
+            padding=self.padding,
+            dimension_numbers=dn,
+        )
+
+        # Compute ||input_patches||^2 using transposed conv with ones kernel
+        inputs_squared = inputs * inputs
+        ones_kernel_shape = tuple(self.kernel_size) + (input_channels, 1)
+        ones_kernel = jnp.ones(ones_kernel_shape, dtype=kernel.dtype)
+
+        patch_sq_sum_raw = lax.conv_transpose(
+            inputs_squared,
+            ones_kernel,
+            strides=self.strides,
+            padding=self.padding,
+            dimension_numbers=dn,
+        )
+
+        # Repeat to match output channels
+        patch_sq_sum = jnp.repeat(patch_sq_sum_raw, self.features, axis=-1)
+
+        # Compute ||kernel||^2 per filter — sum over all axes except the out_channels axis (last)
+        kernel_sq_sum = jnp.sum(kernel**2, axis=tuple(range(kernel.ndim - 1)))
+        kernel_sq_sum = kernel_sq_sum.reshape((1, 1, 1, -1))
+
+        # YAT distance
+        distance_sq = patch_sq_sum + kernel_sq_sum - 2 * dot_prod_map
+
+        # Add bias before squaring
+        if bias is not None:
+            dot_prod_map = dot_prod_map + bias.reshape((1, 1, 1, -1))
+
+        # YAT output: (x·W + b)² / (dist + ε)
+        y = dot_prod_map**2 / (distance_sq + self.epsilon)
+
+        if alpha is not None:
+            y = y * alpha
+
+        return y
+
+
+class YatConvTranspose3D(Module):
+    """3D YAT transposed convolution layer for Flax Linen.
+
+    This layer implements 3D transposed convolution using the YAT algorithm.
+
+    Attributes:
+        features: Number of output features (filters).
+        kernel_size: Size of the convolving kernel as a tuple (depth, height, width).
+        strides: Stride of the transposed convolution. Default (1, 1, 1).
+        padding: Padding algorithm. Either 'VALID' or 'SAME'.
+        use_bias: Whether to add a bias. Default True.
+        use_alpha: Whether to use alpha scaling. Default True.
+        dtype: The dtype of the computation.
+        param_dtype: The dtype for parameters. Default float32.
+        kernel_init: Initializer for kernel weights.
+        bias_init: Initializer for bias.
+        epsilon: Small constant for numerical stability.
+    """
+    features: int
+    kernel_size: Sequence[int]
+    strides: Sequence[int] = (1, 1, 1)
+    padding: Union[str, Sequence[Tuple[int, int]]] = 'VALID'
+    use_bias: bool = True
+    use_alpha: bool = True
+    dtype: Optional[Any] = None
+    param_dtype: Any = jnp.float32
+    kernel_init: Any = nn.initializers.orthogonal()
+    bias_init: Any = zeros_init()
+    alpha_init: Any = lambda key, shape, dtype: jnp.ones(shape, dtype)
+    epsilon: float = 1e-6
+
+    @compact
+    def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
+        """Apply 3D YAT transposed convolution.
+
+        Args:
+            inputs: Input tensor of shape [batch, depth, height, width, channels].
+
+        Returns:
+            Output tensor after YAT transposed convolution.
+        """
+        input_channels = inputs.shape[-1]
+
+        # Kernel shape for transpose conv: [depth, height, width, in_channels, features]
+        kernel_shape = tuple(self.kernel_size) + (input_channels, self.features)
+
+        kernel = self.param('kernel', self.kernel_init, kernel_shape, self.param_dtype)
+
+        if self.use_bias:
+            bias = self.param('bias', self.bias_init, (self.features,), self.param_dtype)
+        else:
+            bias = None
+
+        if self.use_alpha:
+            alpha = self.param('alpha', self.alpha_init, (1,), self.param_dtype)
+        else:
+            alpha = None
+
+        inputs, kernel, bias, alpha = promote_dtype(inputs, kernel, bias, alpha, dtype=self.dtype)
+
+        # Compute transposed convolution using lax.conv_transpose
+        dn = lax.conv_dimension_numbers(inputs.shape, kernel.shape, ('NDHWC', 'DHWIO', 'NDHWC'))
+
+        dot_prod_map = lax.conv_transpose(
+            inputs,
+            kernel,
+            strides=self.strides,
+            padding=self.padding,
+            dimension_numbers=dn,
+        )
+
+        # Compute ||input_patches||^2 using transposed conv with ones kernel
+        inputs_squared = inputs * inputs
+        ones_kernel_shape = tuple(self.kernel_size) + (input_channels, 1)
+        ones_kernel = jnp.ones(ones_kernel_shape, dtype=kernel.dtype)
+
+        patch_sq_sum_raw = lax.conv_transpose(
+            inputs_squared,
+            ones_kernel,
+            strides=self.strides,
+            padding=self.padding,
+            dimension_numbers=dn,
+        )
+
+        # Repeat to match output channels
+        patch_sq_sum = jnp.repeat(patch_sq_sum_raw, self.features, axis=-1)
+
+        # Compute ||kernel||^2 per filter — sum over all axes except the out_channels axis (last)
+        kernel_sq_sum = jnp.sum(kernel**2, axis=tuple(range(kernel.ndim - 1)))
+        kernel_sq_sum = kernel_sq_sum.reshape((1, 1, 1, 1, -1))
+
+        # YAT distance
+        distance_sq = patch_sq_sum + kernel_sq_sum - 2 * dot_prod_map
+
+        # Add bias before squaring
+        if bias is not None:
+            dot_prod_map = dot_prod_map + bias.reshape((1, 1, 1, 1, -1))
+
+        # YAT output: (x·W + b)² / (dist + ε)
+        y = dot_prod_map**2 / (distance_sq + self.epsilon)
+
+        if alpha is not None:
+            y = y * alpha
+
+        return y
+
+
 # Aliases
 YatConv1d = YatConv1D
 YatConv2d = YatConv2D
 YatConv3d = YatConv3D
+YatConvTranspose1d = YatConvTranspose1D
+YatConvTranspose2d = YatConvTranspose2D
+YatConvTranspose3d = YatConvTranspose3D
 
 
 

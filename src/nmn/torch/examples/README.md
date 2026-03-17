@@ -60,13 +60,13 @@ python yat_cifar10.py --help
 ### 1. Alpha Scaling
 Applies a learnable scaling factor based on the number of output channels:
 ```python
-YatConv2d(in_channels=3, out_channels=16, kernel_size=3, use_alpha=True)
+YatConv2D(in_channels=3, out_channels=16, kernel_size=3, use_alpha=True)
 ```
 
 ### 2. DropConnect Regularization
 Randomly drops connections during training for better generalization:
 ```python
-YatConv2d(in_channels=3, out_channels=16, kernel_size=3, 
+YatConv2D(in_channels=3, out_channels=16, kernel_size=3, 
           use_dropconnect=True, drop_rate=0.1)
 ```
 
@@ -75,13 +75,13 @@ Allows masking specific weights in the convolution kernels:
 ```python
 mask = torch.ones(16, 3, 3, 3)  # Shape: (out_channels, in_channels, height, width)
 mask[:, :, 0, 0] = 0  # Zero out top-left corner
-YatConv2d(in_channels=3, out_channels=16, kernel_size=3, mask=mask)
+YatConv2D(in_channels=3, out_channels=16, kernel_size=3, mask=mask)
 ```
 
 ### 4. Grouped Convolutions
 Supports grouped convolutions for parameter efficiency:
 ```python
-YatConv2d(in_channels=8, out_channels=16, kernel_size=3, groups=2)
+YatConv2D(in_channels=8, out_channels=16, kernel_size=3, groups=2)
 ```
 
 ### 5. Deterministic Mode

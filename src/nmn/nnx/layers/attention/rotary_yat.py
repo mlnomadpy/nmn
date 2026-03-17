@@ -678,14 +678,14 @@ class RotaryYatAttention(Module):
                     "Cache not initialized. Call init_cache first."
                 )
 
-            cur_index = self.cache_index.value
+            cur_index = self.cache_index[...]
             # Update cache
             indices = (0, cur_index, 0, 0)
             k_cached = jax.lax.dynamic_update_slice(
-                self.cached_key.value, k, indices
+                self.cached_key[...], k, indices
             )
             v_cached = jax.lax.dynamic_update_slice(
-                self.cached_value.value, v, indices
+                self.cached_value[...], v, indices
             )
             self.cached_key.value = k_cached
             self.cached_value.value = v_cached
@@ -706,8 +706,8 @@ class RotaryYatAttention(Module):
             position_offset = 0  # Use full cache positions
 
         # Get RoPE frequencies
-        freqs_cos = jax.device_put(self.freqs_cos.value)
-        freqs_sin = jax.device_put(self.freqs_sin.value)
+        freqs_cos = jax.device_put(self.freqs_cos[...])
+        freqs_sin = jax.device_put(self.freqs_sin[...])
 
         # Dropout RNG
         dropout_rng = None
@@ -724,7 +724,7 @@ class RotaryYatAttention(Module):
             if self._constant_alpha_value is not None:
                 pass  # Will be applied as direct scale after attention
             elif self.alpha is not None:
-                alpha_value = self.alpha.value
+                alpha_value = self.alpha[...]
 
         # Apply Rotary YAT attention
         if self.use_performer:
@@ -732,8 +732,8 @@ class RotaryYatAttention(Module):
             
             # Reconstruct params dict
             performer_params = {
-                'projections': jax.device_put(self.perf_projections.value),
-                'scales': jax.device_put(self.perf_scales.value),
+                'projections': jax.device_put(self.perf_projections[...]),
+                'scales': jax.device_put(self.perf_scales[...]),
                 'head_dim': self.perf_head_dim,
                 'num_prf_features': self.num_features_per_scale,
                 'num_scales': self.num_scales,

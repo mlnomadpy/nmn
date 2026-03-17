@@ -2,12 +2,12 @@
 
 # Import all layers from the layers module
 from .layers import (
-    YatConv1d,
-    YatConv2d,
-    YatConv3d,
-    YatConvTranspose1d,
-    YatConvTranspose2d,
-    YatConvTranspose3d,
+    YatConv1D,
+    YatConv2D,
+    YatConv3D,
+    YatConvTranspose1D,
+    YatConvTranspose2D,
+    YatConvTranspose3D,
 )
 
 # Import YatNMN from nmn module
@@ -19,12 +19,12 @@ from .attention import MultiHeadYatAttention
 
 __all__ = [
     # YAT Conv layers
-    "YatConv1d",
-    "YatConv2d",
-    "YatConv3d",
-    "YatConvTranspose1d",
-    "YatConvTranspose2d",
-    "YatConvTranspose3d",
+    "YatConv1D",
+    "YatConv2D",
+    "YatConv3D",
+    "YatConvTranspose1D",
+    "YatConvTranspose2D",
+    "YatConvTranspose3D",
     # YAT NMN
     "YatNMN",
     # YAT Attention

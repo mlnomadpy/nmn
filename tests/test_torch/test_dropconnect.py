@@ -5,22 +5,22 @@ import numpy as np
 
 
 def test_yat_conv2d_dropconnect_import():
-    """Test that YatConv2d with DropConnect can be imported."""
+    """Test that YatConv2D with DropConnect can be imported."""
     try:
         import torch
-        from nmn.torch.layers import YatConv2d
-        assert YatConv2d is not None
+        from nmn.torch.layers import YatConv2D
+        assert YatConv2D is not None
     except ImportError as e:
         pytest.skip(f"PyTorch dependencies not available: {e}")
 
 
 def test_yat_conv2d_dropconnect_instantiation():
-    """Test YatConv2d with DropConnect can be instantiated."""
+    """Test YatConv2D with DropConnect can be instantiated."""
     try:
         import torch
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3,
@@ -39,11 +39,11 @@ def test_yat_conv2d_dropconnect_training_mode():
     """Test that DropConnect affects training but not eval."""
     try:
         import torch
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
         torch.manual_seed(42)
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3,
@@ -80,9 +80,9 @@ def test_yat_conv2d_dropconnect_gradient():
     """Test that gradients flow correctly with DropConnect."""
     try:
         import torch
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3,
@@ -108,13 +108,13 @@ def test_yat_conv2d_mask_functionality():
     """Test that custom mask works correctly."""
     try:
         import torch
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
         # Create a mask that zeros out half the weights
         mask = torch.ones(16, 3, 3, 3)
         mask[:8] = 0  # Zero out first 8 filters
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3,
@@ -137,11 +137,11 @@ def test_yat_conv2d_no_dropconnect():
     """Test that layer works normally without DropConnect."""
     try:
         import torch
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
         torch.manual_seed(42)
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3,

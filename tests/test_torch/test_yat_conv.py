@@ -7,19 +7,19 @@ def test_torch_yat_conv_import():
     """Test that YatConv classes can be imported."""
     try:
         import torch
-        from nmn.torch.layers import YatConv1d, YatConv2d, YatConv3d
+        from nmn.torch.layers import YatConv1D, YatConv2D, YatConv3D
         assert True
     except ImportError as e:
         pytest.skip(f"PyTorch dependencies not available: {e}")
 
 
 def test_yat_conv1d_instantiation():
-    """Test YatConv1d can be instantiated."""
+    """Test YatConv1D can be instantiated."""
     try:
         import torch
-        from nmn.torch.layers import YatConv1d
+        from nmn.torch.layers import YatConv1D
         
-        layer = YatConv1d(
+        layer = YatConv1D(
             in_channels=16,
             out_channels=32,
             kernel_size=3
@@ -33,12 +33,12 @@ def test_yat_conv1d_instantiation():
 
 
 def test_yat_conv2d_instantiation():
-    """Test YatConv2d can be instantiated."""
+    """Test YatConv2D can be instantiated."""
     try:
         import torch
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3
@@ -52,12 +52,12 @@ def test_yat_conv2d_instantiation():
 
 
 def test_yat_conv3d_instantiation():
-    """Test YatConv3d can be instantiated."""
+    """Test YatConv3D can be instantiated."""
     try:
         import torch
-        from nmn.torch.layers import YatConv3d
+        from nmn.torch.layers import YatConv3D
         
-        layer = YatConv3d(
+        layer = YatConv3D(
             in_channels=8,
             out_channels=16,
             kernel_size=3
@@ -71,12 +71,12 @@ def test_yat_conv3d_instantiation():
 
 
 def test_yat_conv1d_forward():
-    """Test YatConv1d forward pass."""
+    """Test YatConv1D forward pass."""
     try:
         import torch
-        from nmn.torch.layers import YatConv1d
+        from nmn.torch.layers import YatConv1D
         
-        layer = YatConv1d(
+        layer = YatConv1D(
             in_channels=16,
             out_channels=32,
             kernel_size=3,
@@ -97,12 +97,12 @@ def test_yat_conv1d_forward():
 
 
 def test_yat_conv2d_forward():
-    """Test YatConv2d forward pass."""
+    """Test YatConv2D forward pass."""
     try:
         import torch
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3,
@@ -123,12 +123,12 @@ def test_yat_conv2d_forward():
 
 
 def test_yat_conv3d_forward():
-    """Test YatConv3d forward pass."""
+    """Test YatConv3D forward pass."""
     try:
         import torch
-        from nmn.torch.layers import YatConv3d
+        from nmn.torch.layers import YatConv3D
         
-        layer = YatConv3d(
+        layer = YatConv3D(
             in_channels=8,
             out_channels=16,
             kernel_size=3,
@@ -149,12 +149,12 @@ def test_yat_conv3d_forward():
 
 
 def test_yat_conv2d_with_alpha():
-    """Test YatConv2d with alpha parameter."""
+    """Test YatConv2D with alpha parameter."""
     try:
         import torch
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3,
@@ -169,12 +169,12 @@ def test_yat_conv2d_with_alpha():
 
 
 def test_yat_conv2d_without_alpha():
-    """Test YatConv2d without alpha parameter."""
+    """Test YatConv2D without alpha parameter."""
     try:
         import torch
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3,
@@ -189,12 +189,12 @@ def test_yat_conv2d_without_alpha():
 
 
 def test_yat_conv2d_with_dropconnect():
-    """Test YatConv2d with dropconnect."""
+    """Test YatConv2D with dropconnect."""
     try:
         import torch
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3,
@@ -210,13 +210,13 @@ def test_yat_conv2d_with_dropconnect():
 
 
 def test_yat_conv2d_custom_epsilon():
-    """Test YatConv2d with custom epsilon."""
+    """Test YatConv2D with custom epsilon."""
     try:
         import torch
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
         epsilon = 1e-6
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3,
@@ -230,12 +230,12 @@ def test_yat_conv2d_custom_epsilon():
 
 
 def test_yat_conv2d_stride_and_padding():
-    """Test YatConv2d with stride and padding."""
+    """Test YatConv2D with stride and padding."""
     try:
         import torch
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3,
@@ -260,10 +260,10 @@ def test_yat_conv_all_variants_with_device():
     """Test all YatConv variants can be instantiated with device parameter."""
     try:
         import torch
-        from nmn.torch.layers import YatConv1d, YatConv2d, YatConv3d
+        from nmn.torch.layers import YatConv1D, YatConv2D, YatConv3D
         
-        # Test YatConv1d
-        layer1d = YatConv1d(
+        # Test YatConv1D
+        layer1d = YatConv1D(
             in_channels=8,
             out_channels=16,
             kernel_size=3,
@@ -272,8 +272,8 @@ def test_yat_conv_all_variants_with_device():
         assert layer1d is not None
         assert layer1d.weight.device.type == 'cpu'
         
-        # Test YatConv2d
-        layer2d = YatConv2d(
+        # Test YatConv2D
+        layer2d = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3,
@@ -282,8 +282,8 @@ def test_yat_conv_all_variants_with_device():
         assert layer2d is not None
         assert layer2d.weight.device.type == 'cpu'
         
-        # Test YatConv3d
-        layer3d = YatConv3d(
+        # Test YatConv3D
+        layer3d = YatConv3D(
             in_channels=8,
             out_channels=16,
             kernel_size=3,
@@ -297,13 +297,13 @@ def test_yat_conv_all_variants_with_device():
 
 
 def test_yat_conv2d_dtype_parameter():
-    """Test YatConv2d can be instantiated with dtype parameter."""
+    """Test YatConv2D can be instantiated with dtype parameter."""
     try:
         import torch
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
         # Test with float32 dtype
-        layer_f32 = YatConv2d(
+        layer_f32 = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3,
@@ -313,7 +313,7 @@ def test_yat_conv2d_dtype_parameter():
         assert layer_f32.weight.dtype == torch.float32
         
         # Test with float64 dtype
-        layer_f64 = YatConv2d(
+        layer_f64 = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3,
@@ -327,13 +327,13 @@ def test_yat_conv2d_dtype_parameter():
 
 
 def test_yat_conv2d_device_and_dtype():
-    """Test YatConv2d with both device and dtype parameters simultaneously."""
+    """Test YatConv2D with both device and dtype parameters simultaneously."""
     try:
         import torch
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
         # This tests the fix for the device/dtype kwargs issue
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3,
@@ -356,13 +356,13 @@ def test_yat_conv2d_device_and_dtype():
 
 
 def test_yat_conv2d_device_via_to():
-    """Test YatConv2d can be moved to different devices (simulating multi-GPU)."""
+    """Test YatConv2D can be moved to different devices (simulating multi-GPU)."""
     try:
         import torch
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
         # Test instantiation and .to() method which is commonly used with DataParallel
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3

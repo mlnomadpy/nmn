@@ -56,7 +56,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module='datasets.builder
 # ---------- YAT convolution imports ----------
 # Ensure you have the nmn-pytorch library installed: pip install nmn-pytorch
 try:
-    from nmn.torch import YatConv2d
+    from nmn.torch import YatConv2D
     from nmn.torch import YatNMN
 except ImportError:
     print("Please install nmn-pytorch: pip install nmn-pytorch")
@@ -212,7 +212,7 @@ class BasicYATBlock(nn.Module):
                  use_dropconnect=False, drop_rate=0.1, weight_normalized=False,
                  tie_kernel_bank=False, kernel_bank_id='conv-layers'):
         super(BasicYATBlock, self).__init__()
-        self.yat_conv = YatConv2d(
+        self.yat_conv = YatConv2D(
             in_planes, planes, kernel_size=3, stride=stride, padding=1,
             use_alpha=use_alpha,
             constant_alpha=constant_alpha,

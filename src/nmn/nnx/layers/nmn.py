@@ -239,7 +239,7 @@ class YatNMN(Module):
 
     # Normalize kernel if requested: normalize each neuron (column) to have norm 1
     if self.weight_normalized:
-      kernel_val = self.kernel.value
+      kernel_val = self.kernel[...]
       kernel_norm = jnp.sqrt(jnp.sum(kernel_val**2, axis=0, keepdims=True))
       self.kernel.value = kernel_val / (kernel_norm + 1e-8)
 
@@ -260,16 +260,16 @@ class YatNMN(Module):
     Returns:
       The transformed input.
     """
-    kernel = self.kernel.value
+    kernel = self.kernel[...]
     if self._tie_kernel_bank:
       kernel = kernel[:, self._kernel_slice]
-    bias = self.bias.value if self.bias is not None else None
+    bias = self.bias[...] if self.bias is not None else None
     
     # Get alpha value (either learnable or constant)
     if self._constant_alpha_value is not None:
       alpha = jnp.array(self._constant_alpha_value, dtype=self.param_dtype)
     elif self.alpha is not None:
-      alpha = self.alpha.value
+      alpha = self.alpha[...]
     else:
       alpha = None
 

@@ -218,7 +218,7 @@ function initNavigation() {
         <a href="#results">Results</a>
         <a href="#theory">Blog</a>
         <a href="#code">Code</a>
-        <a href="https://github.com/mlnomadpy/nmn" target="_blank">GitHub →</a>
+        <a href="https://github.com/azettaai/nmn" target="_blank">GitHub →</a>
     `;
     nav.after(drawer);
 
@@ -579,7 +579,7 @@ function copyBibtex() {
   author = {Taha Bouhsine},
   title = {No More DeLuLu: A Kernel-Based Activation-Free Neural Networks},
   year = {2025},
-  url = {https://github.com/mlnomadpy/nmn}
+  url = {https://github.com/azettaai/nmn}
 }`;
 
     navigator.clipboard.writeText(bibtex).then(() => {

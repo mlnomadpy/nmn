@@ -32,7 +32,7 @@ Comprehensive examples for using Neural Matter Networks across all supported fra
 ```python
 import torch
 from nmn.torch.nmn import YatNMN
-from nmn.torch.layers import YatConv2d, YatConvTranspose2d
+from nmn.torch.layers import YatConv2D, YatConvTranspose2D
 
 # ═══════════════════════════════════════════════════════════════
 # Dense Layer — Replace nn.Linear + activation
@@ -51,7 +51,7 @@ y = dense(x)              # (32, 64) — non-linear output!
 # ═══════════════════════════════════════════════════════════════
 # 2D Convolution — Replace nn.Conv2d + activation
 # ═══════════════════════════════════════════════════════════════
-conv = YatConv2d(
+conv = YatConv2D(
     in_channels=3,
     out_channels=32,
     kernel_size=3,
@@ -65,7 +65,7 @@ features = conv(images)              # (8, 32, 32, 32)
 # ═══════════════════════════════════════════════════════════════
 # Transposed Convolution — for upsampling
 # ═══════════════════════════════════════════════════════════════
-deconv = YatConvTranspose2d(
+deconv = YatConvTranspose2D(
     in_channels=32,
     out_channels=16,
     kernel_size=4,
@@ -304,7 +304,7 @@ A complete CNN for image classification using PyTorch:
 import torch
 import torch.nn as nn
 from nmn.torch.nmn import YatNMN
-from nmn.torch.layers import YatConv2d
+from nmn.torch.layers import YatConv2D
 
 class YatCNN(nn.Module):
     """
@@ -317,15 +317,15 @@ class YatCNN(nn.Module):
         # Convolutional backbone
         self.features = nn.Sequential(
             # Block 1: 3 → 32 channels
-            YatConv2d(3, 32, kernel_size=3, padding=1),
+            YatConv2D(3, 32, kernel_size=3, padding=1),
             nn.MaxPool2d(2),  # 32x32 → 16x16
             
             # Block 2: 32 → 64 channels
-            YatConv2d(32, 64, kernel_size=3, padding=1),
+            YatConv2D(32, 64, kernel_size=3, padding=1),
             nn.MaxPool2d(2),  # 16x16 → 8x8
             
             # Block 3: 64 → 128 channels
-            YatConv2d(64, 128, kernel_size=3, padding=1),
+            YatConv2D(64, 128, kernel_size=3, padding=1),
             nn.MaxPool2d(2),  # 8x8 → 4x4
         )
         
@@ -725,10 +725,10 @@ Quick reference for all available imports:
 from nmn.torch.nmn import YatNMN
 
 # Convolutions
-from nmn.torch.layers import YatConv1d, YatConv2d, YatConv3d
+from nmn.torch.layers import YatConv1D, YatConv2D, YatConv3D
 
 # Transposed Convolutions
-from nmn.torch.layers import YatConvTranspose1d, YatConvTranspose2d, YatConvTranspose3d
+from nmn.torch.layers import YatConvTranspose1D, YatConvTranspose2D, YatConvTranspose3D
 
 # ═══════════════════════════════════════════════════════════════
 # Keras
@@ -795,7 +795,7 @@ from nmn.linen.conv import YatConv1D, YatConv2D, YatConv3D
 ---
 
 <p align="center">
-  <sub>Built with ❤️ by <a href="https://github.com/mlnomadpy">MLNomad</a></sub>
+  <sub>Built with ❤️ by <a href="https://azetta.ai">Azetta.ai</a></sub>
 </p>
 
 

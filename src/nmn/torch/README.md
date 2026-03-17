@@ -35,15 +35,15 @@ pip install -e ".[torch]"
 
 ## Quick Start
 
-### Basic YatConv2d Usage
+### Basic YatConv2D Usage
 
 ```python
 import torch
 import torch.nn as nn
-from nmn.torch.layers import YatConv2d
+from nmn.torch.layers import YatConv2D
 
 # Simple YAT convolutional layer
-layer = YatConv2d(
+layer = YatConv2D(
     in_channels=3,
     out_channels=64,
     kernel_size=3,
@@ -85,14 +85,14 @@ $$y = \frac{(x \ast W + b)^2}{||x - W||^2 + \epsilon}$$
 where $\ast$ denotes convolution and distances are computed patch-wise.
 
 **Available variants:**
-- `YatConv1d` - For sequence/temporal data
-- `YatConv2d` - For images
-- `YatConv3d` - For volumetric data
+- `YatConv1D` - For sequence/temporal data
+- `YatConv2D` - For images
+- `YatConv3D` - For volumetric data
 
 ```python
-from nmn.torch.layers import YatConv2d
+from nmn.torch.layers import YatConv2D
 
-layer = YatConv2d(
+layer = YatConv2D(
     in_channels=64,
     out_channels=128,
     kernel_size=3,
@@ -156,11 +156,11 @@ Normalize each neuron/filter to have unit L2-norm. This provides:
 3. **Regularization effect**: Implicitly regularizes weight magnitudes
 
 ```python
-from nmn.torch.layers import YatConv2d
+from nmn.torch.layers import YatConv2D
 from nmn.torch.nmn import YatNMN
 
 # Enable weight normalization
-conv = YatConv2d(
+conv = YatConv2D(
     in_channels=3,
     out_channels=64,
     kernel_size=3,
@@ -194,10 +194,10 @@ Share kernel parameters across multiple layers to **reduce model size** and **en
 - **First-k slicing**: Layers extract the first k filters they need
 
 ```python
-from nmn.torch.layers import YatConv2d
+from nmn.torch.layers import YatConv2D
 
 # Create multiple layers sharing same kernel bank
-layer1 = YatConv2d(
+layer1 = YatConv2D(
     in_channels=3,
     out_channels=32,  # Use first 32 filters from bank
     kernel_size=3,
@@ -205,7 +205,7 @@ layer1 = YatConv2d(
     kernel_bank_id='resnet-conv'    # Bank namespace
 )
 
-layer2 = YatConv2d(
+layer2 = YatConv2D(
     in_channels=32,
     out_channels=64,  # Automatically expands bank to 64
     kernel_size=3,
@@ -213,7 +213,7 @@ layer2 = YatConv2d(
     kernel_bank_id='resnet-conv'
 )
 
-layer3 = YatConv2d(
+layer3 = YatConv2D(
     in_channels=64,
     out_channels=128,  # Automatically expands bank to 128
     kernel_size=3,
@@ -254,7 +254,7 @@ head2 = YatNMN(
 
 ```python
 # Create separate banks for conv and classification layers
-conv_layer = YatConv2d(
+conv_layer = YatConv2D(
     64, 128, 3,
     tie_kernel_bank=True,
     kernel_bank_id='conv-layers'
@@ -291,7 +291,7 @@ Control the alpha scaling factor in the YAT transformation.
 
 1. **Learnable alpha** (default):
 ```python
-layer = YatConv2d(
+layer = YatConv2D(
     64, 128, 3,
     use_alpha=True           # Alpha is a learnable parameter
 )
@@ -299,7 +299,7 @@ layer = YatConv2d(
 
 2. **Constant alpha (default value = √2):**
 ```python
-layer = YatConv2d(
+layer = YatConv2D(
     64, 128, 3,
     constant_alpha=True      # Use sqrt(2) ≈ 1.414 as fixed multiplier
 )
@@ -307,7 +307,7 @@ layer = YatConv2d(
 
 3. **Custom constant alpha:**
 ```python
-layer = YatConv2d(
+layer = YatConv2D(
     64, 128, 3,
     constant_alpha=2.0       # Use custom value: 2.0
 )
@@ -315,7 +315,7 @@ layer = YatConv2d(
 
 4. **No alpha scaling:**
 ```python
-layer = YatConv2d(
+layer = YatConv2D(
     64, 128, 3,
     use_alpha=False          # No alpha scaling
 )
@@ -359,7 +359,7 @@ layer = YatNMN(
 Randomly drop connections during training for regularization.
 
 ```python
-layer = YatConv2d(
+layer = YatConv2D(
     in_channels=64,
     out_channels=128,
     kernel_size=3,
@@ -380,7 +380,7 @@ output = layer(x, deterministic=True)   # Inference
 Build efficient models by combining multiple features:
 
 ```python
-from nmn.torch.layers import YatConv2d
+from nmn.torch.layers import YatConv2D
 from nmn.torch.nmn import YatNMN
 import torch.nn as nn
 
@@ -389,7 +389,7 @@ class EfficientYATNet(nn.Module):
         super().__init__()
         
         # Use weight tying + normalization + constant alpha for efficiency
-        self.conv1 = YatConv2d(
+        self.conv1 = YatConv2D(
             3, 64, 3, padding=1,
             weight_normalized=True,
             tie_kernel_bank=True,
@@ -397,7 +397,7 @@ class EfficientYATNet(nn.Module):
             constant_alpha=True
         )
         
-        self.conv2 = YatConv2d(
+        self.conv2 = YatConv2D(
             64, 128, 3, stride=2, padding=1,
             weight_normalized=True,
             tie_kernel_bank=True,
@@ -405,7 +405,7 @@ class EfficientYATNet(nn.Module):
             constant_alpha=True
         )
         
-        self.conv3 = YatConv2d(
+        self.conv3 = YatConv2D(
             128, 256, 3, stride=2, padding=1,
             weight_normalized=True,
             tie_kernel_bank=True,
@@ -440,10 +440,10 @@ class EfficientYATNet(nn.Module):
 Control weight initialization:
 
 ```python
-from nmn.torch.layers import YatConv2d
+from nmn.torch.layers import YatConv2D
 import torch.nn as nn
 
-layer = YatConv2d(64, 128, 3)
+layer = YatConv2D(64, 128, 3)
 
 # Apply custom initialization before weight tying/normalization
 nn.init.orthogonal_(layer.weight)
@@ -465,7 +465,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
-from nmn.torch.layers import YatConv2d
+from nmn.torch.layers import YatConv2D
 from nmn.torch.nmn import YatNMN
 
 # Model with all optimizations
@@ -474,7 +474,7 @@ class OptimizedYATNet(nn.Module):
         super().__init__()
         
         self.features = nn.Sequential(
-            YatConv2d(3, 64, 3, padding=1,
+            YatConv2D(3, 64, 3, padding=1,
                      weight_normalized=True,
                      constant_alpha=True,
                      tie_kernel_bank=True,
@@ -482,7 +482,7 @@ class OptimizedYATNet(nn.Module):
             nn.BatchNorm2d(64),
             nn.ReLU(),
             
-            YatConv2d(64, 128, 3, stride=2, padding=1,
+            YatConv2D(64, 128, 3, stride=2, padding=1,
                      weight_normalized=True,
                      constant_alpha=True,
                      tie_kernel_bank=True,
@@ -490,7 +490,7 @@ class OptimizedYATNet(nn.Module):
             nn.BatchNorm2d(128),
             nn.ReLU(),
             
-            YatConv2d(128, 256, 3, stride=2, padding=1,
+            YatConv2D(128, 256, 3, stride=2, padding=1,
                      weight_normalized=True,
                      constant_alpha=True,
                      tie_kernel_bank=True,
@@ -559,13 +559,13 @@ for epoch in range(10):
 ### 1. **Use Weight Normalization for Speed**
 ```python
 # Weight normalization reduces norm computation (~10% forward pass speedup)
-layer = YatConv2d(64, 128, 3, weight_normalized=True)
+layer = YatConv2D(64, 128, 3, weight_normalized=True)
 ```
 
 ### 2. **Use Constant Alpha to Save Parameters**
 ```python
 # Constant alpha saves 1 parameter per layer
-layer = YatConv2d(64, 128, 3, constant_alpha=True)  # Good default
+layer = YatConv2D(64, 128, 3, constant_alpha=True)  # Good default
 ```
 
 ### 3. **Combine Weight Tying with Large Networks**
@@ -573,7 +573,7 @@ layer = YatConv2d(64, 128, 3, constant_alpha=True)  # Good default
 # For ResNet-50 style networks, 30-50% parameter reduction possible
 for i in range(num_stages):
     layers.append(
-        YatConv2d(
+        YatConv2D(
             in_ch, out_ch, 3,
             tie_kernel_bank=True,
             kernel_bank_id='shared-conv'
@@ -584,7 +584,7 @@ for i in range(num_stages):
 ### 4. **Use DropConnect During Training**
 ```python
 # Add regularization without slowing down inference
-layer = YatConv2d(64, 128, 3, use_dropconnect=True, drop_rate=0.1)
+layer = YatConv2D(64, 128, 3, use_dropconnect=True, drop_rate=0.1)
 output = layer(x, deterministic=not self.training)
 ```
 
@@ -596,10 +596,10 @@ layer = YatNMN(256, 128, spherical=True, weight_normalized=True)
 
 ## API Reference
 
-### YatConv2d
+### YatConv2D
 
 ```python
-YatConv2d(
+YatConv2D(
     in_channels: int,
     out_channels: int,
     kernel_size: Union[int, Tuple[int, int]],

@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
 name = "nmn"
-version = "0.2.11"
+dynamic = ["version"]
 authors = [{ name = "Taha Bouhsine", email = "taha@azetta.ai" }]
 description = "Neural-Matter Network (NMN) - Advanced neural network layers with attention mechanisms"
 readme = "README.md"
@@ -16,8 +16,8 @@ classifiers = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/mlnomadpy/nmn"
-"Bug Tracker" = "https://github.com/mlnomadpy/nmn/issues"
+"Homepage" = "https://github.com/azettaai/nmn"
+"Bug Tracker" = "https://github.com/azettaai/nmn/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -27,12 +27,13 @@ dev = [
     "flake8>=6.0.0",
     "isort>=5.12.0",
     "mypy>=1.0.0",
+    "hatch-vcs>=0.3.0",
 ]
-nnx = ["jax>=0.4.0", "flax>=0.7.0"]
+nnx = ["jax>=0.9.1", "jaxlib>=0.9.1", "flax>=0.12.5"]
 torch = ["torch>=1.11.0", "torchvision>=0.12.0"]
 keras = ["tensorflow>=2.10.0"]
 tf = ["tensorflow>=2.10.0"]
-linen = ["jax>=0.4.0", "flax>=0.7.0"]
+linen = ["jax>=0.9.1", "jaxlib>=0.9.1", "flax>=0.12.5"]
 all = ["nmn[nnx,torch,keras,tf,linen]"]
 test = [
     "nmn[dev,all]",
@@ -130,6 +131,12 @@ exclude_lines = [
     "except ImportError:",
 ]
 
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/nmn/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/nmn"]

@@ -109,19 +109,20 @@ def test_yat_nmn_custom_epsilon():
 
 
 def test_yat_nmn_custom_dtype():
-    """Test YatNMN with custom dtype."""
+    """Test YatNMN dtype separation: param_dtype controls weight storage."""
     try:
         import torch
         from nmn.torch.nmn import YatNMN
-        
-        layer = YatNMN(
-            in_features=10,
-            out_features=5,
-            dtype=torch.float64
-        )
-        assert layer.dtype == torch.float64
+
+        # param_dtype sets weight storage dtype
+        layer = YatNMN(in_features=10, out_features=5, param_dtype=torch.float64)
         assert layer.weight.dtype == torch.float64
-        
+
+        # dtype is the compute dtype only — weights stay at param_dtype (float32)
+        layer2 = YatNMN(in_features=10, out_features=5, dtype=torch.float64)
+        assert layer2.dtype == torch.float64
+        assert layer2.weight.dtype == torch.float32
+
     except ImportError:
         pytest.skip("PyTorch dependencies not available")
 

@@ -20,7 +20,7 @@ export default {
         {
             type: 'category',
             label: 'Getting Started',
-            items: ['installation', 'quick-start'],
+            items: ['installation', 'quick-start', 'migration-guide'],
         },
         {
             type: 'category',

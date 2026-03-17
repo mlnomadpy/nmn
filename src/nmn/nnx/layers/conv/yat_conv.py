@@ -11,12 +11,15 @@ patch-wise between input patches and kernel weights.
 
 from __future__ import annotations
 
+import logging
 import typing as tp
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import lax
+
+logger = logging.getLogger(__name__)
 
 from flax import nnx
 from flax.nnx.module import Module
@@ -184,8 +187,8 @@ class YatConv(Module):
                 
                 if bank_out_features > existing_bank_size:
                     # Auto-expand bank to accommodate larger layer
-                    print(f"Auto-expanding kernel bank '{kernel_bank_id}': "
-                          f"{existing_bank_size} -> {bank_out_features} filters")
+                    logger.info("Auto-expanding kernel bank '%s': %d -> %d filters",
+                                kernel_bank_id, existing_bank_size, bank_out_features)
                     new_shape = existing_shape[:-1] + (bank_out_features,)
                     old_kernel = shared_kernel.value
                     # Pad with random initialization for new filters
@@ -264,7 +267,7 @@ class YatConv(Module):
 
         # Normalize kernel if requested
         if self.weight_normalized:
-            kernel_val = self.kernel.value
+            kernel_val = self.kernel[...]
             reduce_axes = tuple(range(kernel_val.ndim - 1))
             kernel_norm = jnp.sqrt(jnp.sum(kernel_val**2, axis=reduce_axes, keepdims=True))
             self.kernel.value = kernel_val / (kernel_norm + 1e-8)
@@ -339,7 +342,7 @@ class YatConv(Module):
         dimension_numbers = conv_dimension_numbers(inputs_flat.shape)
         assert self.in_features % self.feature_group_count == 0
 
-        kernel_val = self.kernel.value
+        kernel_val = self.kernel[...]
         if self._tie_kernel_bank:
             kernel_val = kernel_val[..., self._kernel_slice]
 
@@ -367,13 +370,13 @@ class YatConv(Module):
             kernel_norm = jnp.sqrt(jnp.sum(kernel_val**2, axis=reduce_axes, keepdims=True))
             kernel_val = kernel_val / (kernel_norm + 1e-8)
 
-        bias_val = self.bias.value if self.bias is not None else None
+        bias_val = self.bias[...] if self.bias is not None else None
 
         # Get alpha value
         if self._constant_alpha_value is not None:
             alpha = jnp.array(self._constant_alpha_value, dtype=self.param_dtype)
         elif self.alpha is not None:
-            alpha = self.alpha.value
+            alpha = self.alpha[...]
         else:
             alpha = None
 

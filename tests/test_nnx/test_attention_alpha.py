@@ -291,7 +291,8 @@ class TestMultiHeadAttentionAlpha:
             rngs=nnx.Rngs(0),
             decode=False,
         )
-        
+
+        # constant_alpha=1.0 is equivalent to use_alpha=False (multiply by 1 is identity)
         attn_alpha_1 = MultiHeadAttention(
             num_heads=num_heads,
             in_features=in_features,
@@ -299,7 +300,7 @@ class TestMultiHeadAttentionAlpha:
             rngs=nnx.Rngs(0),
             decode=False,
         )
-        
+
         attn_alpha_2 = MultiHeadAttention(
             num_heads=num_heads,
             in_features=in_features,
@@ -307,15 +308,15 @@ class TestMultiHeadAttentionAlpha:
             rngs=nnx.Rngs(0),
             decode=False,
         )
-        
+
         output_no_alpha = attn_no_alpha(x, deterministic=True)
         output_alpha_1 = attn_alpha_1(x, deterministic=True)
         output_alpha_2 = attn_alpha_2(x, deterministic=True)
-        
-        # Outputs should be different with different alpha values
-        # (Though note: same rngs means same weights, but alpha affects attention scores)
-        assert not jnp.allclose(output_no_alpha, output_alpha_1, atol=1e-3)
-        assert not jnp.allclose(output_alpha_1, output_alpha_2, atol=1e-3)
+
+        # constant_alpha=1.0 is identity so it equals no-alpha
+        assert jnp.allclose(output_no_alpha, output_alpha_1, atol=1e-5)
+        # constant_alpha=2.0 scales by 2x, so output should differ from no-alpha
+        assert not jnp.allclose(output_no_alpha, output_alpha_2, atol=1e-3)
         
         print("  [OK] Different alpha values produce different outputs")
 

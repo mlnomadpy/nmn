@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/mlnomadpy/nmn/master/assets/logo.png" alt="NMN Logo" width="200" height="200" onerror="this.style.display='none'">
+  <img src="https://raw.githubusercontent.com/azettaai/nmn/master/assets/logo.png" alt="NMN Logo" width="200" height="200" onerror="this.style.display='none'">
 </p>
 
 <h1 align="center">⚛️ NMN — Neural Matter Networks</h1>
@@ -455,7 +455,7 @@ isort src/ tests/
 ```python
 # PyTorch
 from nmn.torch.nmn import YatNMN
-from nmn.torch.layers import YatConv2d, YatConvTranspose2d
+from nmn.torch.layers import YatConv2D, YatConvTranspose2D
 
 # Keras / TensorFlow
 from nmn.keras.nmn import YatNMN

@@ -27,12 +27,12 @@ __all__ = [
     "LazyConvTranspose1d",
     "LazyConvTranspose2d",
     "LazyConvTranspose3d",
-    "YatConv1d",
-    "YatConv2d",
-    "YatConv3d",
-    "YatConvTranspose1d",
-    "YatConvTranspose2d",
-    "YatConvTranspose3d",
+    "YatConv1D",
+    "YatConv2D",
+    "YatConv3D",
+    "YatConvTranspose1D",
+    "YatConvTranspose2D",
+    "YatConvTranspose3D",
 ]
 
 convolution_notes = {

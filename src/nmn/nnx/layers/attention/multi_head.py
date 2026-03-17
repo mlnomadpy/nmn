@@ -397,7 +397,7 @@ class MultiHeadAttention(Module):
                 max_length,
                 num_heads,
                 depth_per_head,
-            ) = self.cached_key.value.shape
+            ) = self.cached_key[...].shape
 
             # Validate query shape
             expected_shape = tuple(batch_dims) + (1, num_heads, depth_per_head)
@@ -408,11 +408,11 @@ class MultiHeadAttention(Module):
                 )
 
             # Update cache
-            cur_index = self.cache_index.value
+            cur_index = self.cache_index[...]
             zero = jnp.array(0, dtype=lax.dtype(cur_index.dtype))
             indices = (zero,) * len(batch_dims) + (cur_index, zero, zero)
-            key = lax.dynamic_update_slice(self.cached_key.value, key, indices)
-            value = lax.dynamic_update_slice(self.cached_value.value, value, indices)
+            key = lax.dynamic_update_slice(self.cached_key[...], key, indices)
+            value = lax.dynamic_update_slice(self.cached_value[...], value, indices)
             self.cached_key.value = key
             self.cached_value.value = value
             self.cache_index.value += 1
@@ -442,7 +442,7 @@ class MultiHeadAttention(Module):
                 # Will be applied as direct scale after attention
                 pass
             elif self.alpha is not None:
-                alpha_value = self.alpha.value
+                alpha_value = self.alpha[...]
 
         # Apply attention (YAT by default)
         x = self.attention_fn(

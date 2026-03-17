@@ -230,7 +230,7 @@ class YatConvTranspose(Module):
         if padding_lax == "CIRCULAR":
             padding_lax = "VALID"
 
-        kernel_val = self.kernel.value
+        kernel_val = self.kernel[...]
 
         # Apply DropConnect if enabled
         if self.use_dropconnect and not deterministic and self.drop_rate > 0.0:
@@ -250,13 +250,13 @@ class YatConvTranspose(Module):
                 )
             kernel_val *= current_mask
 
-        bias_val = self.bias.value if self.bias is not None else None
+        bias_val = self.bias[...] if self.bias is not None else None
 
         # Get alpha value
         if self._constant_alpha_value is not None:
             alpha = jnp.array(self._constant_alpha_value, dtype=self.param_dtype)
         elif self.alpha is not None:
-            alpha = self.alpha.value
+            alpha = self.alpha[...]
         else:
             alpha = None
 

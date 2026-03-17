@@ -63,8 +63,46 @@ y = layer(x)
 | [`YatAttention`](/docs/attention/yat-attention) | Self-attention with ⵟ-product |
 | [`YatLSTM`](/docs/rnn/lstm) | LSTM with ⵟ-product gates |
 
+## Why YAT Works: Geometric Intuition
+
+Traditional layers separate *representation* (dot product) from *non-linearity* (activation function). YAT unifies them through **geometry**.
+
+### Alignment × Proximity
+
+The ⵟ-product measures two things simultaneously:
+
+- **Numerator** `(x·W + b)²`: How aligned is the input with the weight vector? Squared alignment penalizes near-orthogonal inputs, creating a natural gating effect without a sigmoid or ReLU.
+- **Denominator** `‖x − W‖² + ε`: How far is the input from the weight? Nearby inputs get amplified; distant inputs get suppressed. This is the self-regularizing effect.
+
+The ratio combines these: **large response only when input is both aligned with and close to the weight**.
+
+### Connection to Kernel Methods
+
+The ⵟ-product is a **Mercer kernel** — it is positive semi-definite (PSD). This means:
+
+1. The representation is implicitly in a reproducing kernel Hilbert space (RKHS)
+2. Universal approximation follows from kernel theory on compact domains
+3. The network has implicit regularization properties related to minimum-norm interpolation
+
+### Bounded Responses
+
+For fixed `‖x‖` and `‖W‖`, the ⵟ-product output is bounded:
+
+$$
+0 \le \text{ⵟ}(\mathbf{w}, \mathbf{x}) \le \frac{\|\mathbf{w}\|^2 \|\mathbf{x}\|^2}{\epsilon}
+$$
+
+This boundedness means gradients cannot explode through the YAT operation itself — a property that ReLU networks lack without residual connections or normalization.
+
+### Why No Activation Function
+
+A ReLU after a linear layer introduces non-linearity by thresholding. YAT introduces non-linearity geometrically: the division by distance is a nonlinear function of both `x` and `W`. The squared numerator creates the asymmetry (polarity) that activations normally provide.
+
+In practice this means: **fewer components, same expressiveness** — leading to the memory and parameter count reductions reported in benchmarks.
+
 ## Next Steps
 
 - [**Installation**](/docs/installation) - Get NMN set up
 - [**Quick Start**](/docs/quick-start) - Build your first model
+- [**Migration Guide**](/docs/migration-guide) - Drop in NMN layers
 - [**Interactive Paper**](/paper/) - Explore visualizations

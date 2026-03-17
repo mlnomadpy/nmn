@@ -17,14 +17,14 @@ const config = {
     favicon: 'img/favicon.ico',
 
     // Set the production url of your site here
-    url: 'https://mlnomadpy.github.io',
+    url: 'https://azettaai.github.io',
     // Set the /<baseUrl>/ pathname under which your site is served
     // For GitHub pages deployment, it is often '/<projectName>/'
     baseUrl: '/nmn/',
 
     // GitHub pages deployment config.
     // If you aren't using GitHub pages, you don't need these.
-    organizationName: 'mlnomadpy', // Usually your GitHub org/user name.
+    organizationName: 'azettaai', // Usually your GitHub org/user name.
     projectName: 'nmn', // Usually your repo name.
 
     trailingSlash: false,
@@ -62,7 +62,7 @@ const config = {
                     // Please change this to your repo.
                     // Remove this to remove the "edit this page" links.
                     editUrl:
-                        'https://github.com/mlnomadpy/nmn/tree/main/website/docusaurus/',
+                        'https://github.com/azettaai/nmn/tree/main/website/docusaurus/',
                 },
                 blog: {
                     showReadingTime: true,
@@ -75,7 +75,7 @@ const config = {
                     // Please change this to your repo.
                     // Remove this to remove the "edit this page" links.
                     editUrl:
-                        'https://github.com/mlnomadpy/nmn/tree/main/website/docusaurus/',
+                        'https://github.com/azettaai/nmn/tree/main/website/docusaurus/',
                     // Useful options to enforce blogging best practices
                     onInlineTags: 'warn',
                     onInlineAuthors: 'warn',
@@ -113,7 +113,7 @@ const config = {
                         position: 'left',
                     },
                     {
-                        href: 'https://github.com/mlnomadpy/nmn',
+                        href: 'https://github.com/azettaai/nmn',
                         label: 'GitHub',
                         position: 'right',
                     },
@@ -145,11 +145,11 @@ const config = {
                         items: [
                             {
                                 label: 'GitHub Discussions',
-                                href: 'https://github.com/mlnomadpy/nmn/discussions',
+                                href: 'https://github.com/azettaai/nmn/discussions',
                             },
                             {
                                 label: 'Issues',
-                                href: 'https://github.com/mlnomadpy/nmn/issues',
+                                href: 'https://github.com/azettaai/nmn/issues',
                             },
                         ],
                     },
@@ -162,7 +162,7 @@ const config = {
                             },
                             {
                                 label: 'GitHub',
-                                href: 'https://github.com/mlnomadpy/nmn',
+                                href: 'https://github.com/azettaai/nmn',
                             },
                             {
                                 label: 'Paper (Interactive)',

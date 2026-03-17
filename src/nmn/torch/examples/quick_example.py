@@ -5,7 +5,7 @@ Quick example demonstrating weight normalization, weight tying, and constant alp
 
 import torch
 import torch.nn as nn
-from nmn.torch.layers import YatConv2d
+from nmn.torch.layers import YatConv2D
 from nmn.torch.nmn import YatNMN
 
 
@@ -16,7 +16,7 @@ def example_1_basic_yat_layers():
     print("="*70)
     
     # YAT Conv layer
-    conv = YatConv2d(
+    conv = YatConv2D(
         in_channels=3,
         out_channels=64,
         kernel_size=3,
@@ -33,7 +33,7 @@ def example_1_basic_yat_layers():
         epsilon=1e-5
     )
     
-    print("✓ Created YatConv2d: in_ch=3, out_ch=64")
+    print("✓ Created YatConv2D: in_ch=3, out_ch=64")
     print("✓ Created YatNMN: in_feat=256, out_feat=128")
     
     # Test forward pass
@@ -53,7 +53,7 @@ def example_2_weight_normalization():
     print("="*70)
     
     # YAT Conv with weight normalization
-    conv_normalized = YatConv2d(
+    conv_normalized = YatConv2D(
         in_channels=3,
         out_channels=64,
         kernel_size=3,
@@ -68,7 +68,7 @@ def example_2_weight_normalization():
         weight_normalized=True  # Enable weight normalization
     )
     
-    print("✓ Created YatConv2d with weight_normalized=True")
+    print("✓ Created YatConv2D with weight_normalized=True")
     print("✓ Created YatNMN with weight_normalized=True")
     
     # Verify weights are normalized (norm should be ~1.0 for each filter)
@@ -93,23 +93,23 @@ def example_3_weight_tying():
     print("="*70)
     
     # Create multiple layers sharing kernels
-    print("\nCreating 3 YatConv2d layers with weight tying...")
+    print("\nCreating 3 YatConv2D layers with weight tying...")
     
-    layer1 = YatConv2d(
+    layer1 = YatConv2D(
         3, 32, 3, padding=1,
         tie_kernel_bank=True,
         kernel_bank_id='shared-conv'
     )
     print(f"Layer 1: 32 filters, weight shape: {layer1.weight.shape}")
     
-    layer2 = YatConv2d(
+    layer2 = YatConv2D(
         32, 64, 3, padding=1,
         tie_kernel_bank=True,
         kernel_bank_id='shared-conv'
     )
     print(f"Layer 2: 64 filters (auto-expanded), weight shape: {layer2.weight.shape}")
     
-    layer3 = YatConv2d(
+    layer3 = YatConv2D(
         64, 128, 3, padding=1,
         tie_kernel_bank=True,
         kernel_bank_id='shared-conv'
@@ -131,15 +131,15 @@ def example_4_constant_alpha():
     print("="*70)
     
     # Default learnable alpha
-    conv_learnable = YatConv2d(3, 64, 3, padding=1, use_alpha=True)
+    conv_learnable = YatConv2D(3, 64, 3, padding=1, use_alpha=True)
     print(f"✓ Conv with learnable alpha: has parameter 'alpha' = {conv_learnable.alpha is not None}")
     
     # Constant alpha = sqrt(2)
-    conv_constant_sqrt2 = YatConv2d(3, 64, 3, padding=1, constant_alpha=True)
+    conv_constant_sqrt2 = YatConv2D(3, 64, 3, padding=1, constant_alpha=True)
     print(f"✓ Conv with constant alpha=√2 ({conv_constant_sqrt2._constant_alpha_value:.4f})")
     
     # Custom constant alpha
-    conv_constant_custom = YatConv2d(3, 64, 3, padding=1, constant_alpha=2.0)
+    conv_constant_custom = YatConv2D(3, 64, 3, padding=1, constant_alpha=2.0)
     print(f"✓ Conv with constant alpha=2.0 ({conv_constant_custom._constant_alpha_value})")
     
     # Same for YatNMN
@@ -165,7 +165,7 @@ def example_5_combined_optimizations():
             super().__init__()
             
             # All conv layers share kernels + weight normalization + constant alpha
-            self.conv1 = YatConv2d(
+            self.conv1 = YatConv2D(
                 3, 64, 3, padding=1,
                 weight_normalized=True,
                 tie_kernel_bank=True,
@@ -173,7 +173,7 @@ def example_5_combined_optimizations():
                 constant_alpha=True
             )
             
-            self.conv2 = YatConv2d(
+            self.conv2 = YatConv2D(
                 64, 128, 3, stride=2, padding=1,
                 weight_normalized=True,
                 tie_kernel_bank=True,
@@ -181,7 +181,7 @@ def example_5_combined_optimizations():
                 constant_alpha=True
             )
             
-            self.conv3 = YatConv2d(
+            self.conv3 = YatConv2D(
                 128, 256, 3, stride=2, padding=1,
                 weight_normalized=True,
                 tie_kernel_bank=True,

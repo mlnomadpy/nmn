@@ -1,4 +1,5 @@
 # mypy: allow-untyped-defs
+import logging
 import math
 from typing import Optional, Union
 
@@ -12,13 +13,15 @@ from torch.nn.modules.utils import _single
 
 from torch.nn import Conv1d
 
-__all__ = ["YatConv1d"]
+logger = logging.getLogger(__name__)
+
+__all__ = ["YatConv1D"]
 
 # Default constant alpha value (sqrt(2))
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
 
 
-class YatConv1d(Conv1d):
+class YatConv1D(Conv1d):
     """1D YAT convolution layer implementing the YAT algorithm.
 
     Computes: y = (x * W)² / (||x - W||² + ε), with optional alpha scaling.
@@ -109,18 +112,18 @@ class YatConv1d(Conv1d):
         # Handle auto-expanding shared kernel bank
         if tie_kernel_bank:
             bank_key = (kernel_bank_id, in_channels, kernel_size, groups, storage_dtype)
-            shared_weight = YatConv1d._KERNEL_BANKS.get(bank_key)
-            
+            shared_weight = YatConv1D._KERNEL_BANKS.get(bank_key)
+
             if shared_weight is None:
                 # First layer: register the weight as shared
-                YatConv1d._KERNEL_BANKS[bank_key] = self.weight
+                YatConv1D._KERNEL_BANKS[bank_key] = self.weight
             else:
                 # Bank exists: auto-expand if needed
                 existing_channels = shared_weight.shape[0]
                 if bank_out_channels > existing_channels:
                     # Auto-expand: pad with new random initialization
-                    print(f"Auto-expanding kernel bank '{kernel_bank_id}': "
-                          f"{existing_channels} -> {bank_out_channels} filters")
+                    logger.info("Auto-expanding kernel bank '%s': %d -> %d filters",
+                                kernel_bank_id, existing_channels, bank_out_channels)
                     old_weight = shared_weight.data
                     # Create new weight with expanded size
                     new_weight = torch.empty(

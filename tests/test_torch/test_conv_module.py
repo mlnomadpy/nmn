@@ -53,12 +53,12 @@ def test_yat_classes_in_layers_module():
         from nmn.torch import layers
         
         # YAT classes should be exported from layers
-        assert hasattr(layers, 'YatConv1d')
-        assert hasattr(layers, 'YatConv2d')
-        assert hasattr(layers, 'YatConv3d')
-        assert hasattr(layers, 'YatConvTranspose1d')
-        assert hasattr(layers, 'YatConvTranspose2d')
-        assert hasattr(layers, 'YatConvTranspose3d')
+        assert hasattr(layers, 'YatConv1D')
+        assert hasattr(layers, 'YatConv2D')
+        assert hasattr(layers, 'YatConv3D')
+        assert hasattr(layers, 'YatConvTranspose1D')
+        assert hasattr(layers, 'YatConvTranspose2D')
+        assert hasattr(layers, 'YatConvTranspose3D')
         
     except ImportError:
         pytest.skip("PyTorch dependencies not available")

@@ -22,15 +22,15 @@ pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="PyTorch not availab
 # ============================================================================
 
 CONV_LAYER_CONFIGS = [
-    ("YatConv1d", {"in_channels": 3, "out_channels": 8, "kernel_size": 3}, (2, 3, 16), (2, 8, 14)),
-    ("YatConv2d", {"in_channels": 3, "out_channels": 8, "kernel_size": 3}, (2, 3, 16, 16), (2, 8, 14, 14)),
-    ("YatConv3d", {"in_channels": 3, "out_channels": 8, "kernel_size": 3}, (2, 3, 8, 8, 8), (2, 8, 6, 6, 6)),
+    ("YatConv1D", {"in_channels": 3, "out_channels": 8, "kernel_size": 3}, (2, 3, 16), (2, 8, 14)),
+    ("YatConv2D", {"in_channels": 3, "out_channels": 8, "kernel_size": 3}, (2, 3, 16, 16), (2, 8, 14, 14)),
+    ("YatConv3D", {"in_channels": 3, "out_channels": 8, "kernel_size": 3}, (2, 3, 8, 8, 8), (2, 8, 6, 6, 6)),
 ]
 
 CONV_TRANSPOSE_CONFIGS = [
-    ("YatConvTranspose1d", {"in_channels": 8, "out_channels": 3, "kernel_size": 2, "stride": 2}, (2, 8, 8), (2, 3, 16)),
-    ("YatConvTranspose2d", {"in_channels": 8, "out_channels": 3, "kernel_size": 2, "stride": 2}, (2, 8, 8, 8), (2, 3, 16, 16)),
-    ("YatConvTranspose3d", {"in_channels": 8, "out_channels": 3, "kernel_size": 2, "stride": 2}, (2, 8, 4, 4, 4), (2, 3, 8, 8, 8)),
+    ("YatConvTranspose1D", {"in_channels": 8, "out_channels": 3, "kernel_size": 2, "stride": 2}, (2, 8, 8), (2, 3, 16)),
+    ("YatConvTranspose2D", {"in_channels": 8, "out_channels": 3, "kernel_size": 2, "stride": 2}, (2, 8, 8, 8), (2, 3, 16, 16)),
+    ("YatConvTranspose3D", {"in_channels": 8, "out_channels": 3, "kernel_size": 2, "stride": 2}, (2, 8, 4, 4, 4), (2, 3, 8, 8, 8)),
 ]
 
 
@@ -200,11 +200,11 @@ class TestDropConnect:
     
     def test_yat_conv2d_dropconnect_training_vs_eval(self):
         """Test that DropConnect only applies during training."""
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
         torch.manual_seed(42)
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3, out_channels=8, kernel_size=3,
             use_dropconnect=True, drop_rate=0.5
         )
@@ -231,11 +231,11 @@ class TestDropConnect:
     
     def test_dropconnect_disabled(self):
         """Test that disabled DropConnect produces deterministic outputs."""
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
         torch.manual_seed(42)
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3, out_channels=8, kernel_size=3,
             use_dropconnect=False
         )
@@ -300,9 +300,9 @@ class TestDeviceAndDtype:
     
     def test_to_method(self):
         """Test that .to() method works correctly."""
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
-        layer = YatConv2d(in_channels=3, out_channels=8, kernel_size=3)
+        layer = YatConv2D(in_channels=3, out_channels=8, kernel_size=3)
         layer = layer.to(torch.float64)
         
         x = torch.randn(2, 3, 16, 16, dtype=torch.float64)
@@ -346,9 +346,9 @@ class TestEdgeCases:
     
     def test_single_channel_conv(self):
         """Test convolution with single channel."""
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
-        layer = YatConv2d(in_channels=1, out_channels=1, kernel_size=3)
+        layer = YatConv2D(in_channels=1, out_channels=1, kernel_size=3)
         x = torch.randn(2, 1, 16, 16)
         
         with torch.no_grad():
@@ -358,9 +358,9 @@ class TestEdgeCases:
     
     def test_large_kernel(self):
         """Test convolution with large kernel size."""
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
-        layer = YatConv2d(in_channels=3, out_channels=8, kernel_size=7)
+        layer = YatConv2D(in_channels=3, out_channels=8, kernel_size=7)
         x = torch.randn(2, 3, 32, 32)
         
         with torch.no_grad():
@@ -370,9 +370,9 @@ class TestEdgeCases:
     
     def test_stride_and_padding(self):
         """Test convolution with stride and padding."""
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3, out_channels=8, kernel_size=3,
             stride=2, padding=1
         )
@@ -386,9 +386,9 @@ class TestEdgeCases:
     
     def test_dilation(self):
         """Test convolution with dilation."""
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3, out_channels=8, kernel_size=3,
             dilation=2
         )
@@ -403,9 +403,9 @@ class TestEdgeCases:
     
     def test_grouped_convolution(self):
         """Test grouped convolution."""
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=6, out_channels=12, kernel_size=3,
             groups=3
         )

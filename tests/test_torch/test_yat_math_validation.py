@@ -54,55 +54,53 @@ class TestYatNMNMathValidation:
             np.testing.assert_allclose(output.numpy(), expected, rtol=1e-4, atol=1e-4)
     
     def test_yat_formula_with_bias(self):
-        """Test that bias is correctly added after YAT transformation."""
+        """Test that bias enters the YAT numerator: (x·W + b)² / (dist + ε)."""
         from nmn.torch.nmn import YatNMN
-        
+
         torch.manual_seed(42)
-        
-        layer_no_bias = YatNMN(in_features=4, out_features=2, bias=False, alpha=False)
-        layer_with_bias = YatNMN(in_features=4, out_features=2, bias=True, alpha=False)
-        
-        # Copy weights
-        layer_with_bias.weight.data = layer_no_bias.weight.data.clone()
+
+        layer = YatNMN(in_features=4, out_features=2, bias=True, alpha=False)
         bias_value = 0.5
-        layer_with_bias.bias.data.fill_(bias_value)
-        
+        layer.bias.data.fill_(bias_value)
+
         x = torch.randn(2, 4)
-        
+
         with torch.no_grad():
-            out_no_bias = layer_no_bias(x)
-            out_with_bias = layer_with_bias(x)
-            
-            # Output with bias should be output without bias + bias
-            expected = out_no_bias + bias_value
-            
-            np.testing.assert_allclose(out_with_bias.numpy(), expected.numpy(), rtol=1e-5)
+            output = layer(x)
+
+            # Manually compute expected: (x·W + b)² / (||x - W||² + ε)
+            weight = layer.weight.data.numpy()
+            x_np = x.numpy()
+            dot_prod = np.matmul(x_np, weight.T)
+            x_sq = np.sum(x_np**2, axis=-1, keepdims=True)
+            w_sq = np.sum(weight**2, axis=-1)
+            dist_sq = x_sq + w_sq - 2 * dot_prod
+            expected = (dot_prod + bias_value)**2 / (dist_sq + layer.epsilon)
+
+            np.testing.assert_allclose(output.numpy(), expected, rtol=1e-4, atol=1e-4)
     
     def test_yat_formula_with_alpha_scaling(self):
-        """Test that alpha scaling is correctly applied."""
+        """Test that learnable alpha=2.0 scales the YAT output by exactly 2.0."""
         from nmn.torch.nmn import YatNMN
-        import math
-        
+
         torch.manual_seed(42)
-        
-        out_features = 8
-        layer_no_alpha = YatNMN(in_features=4, out_features=out_features, bias=False, alpha=False)
-        layer_with_alpha = YatNMN(in_features=4, out_features=out_features, bias=False, alpha=True)
-        
-        # Copy weights and set alpha to 1.0
+
+        layer_no_alpha = YatNMN(in_features=4, out_features=8, bias=False, alpha=False)
+        layer_with_alpha = YatNMN(in_features=4, out_features=8, bias=False, alpha=True)
+
+        # Copy weights and set a known alpha
         layer_with_alpha.weight.data = layer_no_alpha.weight.data.clone()
-        layer_with_alpha.alpha.data.fill_(1.0)
-        
+        layer_with_alpha.alpha.data.fill_(2.0)
+
         x = torch.randn(2, 4)
-        
+
         with torch.no_grad():
             out_no_alpha = layer_no_alpha(x)
             out_with_alpha = layer_with_alpha(x)
-            
-            # Expected scaling factor
-            scale = math.sqrt(out_features) / math.log(1 + out_features)
-            expected = out_no_alpha * scale
-            
+
+            # alpha is a simple scalar multiplier applied after the YAT ratio
+            expected = out_no_alpha * 2.0
+
             np.testing.assert_allclose(out_with_alpha.numpy(), expected.numpy(), rtol=1e-4)
     
     def test_yat_produces_positive_outputs(self):
@@ -138,15 +136,15 @@ class TestYatNMNMathValidation:
 
 
 class TestYatConv2DMathValidation:
-    """Validate YAT formula implementation in YatConv2d."""
+    """Validate YAT formula implementation in YatConv2D."""
     
     def test_yat_conv2d_formula_basic(self):
-        """Test that YatConv2d correctly computes YAT for convolutions."""
-        from nmn.torch.layers import YatConv2d
+        """Test that YatConv2D correctly computes YAT for convolutions."""
+        from nmn.torch.layers import YatConv2D
         
         torch.manual_seed(42)
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=1, out_channels=1, kernel_size=2,
             bias=False, use_alpha=False, padding=0
         )
@@ -165,11 +163,11 @@ class TestYatConv2DMathValidation:
     
     def test_yat_conv2d_distance_computation(self):
         """Test that distance is correctly computed for patches."""
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
         torch.manual_seed(42)
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=1, out_channels=1, kernel_size=2,
             bias=False, use_alpha=False
         )
@@ -194,9 +192,9 @@ class TestYatConv2DMathValidation:
     
     def test_yat_conv2d_non_matching_patch_kernel(self):
         """Test YAT computation when patch and kernel differ."""
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=1, out_channels=1, kernel_size=2,
             bias=False, use_alpha=False, epsilon=1e-6
         )
@@ -229,10 +227,10 @@ class TestYatConvTranspose2DMathValidation:
     """Validate YAT formula in transposed convolution."""
     
     def test_yat_conv_transpose2d_output_shape(self):
-        """Test that YatConvTranspose2d produces correct output shape."""
-        from nmn.torch.layers import YatConvTranspose2d
+        """Test that YatConvTranspose2D produces correct output shape."""
+        from nmn.torch.layers import YatConvTranspose2D
         
-        layer = YatConvTranspose2d(
+        layer = YatConvTranspose2D(
             in_channels=8, out_channels=4, kernel_size=2, stride=2,
             bias=False, use_alpha=False
         )
@@ -247,11 +245,11 @@ class TestYatConvTranspose2DMathValidation:
     
     def test_yat_conv_transpose2d_positive_outputs(self):
         """Test that transposed conv also produces non-negative outputs."""
-        from nmn.torch.layers import YatConvTranspose2d
+        from nmn.torch.layers import YatConvTranspose2D
         
         torch.manual_seed(42)
         
-        layer = YatConvTranspose2d(
+        layer = YatConvTranspose2D(
             in_channels=3, out_channels=8, kernel_size=3, stride=2,
             bias=False, use_alpha=False
         )
@@ -284,10 +282,10 @@ class TestGradientFlow:
         assert not torch.isnan(layer.weight.grad).any()
     
     def test_yat_conv2d_gradient_flow(self):
-        """Test gradient computation for YatConv2d."""
-        from nmn.torch.layers import YatConv2d
+        """Test gradient computation for YatConv2D."""
+        from nmn.torch.layers import YatConv2D
         
-        layer = YatConv2d(in_channels=3, out_channels=8, kernel_size=3)
+        layer = YatConv2D(in_channels=3, out_channels=8, kernel_size=3)
         x = torch.randn(2, 3, 16, 16, requires_grad=True)
         
         output = layer(x)

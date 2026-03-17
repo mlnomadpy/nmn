@@ -7,12 +7,12 @@ def test_yat_conv_imports():
     """Test that all YAT conv classes can be imported from yat_conv module."""
     try:
         from nmn.torch.layers import (
-            YatConv1d,
-            YatConv2d,
-            YatConv3d,
-            YatConvTranspose1d,
-            YatConvTranspose2d,
-            YatConvTranspose3d,
+            YatConv1D,
+            YatConv2D,
+            YatConv3D,
+            YatConvTranspose1D,
+            YatConvTranspose2D,
+            YatConvTranspose3D,
         )
         assert True
     except ImportError as e:
@@ -23,12 +23,12 @@ def test_yat_conv_from_main_module():
     """Test that YAT conv classes can be imported from main torch module."""
     try:
         from nmn.torch import (
-            YatConv1d,
-            YatConv2d,
-            YatConv3d,
-            YatConvTranspose1d,
-            YatConvTranspose2d,
-            YatConvTranspose3d,
+            YatConv1D,
+            YatConv2D,
+            YatConv3D,
+            YatConvTranspose1D,
+            YatConvTranspose2D,
+            YatConvTranspose3D,
         )
         assert True
     except ImportError as e:
@@ -36,11 +36,11 @@ def test_yat_conv_from_main_module():
 
 
 def test_yat_conv1d_module_instantiation():
-    """Test YatConv1d can be instantiated from yat_conv module."""
+    """Test YatConv1D can be instantiated from yat_conv module."""
     try:
-        from nmn.torch.layers import YatConv1d
+        from nmn.torch.layers import YatConv1D
         
-        layer = YatConv1d(
+        layer = YatConv1D(
             in_channels=16,
             out_channels=32,
             kernel_size=3
@@ -54,11 +54,11 @@ def test_yat_conv1d_module_instantiation():
 
 
 def test_yat_conv2d_module_instantiation():
-    """Test YatConv2d can be instantiated from yat_conv module."""
+    """Test YatConv2D can be instantiated from yat_conv module."""
     try:
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3
@@ -72,11 +72,11 @@ def test_yat_conv2d_module_instantiation():
 
 
 def test_yat_conv3d_module_instantiation():
-    """Test YatConv3d can be instantiated from yat_conv module."""
+    """Test YatConv3D can be instantiated from yat_conv module."""
     try:
-        from nmn.torch.layers import YatConv3d
+        from nmn.torch.layers import YatConv3D
         
-        layer = YatConv3d(
+        layer = YatConv3D(
             in_channels=8,
             out_channels=16,
             kernel_size=3
@@ -90,11 +90,11 @@ def test_yat_conv3d_module_instantiation():
 
 
 def test_yat_conv_transpose1d_module_instantiation():
-    """Test YatConvTranspose1d can be instantiated from yat_conv module."""
+    """Test YatConvTranspose1D can be instantiated from yat_conv module."""
     try:
-        from nmn.torch.layers import YatConvTranspose1d
+        from nmn.torch.layers import YatConvTranspose1D
         
-        layer = YatConvTranspose1d(
+        layer = YatConvTranspose1D(
             in_channels=16,
             out_channels=32,
             kernel_size=3
@@ -108,11 +108,11 @@ def test_yat_conv_transpose1d_module_instantiation():
 
 
 def test_yat_conv_transpose2d_module_instantiation():
-    """Test YatConvTranspose2d can be instantiated from yat_conv module."""
+    """Test YatConvTranspose2D can be instantiated from yat_conv module."""
     try:
-        from nmn.torch.layers import YatConvTranspose2d
+        from nmn.torch.layers import YatConvTranspose2D
         
-        layer = YatConvTranspose2d(
+        layer = YatConvTranspose2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3
@@ -126,11 +126,11 @@ def test_yat_conv_transpose2d_module_instantiation():
 
 
 def test_yat_conv_transpose3d_module_instantiation():
-    """Test YatConvTranspose3d can be instantiated from yat_conv module."""
+    """Test YatConvTranspose3D can be instantiated from yat_conv module."""
     try:
-        from nmn.torch.layers import YatConvTranspose3d
+        from nmn.torch.layers import YatConvTranspose3D
         
-        layer = YatConvTranspose3d(
+        layer = YatConvTranspose3D(
             in_channels=8,
             out_channels=16,
             kernel_size=3
@@ -144,12 +144,12 @@ def test_yat_conv_transpose3d_module_instantiation():
 
 
 def test_yat_conv2d_forward_from_module():
-    """Test YatConv2d forward pass from yat_conv module."""
+    """Test YatConv2D forward pass from yat_conv module."""
     try:
         import torch
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3,
@@ -170,11 +170,11 @@ def test_yat_conv2d_forward_from_module():
 
 
 def test_yat_conv2d_alpha_parameter():
-    """Test YatConv2d alpha parameter from yat_conv module."""
+    """Test YatConv2D alpha parameter from yat_conv module."""
     try:
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
-        layer_with_alpha = YatConv2d(
+        layer_with_alpha = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3,
@@ -183,7 +183,7 @@ def test_yat_conv2d_alpha_parameter():
         assert layer_with_alpha.use_alpha is True
         assert layer_with_alpha.alpha is not None
         
-        layer_without_alpha = YatConv2d(
+        layer_without_alpha = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3,
@@ -197,11 +197,11 @@ def test_yat_conv2d_alpha_parameter():
 
 
 def test_yat_conv2d_dropconnect_parameter():
-    """Test YatConv2d dropconnect parameter from yat_conv module."""
+    """Test YatConv2D dropconnect parameter from yat_conv module."""
     try:
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3,
@@ -216,12 +216,12 @@ def test_yat_conv2d_dropconnect_parameter():
 
 
 def test_yat_conv2d_epsilon_parameter():
-    """Test YatConv2d epsilon parameter from yat_conv module."""
+    """Test YatConv2D epsilon parameter from yat_conv module."""
     try:
-        from nmn.torch.layers import YatConv2d
+        from nmn.torch.layers import YatConv2D
         
         epsilon = 1e-6
-        layer = YatConv2d(
+        layer = YatConv2D(
             in_channels=3,
             out_channels=16,
             kernel_size=3,

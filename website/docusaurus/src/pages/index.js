@@ -38,7 +38,7 @@ function HomepageHeader() {
                     </Link>
                     <Link
                         className="button button--secondary button--lg"
-                        href="https://github.com/mlnomadpy/nmn">
+                        href="https://github.com/azettaai/nmn">
                         GitHub ⭐
                     </Link>
                     <Link

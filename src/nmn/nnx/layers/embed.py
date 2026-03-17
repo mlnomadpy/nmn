@@ -133,7 +133,7 @@ class Embed(Module):
     
     self.num_embeddings = num_embeddings
     self.features = features
-    self.dtype = dtype or self.embedding.value.dtype
+    self.dtype = dtype or self.embedding[...].dtype
     self.param_dtype = param_dtype
     self.embedding_init = embedding_init
     self.promote_dtype = promote_dtype
@@ -145,7 +145,7 @@ class Embed(Module):
 
     # Normalize embeddings if requested: normalize each embedding to have norm 1
     if self.weight_normalized:
-      embedding_val = self.embedding.value
+      embedding_val = self.embedding[...]
       embedding_norm = jnp.sqrt(jnp.sum(embedding_val**2, axis=1, keepdims=True))
       self.embedding.value = embedding_val / (embedding_norm + 1e-8)
 
@@ -165,7 +165,7 @@ class Embed(Module):
     # Use take because fancy indexing numpy arrays with JAX indices does not
     # work correctly.
     (embedding,) = self.promote_dtype(
-      (self.embedding.value,), dtype=self.dtype, inexact=False
+      (self.embedding[...],), dtype=self.dtype, inexact=False
     )
     if self.num_embeddings == 1:
       return jnp.broadcast_to(embedding, inputs.shape + (self.features,))
@@ -187,13 +187,13 @@ class Embed(Module):
       Commonly used for weight-sharing between embeddings and logit transform
       in NLP models.
     """
-    embedding = self.embedding.value
+    embedding = self.embedding[...]
     
     # Get alpha value (either learnable or constant)
     if self._constant_alpha_value is not None:
       alpha = jnp.array(self._constant_alpha_value, dtype=self.param_dtype)
     elif self.alpha is not None:
-      alpha = self.alpha.value
+      alpha = self.alpha[...]
     else:
       alpha = None
 

@@ -1,3 +1,5 @@
+"""YAT dense layer for TensorFlow (tf.Module-based, eager and graph compatible)."""
+
 import tensorflow as tf
 import math
 from typing import Optional, Any, Tuple, Union, List, Callable
@@ -30,15 +32,40 @@ def create_orthogonal_matrix(shape: Tuple[int, ...], dtype: tf.DType = tf.float3
         return tf.transpose(q)
 
 class YatNMN(tf.Module):
-    """A custom transformation applied over the last dimension of the input using squared Euclidean distance.
+    """Dense layer implementing the ⵟ-product (YAT) transformation.
+
+    Computes ``y = (x·Wᵀ + b)² / (‖x − W‖² + ε)`` over the last dimension of
+    the input, providing intrinsic non-linearity without a separate activation
+    function.
 
     Args:
-        features: The number of output features.
-        use_bias: Whether to add a bias to the output (default: True).
-        dtype: The dtype of the computation (default: tf.float32).
-        epsilon: Small constant added to avoid division by zero (default: 1e-6).
-        return_weights: Whether to return the weight matrix along with output (default: False).
-        name: Name of the module (default: None).
+        features: Number of output features.
+        use_bias: Whether to add a bias term inside the numerator square
+            (default: ``True``).
+        use_alpha: Whether to apply output scaling via an alpha parameter
+            (default: ``True``).  Has no effect when ``constant_alpha`` is set.
+        constant_alpha: If ``True``, applies a fixed √2 scale factor.  If a
+            ``float``, applies that value as a fixed scale.  If ``None``
+            (default), a learnable scalar ``alpha`` variable is created when
+            ``use_alpha=True``.
+        positive_init: Initialise kernel weights with their absolute values so
+            all entries are non-negative (default: ``False``).
+        dtype: TensorFlow dtype used for both parameters and computation
+            (default: ``tf.float32``).
+        epsilon: Small constant added to the denominator to avoid division by
+            zero (default: ``1e-5``).
+        return_weights: If ``True``, ``__call__`` returns ``(output, kernel)``
+            instead of just ``output`` (default: ``False``).
+        name: Optional name scope for the module.
+
+    Example::
+
+        import tensorflow as tf
+        from nmn.tf.nmn import YatNMN
+
+        layer = YatNMN(features=128, constant_alpha=True)
+        x = tf.random.normal([32, 256])
+        y = layer(x)  # shape (32, 128) — no activation needed
     """
     def __init__(
         self,

@@ -1,3 +1,6 @@
 """Neural-Matter Network (NMN) - beyond blinded neurons."""
 
-__version__ = "0.2.6"
+try:
+    from nmn._version import __version__
+except ImportError:
+    __version__ = "0.0.0.dev0"
