@@ -2,6 +2,8 @@ name: Publish Python 🐍 distribution to PyPI
 
 on:
   push:
+    branches:
+      - master
     tags:
       - 'v*.*.*'
   workflow_dispatch:
@@ -40,7 +42,7 @@ jobs:
 
   publish-to-testpypi:
     name: Publish to TestPyPI
-    if: startsWith(github.ref, 'refs/tags/')
+    if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/')
     needs: build
     runs-on: ubuntu-latest
     environment:
@@ -61,7 +63,7 @@ jobs:
 
   publish-to-pypi:
     name: Publish to PyPI
-    if: startsWith(github.ref, 'refs/tags/')
+    if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/')
     needs: [build, publish-to-testpypi]
     runs-on: ubuntu-latest
     environment:
