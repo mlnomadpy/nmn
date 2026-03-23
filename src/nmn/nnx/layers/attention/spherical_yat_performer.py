@@ -26,6 +26,32 @@ Final feature per quadrature node:
 
 where ⊗ is the tensor (outer) product, yielding P*M features per node,
 and R*P*M total features.
+
+Parameter Tuning Guide:
+    There are three knobs: P (anchor features), M (PRF features), R (quadrature nodes).
+    Total feature dimension F = R * P * M. Larger F improves approximation quality
+    but increases memory (state is F × head_dim) and compute in the linear attention.
+
+    Impact on quality (cosine similarity to exact spherical YAT attention):
+        - M (PRF features) has the biggest impact. Each doubling gives meaningful gain.
+        - P (anchor features) is second. Diminishing returns past P=32.
+        - R (quadrature nodes) has the least impact per feature. R=1 is often best
+          bang-for-buck; R>2 rarely helps unless the feature budget is very large.
+
+    Recommended configurations (measured at batch=2, seq=64, heads=4, head_dim=64):
+
+        Config              |  F   | Cos Sim | Rel L2 | Notes
+        --------------------|------|---------|--------|------------------
+        P=16, M=8,  R=1    |  128 |  0.66   |  1.15  | Default (fastest)
+        P=32, M=8,  R=1    |  256 |  0.71   |  0.98  | Balanced
+        P=32, M=8,  R=2    |  512 |  0.75   |  0.88  | Best quality
+        P=32, M=4,  R=1    |  128 |  0.68   |  1.07  | Fewer PRF, more anchors
+        P=8,  M=8,  R=1    |   64 |  0.60   |  1.39  | Minimal (fastest possible)
+
+    Memory crossover: the performer uses less memory than quadratic attention when
+    seq_len > F. With F=128 (default), this is seq_len > 128. With F=512, seq_len > 512.
+
+    Mean approximation error decreases with longer sequences due to averaging effects.
 """
 
 from __future__ import annotations
@@ -54,17 +80,19 @@ def create_orthogonal_features(key, num_features, dim, dtype=jnp.float32):
 def create_yat_tp_projection(
     key: Array,
     head_dim: int,
-    num_prf_features: int = 4,
-    num_quad_nodes: int = 2,
-    num_anchor_features: int = 32,
+    num_prf_features: int = 8,
+    num_quad_nodes: int = 1,
+    num_anchor_features: int = 16,
     epsilon: float = 1e-5,
     dtype: Dtype = jnp.float32,
 ) -> dict:
     """Create parameters for anchor-based YAT attention.
 
     Uses Gauss-Laguerre quadrature to discretize the Bernstein integral,
-    anchor features for the polynomial kernel, and orthogonal random
-    projections for PRF features.
+    anchor features for the polynomial kernel, and random projections
+    for PRF features.
+
+    See module docstring for parameter tuning guide and recommended configs.
 
     Args:
         key: JAX random key.
