@@ -384,10 +384,8 @@ class TestYatMathValidation:
         distance_sq = x_sq_sum + k_sq_sum - 2 * dot_prod
         expected = dot_prod**2 / (distance_sq + layer.epsilon)
         
-        # Apply alpha scaling
-        out_features = 4
-        scale = (np.sqrt(out_features) / np.log(1 + out_features)) ** alpha_val
-        expected = expected * scale
+        # Apply alpha scaling (simple multiply)
+        expected = expected * alpha_val
         
         # Get actual output
         output = layer(x)

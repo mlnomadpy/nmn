@@ -548,35 +548,40 @@ class RotaryYatAttention(Module):
 
         # Performer random projection
         self.perf_projections: nnx.Cache | None
-        self.perf_scales: nnx.Cache | None
+        self.perf_anchors: nnx.Cache | None
+        self.perf_quad_nodes: nnx.Cache | None
+        self.perf_quad_weights: nnx.Cache | None
         if use_performer:
             total_features = num_features if num_features is not None else 64
-            self.num_scales = 8
-            
-            # Split features across scales for memory efficiency
-            # Ensure at least 4 features per scale
-            self.num_features_per_scale = max(4, total_features // self.num_scales)
-            # Update total features to reflect actual count
-            self.num_features = self.num_features_per_scale * self.num_scales
-            
-            # Create Multi-Scale params
+            self.num_scales = 2  # Gauss-Laguerre quadrature nodes
+
+            # Feature dimension (shared for poly anchors and PRF)
+            self.num_features_per_scale = total_features
+            self.num_features = total_features * self.num_scales
+
+            # Create anchor-based params
             params = create_yat_tp_projection(
                 rngs.params(),
                 self.head_dim,
-                num_prf_features=self.num_features_per_scale,
+                num_prf_features=total_features,
                 num_quad_nodes=self.num_scales,
+                num_anchor_features=total_features,
                 dtype=param_dtype,
             )
-            
+
             self.perf_projections = nnx.Cache(params['projections'])
-            self.perf_scales = nnx.Cache(params['scales'])
+            self.perf_anchors = nnx.Cache(params['anchors'])
+            self.perf_quad_nodes = nnx.Cache(params['quad_nodes'])
+            self.perf_quad_weights = nnx.Cache(params['quad_weights'])
             self.perf_head_dim = params['head_dim']
         else:
             self.num_features = None
             self.num_scales = None
             self.num_features_per_scale = None
             self.perf_projections = None
-            self.perf_scales = None
+            self.perf_anchors = None
+            self.perf_quad_nodes = None
+            self.perf_quad_weights = None
             self.perf_head_dim = None
 
         # Q, K, V projections
@@ -733,9 +738,12 @@ class RotaryYatAttention(Module):
             # Reconstruct params dict
             performer_params = {
                 'projections': jax.device_put(self.perf_projections[...]),
-                'scales': jax.device_put(self.perf_scales[...]),
+                'anchors': jax.device_put(self.perf_anchors[...]),
+                'quad_nodes': jax.device_put(self.perf_quad_nodes[...]),
+                'quad_weights': jax.device_put(self.perf_quad_weights[...]),
                 'head_dim': self.perf_head_dim,
                 'num_prf_features': self.num_features_per_scale,
+                'num_anchor_features': self.num_features_per_scale,
                 'num_scales': self.num_scales,
             }
             

@@ -76,27 +76,24 @@ def yat_reference_numpy(inputs, weights, bias=None, alpha=None, epsilon=1e-6):
     """
     # Dot product
     dot_prod = np.matmul(inputs, weights)
-    
+
     # Squared norms
     inputs_sq_sum = np.sum(inputs**2, axis=-1, keepdims=True)
     weights_sq_sum = np.sum(weights**2, axis=0, keepdims=True)
-    
-    # Squared distance
+
+    # Squared distance (bias does NOT affect distance)
     distance_sq = inputs_sq_sum + weights_sq_sum - 2 * dot_prod
-    
-    # YAT transformation
-    y = dot_prod**2 / (distance_sq + epsilon)
-    
-    # Bias
+
+    # YAT transformation: bias goes INSIDE the square
     if bias is not None:
-        y = y + bias
-    
+        y = (dot_prod + bias)**2 / (distance_sq + epsilon)
+    else:
+        y = dot_prod**2 / (distance_sq + epsilon)
+
     # Alpha scaling
     if alpha is not None:
-        out_features = weights.shape[1]
-        scale = (np.sqrt(out_features) / np.log(1 + out_features)) ** alpha
-        y = y * scale
-    
+        y = y * alpha
+
     return y
 
 
@@ -164,26 +161,26 @@ def get_keras_output(inputs_np, weights_np, bias_np=None, alpha_np=None, epsilon
     """Get YAT output from Keras implementation."""
     import keras
     from nmn.keras import YatNMN
-    
+
     in_features, out_features = weights_np.shape
     layer = YatNMN(
         units=out_features,
         use_bias=(bias_np is not None),
+        use_alpha=(alpha_np is not None),
         epsilon=epsilon
     )
-    
+
     # Build layer
     x = keras.ops.convert_to_tensor(inputs_np.astype(np.float32))
     _ = layer(x)
-    
-    # Set weights - Keras has kernel as (in, out), alpha, then bias
-    weights_list = [weights_np]
-    weights_list.append(np.array([1.0 if alpha_np is None else alpha_np]))  # Always has alpha
+
+    # Set weights directly
+    layer.kernel.assign(weights_np.astype(np.float32))
     if bias_np is not None:
-        weights_list.append(bias_np)
-    
-    layer.set_weights(weights_list)
-    
+        layer.bias.assign(bias_np.astype(np.float32))
+    if alpha_np is not None and layer.alpha is not None:
+        layer.alpha.assign(np.array([alpha_np], dtype=np.float32))
+
     output = layer(x)
     return keras.ops.convert_to_numpy(output)
 
@@ -221,7 +218,7 @@ def get_nnx_output(inputs_np, weights_np, bias_np=None, alpha_np=None, epsilon=1
     """Get YAT output from NNX implementation."""
     import jax.numpy as jnp
     from flax import nnx
-    from nmn.nnx.nmn import YatNMN
+    from nmn.nnx.layers.nmn import YatNMN
     
     in_features, out_features = weights_np.shape
     rngs = nnx.Rngs(0)

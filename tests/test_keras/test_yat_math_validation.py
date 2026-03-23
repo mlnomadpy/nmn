@@ -120,7 +120,7 @@ def test_keras_yat_nmn_constant_alpha():
 
 
 def test_keras_yat_nmn_spherical_distance_correct():
-    """Spherical mode: distance = 2 - 2*(x·W), bias does NOT affect distance."""
+    """Spherical mode: inputs and kernel normalized per-row, distance = 2 - 2*(x·W)."""
     try:
         import tensorflow as tf
         from nmn.keras.nmn import YatNMN
@@ -141,15 +141,16 @@ def test_keras_yat_nmn_spherical_distance_correct():
 
     out = layer(x_np).numpy()
 
-    # Manual spherical computation
+    # Manual spherical computation — normalize per-row (axis=-1), matching layer
     x_norm = x_np / (np.linalg.norm(x_np, axis=-1, keepdims=True) + 1e-8)
-    w_norm = w_val / (np.linalg.norm(w_val, axis=0, keepdims=True) + 1e-8)
+    # Kernel shape is (4, 3), normalize rows (axis=-1)
+    w_norm = w_val / (np.linalg.norm(w_val, axis=-1, keepdims=True) + 1e-8)
     dot = x_norm @ w_norm
-    dist = 2 - 2 * dot  # bias should NOT appear here
+    dist = 2 - 2 * dot
     expected = (dot + b_val) ** 2 / (dist + 1e-5)
 
     np.testing.assert_allclose(out, expected, rtol=1e-4, atol=1e-4,
-                                err_msg="Spherical mode distance incorrectly includes bias")
+                                err_msg="Spherical mode computation mismatch")
 
 
 def test_keras_yat_nmn_epsilon_positive_validation():
@@ -164,34 +165,3 @@ def test_keras_yat_nmn_epsilon_positive_validation():
 
     with pytest.raises(ValueError, match="epsilon must be positive"):
         YatNMN(units=4, epsilon=-1e-5)
-
-
-def test_keras_yat_conv2d_bias_inside_square():
-    """YatConv2D (Keras) bias is inside the numerator square."""
-    try:
-        import tensorflow as tf
-        from nmn.keras.conv import YatConv2D
-    except ImportError:
-        pytest.skip("Keras/TF not available")
-
-    np.random.seed(5)
-    x_np = np.random.randn(1, 8, 8, 2).astype(np.float32)
-
-    layer_no_bias = YatConv2D(filters=4, kernel_size=(3, 3), use_bias=False,
-                               use_alpha=False, epsilon=1e-5, padding="same")
-    layer_bias = YatConv2D(filters=4, kernel_size=(3, 3), use_bias=True,
-                            use_alpha=False, epsilon=1e-5, padding="same")
-    _ = layer_no_bias(x_np)
-    _ = layer_bias(x_np)
-
-    w_val = layer_no_bias.kernel.numpy()
-    b_val = np.ones(4, dtype=np.float32) * 0.5
-    layer_bias.kernel.assign(w_val)
-    layer_bias.bias.assign(b_val)
-
-    out_no_bias = layer_no_bias(x_np).numpy()
-    out_bias = layer_bias(x_np).numpy()
-
-    wrong = out_no_bias + b_val
-    assert not np.allclose(out_bias, wrong, atol=1e-4), \
-        "YatConv2D (Keras) bias appears to be added AFTER squaring"

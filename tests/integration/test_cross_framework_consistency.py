@@ -167,7 +167,7 @@ def run_nnx_dense(inputs: np.ndarray, weights: np.ndarray,
     """Run YAT dense layer in Flax NNX."""
     import jax.numpy as jnp
     from flax import nnx
-    from nmn.nnx.nmn import YatNMN
+    from nmn.nnx.layers.nmn import YatNMN
     
     in_features, out_features = weights.shape
     rngs = nnx.Rngs(0)
@@ -210,21 +210,17 @@ def run_numpy_yat(inputs: np.ndarray, weights: np.ndarray,
     
     # Squared distance
     distance_sq = inputs_sq_sum + weights_sq_sum - 2 * dot_prod
-    
-    # Bias
-    if bias is not None:
-        y = y + bias
 
-    # YAT transformation
-    y = dot_prod**2 / (distance_sq + epsilon)
-    
-    
-    # Alpha scaling
+    # YAT transformation: bias goes INSIDE the square
+    if bias is not None:
+        y = (dot_prod + bias)**2 / (distance_sq + epsilon)
+    else:
+        y = dot_prod**2 / (distance_sq + epsilon)
+
+    # Alpha scaling (simple multiply)
     if alpha is not None:
-        out_features = weights.shape[1]
-        scale = (np.sqrt(out_features) / np.log(1 + out_features)) ** alpha
-        y = y * scale
-    
+        y = y * alpha
+
     return y.astype(np.float32)
 
 

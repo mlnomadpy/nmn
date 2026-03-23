@@ -65,19 +65,16 @@ def yat_reference_dense(inputs, weights, bias=None, alpha=None, epsilon=1e-6):
     # Compute squared Euclidean distance
     distance_sq = inputs_sq_sum + weights_sq_sum - 2 * dot_prod
     
-    # YAT transformation
-    y = dot_prod**2 / (distance_sq + epsilon)
-    
-    # Add bias
+    # YAT transformation: bias goes INSIDE the square
     if bias is not None:
-        y = y + bias
-    
-    # Apply alpha scaling
+        y = (dot_prod + bias)**2 / (distance_sq + epsilon)
+    else:
+        y = dot_prod**2 / (distance_sq + epsilon)
+
+    # Apply alpha scaling (simple multiply)
     if alpha is not None:
-        out_features = weights.shape[1]
-        scale = (np.sqrt(out_features) / np.log(1 + out_features)) ** alpha
-        y = y * scale
-    
+        y = y * alpha
+
     return y
 
 
@@ -142,17 +139,15 @@ def yat_reference_conv2d(inputs, weights, bias=None, alpha=None, epsilon=1e-6,
                 patch_sq_sum = np.sum(patch_flat**2)
                 distance_sq = patch_sq_sum + weights_sq_sum - 2 * dot_prod
                 
-                # YAT transformation
-                output[b, i, j, :] = dot_prod**2 / (distance_sq + epsilon)
-    
-    # Add bias
-    if bias is not None:
-        output = output + bias.reshape(1, 1, 1, -1)
-    
-    # Apply alpha scaling
+                # YAT transformation: bias goes INSIDE the square
+                if bias is not None:
+                    output[b, i, j, :] = (dot_prod + bias)**2 / (distance_sq + epsilon)
+                else:
+                    output[b, i, j, :] = dot_prod**2 / (distance_sq + epsilon)
+
+    # Apply alpha scaling (simple multiply)
     if alpha is not None:
-        scale = (np.sqrt(out_channels) / np.log(1 + out_channels)) ** alpha
-        output = output * scale
+        output = output * alpha
     
     return output
 
