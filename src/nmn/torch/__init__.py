@@ -16,6 +16,12 @@ from .nmn import YatNMN
 # Import attention
 from .attention import MultiHeadYatAttention
 
+# Import embedding
+from .embed import YatEmbed
+
+# Import squashers
+from .squashers import softermax, softer_sigmoid, soft_tanh
+
 
 __all__ = [
     # YAT Conv layers
@@ -29,6 +35,12 @@ __all__ = [
     "YatNMN",
     # YAT Attention
     "MultiHeadYatAttention",
+    # YAT Embedding
+    "YatEmbed",
+    # Squashers
+    "softermax",
+    "softer_sigmoid",
+    "soft_tanh",
 ]
 
 

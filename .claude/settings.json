@@ -1,5 +1,14 @@
 {
   "permissions": {
+    "allow": [
+      "Bash(python -c \":*)",
+      "Bash(grep -c \"def test_\" /c/Users/tahab/Documents/github/nmn/tests/test_torch/*.py)",
+      "Read(//c/Users/tahab/Documents/github/nmn/**)",
+      "Bash(find /c/Users/tahab/Documents/github/nmn/src/nmn -name *rnn* -o -name *lstm* -o -name *gru*)",
+      "Bash(python -m pytest tests/test_linen/test_squashers.py tests/test_linen/test_embed.py tests/test_linen/test_attention.py -v --tb=short)",
+      "Bash(python -m pytest tests/test_torch/ -v --tb=short)",
+      "Bash(python -m pytest tests/test_nnx/ tests/test_linen/ -v --tb=short)"
+    ],
     "additionalDirectories": [
       "c:\\Users\\tahab\\.claude\\projects\\c--Users-tahab-Documents-github-nmn\\memory"
     ]
