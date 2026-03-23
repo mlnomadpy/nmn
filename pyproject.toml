@@ -134,6 +134,7 @@ exclude_lines = [
 
 [tool.hatch.version]
 source = "vcs"
+fallback-version = "0.2.11"
 
 [tool.hatch.build.hooks.vcs]
 version-file = "src/nmn/_version.py"
