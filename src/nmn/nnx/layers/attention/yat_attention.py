@@ -118,20 +118,13 @@ def yat_attention_weights(
         "...qhd,...khd->...hqk", query, key, precision=precision
     )
 
-    # Squared dot product for numerator: (q·k)²
-    squared_dot_product = jnp.square(dot_product)
-
-    # Calculate squared norms
+    # Calculate squared norms (small tensors — not [B,H,S,S])
     # q_norm: [..., q_length, num_heads, 1]
     # k_norm: [..., kv_length, num_heads, 1]
     q_norm_sq = jnp.sum(jnp.square(query), axis=-1, keepdims=True)
     k_norm_sq = jnp.sum(jnp.square(key), axis=-1, keepdims=True)
 
-    # We need to compute ||q - k||² for each (q, k) pair
-    # ||q - k||² = ||q||² + ||k||² - 2*(q·k)
-    #
-    # Reshape norms to broadcast correctly with dot_product shape
-    # [..., num_heads, q_length, kv_length]
+    # Reshape norms to broadcast with dot_product: [..., num_heads, q_length, kv_length]
     batch_dims = query.ndim - 3
 
     # Transpose q_norm: [..., q_length, num_heads, 1] -> [..., num_heads, q_length, 1]
@@ -143,11 +136,13 @@ def yat_attention_weights(
     k_norm_transposed = k_norm_sq.transpose(k_axes)
     k_norm_transposed = jnp.swapaxes(k_norm_transposed, -2, -1)
 
-    # Squared Euclidean distance: ||q||² + ||k||² - 2*(q·k)
-    squared_dist = q_norm_transposed + k_norm_transposed - 2.0 * dot_product
-
-    # YAT attention scores: (q·k)² / (||q - k||² + ε)
-    attn_weights = squared_dot_product / (squared_dist + epsilon)
+    # Fused YAT scores: (q·k)² / (||q||² + ||k||² - 2·(q·k) + ε)
+    # Computing in one expression lets XLA fuse square/divide/subtract into a
+    # single kernel so only dot_product ([B,H,S,S]) needs to be materialised
+    # — avoids holding separate squared_dot_product AND squared_dist tensors.
+    attn_weights = jnp.square(dot_product) / (
+        q_norm_transposed + k_norm_transposed - 2.0 * dot_product + epsilon
+    )
 
     # Apply alpha scaling: y *= alpha (simple multiply)
     if alpha is not None:
@@ -372,15 +367,10 @@ def yat_attention_normalized(
         "...qhd,...khd->...hqk", query_normalized, key_normalized, precision=precision
     )
 
-    # Squared dot product: (q·k)²
-    squared_dot_product = jnp.square(dot_product)
-
-    # Simplified distance: 2(1 - q·k) since ||q|| = ||k|| = 1
-    # ||q - k||² = ||q||² + ||k||² - 2(q·k) = 1 + 1 - 2(q·k) = 2 - 2(q·k)
-    distance_sq = 2.0 - 2.0 * dot_product
-
-    # YAT attention scores: (q·k)² / (2(1 - q·k) + ε)
-    attn_weights = squared_dot_product / (distance_sq + epsilon)
+    # Fused YAT scores: (q·k)² / (2(1 - q·k) + ε)
+    # Since ||q|| = ||k|| = 1: ||q-k||² = 2 - 2·(q·k)
+    # Single expression avoids materialising separate squared_dot / distance tensors.
+    attn_weights = jnp.square(dot_product) / (2.0 - 2.0 * dot_product + epsilon)
 
     # Apply alpha scaling: y *= alpha (simple multiply)
     if alpha is not None:
