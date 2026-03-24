@@ -444,7 +444,9 @@ class RotaryYatAttention(Module):
         use_softermax: bool = False,
         power: float = 1.0,
         use_performer: bool = False,
-        num_features: int | None = None,
+        num_anchor_features: int = 16,
+        num_prf_features: int = 8,
+        num_quad_nodes: int = 1,
         causal: bool = False,
         performer_normalize: bool = True,
         use_alpha: bool = True,
@@ -473,7 +475,13 @@ class RotaryYatAttention(Module):
             use_softermax: Whether to use softermax (only for non-Performer).
             power: Softermax power parameter.
             use_performer: If True, use Performer mode for O(n) complexity.
-            num_features: Number of random features for Performer (default: head_dim).
+            num_anchor_features: P — number of anchor features for polynomial
+                kernel approximation (default: 16). See spherical_yat_performer
+                module docstring for tuning guide.
+            num_prf_features: M — number of positive random features per
+                quadrature node for exponential kernel (default: 8).
+            num_quad_nodes: R — number of Gauss-Laguerre quadrature nodes
+                (default: 1). Total feature dim = R * P * M.
             causal: If True, use causal attention (Performer mode).
             performer_normalize: If True (default), normalize Q/K to unit vectors
                 in Performer mode. This enables the optimized YAT formula:
@@ -552,20 +560,18 @@ class RotaryYatAttention(Module):
         self.perf_quad_nodes: nnx.Cache | None
         self.perf_quad_weights: nnx.Cache | None
         if use_performer:
-            # Anchor-based performer config (P=16 anchors, M=8 PRF, R=1 quad node)
-            self.num_anchor_features = 16
-            self.num_prf_features_per_node = num_features if num_features is not None else 8
-            self.num_scales = 1  # Gauss-Laguerre quadrature nodes
-            self.num_features_per_scale = self.num_prf_features_per_node
-            self.num_features = self.num_scales * self.num_anchor_features * self.num_prf_features_per_node
+            self.num_anchor_features = num_anchor_features
+            self.num_prf_features_per_node = num_prf_features
+            self.num_scales = num_quad_nodes
+            self.num_features_per_scale = num_prf_features
+            self.num_features = num_quad_nodes * num_anchor_features * num_prf_features
 
-            # Create anchor-based params
             params = create_yat_tp_projection(
                 rngs.params(),
                 self.head_dim,
-                num_prf_features=self.num_prf_features_per_node,
-                num_quad_nodes=self.num_scales,
-                num_anchor_features=self.num_anchor_features,
+                num_prf_features=num_prf_features,
+                num_quad_nodes=num_quad_nodes,
+                num_anchor_features=num_anchor_features,
                 dtype=param_dtype,
             )
 

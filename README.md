@@ -40,7 +40,7 @@
 # Traditional approach
 y = relu(linear(x))  # dot product → activation
 
-# NMN approach  
+# NMN approach
 y = yat(x)  # geometric operation with built-in non-linearity
 ```
 
@@ -55,8 +55,8 @@ The **Yat-Product** (ⵟ) balances *similarity* and *distance* to create inheren
 | 🔥 **Activation-Free** | Learn complex non-linear relationships without ReLU, sigmoid, or tanh |
 | 🌐 **Multi-Framework** | PyTorch, TensorFlow, Keras, Flax (Linen & NNX) |
 | 🧮 **Geometric Foundation** | Based on distance-similarity tradeoff, not just correlations |
-| ✅ **Cross-Framework Consistency** | Verified numerical equivalence across all frameworks |
-| 🧠 **Complete Layer Suite** | Dense, Conv1D/2D/3D, ConvTranspose, Attention, RNN cells |
+| ✅ **Full Framework Parity** | Dense, Conv, ConvTranspose, Attention, Embedding, and Squashers across all 5 frameworks |
+| 🧠 **Complete Layer Suite** | Dense, Conv1D/2D/3D, ConvTranspose1D/2D/3D, Multi-Head Attention, Embeddings |
 | ⚡ **Production Ready** | Comprehensive tests, CI/CD, high code coverage |
 
 ---
@@ -116,8 +116,9 @@ pip install nmn
 
 # Framework-specific installations
 pip install "nmn[torch]"    # PyTorch
-pip install "nmn[keras]"    # Keras/TensorFlow  
+pip install "nmn[keras]"    # Keras/TensorFlow
 pip install "nmn[nnx]"      # Flax NNX (JAX)
+pip install "nmn[linen]"    # Flax Linen (JAX)
 pip install "nmn[all]"      # Everything
 ```
 
@@ -130,9 +131,8 @@ pip install "nmn[all]"      # Everything
 **PyTorch**
 ```python
 import torch
-from nmn.torch.nmn import YatNMN
+from nmn.torch import YatNMN
 
-# Replace nn.Linear + activation
 layer = YatNMN(
     in_features=128,
     out_features=64,
@@ -149,9 +149,8 @@ y = layer(x)  # (32, 64) — non-linear output!
 **Keras**
 ```python
 import keras
-from nmn.keras.nmn import YatNMN
+from nmn.keras import YatNMN
 
-# Drop-in replacement for Dense
 layer = YatNMN(
     features=64,
     epsilon=1e-5
@@ -168,8 +167,9 @@ y = layer(x)  # (32, 64)
 
 **Flax NNX**
 ```python
+import jax.numpy as jnp
 from flax import nnx
-from nmn.nnx.nmn import YatNMN
+from nmn.nnx import YatNMN
 
 layer = YatNMN(
     in_features=128,
@@ -177,7 +177,7 @@ layer = YatNMN(
     rngs=nnx.Rngs(0)
 )
 
-x = jax.numpy.zeros((32, 128))
+x = jnp.zeros((32, 128))
 y = layer(x)  # (32, 64)
 ```
 
@@ -187,7 +187,7 @@ y = layer(x)  # (32, 64)
 **TensorFlow**
 ```python
 import tensorflow as tf
-from nmn.tf.nmn import YatNMN
+from nmn.tf import YatNMN
 
 layer = YatNMN(features=64)
 
@@ -203,7 +203,7 @@ y = layer(x)  # (32, 64)
 
 ## 📦 Layer Support Matrix
 
-### Core Layers
+All layers are available across **all 5 frameworks** with verified numerical equivalence.
 
 | Layer | PyTorch | TensorFlow | Keras | Flax NNX | Flax Linen |
 |-------|:-------:|:----------:|:-----:|:--------:|:----------:|
@@ -211,24 +211,19 @@ y = layer(x)  # (32, 64)
 | **YatConv1D** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **YatConv2D** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **YatConv3D** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **YatConvTranspose1D** | ✅ | ✅ | ✅ | ✅ | ❌ |
-| **YatConvTranspose2D** | ✅ | ✅ | ✅ | ✅ | ❌ |
-| **YatConvTranspose3D** | ✅ | ✅ | ❌ | ✅ | ❌ |
+| **YatConvTranspose1D** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **YatConvTranspose2D** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **YatConvTranspose3D** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **MultiHeadAttention** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **YatEmbed** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Squashers** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-### Advanced Layers (Flax NNX)
+### Advanced Attention Variants (Flax NNX)
 
-| Layer | Status | Description |
-|-------|:------:|-------------|
-| **MultiHeadAttention** | ✅ | Multi-head attention with YAT formula |
-| **RotaryYatAttention** | ✅ | YAT + Rotary Position Embeddings (RoPE) |
-| **Performer Attention** | ✅ | YAT + FAVOR+ random features (O(n) complexity) |
-| **YatSimpleCell** | ✅ | Simple RNN cell |
-| **YatLSTMCell** | ✅ | LSTM with Yat operations |
-| **YatGRUCell** | ✅ | GRU with Yat operations |
-| **softermax** | ✅ | Generalized softmax: $\frac{x_k^n}{\epsilon + \sum_i x_i^n}$ |
-| **softer_sigmoid** | ✅ | Smooth sigmoid variant |
-| **soft_tanh** | ✅ | Smooth tanh variant |
-| **DropConnect** | ✅ | Weight-level dropout (Conv & Dense layers) |
+| Variant | Description | Complexity |
+|---------|-------------|:----------:|
+| **RotaryYatAttention** | YAT + Rotary Position Embeddings (RoPE) | O(n²) |
+| **Spherical YAT-Performer** | YAT + FAVOR+ random features | O(n) |
 
 ---
 
@@ -251,111 +246,96 @@ All implementations are verified to produce **numerically equivalent outputs** g
 └──────────────────────────┴──────────────┴───────────────────┘
 ```
 
-This demonstrates the **robustness of the geometric YAT formulation** across different numerical backends.
-
 ---
 
-## ⚙️ Advanced Features (Flax NNX Only)
+## ⚙️ Advanced Features
 
 ### Attention Mechanisms
 
-Select the right attention variant for your use case:
-
-| Variant | Use Case | Complexity |
-|---------|----------|-----------|
-| **MultiHeadAttention** | Standard multi-head attention with YAT | O(n²) |
-| **RotaryYatAttention** | With Rotary Position Embeddings (RoPE) | O(n²) |
-| **Performer Mode** | Linear complexity with FAVOR+ approximation | O(n) |
-
 ```python
-from nmn.nnx.attention import RotaryYatAttention
+# PyTorch
+from nmn.torch import MultiHeadYatAttention
+
+attn = MultiHeadYatAttention(embed_dim=512, num_heads=8)
+output = attn(query, key, value)
+
+# Flax NNX — with Rotary Position Embeddings
+from nmn.nnx import RotaryYatAttention
 from flax import nnx
 
-# Standard Rotary YAT Attention
-attn = RotaryYatAttention(embed_dim=512, num_heads=8, rngs=nnx.Rngs(0))
-output = attn(x)
-
-# Performer Mode (O(n) linear complexity)
-attn_fast = RotaryYatAttention(
-    embed_dim=512, 
+attn = RotaryYatAttention(
     num_heads=8,
-    use_performer=True,  # Enable FAVOR+ approximation
-    num_features=256,    # Feature projection dimension
+    in_features=512,
     rngs=nnx.Rngs(0)
 )
+output = attn(x)
+
+# Flax NNX — Spherical YAT-Performer (O(n) linear complexity)
+from nmn.nnx import MultiHeadAttention
+
+attn = MultiHeadAttention(
+    num_heads=8,
+    in_features=512,
+    use_performer=True,
+    rngs=nnx.Rngs(0)
+)
+output = attn(x)
 ```
 
-### Recurrent Layers
-
-**RNN Cells**: YatSimpleCell, YatLSTMCell, YatGRUCell
+### Embeddings
 
 ```python
-from nmn.nnx.rnn import YatLSTMCell, RNN, Bidirectional
+# PyTorch
+from nmn.torch import YatEmbed
 
-# Create LSTM cell
-cell = YatLSTMCell(hidden_dim=256, rngs=nnx.Rngs(0))
+embed = YatEmbed(num_embeddings=10000, embedding_dim=128)
+output = embed(token_ids)
 
-# Wrap in RNN for sequence processing
-rnn = RNN(cell, return_sequences=True)
-output, final_state = rnn(inputs)
+# Flax NNX
+from nmn.nnx import Embed
+from flax import nnx
 
-# Bidirectional processing
-bi_rnn = Bidirectional(YatLSTMCell(hidden_dim=256, rngs=nnx.Rngs(0)))
-output = bi_rnn(inputs)
+embed = Embed(
+    num_embeddings=10000,
+    features=128,
+    constant_alpha=True,
+    rngs=nnx.Rngs(0)
+)
+output = embed(token_ids)
+# YAT attend for attention-based retrieval
+scores = embed.attend(query)
 ```
 
 ### Squashing Functions
 
-Alternatives to standard activation functions:
+Alternatives to standard activation functions, available in all frameworks:
 
 ```python
-from nmn.nnx.squashers import softermax, softer_sigmoid, soft_tanh
+from nmn.nnx import softermax, softer_sigmoid, soft_tanh
 
 y1 = softermax(x, n=2)              # Smoother softmax with power n
 y2 = softer_sigmoid(x, sharpness=1) # Smooth sigmoid variant
 y3 = soft_tanh(x)                   # Smooth tanh variant
 ```
 
-### DropConnect Regularization
-
-Weight-level dropout:
-
-```python
-from nmn.nnx.conv import YatConv
-
-conv = YatConv(
-    in_channels=3,
-    out_channels=32,
-    kernel_size=(3, 3),
-    use_dropconnect=True,  # Enable DropConnect
-    drop_rate=0.1,         # 10% dropout rate
-    rngs=nnx.Rngs(0)
-)
-
-# Training: DropConnect active
-output = conv(x, deterministic=False)
-# Inference: DropConnect disabled
-output = conv(x, deterministic=True)
-```
-
 ---
 
 See **[EXAMPLES.md](EXAMPLES.md)** for comprehensive usage guides including:
 - Framework-specific quick starts (PyTorch, Keras, TensorFlow, Flax)
-- Architecture examples (CNN, Transformer, RNN)
-- Advanced features (DropConnect, custom squashers, attention)
+- Architecture examples (CNN, Transformer)
+- Advanced features (custom squashers, attention)
 
 **Quick run:**
 
 ```bash
 # PyTorch Examples
-python src/nmn/torch/examples/yat_cifar10.py      # CIFAR-10 classification
-python src/nmn/torch/examples/yat_examples.py     # Various architectures
+python src/nmn/torch/examples/quick_example.py         # Quick demo
+python src/nmn/torch/examples/vision/resnet_training.py # ResNet training
 
-# Flax NNX Examples  
+# Flax NNX Examples
 python src/nmn/nnx/examples/vision/aether_resnet50_tpu.py  # ResNet50 on TPU
-python src/nmn/nnx/examples/language/m3za.py              # MiniBERT pre-training
-python src/nmn/nnx/examples/language/m3za_perf.py         # Performance evaluation
+python src/nmn/nnx/examples/language/m3za.py                # MiniBERT pre-training
+python src/nmn/nnx/examples/language/m3za_perf.py           # Performance evaluation
 ```
 
 ---
@@ -449,20 +429,31 @@ isort src/ tests/
 | `kernel_size` | int \| tuple | Convolution kernel size |
 | `epsilon` | float | Numerical stability (default: 1e-5) |
 | `use_bias` | bool | Include bias term (default: True) |
+| `constant_alpha` | bool | Use fixed √2 scaling (default: varies) |
+| `spherical` | bool | Enable spherical mode (default: False) |
 
 ### Framework Imports
 
 ```python
 # PyTorch
-from nmn.torch.nmn import YatNMN
-from nmn.torch.layers import YatConv2D, YatConvTranspose2D
+from nmn.torch import YatNMN, YatConv2D, MultiHeadYatAttention, YatEmbed
+from nmn.torch import softermax, softer_sigmoid, soft_tanh
 
-# Keras / TensorFlow
-from nmn.keras.nmn import YatNMN
-from nmn.keras.conv import YatConv2D
+# Keras
+from nmn.keras import YatNMN, YatConv2D, MultiHeadYatAttention, YatEmbed
+from nmn.keras import softermax, softer_sigmoid, soft_tanh
 
-# Flax NNX (most complete)
-from nmn.nnx import YatNMN, YatConv, MultiHeadAttention, softermax
+# TensorFlow
+from nmn.tf import YatNMN, YatConv2D, MultiHeadYatAttention, YatEmbed
+from nmn.tf import softermax, softer_sigmoid, soft_tanh
+
+# Flax NNX (includes advanced attention variants)
+from nmn.nnx import YatNMN, YatConv, MultiHeadAttention, Embed
+from nmn.nnx import RotaryYatAttention, softermax
+
+# Flax Linen
+from nmn.linen import YatNMN, YatConv2D, MultiHeadAttention, YatEmbed
+from nmn.linen import softermax, softer_sigmoid, soft_tanh
 ```
 
 📋 Full reference → **[EXAMPLES.md](EXAMPLES.md)**
@@ -518,6 +509,6 @@ The foundations of NMN were established through extensive research and community
 ---
 
 <p align="center">
-  <sub>Built with ❤️ by <a href="https://azetta.ai">Azetta.ai</a> · 
+  <sub>Built with ❤️ by <a href="https://azetta.ai">Azetta.ai</a> ·
   Originally created by <a href="https://github.com/mlnomadpy">ML Nomad</a></sub>
 </p>
