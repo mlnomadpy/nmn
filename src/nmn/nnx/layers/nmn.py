@@ -307,18 +307,20 @@ class YatNMN(Module):
     if self.spherical:
       # Spherical YAT: inputs and kernel are normalized
       # distances = ||x||² + ||W||² - 2(x · W) = 1 + 1 - 2(x · W) = 2 - 2(x · W)
-      distances = 2 - 2 * y
+      # Clamp to zero: bf16 cancellation can make distance negative when x ≈ W
+      distances = jnp.maximum(2 - 2 * y, 0.0)
     else:
       # Compute squared Euclidean distance: ||x||² + ||W||² - 2(x · W)
       inputs_squared_sum = jnp.sum(inputs**2, axis=-1, keepdims=True)
-      
+
       # Optimization: if weights are normalized, ||W||² = 1 for each neuron
       if self.weight_normalized:
         kernel_squared_sum = jnp.ones((1, kernel.shape[-1]), dtype=kernel.dtype)
       else:
         kernel_squared_sum = jnp.sum(kernel**2, axis=0, keepdims=True)
-      
-      distances = inputs_squared_sum + kernel_squared_sum - 2 * y
+
+      # Clamp to zero: bf16 cancellation can make distance negative when x ≈ W
+      distances = jnp.maximum(inputs_squared_sum + kernel_squared_sum - 2 * y, 0.0)
 
     # Add bias
     if bias is not None:

@@ -167,7 +167,7 @@ class YatNMN(tf.Module):
             [1] * (len(inputs.shape) - 1) + [self.features]
         )
 
-        distances = inputs_squared_sum + kernel_squared_sum - 2 * y
+        distances = tf.maximum(inputs_squared_sum + kernel_squared_sum - 2 * y, 0.0)
 
         # Add bias if used
         if self.use_bias:

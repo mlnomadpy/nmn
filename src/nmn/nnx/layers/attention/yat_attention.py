@@ -136,16 +136,21 @@ def yat_attention_weights(
     k_norm_transposed = k_norm_sq.transpose(k_axes)
     k_norm_transposed = jnp.swapaxes(k_norm_transposed, -2, -1)
 
-    # Fused YAT scores: (q·k)² / ((||q||² + ||k||² - 2·(q·k) + ε) * √d)
-    # Computing in one expression lets XLA fuse square/divide/subtract into a
-    # single kernel so only dot_product ([B,H,S,S]) needs to be materialised
-    # — avoids holding separate squared_dot_product AND squared_dist tensors.
+    # Squared Euclidean distance: ||q-k||² = ||q||² + ||k||² - 2·(q·k)
+    # Clamp to zero: bf16 catastrophic cancellation can make this negative
+    # when q ≈ k (three large terms nearly cancel with only 7-bit mantissa).
+    # A negative denominator produces negative YAT scores that corrupt softmax.
+    squared_dist = jnp.maximum(
+        q_norm_transposed + k_norm_transposed - 2.0 * dot_product, 0.0
+    )
+
+    # YAT scores: (q·k)² / ((||q-k||² + ε) * √d)
     # Scale by 1/√head_dim to match standard attention's score growth profile.
     # Without this, scores blow up ~10x faster as norms grow, causing softmax
     # saturation and gradient death.
     scale = jnp.sqrt(jnp.float32(head_dim))
     attn_weights = jnp.square(dot_product) / (
-        (q_norm_transposed + k_norm_transposed - 2.0 * dot_product + epsilon) * scale
+        (squared_dist + epsilon) * scale
     )
 
     # Apply alpha scaling: y *= alpha (simple multiply)
@@ -371,13 +376,14 @@ def yat_attention_normalized(
         "...qhd,...khd->...hqk", query_normalized, key_normalized, precision=precision
     )
 
-    # Fused YAT scores: (q·k)² / ((2(1 - q·k) + ε) * √d)
+    # YAT scores: (q·k)² / ((2(1 - q·k) + ε) * √d)
     # Since ||q|| = ||k|| = 1: ||q-k||² = 2 - 2·(q·k)
-    # Single expression avoids materialising separate squared_dot / distance tensors.
-    # Scale by 1/√head_dim — same rationale as the unnormalized path.
+    # Clamp distance: bf16 rounding after normalization can make q·k > 1,
+    # producing negative distances.
     head_dim = query.shape[-1]
     scale = jnp.sqrt(jnp.float32(head_dim))
-    attn_weights = jnp.square(dot_product) / ((2.0 - 2.0 * dot_product + epsilon) * scale)
+    distance_sq = jnp.maximum(2.0 - 2.0 * dot_product, 0.0)
+    attn_weights = jnp.square(dot_product) / ((distance_sq + epsilon) * scale)
 
     # Apply alpha scaling: y *= alpha (simple multiply)
     if alpha is not None:

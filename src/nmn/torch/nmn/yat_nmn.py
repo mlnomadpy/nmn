@@ -284,19 +284,21 @@ class YatNMN(nn.Module):
             # Spherical: inputs and kernel are normalized
             # ||x - W||² = ||x||² + ||W||² - 2(x·W) = 1 + 1 - 2(x·W) = 2 - 2(x·W)
             # Reuse y (before bias) since it equals x · W^T
-            distances = 2 - 2 * (y - bias if bias is not None else y)
+            # Clamp to zero: bf16 cancellation can make distance negative when x ≈ W
+            distances = (2 - 2 * (y - bias if bias is not None else y)).clamp(min=0.0)
         else:
             inputs_squared_sum = torch.sum(x**2, dim=-1, keepdim=True)
-            
+
             # Optimization: if weights are normalized, ||W||² = 1 for each neuron
             if self.weight_normalized:
                 kernel_squared_sum = torch.ones(kernel.shape[0], device=kernel.device, dtype=kernel.dtype)
             else:
                 kernel_squared_sum = torch.sum(kernel**2, dim=-1)
-            
+
             # Reuse dot product for distance: ||x||² + ||W||² - 2(x·W)
             dot_for_dist = y - bias if bias is not None else y
-            distances = inputs_squared_sum + kernel_squared_sum - 2 * dot_for_dist
+            # Clamp to zero: bf16 cancellation can make distance negative when x ≈ W
+            distances = (inputs_squared_sum + kernel_squared_sum - 2 * dot_for_dist).clamp(min=0.0)
 
         # Apply squared Euclidean distance transformation: (x·W + b)² / (||x - W||² + ε)
         y = y ** 2 / (distances + self.epsilon)

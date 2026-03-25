@@ -111,7 +111,8 @@ class YatNMN(Module):
         )
         inputs_squared_sum = jnp.sum(inputs**2, axis=-1, keepdims=True)
         kernel_squared_sum = jnp.sum(kernel**2, axis=-1)
-        distances = inputs_squared_sum + kernel_squared_sum - 2 * y
+        # Clamp to zero: bf16 cancellation can make distance negative when x ≈ W
+        distances = jnp.maximum(inputs_squared_sum + kernel_squared_sum - 2 * y, 0.0)
 
         if bias is not None:
             y += jnp.reshape(bias, (1,) * (y.ndim - 1) + (-1,))

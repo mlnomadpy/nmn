@@ -87,6 +87,11 @@ def yat_attention_weights(
     assert query.ndim == key.ndim == 4, "Expected (batch, seq, heads, dim)"
     head_dim = query.shape[-1]
 
+    # Scale by 1/√head_dim to match standard attention's score growth profile.
+    # Without this, scores blow up as norms grow, causing softmax saturation
+    # and gradient death.
+    dim_scale = head_dim ** 0.5
+
     if spherical:
         # Spherical YAT: normalize Q/K to unit vectors, simplified formula
         query, key = normalize_qk(query, key, epsilon)
@@ -96,8 +101,9 @@ def yat_attention_weights(
         squared_dot = dot_product.square()
 
         # ||q-k||² = 2(1 - q·k) for unit vectors
-        distance_sq = 2.0 - 2.0 * dot_product
-        attn_weights = squared_dot / (distance_sq + epsilon)
+        # Clamp: bf16 rounding can make q·k > 1 after normalization
+        distance_sq = (2.0 - 2.0 * dot_product).clamp(min=0.0)
+        attn_weights = squared_dot / ((distance_sq + epsilon) * dim_scale)
     else:
         # Standard YAT: full norm computation
         dot_product = torch.einsum("bqhd,bkhd->bhqk", query, key)
@@ -109,8 +115,9 @@ def yat_attention_weights(
         q_norm_sq = q_norm_sq.permute(0, 2, 1, 3)
         k_norm_sq = k_norm_sq.permute(0, 2, 1, 3).transpose(-2, -1)
 
-        squared_dist = q_norm_sq + k_norm_sq - 2.0 * dot_product
-        attn_weights = squared_dot / (squared_dist + epsilon)
+        # Clamp to zero: bf16 cancellation can make distance negative when q ≈ k
+        squared_dist = (q_norm_sq + k_norm_sq - 2.0 * dot_product).clamp(min=0.0)
+        attn_weights = squared_dot / ((squared_dist + epsilon) * dim_scale)
 
     # Alpha scaling (before softmax)
     # Either learnable alpha (simple multiply) or direct constant scale, never both
@@ -217,11 +224,13 @@ def yat_attention_normalized(
     # Dot product: q·k → (B, H, Q, K)
     dot_product = torch.einsum("bqhd,bkhd->bhqk", query_n, key_n)
 
-    # Simplified: (q·k)² / (2(1 - q·k) + ε)
+    # Simplified: (q·k)² / ((2(1 - q·k) + ε) * √d)
+    # Clamp distance: bf16 rounding can make q·k > 1 after normalization
+    dim_scale = head_dim ** 0.5
     squared_dot = dot_product.square()
-    distance_sq = 2.0 - 2.0 * dot_product
+    distance_sq = (2.0 - 2.0 * dot_product).clamp(min=0.0)
 
-    attn_weights = squared_dot / (distance_sq + epsilon)
+    attn_weights = squared_dot / ((distance_sq + epsilon) * dim_scale)
 
     # Alpha scaling (before softmax)
     # Either learnable alpha (simple multiply) or direct constant scale, never both

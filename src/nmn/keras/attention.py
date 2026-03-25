@@ -60,12 +60,17 @@ def yat_attention_weights(
     Returns:
         Attention weights (batch, num_heads, q_len, kv_len).
     """
+    # Scale by 1/√head_dim to match standard attention's score growth profile.
+    head_dim = query.shape[-1]
+    dim_scale = ops.sqrt(ops.cast(head_dim, query.dtype))
+
     if spherical:
         query, key = normalize_qk(query, key, epsilon)
         dot_product = ops.einsum("bqhd,bkhd->bhqk", query, key)
         squared_dot = ops.square(dot_product)
-        distance_sq = 2.0 - 2.0 * dot_product
-        attn_weights = squared_dot / (distance_sq + epsilon)
+        # Clamp: bf16 rounding can make q·k > 1 after normalization
+        distance_sq = ops.maximum(2.0 - 2.0 * dot_product, 0.0)
+        attn_weights = squared_dot / ((distance_sq + epsilon) * dim_scale)
     else:
         dot_product = ops.einsum("bqhd,bkhd->bhqk", query, key)
         squared_dot = ops.square(dot_product)
@@ -77,8 +82,9 @@ def yat_attention_weights(
         k_norm_sq = ops.transpose(k_norm_sq, axes=[0, 2, 1, 3])
         k_norm_sq = ops.swapaxes(k_norm_sq, -2, -1)
 
-        squared_dist = q_norm_sq + k_norm_sq - 2.0 * dot_product
-        attn_weights = squared_dot / (squared_dist + epsilon)
+        # Clamp to zero: bf16 cancellation can make distance negative when q ≈ k
+        squared_dist = ops.maximum(q_norm_sq + k_norm_sq - 2.0 * dot_product, 0.0)
+        attn_weights = squared_dot / ((squared_dist + epsilon) * dim_scale)
 
     if alpha is not None:
         attn_weights = attn_weights * alpha

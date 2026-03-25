@@ -162,14 +162,14 @@ class YatNMN(Layer):
         # distance = ||x - W||² is purely geometric (independent of bias)
         if self.spherical:
             # Spherical: ||x||=1, ||W||=1, so dist = 2 - 2*(x·W)
-            distances = 2 - 2 * dot_product
+            distances = ops.maximum(2 - 2 * dot_product, 0.0)
         else:
             inputs_squared_sum = ops.sum(ops.square(inputs), axis=-1, keepdims=True)
             if self.weight_normalized:
                 kernel_squared_sum = ops.ones((self.units,), dtype=inputs.dtype)
             else:
                 kernel_squared_sum = ops.sum(ops.square(kernel), axis=0)
-            distances = inputs_squared_sum + kernel_squared_sum - 2 * dot_product
+            distances = ops.maximum(inputs_squared_sum + kernel_squared_sum - 2 * dot_product, 0.0)
 
         # Add bias inside the numerator square: (dot + bias)^2 / dist
         if self.use_bias:
