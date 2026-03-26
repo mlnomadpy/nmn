@@ -60,8 +60,9 @@ def yat_attention_weights(
     use_softermax: bool = False,
     power: float = 1.0,
     alpha: Optional[Array] = None,
+    normalization: str = "softmax",
 ) -> Array:
-    """Computes YAT attention weights: softmax((Q·K)² / (||Q-K||² + ε))
+    """Computes YAT attention weights: norm((Q·K)² / (||Q-K||² + ε))
 
     Uses the YAT formula to compute attention scores that balance similarity
     (squared dot product) with proximity (squared Euclidean distance).
@@ -90,6 +91,11 @@ def yat_attention_weights(
         power: Power parameter for softermax (only used if use_softermax=True).
         alpha: Optional alpha scaling parameter. Can be a scalar Array (learnable)
             or a float value (constant). If None, no alpha scaling is applied.
+        normalization: Normalization method for attention weights. One of:
+            - ``"softmax"`` (default): standard softmax normalization.
+            - ``"l1"``: L1 normalization (score / sum(scores)). More natural
+              for YAT since scores are already non-negative — no exp() overflow.
+            - ``"softermax"``: softermax normalization (requires use_softermax=True).
 
     Returns:
         Attention weights of shape [..., num_heads, q_length, kv_length]
@@ -151,11 +157,21 @@ def yat_attention_weights(
 
     # Apply attention mask
     if mask is not None:
-        big_neg = jnp.finfo(jnp.float32).min
-        attn_weights = jnp.where(mask, attn_weights, big_neg)
+        if normalization == "l1":
+            # L1 norm: zero out masked positions (scores are non-negative)
+            attn_weights = jnp.where(mask, attn_weights, 0.0)
+        else:
+            # Softmax/softermax: use -inf for masked positions
+            big_neg = jnp.finfo(jnp.float32).min
+            attn_weights = jnp.where(mask, attn_weights, big_neg)
 
-    # Normalize — softmax in f32, then cast back to caller's dtype
-    if use_softermax:
+    # Normalize attention weights — all in f32, cast back to caller's dtype
+    if normalization == "l1":
+        # L1 normalization: score / sum(scores). Natural for YAT since
+        # scores are non-negative — no exp() means no overflow risk.
+        attn_sum = jnp.sum(attn_weights, axis=-1, keepdims=True)
+        attn_weights = (attn_weights / (attn_sum + epsilon)).astype(dtype)
+    elif use_softermax or normalization == "softermax":
         attn_weights = softermax(attn_weights, n=power).astype(dtype)
     else:
         attn_weights = jax.nn.softmax(attn_weights).astype(dtype)
@@ -195,17 +211,9 @@ def yat_attention(
     use_softermax: bool = False,
     power: float = 1.0,
     alpha: Optional[Array] = None,
+    normalization: str = "softmax",
 ) -> Array:
-    """Computes YAT attention: softmax((Q·K)² / (||Q-K||² + ε)) · V
-
-    This replaces the standard scaled dot-product attention with the YAT formula,
-    which balances similarity (dot product) with proximity (Euclidean distance).
-
-    The YAT attention score for each (query, key) pair is:
-        ⵟ(q, k) = (q·k)² / (||q - k||² + ε)
-
-    With optional alpha scaling:
-        scaled_attn = attn * (sqrt(head_dim) / log(1 + head_dim))^alpha
+    """Computes YAT attention: norm((Q·K)² / (||Q-K||² + ε)) · V
 
     Args:
         query: Queries with shape [..., q_length, num_heads, head_dim]
@@ -223,8 +231,8 @@ def yat_attention(
         epsilon: Small constant for numerical stability in denominator.
         use_softermax: If True, use softermax instead of standard softmax.
         power: Power parameter for softermax.
-        alpha: Optional alpha scaling parameter. Can be a scalar Array (learnable)
-            or a float value (constant). If None, no alpha scaling is applied.
+        alpha: Optional alpha scaling parameter.
+        normalization: ``"softmax"`` (default), ``"l1"``, or ``"softermax"``.
 
     Returns:
         Output of shape [..., q_length, num_heads, v_dim]
@@ -258,6 +266,7 @@ def yat_attention(
         use_softermax,
         power,
         alpha,
+        normalization=normalization,
     )
 
     # Return weighted sum over values for each query position

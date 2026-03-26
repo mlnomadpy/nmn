@@ -173,6 +173,7 @@ def rotary_yat_attention_weights(
     power: float = 1.0,
     position_offset: int = 0,
     alpha: Optional[Array] = None,
+    normalization: str = "softmax",
 ) -> Array:
     """Computes Rotary YAT attention weights.
 
@@ -185,18 +186,10 @@ def rotary_yat_attention_weights(
         freqs_sin: Sine frequencies for RoPE.
         bias: Optional attention bias.
         mask: Optional attention mask.
-        broadcast_dropout: Whether to broadcast dropout.
-        dropout_rng: RNG for dropout.
-        dropout_rate: Dropout probability.
-        deterministic: If True, no dropout.
-        dtype: Computation dtype.
-        precision: JAX precision.
-        module: Optional module for sowing weights.
         epsilon: Numerical stability constant.
-        use_softermax: Whether to use softermax.
-        power: Softermax power parameter.
         position_offset: Starting position for RoPE.
         alpha: Optional alpha scaling parameter.
+        normalization: ``"softmax"`` (default), ``"l1"``, or ``"softermax"``.
 
     Returns:
         Attention weights of shape [..., num_heads, q_length, kv_length].
@@ -222,6 +215,7 @@ def rotary_yat_attention_weights(
         use_softermax=use_softermax,
         power=power,
         alpha=alpha,
+        normalization=normalization,
     )
 
 
@@ -245,36 +239,17 @@ def rotary_yat_attention(
     power: float = 1.0,
     position_offset: int = 0,
     alpha: Optional[Array] = None,
+    normalization: str = "softmax",
 ) -> Array:
-    """Computes Rotary YAT attention: RoPE + YAT formula.
-
-    Combines Rotary Position Embeddings with YAT attention:
-        1. Apply RoPE: q' = RoPE(q), k' = RoPE(k)
-        2. Compute YAT: softmax((q'·k')² / (||q' - k'||² + ε)) · V
-
-    With optional alpha scaling:
-        scaled_attn = attn * (sqrt(head_dim) / log(1 + head_dim))^alpha
+    """Computes Rotary YAT attention: RoPE + YAT formula + V weighted sum.
 
     Args:
-        query: Queries of shape [..., q_length, num_heads, head_dim].
-        key: Keys of shape [..., kv_length, num_heads, head_dim].
-        value: Values of shape [..., kv_length, num_heads, v_dim].
-        freqs_cos: Cosine frequencies for RoPE.
-        freqs_sin: Sine frequencies for RoPE.
-        bias: Optional attention bias.
-        mask: Optional attention mask.
-        broadcast_dropout: Whether to broadcast dropout.
-        dropout_rng: RNG for dropout.
-        dropout_rate: Dropout probability.
-        deterministic: If True, no dropout.
-        dtype: Computation dtype.
-        precision: JAX precision.
-        module: Optional module for sowing weights.
+        query, key, value: Q/K/V tensors.
+        freqs_cos, freqs_sin: RoPE frequencies.
         epsilon: Numerical stability constant.
-        use_softermax: Whether to use softermax.
-        power: Softermax power parameter.
         position_offset: Starting position for RoPE.
         alpha: Optional alpha scaling parameter.
+        normalization: ``"softmax"`` (default), ``"l1"``, or ``"softermax"``.
 
     Returns:
         Output of shape [..., q_length, num_heads, v_dim].
@@ -302,6 +277,7 @@ def rotary_yat_attention(
         power=power,
         position_offset=position_offset,
         alpha=alpha,
+        normalization=normalization,
     )
 
     # Return weighted sum over values
@@ -451,6 +427,7 @@ class RotaryYatAttention(Module):
         performer_normalize: bool = True,
         use_alpha: bool = True,
         constant_alpha: Optional[Union[bool, float]] = None,
+        normalization: str = "softmax",
         rngs: rnglib.Rngs,
     ):
         """Initializes RotaryYatAttention.
@@ -459,29 +436,11 @@ class RotaryYatAttention(Module):
             embed_dim: Total embedding dimension.
             num_heads: Number of attention heads.
             max_seq_len: Maximum sequence length for RoPE precomputation.
-            theta: Base for RoPE frequency computation.
-            dtype: Computation dtype.
-            param_dtype: Parameter dtype.
-            broadcast_dropout: Whether to broadcast dropout.
-            dropout_rate: Attention dropout probability.
-            precision: JAX precision.
-            kernel_init: Weight initializer.
-            bias_init: Bias initializer.
-            alpha_init: Initializer for learnable alpha.
-            use_bias: Whether to use bias in projections.
-            normalize_qk: Whether to apply QK layer normalization.
-            use_out_proj: Whether to use output projection.
             epsilon: Numerical stability for YAT.
-            use_softermax: Whether to use softermax (only for non-Performer).
-            power: Softermax power parameter.
-            use_performer: If True, use Performer mode for O(n) complexity.
-            num_anchor_features: P — number of anchor features for polynomial
-                kernel approximation (default: 16). See spherical_yat_performer
-                module docstring for tuning guide.
-            num_prf_features: M — number of positive random features per
-                quadrature node for exponential kernel (default: 8).
-            num_quad_nodes: R — number of Gauss-Laguerre quadrature nodes
-                (default: 1). Total feature dim = R * P * M.
+            use_alpha: Whether to use alpha scaling.
+            constant_alpha: Constant alpha value or True for sqrt(2).
+            normalization: ``"softmax"`` (default), ``"l1"``, or ``"softermax"``.
+                L1 is more stable for YAT since scores are non-negative.
             causal: If True, use causal attention (Performer mode).
             performer_normalize: If True (default), normalize Q/K to unit vectors
                 in Performer mode. This enables the optimized YAT formula:
@@ -535,6 +494,7 @@ class RotaryYatAttention(Module):
         
         self.use_alpha = use_alpha
         self.constant_alpha = constant_alpha
+        self.normalization = normalization
 
         if embed_dim % num_heads != 0:
             raise ValueError(
@@ -795,6 +755,7 @@ class RotaryYatAttention(Module):
                 power=self.power,
                 position_offset=position_offset,
                 alpha=alpha_value,
+                normalization=self.normalization,
             )
 
         # Apply constant alpha as direct scale (e.g. sqrt(2))
