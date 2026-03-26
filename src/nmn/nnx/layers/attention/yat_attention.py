@@ -104,70 +104,57 @@ def yat_attention_weights(
 
     head_dim = query.shape[-1]
 
-    # YAT-style attention: softmax((q·k)² / (||q-k||² + ε)) · V
-    #
-    # query shape: [..., q_length, num_heads, head_dim]
-    # key shape: [..., kv_length, num_heads, head_dim]
-    #
-    # The YAT formula: ⵟ(q, k) = (q·k)² / (||q - k||² + ε)
-    # where ||q - k||² = ||q||² - 2(q·k) + ||k||²
+    # ── Upcast to float32 for score computation ──────────────────────
+    # YAT scores grow as O(dot²) — squaring the dot product causes
+    # overflow in bf16 (7-bit mantissa, exp() overflows at ~88).
+    # All score math runs in f32; we cast back after softmax.
+    query_f32 = query.astype(jnp.float32)
+    key_f32 = key.astype(jnp.float32)
 
     # Calculate dot product: q·k
-    # Output shape: [..., num_heads, q_length, kv_length]
     dot_product = jnp.einsum(
-        "...qhd,...khd->...hqk", query, key, precision=precision
+        "...qhd,...khd->...hqk", query_f32, key_f32, precision=precision
     )
 
-    # Calculate squared norms (small tensors — not [B,H,S,S])
-    # q_norm: [..., q_length, num_heads, 1]
-    # k_norm: [..., kv_length, num_heads, 1]
-    q_norm_sq = jnp.sum(jnp.square(query), axis=-1, keepdims=True)
-    k_norm_sq = jnp.sum(jnp.square(key), axis=-1, keepdims=True)
+    # Squared norms
+    q_norm_sq = jnp.sum(jnp.square(query_f32), axis=-1, keepdims=True)
+    k_norm_sq = jnp.sum(jnp.square(key_f32), axis=-1, keepdims=True)
 
     # Reshape norms to broadcast with dot_product: [..., num_heads, q_length, kv_length]
     batch_dims = query.ndim - 3
-
-    # Transpose q_norm: [..., q_length, num_heads, 1] -> [..., num_heads, q_length, 1]
     q_axes = tuple(range(batch_dims)) + (batch_dims + 1, batch_dims, batch_dims + 2)
     q_norm_transposed = q_norm_sq.transpose(q_axes)
-
-    # Transpose k_norm: [..., kv_length, num_heads, 1] -> [..., num_heads, 1, kv_length]
     k_axes = tuple(range(batch_dims)) + (batch_dims + 1, batch_dims, batch_dims + 2)
     k_norm_transposed = k_norm_sq.transpose(k_axes)
     k_norm_transposed = jnp.swapaxes(k_norm_transposed, -2, -1)
 
     # Squared Euclidean distance: ||q-k||² = ||q||² + ||k||² - 2·(q·k)
-    # Clamp to zero: bf16 catastrophic cancellation can make this negative
-    # when q ≈ k (three large terms nearly cancel with only 7-bit mantissa).
-    # A negative denominator produces negative YAT scores that corrupt softmax.
+    # Clamp to zero: cancellation can still make this slightly negative.
     squared_dist = jnp.maximum(
         q_norm_transposed + k_norm_transposed - 2.0 * dot_product, 0.0
     )
 
     # YAT scores: (q·k)² / ((||q-k||² + ε) * √d)
-    # Scale by 1/√head_dim to match standard attention's score growth profile.
-    # Without this, scores blow up ~10x faster as norms grow, causing softmax
-    # saturation and gradient death.
     scale = jnp.sqrt(jnp.float32(head_dim))
     attn_weights = jnp.square(dot_product) / (
         (squared_dist + epsilon) * scale
     )
 
-    # Apply alpha scaling: y *= alpha (simple multiply)
+    # Apply alpha scaling
     if alpha is not None:
-        alpha_val = jnp.asarray(alpha, dtype=dtype)
+        alpha_val = jnp.asarray(alpha, dtype=jnp.float32)
         attn_weights = attn_weights * alpha_val
 
     # Apply attention bias
     if bias is not None:
-        attn_weights = attn_weights + bias
+        attn_weights = attn_weights + bias.astype(jnp.float32)
 
     # Apply attention mask
     if mask is not None:
-        big_neg = jnp.finfo(dtype).min
+        big_neg = jnp.finfo(jnp.float32).min
         attn_weights = jnp.where(mask, attn_weights, big_neg)
 
-    # Normalize the attention weights
+    # Normalize — softmax in f32, then cast back to caller's dtype
     if use_softermax:
         attn_weights = softermax(attn_weights, n=power).astype(dtype)
     else:
