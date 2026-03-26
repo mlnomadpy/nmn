@@ -295,46 +295,45 @@ class YatNMN(Module):
     inputs, kernel, bias, alpha = self.promote_dtype(
       (inputs, kernel, bias, alpha), dtype=self.dtype
     )
-    
-    # Compute dot product: x · W
+
+    # ── Upcast to float32 for YAT score computation ──────────────────
+    # YAT scores grow as O(dot²) — squaring causes overflow in bf16.
+    # Dot product and distance math runs in f32; result cast back after.
+    inputs_f32 = inputs.astype(jnp.float32)
+    kernel_f32 = kernel.astype(jnp.float32)
+
+    # Compute dot product: x · W (in f32)
     y = self.dot_general(
-      inputs,
-      kernel,
+      inputs_f32,
+      kernel_f32,
       (((inputs.ndim - 1,), (0,)), ((), ())),
       precision=self.precision,
     )
 
     if self.spherical:
-      # Spherical YAT: inputs and kernel are normalized
-      # distances = ||x||² + ||W||² - 2(x · W) = 1 + 1 - 2(x · W) = 2 - 2(x · W)
-      # Clamp to zero: bf16 cancellation can make distance negative when x ≈ W
       distances = jnp.maximum(2 - 2 * y, 0.0)
     else:
-      # Compute squared Euclidean distance: ||x||² + ||W||² - 2(x · W)
-      inputs_squared_sum = jnp.sum(inputs**2, axis=-1, keepdims=True)
+      inputs_squared_sum = jnp.sum(inputs_f32**2, axis=-1, keepdims=True)
 
-      # Optimization: if weights are normalized, ||W||² = 1 for each neuron
       if self.weight_normalized:
-        kernel_squared_sum = jnp.ones((1, kernel.shape[-1]), dtype=kernel.dtype)
+        kernel_squared_sum = jnp.ones((1, kernel_f32.shape[-1]), dtype=jnp.float32)
       else:
-        kernel_squared_sum = jnp.sum(kernel**2, axis=0, keepdims=True)
+        kernel_squared_sum = jnp.sum(kernel_f32**2, axis=0, keepdims=True)
 
-      # Clamp to zero: bf16 cancellation can make distance negative when x ≈ W
       distances = jnp.maximum(inputs_squared_sum + kernel_squared_sum - 2 * y, 0.0)
 
-    # Add bias
+    # Add bias (in f32)
     if bias is not None:
-      y += jnp.reshape(bias, (1,) * (y.ndim - 1) + (-1,))
+      y += jnp.reshape(bias.astype(jnp.float32), (1,) * (y.ndim - 1) + (-1,))
 
-    # YAT operation: (x · W)² / (||x - W||² + ε)
+    # YAT operation: (x · W)² / (||x - W||² + ε) — safe in f32
     y = y ** 2 / (distances + self.epsilon)
 
     # Apply alpha scaling
     if self._constant_alpha_value is not None:
-      # Constant alpha: use directly as the scale factor (e.g. sqrt(2))
       y = y * self._constant_alpha_value
     elif alpha is not None:
-      # Simple learnable alpha scaling
-      y = y * alpha
+      y = y * alpha.astype(jnp.float32)
 
-    return y
+    # Cast back to caller's dtype
+    return y.astype(inputs.dtype)
