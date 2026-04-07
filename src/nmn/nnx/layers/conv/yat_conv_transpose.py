@@ -74,6 +74,8 @@ class YatConvTranspose(Module):
         padding: 'SAME', 'VALID', 'CIRCULAR', or sequence of (low, high) pairs.
         kernel_dilation: Dilation factor for kernel (default: 1).
         use_bias: Whether to add a bias (default: True).
+        constant_bias: If a float, use that value as a fixed (non-learnable)
+            bias constant. If None (default), use learnable bias.
         use_alpha: Whether to use alpha scaling (default: True).
         constant_alpha: If True, use sqrt(2) as constant alpha. If float,
             use that value. If None (default), use learnable alpha.
@@ -103,6 +105,7 @@ class YatConvTranspose(Module):
         padding: PaddingLike = "SAME",
         kernel_dilation: int | tp.Sequence[int] | None = None,
         use_bias: bool = True,
+        constant_bias: tp.Optional[float] = None,
         use_alpha: bool = True,
         constant_alpha: tp.Optional[tp.Union[bool, float]] = None,
         use_dropconnect: bool = False,
@@ -131,7 +134,6 @@ class YatConvTranspose(Module):
         self.strides = strides
         self.padding = padding
         self.kernel_dilation = kernel_dilation
-        self.use_bias = use_bias
         self.use_dropconnect = use_dropconnect
         self.mask = mask
         self.dtype = dtype
@@ -157,12 +159,20 @@ class YatConvTranspose(Module):
         self.kernel = nnx.Param(kernel_val)
 
         self.bias: nnx.Param | None
-        if self.use_bias:
+        self._constant_bias_value: tp.Optional[float] = None
+        if constant_bias is not None:
+            self._constant_bias_value = float(constant_bias)
+            self.bias = None
+            use_bias = True  # Bias is applied (but constant)
+        elif use_bias:
             self.bias = nnx.Param(
                 self.bias_init(rngs.params(), (self.out_features,), self.param_dtype)
             )
         else:
             self.bias = None
+
+        self.use_bias = use_bias
+        self.constant_bias = constant_bias
 
         # Handle alpha configuration
         self.alpha: nnx.Param[jax.Array] | None
@@ -250,7 +260,13 @@ class YatConvTranspose(Module):
                 )
             kernel_val *= current_mask
 
-        bias_val = self.bias[...] if self.bias is not None else None
+        # Get bias value (either learnable or constant)
+        if self._constant_bias_value is not None:
+            bias_val = jnp.full((self.out_features,), self._constant_bias_value, dtype=self.param_dtype)
+        elif self.bias is not None:
+            bias_val = self.bias[...]
+        else:
+            bias_val = None
 
         # Get alpha value
         if self._constant_alpha_value is not None:

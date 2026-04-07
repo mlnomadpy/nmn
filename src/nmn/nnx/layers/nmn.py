@@ -59,6 +59,8 @@ class YatNMN(Module):
     in_features: the number of input features.
     out_features: the number of output features.
     use_bias: whether to add a bias to the output (default: True).
+    constant_bias: if a float, use that value as a fixed (non-learnable) bias constant.
+      If None (default), use learnable bias when use_bias=True.
     use_alpha: whether to use alpha scaling (default: True). Ignored if constant_alpha is set.
     constant_alpha: if True, use sqrt(2) as constant alpha. If a float, use that value.
       If None (default), use learnable alpha when use_alpha=True.
@@ -101,6 +103,7 @@ class YatNMN(Module):
     out_features: int,
     *,
     use_bias: bool = True,
+    constant_bias: tp.Optional[float] = None,
     use_alpha: bool = True,
     constant_alpha: tp.Optional[tp.Union[bool, float]] = None,
     positive_init: bool = False,
@@ -185,7 +188,12 @@ class YatNMN(Module):
         kernel_val = jnp.abs(kernel_val)
       self.kernel = nnx.Param(kernel_val)
     self.bias: nnx.Param[jax.Array] | None
-    if use_bias:
+    self._constant_bias_value: tp.Optional[float] = None
+    if constant_bias is not None:
+      self._constant_bias_value = float(constant_bias)
+      self.bias = None
+      use_bias = True  # Bias is applied (but constant)
+    elif use_bias:
       bias_key = rngs.params()
       self.bias = nnx.Param(bias_init(bias_key, (out_features,), param_dtype))
     else:
@@ -225,6 +233,7 @@ class YatNMN(Module):
     self.in_features = in_features
     self.out_features = out_features
     self.use_bias = use_bias
+    self.constant_bias = constant_bias
     self.constant_alpha = constant_alpha
     self.use_dropconnect = use_dropconnect
     self.dtype = dtype
@@ -271,7 +280,14 @@ class YatNMN(Module):
     kernel = self.kernel[...]
     if self._tie_kernel_bank:
       kernel = kernel[:, self._kernel_slice]
-    bias = self.bias[...] if self.bias is not None else None
+
+    # Get bias value (either learnable or constant)
+    if self._constant_bias_value is not None:
+      bias = jnp.full((self.out_features,), self._constant_bias_value, dtype=self.param_dtype)
+    elif self.bias is not None:
+      bias = self.bias[...]
+    else:
+      bias = None
     
     # Get alpha value (either learnable or constant)
     if self._constant_alpha_value is not None:
