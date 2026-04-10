@@ -467,7 +467,9 @@ class TestRotaryYatAttentionAlpha:
             num_heads=num_heads,
             max_seq_len=64,
             use_performer=True,
-            num_features=32,
+            num_prf_features=8,
+            num_quad_nodes=1,
+            num_anchor_features=16,
             constant_alpha=1.5,
             rngs=rngs,
         )

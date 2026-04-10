@@ -146,10 +146,11 @@ class YatNMN(Layer):
     def call(self, inputs):
         kernel = self.kernel
 
-        # Spherical mode: normalize inputs and kernel to unit norm
+        # Spherical mode: normalize inputs and kernel columns (each neuron) to unit norm
+        # Kernel shape is (input_dim, units), so each neuron is a column → axis=0
         if self.spherical:
             inputs = inputs / (ops.sqrt(ops.sum(ops.square(inputs), axis=-1, keepdims=True)) + 1e-8)
-            kernel = kernel / (ops.sqrt(ops.sum(ops.square(kernel), axis=-1, keepdims=True)) + 1e-8)
+            kernel = kernel / (ops.sqrt(ops.sum(ops.square(kernel), axis=0, keepdims=True)) + 1e-8)
 
         # Weight normalization: normalize each kernel row to unit norm at forward time
         if self.weight_normalized:

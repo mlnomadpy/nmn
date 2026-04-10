@@ -141,12 +141,13 @@ def test_keras_yat_nmn_spherical_distance_correct():
 
     out = layer(x_np).numpy()
 
-    # Manual spherical computation — normalize per-row (axis=-1), matching layer
+    # Manual spherical computation — normalize each input row and each kernel
+    # column (neuron) to unit norm. Then ||x||=||W_col||=1, so dist = 2 - 2*(x·W).
     x_norm = x_np / (np.linalg.norm(x_np, axis=-1, keepdims=True) + 1e-8)
-    # Kernel shape is (4, 3), normalize rows (axis=-1)
-    w_norm = w_val / (np.linalg.norm(w_val, axis=-1, keepdims=True) + 1e-8)
+    # Kernel shape is (4, 3): each column is a neuron → normalize axis=0
+    w_norm = w_val / (np.linalg.norm(w_val, axis=0, keepdims=True) + 1e-8)
     dot = x_norm @ w_norm
-    dist = 2 - 2 * dot
+    dist = np.maximum(2 - 2 * dot, 0.0)
     expected = (dot + b_val) ** 2 / (dist + 1e-5)
 
     np.testing.assert_allclose(out, expected, rtol=1e-4, atol=1e-4,
