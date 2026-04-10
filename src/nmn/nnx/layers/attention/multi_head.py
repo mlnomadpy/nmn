@@ -18,6 +18,7 @@ from __future__ import annotations
 import functools
 from typing import Any, Callable, Optional, Union
 
+import jax
 import jax.numpy as jnp
 from jax import lax
 
@@ -135,6 +136,7 @@ class MultiHeadAttention(Module):
         out_dot_general_cls: Any = None,
         rngs: rnglib.Rngs,
         epsilon: float = 1e-5,
+        learnable_epsilon: bool = False,
         use_softermax: bool = False,
         power: float = 1.0,
     ):
@@ -200,6 +202,13 @@ class MultiHeadAttention(Module):
         self.qkv_dot_general_cls = qkv_dot_general_cls
         self.out_dot_general_cls = out_dot_general_cls
         self.epsilon = epsilon
+        self.learnable_epsilon = learnable_epsilon
+        self.epsilon_param: nnx.Param[Array] | None
+        if learnable_epsilon:
+            raw_eps = jnp.log(jnp.exp(jnp.array(epsilon, dtype=param_dtype)) - 1.0)
+            self.epsilon_param = nnx.Param(raw_eps.reshape((1,)))
+        else:
+            self.epsilon_param = None
         self.use_softermax = use_softermax
         self.power = power
         self.use_dropconnect = use_dropconnect
@@ -444,6 +453,12 @@ class MultiHeadAttention(Module):
             elif self.alpha is not None:
                 alpha_value = self.alpha[...]
 
+        # Resolve effective epsilon (learnable via softplus, or constant)
+        if self.learnable_epsilon and self.epsilon_param is not None:
+            effective_epsilon = jax.nn.softplus(self.epsilon_param[...].astype(jnp.float32))
+        else:
+            effective_epsilon = self.epsilon
+
         # Apply attention (YAT by default)
         x = self.attention_fn(
             query,
@@ -457,7 +472,7 @@ class MultiHeadAttention(Module):
             dtype=self.dtype,
             precision=self.precision,
             module=self if sow_weights else None,
-            epsilon=self.epsilon,
+            epsilon=effective_epsilon,
             use_softermax=self.use_softermax,
             power=self.power,
             alpha=alpha_value,

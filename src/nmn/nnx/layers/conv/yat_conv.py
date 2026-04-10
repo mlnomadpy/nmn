@@ -95,6 +95,8 @@ class YatConv(Module):
         bias_init: Bias initializer.
         alpha_init: Alpha initializer (for learnable alpha).
         epsilon: Small constant for numerical stability.
+        learnable_epsilon: if True, epsilon becomes a learnable parameter passed
+            through softplus to guarantee strict positivity (default: False).
         drop_rate: DropConnect rate (default: 0.0).
         weight_normalized: If True, normalize each kernel filter to have norm 1.
             This optimization avoids recomputing kernel norms in YAT distance
@@ -107,7 +109,7 @@ class YatConv(Module):
         rngs: Random number generators.
     """
 
-    __data__ = ("kernel", "bias", "alpha", "mask", "dropconnect_key")
+    __data__ = ("kernel", "bias", "alpha", "epsilon_param", "mask", "dropconnect_key")
     _KERNEL_BANKS: dict[tuple[tp.Any, ...], nnx.Param] = {}
     _KERNEL_BANKS_LOCK = threading.Lock()
 
@@ -138,6 +140,7 @@ class YatConv(Module):
         conv_general_dilated: ConvGeneralDilatedT = lax.conv_general_dilated,
         promote_dtype: PromoteDtypeFn = dtypes.promote_dtype,
         epsilon: float = 1e-5,
+        learnable_epsilon: bool = False,
         drop_rate: float = 0.0,
         weight_normalized: bool = False,
         tie_kernel_bank: bool = False,
@@ -271,6 +274,13 @@ class YatConv(Module):
         if epsilon <= 0:
             raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
+        self.learnable_epsilon = learnable_epsilon
+        self.epsilon_param: nnx.Param[jax.Array] | None
+        if learnable_epsilon:
+            raw_eps = jnp.log(jnp.exp(jnp.array(epsilon, dtype=param_dtype)) - 1.0)
+            self.epsilon_param = nnx.Param(raw_eps.reshape((1,)))
+        else:
+            self.epsilon_param = None
         self.drop_rate = drop_rate
         self.weight_normalized = weight_normalized
         self.tie_kernel_bank = tie_kernel_bank
@@ -471,9 +481,15 @@ class YatConv(Module):
             bias_reshape_dims = (1,) * (dot_prod_map.ndim - 1) + (-1,)
             dot_prod_map = dot_prod_map + jnp.reshape(bias_val, bias_reshape_dims)
 
+        # Resolve effective epsilon (learnable via softplus, or constant)
+        if self.learnable_epsilon and self.epsilon_param is not None:
+            eps = jax.nn.softplus(self.epsilon_param[...].astype(dot_prod_map.dtype))
+        else:
+            eps = self.epsilon
+
         # YAT formula: (x·W + b)² / (||x - W||² + ε)
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_per_filter - 2 * dot_prod_raw
-        y = dot_prod_map**2 / (distance_sq_map + self.epsilon)
+        y = dot_prod_map**2 / (distance_sq_map + eps)
 
         # Apply alpha scaling
         if self._constant_alpha_value is not None:

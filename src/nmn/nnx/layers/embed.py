@@ -77,6 +77,8 @@ class Embed(Module):
     constant_alpha: if True, use sqrt(2) as constant alpha. If a float, use that value.
       If None (default), use learnable alpha when use_alpha=True.
     epsilon: small value added to denominator for numerical stability in YAT (default: 1e-5).
+    learnable_epsilon: if True, epsilon becomes a learnable parameter passed
+      through softplus to guarantee strict positivity (default: False).
     spherical: if True, normalize query and embeddings before YAT computation (default: False).
       Ignored if weight_normalized=True.
     weight_normalized: if True, normalize embeddings to unit norm at initialization only.
@@ -100,6 +102,7 @@ class Embed(Module):
     use_alpha: bool = True,
     constant_alpha: tp.Optional[tp.Union[bool, float]] = None,
     epsilon: float = 1e-5,
+    learnable_epsilon: bool = False,
     spherical: bool = False,
     weight_normalized: bool = False,
     alpha_init: Initializer = default_alpha_init,
@@ -140,6 +143,13 @@ class Embed(Module):
     self.use_alpha = use_alpha
     self.constant_alpha = constant_alpha
     self.epsilon = epsilon
+    self.learnable_epsilon = learnable_epsilon
+    self.epsilon_param: nnx.Param[jax.Array] | None
+    if learnable_epsilon:
+      raw_eps = jnp.log(jnp.exp(jnp.array(epsilon, dtype=param_dtype)) - 1.0)
+      self.epsilon_param = nnx.Param(raw_eps.reshape((1,)))
+    else:
+      self.epsilon_param = None
     self.spherical = spherical
     self.weight_normalized = weight_normalized
 
@@ -220,8 +230,14 @@ class Embed(Module):
       embedding_squared_sum = jnp.sum(embedding**2, axis=1, keepdims=True).T
       distances = query_squared_sum + embedding_squared_sum - 2 * y
 
+    # Resolve effective epsilon (learnable via softplus, or constant)
+    if self.learnable_epsilon and self.epsilon_param is not None:
+      eps = jax.nn.softplus(self.epsilon_param[...].astype(jnp.float32))
+    else:
+      eps = self.epsilon
+
     # YAT operation: (query · embedding)² / (||query - embedding||² + ε)
-    y = y ** 2 / (distances + self.epsilon)
+    y = y ** 2 / (distances + eps)
 
     # Apply alpha scaling
     if self._constant_alpha_value is not None:

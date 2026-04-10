@@ -27,6 +27,7 @@ YatConvTranspose(
     use_alpha: bool = True,
     constant_alpha: Optional[Union[bool, float]] = None,
     epsilon: float = 1e-5,
+    learnable_epsilon: bool = False,
     rngs: nnx.Rngs,
 )
 ```

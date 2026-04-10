@@ -43,6 +43,7 @@ YatConv(
     kernel_init: Initializer = lecun_normal(),
     bias_init: Initializer = zeros_init(),
     epsilon: float = 1e-5,
+    learnable_epsilon: bool = False,
     rngs: nnx.Rngs,
 )
 ```
@@ -62,6 +63,7 @@ YatConv(
 | `use_alpha` | `bool` | `True` | Use alpha scaling |
 | `constant_alpha` | `bool \| float \| None` | `None` | Constant alpha value |
 | `epsilon` | `float` | `1e-5` | Stability constant |
+| `learnable_epsilon` | `bool` | `False` | If `True`, epsilon becomes a learnable parameter (softplus-constrained) |
 | `rngs` | `nnx.Rngs` | required | RNG state |
 
 ## Usage Examples

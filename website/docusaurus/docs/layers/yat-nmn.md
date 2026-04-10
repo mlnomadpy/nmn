@@ -44,6 +44,7 @@ YatNMN(
     bias_init: Initializer = zeros_init(),
     alpha_init: Initializer = ones_init(),
     epsilon: float = 1e-5,
+    learnable_epsilon: bool = False,
     drop_rate: float = 0.0,
     rngs: nnx.Rngs,
 )
@@ -66,6 +67,7 @@ YatNMN(
 | `bias_init` | `Initializer` | `zeros_init()` | Bias initialization |
 | `alpha_init` | `Initializer` | `ones_init()` | Alpha initialization (for learnable alpha) |
 | `epsilon` | `float` | `1e-5` | Small constant for numerical stability |
+| `learnable_epsilon` | `bool` | `False` | If `True`, epsilon becomes a learnable parameter passed through softplus to guarantee strict positivity |
 | `drop_rate` | `float` | `0.0` | DropConnect dropout rate |
 | `rngs` | `nnx.Rngs` | required | Random number generator state |
 
@@ -138,6 +140,26 @@ y_train = layer(x, deterministic=False)
 y_eval = layer(x, deterministic=True)
 ```
 
+### Learnable Epsilon
+
+```python
+# Make epsilon a learnable parameter (with softplus to keep it strictly positive)
+layer = YatNMN(
+    in_features=784,
+    out_features=256,
+    learnable_epsilon=True,
+    rngs=nnx.Rngs(0)
+)
+
+# epsilon_param is initialized so that softplus(param) ≈ 1e-5
+# During training, the model learns the optimal epsilon value
+# softplus guarantees epsilon > 0 (never zero, never negative)
+```
+
+:::tip
+Learnable epsilon lets the model adapt the numerical stability constant per layer. This can be useful when different layers benefit from different epsilon scales. The softplus activation ensures the learned value stays strictly positive.
+:::
+
 ## Comparison with nn.Linear
 
 | Feature | `nn.Linear` | `YatNMN` |
@@ -178,6 +200,7 @@ After initialization, the layer exposes:
 - `kernel`: Weight matrix of shape `(in_features, out_features)`
 - `bias`: Bias vector of shape `(out_features,)` (if `use_bias=True`)
 - `alpha`: Learnable alpha parameter (if `constant_alpha=None` and `use_alpha=True`)
+- `epsilon_param`: Learnable epsilon (raw) parameter of shape `(1,)` (if `learnable_epsilon=True`). Use `jax.nn.softplus(layer.epsilon_param[...])` to get the effective epsilon.
 
 ```python
 layer = YatNMN(64, 32, rngs=nnx.Rngs(0))

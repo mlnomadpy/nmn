@@ -149,6 +149,7 @@ conv3d = YatConv(
 - `use_bias`: Whether to include bias term
 - `use_alpha`: Whether to apply alpha scaling
 - `epsilon`: Small constant for numerical stability
+- `learnable_epsilon`: If True, epsilon becomes a learnable parameter (softplus-constrained, always positive)
 
 ### YatNMN (Linear YAT Layer)
 
@@ -179,6 +180,7 @@ output = layer(input_tensor)
 - `use_alpha`: Whether to apply alpha scaling
 - `constant_alpha`: Fixed alpha value (see below)
 - `epsilon`: Numerical stability constant
+- `learnable_epsilon`: If True, epsilon becomes a learnable parameter (softplus-constrained, always positive)
 - `spherical`: Enable spherical normalization (see below)
 - `rngs`: Flax NNX random number generators
 
@@ -437,6 +439,48 @@ output = layer(x, deterministic=True)   # Disables dropout
 ```
 
 **JAX-specific note:** Uses `jax.random.bernoulli` with proper RNG management.
+
+### Learnable Epsilon
+
+Make the numerical stability constant ε learnable. A softplus activation ensures the value stays strictly positive (never zero, never negative):
+
+```python
+from nmn.nnx import YatNMN
+from nmn.nnx.layers.conv import YatConv
+
+# Learnable epsilon for linear layer
+layer = YatNMN(
+    in_features=256,
+    out_features=128,
+    learnable_epsilon=True,  # ε becomes a learnable parameter
+    rngs=rngs
+)
+
+# Learnable epsilon for conv layer
+conv = YatConv(
+    in_features=64,
+    out_features=128,
+    kernel_size=(3, 3),
+    learnable_epsilon=True,
+    rngs=rngs
+)
+
+# Check the effective epsilon value
+import jax
+effective_eps = jax.nn.softplus(layer.epsilon_param[...])
+print(f"Learned epsilon: {effective_eps}")  # Always > 0
+```
+
+**How it works:**
+- A raw parameter `epsilon_param` is initialized via inverse softplus so that `softplus(raw) ≈ epsilon`
+- During forward pass, the effective epsilon is computed as `softplus(epsilon_param)`, which is always > 0
+- Gradients flow through softplus naturally via JAX autodiff
+- The fused kernel path in `YatNMN` is automatically disabled when epsilon is learnable
+
+**When to use:**
+- When different layers benefit from different epsilon scales
+- When you want the model to adaptively control the sharpness of the YAT response
+- Fine-tuning scenarios where the optimal stability constant varies across layers
 
 ## Advanced Usage
 
@@ -759,13 +803,20 @@ layer = YatConv(64, 128, (3, 3), padding='SAME', rngs=rngs)
 layer = YatConv(64, 128, (3, 3), padding='VALID', rngs=rngs)
 ```
 
-### 5. **Leverage Spherical Mode for Metric Learning**
+### 5. **Use Learnable Epsilon for Adaptive Stability**
+```python
+# Let each layer learn its optimal epsilon
+layer = YatNMN(256, 128, learnable_epsilon=True, rngs=rngs)
+# Note: disables fused kernel (small perf cost), but can improve convergence
+```
+
+### 6. **Leverage Spherical Mode for Metric Learning**
 ```python
 # Efficient when distance matters
 layer = YatNMN(256, 128, spherical=True, weight_normalized=True, rngs=rngs)
 ```
 
-### 6. **Batch Size for TPUs**
+### 7. **Batch Size for TPUs**
 ```python
 # Use multiples of 128 for optimal TPU utilization
 batch_size = 128  # or 256, 512, 1024
@@ -798,6 +849,7 @@ YatConv(
     param_dtype: Dtype = jnp.float32,
     precision: PrecisionLike = None,
     epsilon: float = 1e-5,
+    learnable_epsilon: bool = False,
     drop_rate: float = 0.0,
     weight_normalized: bool = False,
     tie_kernel_bank: bool = False,
@@ -824,6 +876,7 @@ YatNMN(
     param_dtype: Dtype = jnp.float32,
     precision: PrecisionLike = None,
     epsilon: float = 1e-5,
+    learnable_epsilon: bool = False,
     spherical: bool = False,
     drop_rate: float = 0.0,
     weight_normalized: bool = False,

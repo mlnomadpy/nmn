@@ -427,6 +427,7 @@ class RotaryYatAttention(Module):
         performer_normalize: bool = True,
         use_alpha: bool = True,
         constant_alpha: Optional[Union[bool, float]] = None,
+        learnable_epsilon: bool = False,
         normalization: str = "softmax",
         rngs: rnglib.Rngs,
     ):
@@ -465,6 +466,13 @@ class RotaryYatAttention(Module):
         self.normalize_qk = normalize_qk
         self.use_out_proj = use_out_proj
         self.epsilon = epsilon
+        self.learnable_epsilon = learnable_epsilon
+        self.epsilon_param: nnx.Param[Array] | None
+        if learnable_epsilon:
+            raw_eps = jnp.log(jnp.exp(jnp.array(epsilon, dtype=param_dtype)) - 1.0)
+            self.epsilon_param = nnx.Param(raw_eps.reshape((1,)))
+        else:
+            self.epsilon_param = None
         self.use_softermax = use_softermax
         self.power = power
         self.use_performer = use_performer
@@ -687,6 +695,12 @@ class RotaryYatAttention(Module):
                 raise ValueError("rngs required for dropout")
             dropout_rng = rngs.dropout()
 
+        # Resolve effective epsilon (learnable via softplus, or constant)
+        if self.learnable_epsilon and self.epsilon_param is not None:
+            effective_epsilon = jax.nn.softplus(self.epsilon_param[...].astype(jnp.float32))
+        else:
+            effective_epsilon = self.epsilon
+
         # Get alpha value (either learnable or constant)
         # For constant alpha, we apply it directly after attention
         # rather than passing it to the attention function (which uses it as an exponent)
@@ -728,7 +742,7 @@ class RotaryYatAttention(Module):
                 deterministic=deterministic,
                 dtype=self.dtype,
                 precision=self.precision,
-                epsilon=self.epsilon,
+                epsilon=effective_epsilon,
                 position_offset=position_offset,
                 causal=self.causal,
                 normalize_inputs=self.performer_normalize,
@@ -750,7 +764,7 @@ class RotaryYatAttention(Module):
                 dtype=self.dtype,
                 precision=self.precision,
                 module=self if sow_weights else None,
-                epsilon=self.epsilon,
+                epsilon=effective_epsilon,
                 use_softermax=self.use_softermax,
                 power=self.power,
                 position_offset=position_offset,

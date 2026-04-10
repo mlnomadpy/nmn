@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Added
+- **`learnable_epsilon` parameter** for all Flax NNX YAT modules (`YatNMN`, `YatConv`, `YatConvTranspose`, `Embed`, `MultiHeadAttention`, `RotaryYatAttention`). When `learnable_epsilon=True`, epsilon becomes a trainable parameter passed through softplus to guarantee strict positivity — it can never be zero or negative. The raw parameter is initialized via inverse softplus so that `softplus(param) ≈ epsilon`. The fused kernel path in `YatNMN` is automatically disabled when epsilon is learnable to allow gradient flow.
+
+---
+
 ## [0.2.11] — 2026-03-17
 
 ### Added

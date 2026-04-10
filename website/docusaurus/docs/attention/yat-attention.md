@@ -50,6 +50,7 @@ YatAttention(
 | `dropout_rate` | `float` | `0.0` | Attention dropout rate |
 | `deterministic` | `bool` | `False` | Disable dropout |
 | `epsilon` | `float` | `1e-5` | Stability constant |
+| `learnable_epsilon` | `bool` | `False` | If `True`, epsilon becomes a learnable parameter (softplus-constrained) |
 
 ## Usage Example
 

@@ -71,6 +71,7 @@ attn = RotaryYatAttention(
     use_yat=True,          # Use YAT formula vs standard attention
     constant_alpha=True,   # Use constant sqrt(2) scaling
     learnable_alpha=False, # Make alpha learnable
+    learnable_epsilon=True, # Make epsilon learnable (softplus-constrained)
     qk_norm=True,          # Normalize Q and K
     
     # Performer Options

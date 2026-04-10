@@ -89,11 +89,13 @@ class YatConvTranspose(Module):
         alpha_init: Alpha initializer (for learnable alpha).
         transpose_kernel: If True, flips spatial axes and swaps channels.
         epsilon: Small constant for numerical stability.
+        learnable_epsilon: if True, epsilon becomes a learnable parameter passed
+            through softplus to guarantee strict positivity (default: False).
         drop_rate: DropConnect rate (default: 0.0).
         rngs: Random number generators.
     """
 
-    __data__ = ("kernel", "bias", "alpha", "mask", "dropconnect_key")
+    __data__ = ("kernel", "bias", "alpha", "epsilon_param", "mask", "dropconnect_key")
 
     def __init__(
         self,
@@ -120,6 +122,7 @@ class YatConvTranspose(Module):
         transpose_kernel: bool = False,
         promote_dtype: PromoteDtypeFn = dtypes.promote_dtype,
         epsilon: float = 1e-5,
+        learnable_epsilon: bool = False,
         drop_rate: float = 0.0,
         rngs: rnglib.Rngs,
     ):
@@ -145,6 +148,13 @@ class YatConvTranspose(Module):
         self.transpose_kernel = transpose_kernel
         self.promote_dtype = promote_dtype
         self.epsilon = epsilon
+        self.learnable_epsilon = learnable_epsilon
+        self.epsilon_param: nnx.Param | None
+        if learnable_epsilon:
+            raw_eps = jnp.log(jnp.exp(jnp.array(epsilon, dtype=param_dtype)) - 1.0)
+            self.epsilon_param = nnx.Param(raw_eps.reshape((1,)))
+        else:
+            self.epsilon_param = None
         self.drop_rate = drop_rate
 
         if self.transpose_kernel:
@@ -337,6 +347,12 @@ class YatConvTranspose(Module):
             kernel_val**2, axis=reduce_axes_for_kernel_sq
         )
 
+        # Resolve effective epsilon (learnable via softplus, or constant)
+        if self.learnable_epsilon and self.epsilon_param is not None:
+            eps = jax.nn.softplus(self.epsilon_param[...].astype(dot_prod_map.dtype))
+        else:
+            eps = self.epsilon
+
         # YAT formula: (x·W + b)² / (||x - W||² + ε)
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_per_filter - 2 * dot_prod_map
 
@@ -345,7 +361,7 @@ class YatConvTranspose(Module):
             bias_reshape_dims = (1,) * (dot_prod_map.ndim - 1) + (-1,)
             dot_prod_map = dot_prod_map + jnp.reshape(bias_val, bias_reshape_dims)
 
-        y = dot_prod_map**2 / (distance_sq_map + self.epsilon)
+        y = dot_prod_map**2 / (distance_sq_map + eps)
 
         # Apply alpha scaling
         if self._constant_alpha_value is not None:

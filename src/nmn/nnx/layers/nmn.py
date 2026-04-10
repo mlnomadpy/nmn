@@ -78,6 +78,9 @@ class YatNMN(Module):
       and a ``dtype`` keyword argument, and return a tuple of arrays with the
       promoted dtype.
     epsilon: A small float added to the denominator to prevent division by zero.
+    learnable_epsilon: if True, epsilon becomes a learnable parameter passed
+      through softplus to guarantee strict positivity (default: False).
+      Disables the fused kernel path since autodiff must flow through epsilon.
     drop_rate: dropout rate for DropConnect (default: 0.0).
     weight_normalized: if True, normalize each neuron (column) of the kernel to
       have norm 1. This optimization avoids recomputing kernel norms in YAT
@@ -90,7 +93,7 @@ class YatNMN(Module):
     rngs: rng key.
   """
 
-  __data__ = ('kernel', 'bias', 'alpha', 'dropconnect_key')
+  __data__ = ('kernel', 'bias', 'alpha', 'epsilon_param', 'dropconnect_key')
   _KERNEL_BANKS: dict[tuple[tp.Any, ...], nnx.Param] = {}
   _KERNEL_BANKS_LOCK = threading.Lock()
 
@@ -118,6 +121,7 @@ class YatNMN(Module):
     dot_general: DotGeneralT = lax.dot_general,
     promote_dtype: PromoteDtypeFn = dtypes.promote_dtype,
     epsilon: float = 1e-5,
+    learnable_epsilon: bool = False,
     spherical: bool = False,
     drop_rate: float = 0.0,
     weight_normalized: bool = False,
@@ -246,6 +250,14 @@ class YatNMN(Module):
     if epsilon <= 0:
       raise ValueError(f"epsilon must be positive, got {epsilon}")
     self.epsilon = epsilon
+    self.learnable_epsilon = learnable_epsilon
+    self.epsilon_param: nnx.Param[jax.Array] | None
+    if learnable_epsilon:
+      # Initialize so that softplus(raw) ≈ epsilon: raw = log(exp(eps) - 1)
+      raw_eps = jnp.log(jnp.exp(jnp.array(epsilon, dtype=param_dtype)) - 1.0)
+      self.epsilon_param = nnx.Param(raw_eps.reshape((1,)))
+    else:
+      self.epsilon_param = None
     self.spherical = spherical
     self.drop_rate = drop_rate
     self.fused = fused
@@ -314,8 +326,15 @@ class YatNMN(Module):
       (inputs, kernel, bias, alpha), dtype=self.dtype
     )
 
+    # Resolve effective epsilon (learnable via softplus, or constant)
+    if self.learnable_epsilon and self.epsilon_param is not None:
+      eps = jax.nn.softplus(self.epsilon_param[...].astype(jnp.float32))
+    else:
+      eps = self.epsilon
+
     # ── Fused path: custom_vjp saves only (x, W, dot, dist) ──────────
-    if self.fused and not self.spherical and bias is None:
+    # Disabled when epsilon is learnable (autodiff must flow through epsilon)
+    if self.fused and not self.spherical and bias is None and not self.learnable_epsilon:
       return _fused_yat_call(inputs, kernel, alpha, self.epsilon,
                              self._constant_alpha_value)
 
@@ -350,7 +369,7 @@ class YatNMN(Module):
       y += jnp.reshape(bias.astype(jnp.float32), (1,) * (y.ndim - 1) + (-1,))
 
     # YAT operation: (x · W)² / (||x - W||² + ε) — safe in f32
-    y = y ** 2 / (distances + self.epsilon)
+    y = y ** 2 / (distances + eps)
 
     # Apply alpha scaling
     if self._constant_alpha_value is not None:
