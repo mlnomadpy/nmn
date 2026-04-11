@@ -264,12 +264,20 @@ class YatConv2D(tf.Module):
         self.padding = padding.upper()
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate)
         self.groups = groups
-        self.use_bias = use_bias
         self.use_alpha = use_alpha
         if epsilon <= 0:
             raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
+        self.learnable_epsilon = learnable_epsilon
         self.dtype = dtype
+
+        # Bias configuration: learnable, constant, or none
+        self._constant_bias_value: Optional[float] = None
+        if constant_bias is not None:
+            self._constant_bias_value = float(constant_bias)
+            use_bias = True  # Bias is applied (but constant)
+        self.use_bias = use_bias
+        self.constant_bias = constant_bias
         
         # Variables will be created in build
         self.is_built = False
@@ -277,6 +285,7 @@ class YatConv2D(tf.Module):
         self.kernel = None
         self.bias = None
         self.alpha = None
+        self.epsilon_param = None
 
     @tf.Module.with_name_scope
     def build(self, input_shape: Union[List[int], tf.TensorShape]) -> None:
@@ -470,12 +479,20 @@ class YatConv3D(tf.Module):
         self.padding = padding.upper()
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate, dilation_rate)
         self.groups = groups
-        self.use_bias = use_bias
         self.use_alpha = use_alpha
         if epsilon <= 0:
             raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
+        self.learnable_epsilon = learnable_epsilon
         self.dtype = dtype
+
+        # Bias configuration: learnable, constant, or none
+        self._constant_bias_value: Optional[float] = None
+        if constant_bias is not None:
+            self._constant_bias_value = float(constant_bias)
+            use_bias = True  # Bias is applied (but constant)
+        self.use_bias = use_bias
+        self.constant_bias = constant_bias
         
         # Variables will be created in build
         self.is_built = False
@@ -483,6 +500,7 @@ class YatConv3D(tf.Module):
         self.kernel = None
         self.bias = None
         self.alpha = None
+        self.epsilon_param = None
 
     @tf.Module.with_name_scope
     def build(self, input_shape: Union[List[int], tf.TensorShape]) -> None:
@@ -667,18 +685,27 @@ class YatConvTranspose1D(tf.Module):
         self.kernel_size = kernel_size
         self.strides = strides
         self.padding = padding.upper()
-        self.use_bias = use_bias
         self.use_alpha = use_alpha
         if epsilon <= 0:
             raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
+        self.learnable_epsilon = learnable_epsilon
         self.dtype = dtype
+
+        # Bias configuration: learnable, constant, or none
+        self._constant_bias_value: Optional[float] = None
+        if constant_bias is not None:
+            self._constant_bias_value = float(constant_bias)
+            use_bias = True  # Bias is applied (but constant)
+        self.use_bias = use_bias
+        self.constant_bias = constant_bias
         
         self.is_built = False
         self.input_channels = None
         self.kernel = None
         self.bias = None
         self.alpha = None
+        self.epsilon_param = None
 
     @tf.Module.with_name_scope
     def build(self, input_shape: Union[List[int], tf.TensorShape]) -> None:
@@ -701,7 +728,8 @@ class YatConvTranspose1D(tf.Module):
         
         self.kernel = tf.Variable(kernel_init, trainable=True, name='kernel', dtype=self.dtype)
 
-        if self.use_bias:
+        # Learnable bias variable (skipped when constant_bias is set)
+        if self.use_bias and self._constant_bias_value is None:
             self.bias = tf.Variable(
                 tf.zeros([self.filters], dtype=self.dtype),
                 trainable=True, name='bias'
@@ -711,6 +739,15 @@ class YatConvTranspose1D(tf.Module):
             self.alpha = tf.Variable(
                 tf.ones([1], dtype=self.dtype),
                 trainable=True, name='alpha'
+            )
+
+        # Learnable epsilon parameter (softplus-constrained)
+        if self.learnable_epsilon:
+            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            self.epsilon_param = tf.Variable(
+                tf.constant(raw_eps, shape=[1], dtype=self.dtype),
+                trainable=True,
+                name='epsilon_param',
             )
 
         self.is_built = True
@@ -849,18 +886,27 @@ class YatConvTranspose2D(tf.Module):
         self.kernel_size = kernel_size if isinstance(kernel_size, (list, tuple)) else (kernel_size, kernel_size)
         self.strides = strides if isinstance(strides, (list, tuple)) else (strides, strides)
         self.padding = padding.upper()
-        self.use_bias = use_bias
         self.use_alpha = use_alpha
         if epsilon <= 0:
             raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
+        self.learnable_epsilon = learnable_epsilon
         self.dtype = dtype
+
+        # Bias configuration: learnable, constant, or none
+        self._constant_bias_value: Optional[float] = None
+        if constant_bias is not None:
+            self._constant_bias_value = float(constant_bias)
+            use_bias = True  # Bias is applied (but constant)
+        self.use_bias = use_bias
+        self.constant_bias = constant_bias
         
         self.is_built = False
         self.input_channels = None
         self.kernel = None
         self.bias = None
         self.alpha = None
+        self.epsilon_param = None
 
     @tf.Module.with_name_scope
     def build(self, input_shape: Union[List[int], tf.TensorShape]) -> None:
@@ -884,7 +930,8 @@ class YatConvTranspose2D(tf.Module):
         
         self.kernel = tf.Variable(kernel_init, trainable=True, name='kernel', dtype=self.dtype)
 
-        if self.use_bias:
+        # Learnable bias variable (skipped when constant_bias is set)
+        if self.use_bias and self._constant_bias_value is None:
             self.bias = tf.Variable(
                 tf.zeros([self.filters], dtype=self.dtype),
                 trainable=True, name='bias'
@@ -894,6 +941,15 @@ class YatConvTranspose2D(tf.Module):
             self.alpha = tf.Variable(
                 tf.ones([1], dtype=self.dtype),
                 trainable=True, name='alpha'
+            )
+
+        # Learnable epsilon parameter (softplus-constrained)
+        if self.learnable_epsilon:
+            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            self.epsilon_param = tf.Variable(
+                tf.constant(raw_eps, shape=[1], dtype=self.dtype),
+                trainable=True,
+                name='epsilon_param',
             )
 
         self.is_built = True
@@ -1019,18 +1075,27 @@ class YatConvTranspose3D(tf.Module):
         self.kernel_size = kernel_size if isinstance(kernel_size, (list, tuple)) else (kernel_size, kernel_size, kernel_size)
         self.strides = strides if isinstance(strides, (list, tuple)) else (strides, strides, strides)
         self.padding = padding.upper()
-        self.use_bias = use_bias
         self.use_alpha = use_alpha
         if epsilon <= 0:
             raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
+        self.learnable_epsilon = learnable_epsilon
         self.dtype = dtype
+
+        # Bias configuration: learnable, constant, or none
+        self._constant_bias_value: Optional[float] = None
+        if constant_bias is not None:
+            self._constant_bias_value = float(constant_bias)
+            use_bias = True  # Bias is applied (but constant)
+        self.use_bias = use_bias
+        self.constant_bias = constant_bias
         
         self.is_built = False
         self.input_channels = None
         self.kernel = None
         self.bias = None
         self.alpha = None
+        self.epsilon_param = None
 
     @tf.Module.with_name_scope
     def build(self, input_shape: Union[List[int], tf.TensorShape]) -> None:
@@ -1055,7 +1120,8 @@ class YatConvTranspose3D(tf.Module):
         
         self.kernel = tf.Variable(kernel_init, trainable=True, name='kernel', dtype=self.dtype)
 
-        if self.use_bias:
+        # Learnable bias variable (skipped when constant_bias is set)
+        if self.use_bias and self._constant_bias_value is None:
             self.bias = tf.Variable(
                 tf.zeros([self.filters], dtype=self.dtype),
                 trainable=True, name='bias'
@@ -1065,6 +1131,15 @@ class YatConvTranspose3D(tf.Module):
             self.alpha = tf.Variable(
                 tf.ones([1], dtype=self.dtype),
                 trainable=True, name='alpha'
+            )
+
+        # Learnable epsilon parameter (softplus-constrained)
+        if self.learnable_epsilon:
+            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            self.epsilon_param = tf.Variable(
+                tf.constant(raw_eps, shape=[1], dtype=self.dtype),
+                trainable=True,
+                name='epsilon_param',
             )
 
         self.is_built = True
