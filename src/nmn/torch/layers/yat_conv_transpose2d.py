@@ -3,6 +3,7 @@ import math
 from typing import Optional, Union
 
 import torch
+import torch.nn as nn
 from torch import Tensor
 from torch.nn import functional as F
 from torch.nn.common_types import _size_2_t
@@ -40,6 +41,7 @@ class YatConvTranspose2D(ConvTranspose2d):
         output_padding: _size_2_t = 0,
         groups: int = 1,
         bias: bool = True,
+        constant_bias: Optional[float] = None,
         dilation: _size_2_t = 1,
         padding_mode: str = "zeros",
         use_alpha: bool = True,
@@ -47,12 +49,17 @@ class YatConvTranspose2D(ConvTranspose2d):
         use_dropconnect: bool = False,
         mask: Optional[Tensor] = None,
         epsilon: float = 1e-5,
+        learnable_epsilon: bool = False,
         drop_rate: float = 0.0,
         device=None,
         dtype=None,
         param_dtype=None,
     ) -> None:
         storage_dtype = param_dtype if param_dtype is not None else dtype
+
+        # If constant_bias is set, don't allocate a learnable bias in the parent.
+        parent_bias = False if constant_bias is not None else bias
+
         super().__init__(
             in_channels,
             out_channels,
@@ -61,17 +68,34 @@ class YatConvTranspose2D(ConvTranspose2d):
             padding,
             output_padding,
             groups,
-            bias,
+            parent_bias,
             dilation,
             padding_mode,
             device,
             storage_dtype,
         )
 
+        # Constant bias handling
+        self._constant_bias_value: Optional[float] = None
+        if constant_bias is not None:
+            self._constant_bias_value = float(constant_bias)
+            bias = True
+        self.constant_bias = constant_bias
+
         self.compute_dtype = dtype
         self.param_dtype = storage_dtype
         self.use_dropconnect = use_dropconnect
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
+        self.learnable_epsilon = learnable_epsilon
+        if learnable_epsilon:
+            raw_eps = math.log(math.exp(epsilon) - 1.0)
+            self.epsilon_param = nn.Parameter(
+                torch.full((1,), raw_eps, dtype=storage_dtype if storage_dtype else torch.float32)
+            )
+        else:
+            self.register_parameter('epsilon_param', None)
         self.drop_rate = drop_rate
 
         factory_kwargs = {"device": device, "dtype": storage_dtype}
@@ -119,7 +143,16 @@ class YatConvTranspose2D(ConvTranspose2d):
             raise ValueError("Only `zeros` padding mode is supported for YatConvTranspose2D")
 
         weight = self.weight
-        bias_val = self.bias
+        # Resolve bias (learnable or constant)
+        if self._constant_bias_value is not None:
+            bias_val = torch.full(
+                (self.out_channels,),
+                self._constant_bias_value,
+                dtype=self.param_dtype if self.param_dtype is not None else weight.dtype,
+                device=weight.device,
+            )
+        else:
+            bias_val = self.bias
 
         # Get alpha value (constant or learnable)
         if self._constant_alpha_value is not None:
@@ -189,8 +222,14 @@ class YatConvTranspose2D(ConvTranspose2d):
         if bias_val is not None:
             dot_prod_map = dot_prod_map + bias_val.view(*view_shape)
 
+        # Resolve effective epsilon (learnable via softplus, or constant)
+        if self.learnable_epsilon and self.epsilon_param is not None:
+            eps = F.softplus(self.epsilon_param.to(distance_sq_map.dtype))
+        else:
+            eps = self.epsilon
+
         # YAT computation
-        y = dot_prod_map**2 / (distance_sq_map + self.epsilon)
+        y = dot_prod_map**2 / (distance_sq_map + eps)
 
         # Apply alpha scaling
         if self._constant_alpha_value is not None:

@@ -19,6 +19,9 @@ class YatNMN(tf.Module):
         features: Number of output features.
         use_bias: Whether to add a bias term inside the numerator square
             (default: ``True``).
+        constant_bias: If a ``float``, use that value as a fixed (non-learnable)
+            bias constant. If ``None`` (default), use learnable bias when
+            ``use_bias=True``.
         use_alpha: Whether to apply output scaling via an alpha parameter
             (default: ``True``).  Has no effect when ``constant_alpha`` is set.
         constant_alpha: If ``True``, applies a fixed √2 scale factor.  If a
@@ -31,6 +34,14 @@ class YatNMN(tf.Module):
             (default: ``tf.float32``).
         epsilon: Small constant added to the denominator to avoid division by
             zero (default: ``1e-5``).
+        learnable_epsilon: If ``True``, epsilon becomes a learnable parameter
+            passed through softplus to guarantee strict positivity
+            (default: ``False``).
+        spherical: If ``True``, normalize inputs and each kernel row (neuron)
+            to unit norm before computing the YAT formula (default: ``False``).
+        weight_normalized: If ``True``, normalize each kernel row (neuron) to
+            unit norm at forward time. This avoids recomputing kernel norms in
+            the YAT distance calculation (default: ``False``).
         return_weights: If ``True``, ``__call__`` returns ``(output, kernel)``
             instead of just ``output`` (default: ``False``).
         name: Optional name scope for the module.
@@ -48,23 +59,37 @@ class YatNMN(tf.Module):
         self,
         features: int,
         use_bias: bool = True,
+        constant_bias: Optional[float] = None,
         use_alpha: bool = True,
         constant_alpha: Optional[Union[bool, float]] = None,
         positive_init: bool = False,
         dtype: tf.DType = tf.float32,
         epsilon: float = 1e-5,
+        learnable_epsilon: bool = False,
+        spherical: bool = False,
+        weight_normalized: bool = False,
         return_weights: bool = False,
         name: Optional[str] = None
     ):
         super().__init__(name=name)
         self.features = features
-        self.use_bias = use_bias
         self.dtype = dtype
         if epsilon <= 0:
             raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
+        self.learnable_epsilon = learnable_epsilon
+        self.spherical = spherical
+        self.weight_normalized = weight_normalized
         self.return_weights = return_weights
         self.positive_init = positive_init
+
+        # Handle bias configuration: learnable, constant, or none
+        self._constant_bias_value: Optional[float] = None
+        if constant_bias is not None:
+            self._constant_bias_value = float(constant_bias)
+            use_bias = True  # Bias is applied (but constant)
+        self.use_bias = use_bias
+        self.constant_bias = constant_bias
 
         # Handle alpha configuration
         self._constant_alpha_value = None
@@ -76,13 +101,14 @@ class YatNMN(tf.Module):
             use_alpha = True
         self.use_alpha = use_alpha
         self.constant_alpha = constant_alpha
-        
+
         # Variables will be created in build
         self.is_built = False
         self.input_dim = None
         self.kernel = None
         self.bias = None
         self.alpha = None
+        self.epsilon_param = None
 
     @tf.Module.with_name_scope
     def build(self, input_shape: Union[List[int], tf.TensorShape]) -> None:
@@ -120,12 +146,21 @@ class YatNMN(tf.Module):
                 name='alpha'
             )
 
-        # Initialize bias if needed
-        if self.use_bias:
+        # Initialize bias if needed (learnable only; constant bias has no Variable)
+        if self.use_bias and self._constant_bias_value is None:
             self.bias = tf.Variable(
                 tf.zeros([self.features], dtype=self.dtype),
                 trainable=True,
                 name='bias'
+            )
+
+        # Learnable epsilon parameter (softplus-constrained)
+        if self.learnable_epsilon:
+            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            self.epsilon_param = tf.Variable(
+                tf.constant(raw_eps, shape=[1], dtype=self.dtype),
+                trainable=True,
+                name='epsilon_param',
             )
 
         self.is_built = True
@@ -150,33 +185,70 @@ class YatNMN(tf.Module):
         """
         # Ensure inputs are tensor
         inputs = tf.convert_to_tensor(inputs, dtype=self.dtype)
-        
+
         # Build if necessary
         self._maybe_build(inputs)
 
+        kernel = self.kernel
+
+        # Spherical mode: normalize inputs and each kernel row (neuron) to unit norm.
+        # TF kernel shape is (features, last_dim) → each row is a neuron → axis=-1.
+        if self.spherical:
+            inputs = inputs / (
+                tf.sqrt(tf.reduce_sum(tf.square(inputs), axis=-1, keepdims=True)) + 1e-8
+            )
+            kernel = kernel / (
+                tf.sqrt(tf.reduce_sum(tf.square(kernel), axis=-1, keepdims=True)) + 1e-8
+            )
+
+        # Weight normalization: normalize each kernel row at forward time.
+        if self.weight_normalized:
+            kernel = kernel / (
+                tf.sqrt(tf.reduce_sum(tf.square(kernel), axis=-1, keepdims=True)) + 1e-8
+            )
+
         # Compute dot product between input and transposed kernel
-        y = tf.matmul(inputs, tf.transpose(self.kernel))
+        y = tf.matmul(inputs, tf.transpose(kernel))
 
-        # Compute squared Euclidean distances
-        inputs_squared_sum = tf.reduce_sum(tf.square(inputs), axis=-1, keepdims=True)
-        kernel_squared_sum = tf.reduce_sum(tf.square(self.kernel), axis=-1)
+        # Compute squared distances
+        if self.spherical:
+            # Both x and each W_row are unit vectors → ||x - W||² = 2 - 2(x·W)
+            distances = tf.maximum(2.0 - 2.0 * y, 0.0)
+        else:
+            inputs_squared_sum = tf.reduce_sum(tf.square(inputs), axis=-1, keepdims=True)
+            if self.weight_normalized:
+                # ||W_row||² = 1 for each neuron
+                kernel_squared_sum = tf.ones([self.features], dtype=kernel.dtype)
+            else:
+                kernel_squared_sum = tf.reduce_sum(tf.square(kernel), axis=-1)
 
-        # Reshape kernel_squared_sum for broadcasting
-        kernel_squared_sum = tf.reshape(
-            kernel_squared_sum,
-            [1] * (len(inputs.shape) - 1) + [self.features]
-        )
+            # Reshape kernel_squared_sum for broadcasting
+            kernel_squared_sum = tf.reshape(
+                kernel_squared_sum,
+                [1] * (len(inputs.shape) - 1) + [self.features]
+            )
 
-        distances = tf.maximum(inputs_squared_sum + kernel_squared_sum - 2 * y, 0.0)
+            distances = tf.maximum(inputs_squared_sum + kernel_squared_sum - 2 * y, 0.0)
 
-        # Add bias if used
+        # Add bias if used (learnable or constant) — inside the numerator square
         if self.use_bias:
-            # Reshape bias for proper broadcasting
             bias_shape = [1] * (len(y.shape) - 1) + [-1]
-            y = y + tf.reshape(self.bias, bias_shape)
+            if self._constant_bias_value is not None:
+                bias_const = tf.constant(
+                    self._constant_bias_value, shape=[self.features], dtype=self.dtype
+                )
+                y = y + tf.reshape(bias_const, bias_shape)
+            else:
+                y = y + tf.reshape(self.bias, bias_shape)
+
+        # Resolve effective epsilon (learnable via softplus, or constant)
+        if self.learnable_epsilon and self.epsilon_param is not None:
+            eps = tf.nn.softplus(self.epsilon_param)
+        else:
+            eps = self.epsilon
 
         # Apply the transformation
-        y = tf.square(y) / (distances + self.epsilon)
+        y = tf.square(y) / (distances + eps)
 
         # Apply scaling factor
         if self._constant_alpha_value is not None:
@@ -206,6 +278,8 @@ class YatNMN(tf.Module):
             weights.append(self.bias)
         if self.alpha is not None:
             weights.append(self.alpha)
+        if self.epsilon_param is not None:
+            weights.append(self.epsilon_param)
         return weights
 
     def set_weights(self, weights: List[tf.Tensor]) -> None:
@@ -231,6 +305,9 @@ class YatNMN(tf.Module):
             idx += 1
         if self.alpha is not None:
             self.alpha.assign(weights[idx])
+            idx += 1
+        if self.epsilon_param is not None:
+            self.epsilon_param.assign(weights[idx])
 
 
 # Alias for backward compatibility

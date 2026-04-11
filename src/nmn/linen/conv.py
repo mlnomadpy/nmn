@@ -1,5 +1,7 @@
 """YAT convolution layers for Flax Linen."""
 
+import math
+
 import jax
 import jax.numpy as jnp
 import jax.lax as lax
@@ -40,6 +42,7 @@ class YatConv1D(Module):
     kernel_dilation: Sequence[int] = (1,)
     feature_group_count: int = 1
     use_bias: bool = True
+    constant_bias: Optional[float] = None
     use_alpha: bool = True
     dtype: Optional[Any] = None
     param_dtype: Any = jnp.float32
@@ -47,6 +50,7 @@ class YatConv1D(Module):
     bias_init: Any = zeros_init()
     alpha_init: Any = lambda key, shape, dtype: jnp.ones(shape, dtype)
     epsilon: float = 1e-6
+    learnable_epsilon: bool = False
 
     @compact
     def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
@@ -65,15 +69,29 @@ class YatConv1D(Module):
         
         kernel = self.param('kernel', self.kernel_init, kernel_shape, self.param_dtype)
         
-        if self.use_bias:
+        if self.constant_bias is not None:
+            bias = jnp.full((self.features,), float(self.constant_bias), dtype=self.param_dtype)
+        elif self.use_bias:
             bias = self.param('bias', self.bias_init, (self.features,), self.param_dtype)
         else:
             bias = None
-            
+
         if self.use_alpha:
             alpha = self.param('alpha', self.alpha_init, (1,), self.param_dtype)
         else:
             alpha = None
+
+        # Learnable epsilon parameter (softplus-constrained)
+        if self.learnable_epsilon:
+            raw_eps_init = math.log(math.exp(self.epsilon) - 1.0)
+            epsilon_param = self.param(
+                'epsilon_param',
+                lambda key, shape, dtype: jnp.full(shape, raw_eps_init, dtype=dtype),
+                (1,),
+                self.param_dtype,
+            )
+        else:
+            epsilon_param = None
         
         inputs, kernel, bias, alpha = promote_dtype(inputs, kernel, bias, alpha, dtype=self.dtype)
         
@@ -124,8 +142,14 @@ class YatConv1D(Module):
         if bias is not None:
             dot_prod_map = dot_prod_map + bias.reshape((1, 1, -1))
         
+        # Resolve effective epsilon (learnable via softplus, or constant)
+        if epsilon_param is not None:
+            eps = jax.nn.softplus(epsilon_param.astype(dot_prod_map.dtype))
+        else:
+            eps = self.epsilon
+
         # YAT output: (x·W + b)² / (dist + ε)
-        y = dot_prod_map**2 / (distance_sq + self.epsilon)
+        y = dot_prod_map**2 / (distance_sq + eps)
         
         if alpha is not None:
             # Simple learnable alpha scaling
@@ -163,6 +187,7 @@ class YatConv2D(Module):
     kernel_dilation: Sequence[int] = (1, 1)
     feature_group_count: int = 1
     use_bias: bool = True
+    constant_bias: Optional[float] = None
     use_alpha: bool = True
     dtype: Optional[Any] = None
     param_dtype: Any = jnp.float32
@@ -170,6 +195,7 @@ class YatConv2D(Module):
     bias_init: Any = zeros_init()
     alpha_init: Any = lambda key, shape, dtype: jnp.ones(shape, dtype)
     epsilon: float = 1e-6
+    learnable_epsilon: bool = False
 
     @compact
     def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
@@ -188,15 +214,29 @@ class YatConv2D(Module):
         
         kernel = self.param('kernel', self.kernel_init, kernel_shape, self.param_dtype)
         
-        if self.use_bias:
+        if self.constant_bias is not None:
+            bias = jnp.full((self.features,), float(self.constant_bias), dtype=self.param_dtype)
+        elif self.use_bias:
             bias = self.param('bias', self.bias_init, (self.features,), self.param_dtype)
         else:
             bias = None
-            
+
         if self.use_alpha:
             alpha = self.param('alpha', self.alpha_init, (1,), self.param_dtype)
         else:
             alpha = None
+
+        # Learnable epsilon parameter (softplus-constrained)
+        if self.learnable_epsilon:
+            raw_eps_init = math.log(math.exp(self.epsilon) - 1.0)
+            epsilon_param = self.param(
+                'epsilon_param',
+                lambda key, shape, dtype: jnp.full(shape, raw_eps_init, dtype=dtype),
+                (1,),
+                self.param_dtype,
+            )
+        else:
+            epsilon_param = None
         
         inputs, kernel, bias, alpha = promote_dtype(inputs, kernel, bias, alpha, dtype=self.dtype)
         
@@ -247,8 +287,14 @@ class YatConv2D(Module):
         if bias is not None:
             dot_prod_map = dot_prod_map + bias.reshape((1, 1, 1, -1))
         
+        # Resolve effective epsilon (learnable via softplus, or constant)
+        if epsilon_param is not None:
+            eps = jax.nn.softplus(epsilon_param.astype(dot_prod_map.dtype))
+        else:
+            eps = self.epsilon
+
         # YAT output: (x·W + b)² / (dist + ε)
-        y = dot_prod_map**2 / (distance_sq + self.epsilon)
+        y = dot_prod_map**2 / (distance_sq + eps)
         
         if alpha is not None:
             # Simple learnable alpha scaling
@@ -286,6 +332,7 @@ class YatConv3D(Module):
     kernel_dilation: Sequence[int] = (1, 1, 1)
     feature_group_count: int = 1
     use_bias: bool = True
+    constant_bias: Optional[float] = None
     use_alpha: bool = True
     dtype: Optional[Any] = None
     param_dtype: Any = jnp.float32
@@ -293,6 +340,7 @@ class YatConv3D(Module):
     bias_init: Any = zeros_init()
     alpha_init: Any = lambda key, shape, dtype: jnp.ones(shape, dtype)
     epsilon: float = 1e-6
+    learnable_epsilon: bool = False
 
     @compact
     def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
@@ -311,15 +359,29 @@ class YatConv3D(Module):
         
         kernel = self.param('kernel', self.kernel_init, kernel_shape, self.param_dtype)
         
-        if self.use_bias:
+        if self.constant_bias is not None:
+            bias = jnp.full((self.features,), float(self.constant_bias), dtype=self.param_dtype)
+        elif self.use_bias:
             bias = self.param('bias', self.bias_init, (self.features,), self.param_dtype)
         else:
             bias = None
-            
+
         if self.use_alpha:
             alpha = self.param('alpha', self.alpha_init, (1,), self.param_dtype)
         else:
             alpha = None
+
+        # Learnable epsilon parameter (softplus-constrained)
+        if self.learnable_epsilon:
+            raw_eps_init = math.log(math.exp(self.epsilon) - 1.0)
+            epsilon_param = self.param(
+                'epsilon_param',
+                lambda key, shape, dtype: jnp.full(shape, raw_eps_init, dtype=dtype),
+                (1,),
+                self.param_dtype,
+            )
+        else:
+            epsilon_param = None
         
         inputs, kernel, bias, alpha = promote_dtype(inputs, kernel, bias, alpha, dtype=self.dtype)
         
@@ -370,8 +432,14 @@ class YatConv3D(Module):
         if bias is not None:
             dot_prod_map = dot_prod_map + bias.reshape((1, 1, 1, 1, -1))
         
+        # Resolve effective epsilon (learnable via softplus, or constant)
+        if epsilon_param is not None:
+            eps = jax.nn.softplus(epsilon_param.astype(dot_prod_map.dtype))
+        else:
+            eps = self.epsilon
+
         # YAT output: (x·W + b)² / (dist + ε)
-        y = dot_prod_map**2 / (distance_sq + self.epsilon)
+        y = dot_prod_map**2 / (distance_sq + eps)
         
         if alpha is not None:
             # Simple learnable alpha scaling
@@ -403,6 +471,7 @@ class YatConvTranspose1D(Module):
     strides: Sequence[int] = (1,)
     padding: Union[str, Sequence[Tuple[int, int]]] = 'VALID'
     use_bias: bool = True
+    constant_bias: Optional[float] = None
     use_alpha: bool = True
     dtype: Optional[Any] = None
     param_dtype: Any = jnp.float32
@@ -410,6 +479,7 @@ class YatConvTranspose1D(Module):
     bias_init: Any = zeros_init()
     alpha_init: Any = lambda key, shape, dtype: jnp.ones(shape, dtype)
     epsilon: float = 1e-6
+    learnable_epsilon: bool = False
 
     @compact
     def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
@@ -428,7 +498,9 @@ class YatConvTranspose1D(Module):
 
         kernel = self.param('kernel', self.kernel_init, kernel_shape, self.param_dtype)
 
-        if self.use_bias:
+        if self.constant_bias is not None:
+            bias = jnp.full((self.features,), float(self.constant_bias), dtype=self.param_dtype)
+        elif self.use_bias:
             bias = self.param('bias', self.bias_init, (self.features,), self.param_dtype)
         else:
             bias = None
@@ -437,6 +509,18 @@ class YatConvTranspose1D(Module):
             alpha = self.param('alpha', self.alpha_init, (1,), self.param_dtype)
         else:
             alpha = None
+
+        # Learnable epsilon parameter (softplus-constrained)
+        if self.learnable_epsilon:
+            raw_eps_init = math.log(math.exp(self.epsilon) - 1.0)
+            epsilon_param = self.param(
+                'epsilon_param',
+                lambda key, shape, dtype: jnp.full(shape, raw_eps_init, dtype=dtype),
+                (1,),
+                self.param_dtype,
+            )
+        else:
+            epsilon_param = None
 
         inputs, kernel, bias, alpha = promote_dtype(inputs, kernel, bias, alpha, dtype=self.dtype)
 
@@ -478,8 +562,14 @@ class YatConvTranspose1D(Module):
         if bias is not None:
             dot_prod_map = dot_prod_map + bias.reshape((1, 1, -1))
 
+        # Resolve effective epsilon (learnable via softplus, or constant)
+        if epsilon_param is not None:
+            eps = jax.nn.softplus(epsilon_param.astype(dot_prod_map.dtype))
+        else:
+            eps = self.epsilon
+
         # YAT output: (x·W + b)² / (dist + ε)
-        y = dot_prod_map**2 / (distance_sq + self.epsilon)
+        y = dot_prod_map**2 / (distance_sq + eps)
 
         if alpha is not None:
             y = y * alpha
@@ -510,6 +600,7 @@ class YatConvTranspose2D(Module):
     strides: Sequence[int] = (1, 1)
     padding: Union[str, Sequence[Tuple[int, int]]] = 'VALID'
     use_bias: bool = True
+    constant_bias: Optional[float] = None
     use_alpha: bool = True
     dtype: Optional[Any] = None
     param_dtype: Any = jnp.float32
@@ -517,6 +608,7 @@ class YatConvTranspose2D(Module):
     bias_init: Any = zeros_init()
     alpha_init: Any = lambda key, shape, dtype: jnp.ones(shape, dtype)
     epsilon: float = 1e-6
+    learnable_epsilon: bool = False
 
     @compact
     def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
@@ -535,7 +627,9 @@ class YatConvTranspose2D(Module):
 
         kernel = self.param('kernel', self.kernel_init, kernel_shape, self.param_dtype)
 
-        if self.use_bias:
+        if self.constant_bias is not None:
+            bias = jnp.full((self.features,), float(self.constant_bias), dtype=self.param_dtype)
+        elif self.use_bias:
             bias = self.param('bias', self.bias_init, (self.features,), self.param_dtype)
         else:
             bias = None
@@ -544,6 +638,18 @@ class YatConvTranspose2D(Module):
             alpha = self.param('alpha', self.alpha_init, (1,), self.param_dtype)
         else:
             alpha = None
+
+        # Learnable epsilon parameter (softplus-constrained)
+        if self.learnable_epsilon:
+            raw_eps_init = math.log(math.exp(self.epsilon) - 1.0)
+            epsilon_param = self.param(
+                'epsilon_param',
+                lambda key, shape, dtype: jnp.full(shape, raw_eps_init, dtype=dtype),
+                (1,),
+                self.param_dtype,
+            )
+        else:
+            epsilon_param = None
 
         inputs, kernel, bias, alpha = promote_dtype(inputs, kernel, bias, alpha, dtype=self.dtype)
 
@@ -585,8 +691,14 @@ class YatConvTranspose2D(Module):
         if bias is not None:
             dot_prod_map = dot_prod_map + bias.reshape((1, 1, 1, -1))
 
+        # Resolve effective epsilon (learnable via softplus, or constant)
+        if epsilon_param is not None:
+            eps = jax.nn.softplus(epsilon_param.astype(dot_prod_map.dtype))
+        else:
+            eps = self.epsilon
+
         # YAT output: (x·W + b)² / (dist + ε)
-        y = dot_prod_map**2 / (distance_sq + self.epsilon)
+        y = dot_prod_map**2 / (distance_sq + eps)
 
         if alpha is not None:
             y = y * alpha
@@ -617,6 +729,7 @@ class YatConvTranspose3D(Module):
     strides: Sequence[int] = (1, 1, 1)
     padding: Union[str, Sequence[Tuple[int, int]]] = 'VALID'
     use_bias: bool = True
+    constant_bias: Optional[float] = None
     use_alpha: bool = True
     dtype: Optional[Any] = None
     param_dtype: Any = jnp.float32
@@ -624,6 +737,7 @@ class YatConvTranspose3D(Module):
     bias_init: Any = zeros_init()
     alpha_init: Any = lambda key, shape, dtype: jnp.ones(shape, dtype)
     epsilon: float = 1e-6
+    learnable_epsilon: bool = False
 
     @compact
     def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
@@ -642,7 +756,9 @@ class YatConvTranspose3D(Module):
 
         kernel = self.param('kernel', self.kernel_init, kernel_shape, self.param_dtype)
 
-        if self.use_bias:
+        if self.constant_bias is not None:
+            bias = jnp.full((self.features,), float(self.constant_bias), dtype=self.param_dtype)
+        elif self.use_bias:
             bias = self.param('bias', self.bias_init, (self.features,), self.param_dtype)
         else:
             bias = None
@@ -651,6 +767,18 @@ class YatConvTranspose3D(Module):
             alpha = self.param('alpha', self.alpha_init, (1,), self.param_dtype)
         else:
             alpha = None
+
+        # Learnable epsilon parameter (softplus-constrained)
+        if self.learnable_epsilon:
+            raw_eps_init = math.log(math.exp(self.epsilon) - 1.0)
+            epsilon_param = self.param(
+                'epsilon_param',
+                lambda key, shape, dtype: jnp.full(shape, raw_eps_init, dtype=dtype),
+                (1,),
+                self.param_dtype,
+            )
+        else:
+            epsilon_param = None
 
         inputs, kernel, bias, alpha = promote_dtype(inputs, kernel, bias, alpha, dtype=self.dtype)
 
@@ -692,8 +820,14 @@ class YatConvTranspose3D(Module):
         if bias is not None:
             dot_prod_map = dot_prod_map + bias.reshape((1, 1, 1, 1, -1))
 
+        # Resolve effective epsilon (learnable via softplus, or constant)
+        if epsilon_param is not None:
+            eps = jax.nn.softplus(epsilon_param.astype(dot_prod_map.dtype))
+        else:
+            eps = self.epsilon
+
         # YAT output: (x·W + b)² / (dist + ε)
-        y = dot_prod_map**2 / (distance_sq + self.epsilon)
+        y = dot_prod_map**2 / (distance_sq + eps)
 
         if alpha is not None:
             y = y * alpha

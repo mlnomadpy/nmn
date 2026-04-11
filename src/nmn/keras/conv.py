@@ -1,5 +1,8 @@
 """YAT convolution layers for Keras/TensorFlow."""
 
+import logging
+import threading
+
 from keras.src import activations, constraints, initializers, regularizers
 from keras.src.api_export import keras_export
 from keras.src.layers.input_spec import InputSpec
@@ -7,9 +10,15 @@ from keras.src.layers.layer import Layer
 from keras.src import ops
 import math
 
+logger = logging.getLogger(__name__)
+
 
 @keras_export("keras.layers.YatConv1D")
 class YatConv1D(Layer):
+    # Class-level shared kernel banks (guarded by a lock for thread safety)
+    _KERNEL_BANKS = {}
+    _KERNEL_BANKS_LOCK = threading.Lock()
+
     """1D YAT convolution layer (e.g. temporal convolution).
 
     This layer creates a convolution kernel that is convolved with the layer
@@ -80,8 +89,16 @@ class YatConv1D(Layer):
         dilation_rate=1,
         groups=1,
         use_bias=True,
+        constant_bias=None,
         use_alpha=True,
         epsilon=1e-5,
+        learnable_epsilon=False,
+        weight_normalized=False,
+        use_dropconnect=False,
+        drop_rate=0.0,
+        tie_kernel_bank=False,
+        kernel_bank_size=None,
+        kernel_bank_id="default",
         kernel_initializer="orthogonal",
         bias_initializer="zeros",
         kernel_regularizer=None,
@@ -99,13 +116,26 @@ class YatConv1D(Layer):
         self.data_format = data_format
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate,)
         self.groups = groups
-        self.use_bias = use_bias
         self.use_alpha = use_alpha
         if epsilon <= 0:
             raise ValueError(f"epsilon must be positive, got {epsilon}")
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
+        self.learnable_epsilon = learnable_epsilon
+        self.weight_normalized = weight_normalized
+        self.use_dropconnect = use_dropconnect
+        self.drop_rate = drop_rate
+        self.tie_kernel_bank = tie_kernel_bank
+        self.kernel_bank_size = kernel_bank_size
+        self.kernel_bank_id = kernel_bank_id
+        self._kernel_slice = slice(None)
+
+        # Bias configuration: learnable, constant, or none
+        self._constant_bias_value = None
+        if constant_bias is not None:
+            self._constant_bias_value = float(constant_bias)
+            use_bias = True  # Bias is applied (but constant)
+        self.use_bias = use_bias
+        self.constant_bias = constant_bias
 
         self.kernel_initializer = initializers.get(kernel_initializer)
         self.bias_initializer = initializers.get(bias_initializer)
@@ -143,18 +173,59 @@ class YatConv1D(Layer):
                 f"divisible by the number of groups ({self.groups})."
             )
 
-        kernel_shape = tuple(self.kernel_size) + (input_dim // self.groups, self.filters)
+        # Kernel: standalone or from a shared bank
+        if self.tie_kernel_bank:
+            bank_filters = self.kernel_bank_size or self.filters
+            bank_kernel_shape = tuple(self.kernel_size) + (input_dim // self.groups, bank_filters)
+            bank_key = (
+                self.kernel_bank_id,
+                tuple(self.kernel_size),
+                input_dim // self.groups,
+                self.groups,
+            )
+            with type(self)._KERNEL_BANKS_LOCK:
+                shared_kernel = type(self)._KERNEL_BANKS.get(bank_key)
+                if shared_kernel is None:
+                    self.kernel = self.add_weight(
+                        name="kernel",
+                        shape=bank_kernel_shape,
+                        initializer=self.kernel_initializer,
+                        regularizer=self.kernel_regularizer,
+                        constraint=self.kernel_constraint,
+                        trainable=True,
+                    )
+                    type(self)._KERNEL_BANKS[bank_key] = self.kernel
+                else:
+                    existing_filters = shared_kernel.shape[-1]
+                    if bank_filters > existing_filters:
+                        logger.info(
+                            "Auto-expanding Keras kernel bank '%s': %d -> %d filters",
+                            self.kernel_bank_id, existing_filters, bank_filters,
+                        )
+                        # Expand the shared kernel by sampling new tail filters
+                        new_kernel_val = self.kernel_initializer(bank_kernel_shape, dtype=shared_kernel.dtype)
+                        old_val = shared_kernel.numpy() if hasattr(shared_kernel, "numpy") else ops.convert_to_numpy(shared_kernel)
+                        new_kernel_val = ops.convert_to_tensor(new_kernel_val)
+                        # Splice old values into the front
+                        import numpy as _np
+                        new_arr = _np.array(new_kernel_val)
+                        new_arr[..., :existing_filters] = _np.array(old_val)
+                        shared_kernel.assign(ops.convert_to_tensor(new_arr))
+                    self.kernel = shared_kernel
+            self._kernel_slice = slice(0, self.filters)
+        else:
+            kernel_shape = tuple(self.kernel_size) + (input_dim // self.groups, self.filters)
+            self.kernel = self.add_weight(
+                name="kernel",
+                shape=kernel_shape,
+                initializer=self.kernel_initializer,
+                regularizer=self.kernel_regularizer,
+                constraint=self.kernel_constraint,
+                trainable=True,
+            )
 
-        self.kernel = self.add_weight(
-            name="kernel",
-            shape=kernel_shape,
-            initializer=self.kernel_initializer,
-            regularizer=self.kernel_regularizer,
-            constraint=self.kernel_constraint,
-            trainable=True,
-        )
-
-        if self.use_bias:
+        # Bias: learnable parameter, or None if constant_bias is set / use_bias=False
+        if self.use_bias and self._constant_bias_value is None:
             self.bias = self.add_weight(
                 name="bias",
                 shape=(self.filters,),
@@ -176,14 +247,56 @@ class YatConv1D(Layer):
         else:
             self.alpha = None
 
+        # Learnable epsilon parameter (softplus-constrained)
+        if self.learnable_epsilon:
+            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            self.epsilon_param = self.add_weight(
+                name="epsilon_param",
+                shape=(1,),
+                initializer=initializers.Constant(raw_eps),
+                trainable=True,
+            )
+        else:
+            self.epsilon_param = None
+
+        # Apply build-time weight normalization (per filter, last axis)
+        # Note: skipped when tie_kernel_bank to avoid mutating shared state.
+        if self.weight_normalized and not self.tie_kernel_bank:
+            reduce_axes = tuple(range(self.kernel.ndim - 1))
+            kernel_norm = ops.sqrt(
+                ops.sum(ops.square(self.kernel), axis=reduce_axes, keepdims=True)
+            )
+            self.kernel.assign(self.kernel / (kernel_norm + 1e-8))
+
         self.input_spec = InputSpec(ndim=3, axes={channel_axis: input_dim})
         self.built = True
 
-    def call(self, inputs):
+    def call(self, inputs, training=None):
+        kernel = self.kernel
+        # Slice shared bank if tying
+        if self.tie_kernel_bank:
+            kernel = kernel[..., self._kernel_slice]
+
+        # DropConnect: random kernel mask during training
+        if self.use_dropconnect and training and self.drop_rate > 0.0:
+            keep_prob = 1.0 - self.drop_rate
+            mask = ops.cast(
+                ops.random.uniform(ops.shape(kernel), dtype=kernel.dtype) < keep_prob,
+                kernel.dtype,
+            )
+            kernel = (kernel * mask) / keep_prob
+
+        # Optional forward-time weight normalization (per filter, last axis)
+        if self.weight_normalized:
+            reduce_axes = tuple(range(kernel.ndim - 1))
+            kernel = kernel / (
+                ops.sqrt(ops.sum(ops.square(kernel), axis=reduce_axes, keepdims=True)) + 1e-8
+            )
+
         # Compute standard convolution (dot product)
         dot_prod_map = ops.conv(
             inputs,
-            self.kernel,
+            kernel,
             strides=self.strides,
             padding=self.padding,
             data_format=self.data_format,
@@ -192,12 +305,12 @@ class YatConv1D(Layer):
 
         # Compute squared input patches using convolution with ones
         inputs_squared = inputs * inputs
-        
+
         # Create ones kernel for computing patch squared sums
-        input_channels_per_group = self.kernel.shape[-2]
+        input_channels_per_group = kernel.shape[-2]
         ones_kernel_shape = tuple(self.kernel_size) + (input_channels_per_group, 1)
-        ones_kernel = ops.ones(ones_kernel_shape, dtype=self.kernel.dtype)
-        
+        ones_kernel = ops.ones(ones_kernel_shape, dtype=kernel.dtype)
+
         patch_sq_sum_map_raw = ops.conv(
             inputs_squared,
             ones_kernel,
@@ -213,8 +326,13 @@ class YatConv1D(Layer):
         else:
             patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
 
-        # Compute kernel squared sum per filter
-        kernel_sq_sum_per_filter = ops.sum(self.kernel**2, axis=tuple(range(self.kernel.ndim - 1)))
+        # Compute kernel squared sum per filter (1.0 if normalized)
+        if self.weight_normalized:
+            kernel_sq_sum_per_filter = ops.ones((self.filters,), dtype=kernel.dtype)
+        else:
+            kernel_sq_sum_per_filter = ops.sum(
+                kernel ** 2, axis=tuple(range(kernel.ndim - 1))
+            )
 
         # Reshape for broadcasting
         kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, -1))
@@ -222,12 +340,21 @@ class YatConv1D(Layer):
         # Compute YAT: squared distance
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
 
-        # Add bias before squaring
+        # Add bias before squaring (learnable or constant)
         if self.use_bias:
-            dot_prod_map = ops.add(dot_prod_map, self.bias)
+            if self._constant_bias_value is not None:
+                dot_prod_map = dot_prod_map + self._constant_bias_value
+            else:
+                dot_prod_map = ops.add(dot_prod_map, self.bias)
+
+        # Resolve effective epsilon (learnable via softplus, or constant)
+        if self.learnable_epsilon and self.epsilon_param is not None:
+            eps = ops.softplus(self.epsilon_param)
+        else:
+            eps = self.epsilon
 
         # YAT computation: (dot_product + bias)^2 / (distance_squared + epsilon)
-        outputs = dot_prod_map**2 / (distance_sq_map + self.epsilon)
+        outputs = dot_prod_map**2 / (distance_sq_map + eps)
 
         # Apply alpha scaling
         if self.use_alpha and self.alpha is not None:
@@ -267,8 +394,16 @@ class YatConv1D(Layer):
             "dilation_rate": self.dilation_rate,
             "groups": self.groups,
             "use_bias": self.use_bias,
+            "constant_bias": self.constant_bias,
             "use_alpha": self.use_alpha,
             "epsilon": self.epsilon,
+            "learnable_epsilon": self.learnable_epsilon,
+            "weight_normalized": self.weight_normalized,
+            "use_dropconnect": self.use_dropconnect,
+            "drop_rate": self.drop_rate,
+            "tie_kernel_bank": self.tie_kernel_bank,
+            "kernel_bank_size": self.kernel_bank_size,
+            "kernel_bank_id": self.kernel_bank_id,
             "kernel_initializer": initializers.serialize(self.kernel_initializer),
             "bias_initializer": initializers.serialize(self.bias_initializer),
             "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
@@ -282,6 +417,10 @@ class YatConv1D(Layer):
 
 @keras_export("keras.layers.YatConv2D")
 class YatConv2D(Layer):
+    # Class-level shared kernel banks (guarded by a lock for thread safety)
+    _KERNEL_BANKS = {}
+    _KERNEL_BANKS_LOCK = threading.Lock()
+
     """2D YAT convolution layer (e.g. spatial convolution over images).
 
     This layer creates a convolution kernel that is convolved with the layer
@@ -360,8 +499,16 @@ class YatConv2D(Layer):
         dilation_rate=(1, 1),
         groups=1,
         use_bias=True,
+        constant_bias=None,
         use_alpha=True,
         epsilon=1e-5,
+        learnable_epsilon=False,
+        weight_normalized=False,
+        use_dropconnect=False,
+        drop_rate=0.0,
+        tie_kernel_bank=False,
+        kernel_bank_size=None,
+        kernel_bank_id="default",
         kernel_initializer="orthogonal",
         bias_initializer="zeros",
         kernel_regularizer=None,
@@ -379,11 +526,26 @@ class YatConv2D(Layer):
         self.data_format = data_format
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate)
         self.groups = groups
-        self.use_bias = use_bias
         self.use_alpha = use_alpha
         if epsilon <= 0:
             raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
+        self.learnable_epsilon = learnable_epsilon
+        self.weight_normalized = weight_normalized
+        self.use_dropconnect = use_dropconnect
+        self.drop_rate = drop_rate
+        self.tie_kernel_bank = tie_kernel_bank
+        self.kernel_bank_size = kernel_bank_size
+        self.kernel_bank_id = kernel_bank_id
+        self._kernel_slice = slice(None)
+
+        # Bias configuration: learnable, constant, or none
+        self._constant_bias_value = None
+        if constant_bias is not None:
+            self._constant_bias_value = float(constant_bias)
+            use_bias = True
+        self.use_bias = use_bias
+        self.constant_bias = constant_bias
 
         self.kernel_initializer = initializers.get(kernel_initializer)
         self.bias_initializer = initializers.get(bias_initializer)
@@ -421,18 +583,56 @@ class YatConv2D(Layer):
                 f"divisible by the number of groups ({self.groups})."
             )
 
-        kernel_shape = tuple(self.kernel_size) + (input_dim // self.groups, self.filters)
+        # Kernel: standalone or from a shared bank
+        if self.tie_kernel_bank:
+            bank_filters = self.kernel_bank_size or self.filters
+            bank_kernel_shape = tuple(self.kernel_size) + (input_dim // self.groups, bank_filters)
+            bank_key = (
+                self.kernel_bank_id,
+                tuple(self.kernel_size),
+                input_dim // self.groups,
+                self.groups,
+            )
+            with type(self)._KERNEL_BANKS_LOCK:
+                shared_kernel = type(self)._KERNEL_BANKS.get(bank_key)
+                if shared_kernel is None:
+                    self.kernel = self.add_weight(
+                        name="kernel",
+                        shape=bank_kernel_shape,
+                        initializer=self.kernel_initializer,
+                        regularizer=self.kernel_regularizer,
+                        constraint=self.kernel_constraint,
+                        trainable=True,
+                    )
+                    type(self)._KERNEL_BANKS[bank_key] = self.kernel
+                else:
+                    existing_filters = shared_kernel.shape[-1]
+                    if bank_filters > existing_filters:
+                        logger.info(
+                            "Auto-expanding Keras kernel bank '%s': %d -> %d filters",
+                            self.kernel_bank_id, existing_filters, bank_filters,
+                        )
+                        new_kernel_val = self.kernel_initializer(bank_kernel_shape, dtype=shared_kernel.dtype)
+                        import numpy as _np
+                        old_arr = _np.array(shared_kernel)
+                        new_arr = _np.array(new_kernel_val)
+                        new_arr[..., :existing_filters] = old_arr
+                        shared_kernel.assign(ops.convert_to_tensor(new_arr))
+                    self.kernel = shared_kernel
+            self._kernel_slice = slice(0, self.filters)
+        else:
+            kernel_shape = tuple(self.kernel_size) + (input_dim // self.groups, self.filters)
+            self.kernel = self.add_weight(
+                name="kernel",
+                shape=kernel_shape,
+                initializer=self.kernel_initializer,
+                regularizer=self.kernel_regularizer,
+                constraint=self.kernel_constraint,
+                trainable=True,
+            )
 
-        self.kernel = self.add_weight(
-            name="kernel",
-            shape=kernel_shape,
-            initializer=self.kernel_initializer,
-            regularizer=self.kernel_regularizer,
-            constraint=self.kernel_constraint,
-            trainable=True,
-        )
-
-        if self.use_bias:
+        # Bias: learnable parameter, or None if constant_bias is set / use_bias=False
+        if self.use_bias and self._constant_bias_value is None:
             self.bias = self.add_weight(
                 name="bias",
                 shape=(self.filters,),
@@ -454,14 +654,56 @@ class YatConv2D(Layer):
         else:
             self.alpha = None
 
+        # Learnable epsilon parameter (softplus-constrained)
+        if self.learnable_epsilon:
+            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            self.epsilon_param = self.add_weight(
+                name="epsilon_param",
+                shape=(1,),
+                initializer=initializers.Constant(raw_eps),
+                trainable=True,
+            )
+        else:
+            self.epsilon_param = None
+
+        # Apply build-time weight normalization (per filter, last axis)
+        # Skipped when tie_kernel_bank to avoid mutating shared state.
+        if self.weight_normalized and not self.tie_kernel_bank:
+            reduce_axes = tuple(range(self.kernel.ndim - 1))
+            kernel_norm = ops.sqrt(
+                ops.sum(ops.square(self.kernel), axis=reduce_axes, keepdims=True)
+            )
+            self.kernel.assign(self.kernel / (kernel_norm + 1e-8))
+
         self.input_spec = InputSpec(ndim=4, axes={channel_axis: input_dim})
         self.built = True
 
-    def call(self, inputs):
+    def call(self, inputs, training=None):
+        kernel = self.kernel
+        # Slice shared bank if tying
+        if self.tie_kernel_bank:
+            kernel = kernel[..., self._kernel_slice]
+
+        # DropConnect: random kernel mask during training
+        if self.use_dropconnect and training and self.drop_rate > 0.0:
+            keep_prob = 1.0 - self.drop_rate
+            mask = ops.cast(
+                ops.random.uniform(ops.shape(kernel), dtype=kernel.dtype) < keep_prob,
+                kernel.dtype,
+            )
+            kernel = (kernel * mask) / keep_prob
+
+        # Optional forward-time weight normalization (per filter, last axis)
+        if self.weight_normalized:
+            reduce_axes = tuple(range(kernel.ndim - 1))
+            kernel = kernel / (
+                ops.sqrt(ops.sum(ops.square(kernel), axis=reduce_axes, keepdims=True)) + 1e-8
+            )
+
         # Compute standard convolution (dot product)
         dot_prod_map = ops.conv(
             inputs,
-            self.kernel,
+            kernel,
             strides=self.strides,
             padding=self.padding,
             data_format=self.data_format,
@@ -470,12 +712,12 @@ class YatConv2D(Layer):
 
         # Compute squared input patches using convolution with ones
         inputs_squared = inputs * inputs
-        
+
         # Create ones kernel for computing patch squared sums
-        input_channels_per_group = self.kernel.shape[-2]
+        input_channels_per_group = kernel.shape[-2]
         ones_kernel_shape = tuple(self.kernel_size) + (input_channels_per_group, 1)
-        ones_kernel = ops.ones(ones_kernel_shape, dtype=self.kernel.dtype)
-        
+        ones_kernel = ops.ones(ones_kernel_shape, dtype=kernel.dtype)
+
         patch_sq_sum_map_raw = ops.conv(
             inputs_squared,
             ones_kernel,
@@ -491,8 +733,13 @@ class YatConv2D(Layer):
         else:
             patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
 
-        # Compute kernel squared sum per filter
-        kernel_sq_sum_per_filter = ops.sum(self.kernel**2, axis=tuple(range(self.kernel.ndim - 1)))
+        # Compute kernel squared sum per filter (1.0 if normalized)
+        if self.weight_normalized:
+            kernel_sq_sum_per_filter = ops.ones((self.filters,), dtype=kernel.dtype)
+        else:
+            kernel_sq_sum_per_filter = ops.sum(
+                kernel ** 2, axis=tuple(range(kernel.ndim - 1))
+            )
 
         # Reshape for broadcasting
         if self.data_format == "channels_first":
@@ -503,17 +750,25 @@ class YatConv2D(Layer):
         # Compute YAT: squared distance
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
 
-        # YAT computation: (dot_product)^2 / (distance_squared + epsilon)
-        outputs = dot_prod_map**2 / (distance_sq_map + self.epsilon)
-
+        # Add bias before squaring (matches all other frameworks: (x·W + b)² / dist)
         if self.use_bias:
-            outputs = ops.add(outputs, self.bias)
+            if self._constant_bias_value is not None:
+                dot_prod_map = dot_prod_map + self._constant_bias_value
+            else:
+                dot_prod_map = ops.add(dot_prod_map, self.bias)
 
-        # Apply alpha scaling
+        # Resolve effective epsilon (learnable via softplus, or constant)
+        if self.learnable_epsilon and self.epsilon_param is not None:
+            eps = ops.softplus(self.epsilon_param)
+        else:
+            eps = self.epsilon
+
+        # YAT computation: (dot_product + bias)^2 / (distance_squared + epsilon)
+        outputs = dot_prod_map ** 2 / (distance_sq_map + eps)
+
+        # Apply alpha scaling (simple multiplicative, matches all other frameworks)
         if self.use_alpha and self.alpha is not None:
-            scale = (ops.sqrt(ops.cast(self.filters, self.compute_dtype)) /
-                    ops.log1p(ops.cast(self.filters, self.compute_dtype))) ** self.alpha
-            outputs = outputs * scale
+            outputs = outputs * self.alpha
 
         return outputs
 
@@ -551,8 +806,16 @@ class YatConv2D(Layer):
             "dilation_rate": self.dilation_rate,
             "groups": self.groups,
             "use_bias": self.use_bias,
+            "constant_bias": self.constant_bias,
             "use_alpha": self.use_alpha,
             "epsilon": self.epsilon,
+            "learnable_epsilon": self.learnable_epsilon,
+            "weight_normalized": self.weight_normalized,
+            "use_dropconnect": self.use_dropconnect,
+            "drop_rate": self.drop_rate,
+            "tie_kernel_bank": self.tie_kernel_bank,
+            "kernel_bank_size": self.kernel_bank_size,
+            "kernel_bank_id": self.kernel_bank_id,
             "kernel_initializer": initializers.serialize(self.kernel_initializer),
             "bias_initializer": initializers.serialize(self.bias_initializer),
             "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
@@ -566,6 +829,10 @@ class YatConv2D(Layer):
 
 @keras_export("keras.layers.YatConv3D")
 class YatConv3D(Layer):
+    # Class-level shared kernel banks (guarded by a lock for thread safety)
+    _KERNEL_BANKS = {}
+    _KERNEL_BANKS_LOCK = threading.Lock()
+
     """3D YAT convolution layer (e.g. spatial convolution over volumes).
 
     This layer creates a convolution kernel that is convolved with the layer
@@ -611,8 +878,16 @@ class YatConv3D(Layer):
         dilation_rate=(1, 1, 1),
         groups=1,
         use_bias=True,
+        constant_bias=None,
         use_alpha=True,
         epsilon=1e-5,
+        learnable_epsilon=False,
+        weight_normalized=False,
+        use_dropconnect=False,
+        drop_rate=0.0,
+        tie_kernel_bank=False,
+        kernel_bank_size=None,
+        kernel_bank_id="default",
         kernel_initializer="orthogonal",
         bias_initializer="zeros",
         kernel_regularizer=None,
@@ -630,11 +905,26 @@ class YatConv3D(Layer):
         self.data_format = data_format
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate, dilation_rate)
         self.groups = groups
-        self.use_bias = use_bias
         self.use_alpha = use_alpha
         if epsilon <= 0:
             raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
+        self.learnable_epsilon = learnable_epsilon
+        self.weight_normalized = weight_normalized
+        self.use_dropconnect = use_dropconnect
+        self.drop_rate = drop_rate
+        self.tie_kernel_bank = tie_kernel_bank
+        self.kernel_bank_size = kernel_bank_size
+        self.kernel_bank_id = kernel_bank_id
+        self._kernel_slice = slice(None)
+
+        # Bias configuration: learnable, constant, or none
+        self._constant_bias_value = None
+        if constant_bias is not None:
+            self._constant_bias_value = float(constant_bias)
+            use_bias = True
+        self.use_bias = use_bias
+        self.constant_bias = constant_bias
 
         self.kernel_initializer = initializers.get(kernel_initializer)
         self.bias_initializer = initializers.get(bias_initializer)
@@ -672,18 +962,56 @@ class YatConv3D(Layer):
                 f"divisible by the number of groups ({self.groups})."
             )
 
-        kernel_shape = tuple(self.kernel_size) + (input_dim // self.groups, self.filters)
+        # Kernel: standalone or from a shared bank
+        if self.tie_kernel_bank:
+            bank_filters = self.kernel_bank_size or self.filters
+            bank_kernel_shape = tuple(self.kernel_size) + (input_dim // self.groups, bank_filters)
+            bank_key = (
+                self.kernel_bank_id,
+                tuple(self.kernel_size),
+                input_dim // self.groups,
+                self.groups,
+            )
+            with type(self)._KERNEL_BANKS_LOCK:
+                shared_kernel = type(self)._KERNEL_BANKS.get(bank_key)
+                if shared_kernel is None:
+                    self.kernel = self.add_weight(
+                        name="kernel",
+                        shape=bank_kernel_shape,
+                        initializer=self.kernel_initializer,
+                        regularizer=self.kernel_regularizer,
+                        constraint=self.kernel_constraint,
+                        trainable=True,
+                    )
+                    type(self)._KERNEL_BANKS[bank_key] = self.kernel
+                else:
+                    existing_filters = shared_kernel.shape[-1]
+                    if bank_filters > existing_filters:
+                        logger.info(
+                            "Auto-expanding Keras kernel bank '%s': %d -> %d filters",
+                            self.kernel_bank_id, existing_filters, bank_filters,
+                        )
+                        new_kernel_val = self.kernel_initializer(bank_kernel_shape, dtype=shared_kernel.dtype)
+                        import numpy as _np
+                        old_arr = _np.array(shared_kernel)
+                        new_arr = _np.array(new_kernel_val)
+                        new_arr[..., :existing_filters] = old_arr
+                        shared_kernel.assign(ops.convert_to_tensor(new_arr))
+                    self.kernel = shared_kernel
+            self._kernel_slice = slice(0, self.filters)
+        else:
+            kernel_shape = tuple(self.kernel_size) + (input_dim // self.groups, self.filters)
+            self.kernel = self.add_weight(
+                name="kernel",
+                shape=kernel_shape,
+                initializer=self.kernel_initializer,
+                regularizer=self.kernel_regularizer,
+                constraint=self.kernel_constraint,
+                trainable=True,
+            )
 
-        self.kernel = self.add_weight(
-            name="kernel",
-            shape=kernel_shape,
-            initializer=self.kernel_initializer,
-            regularizer=self.kernel_regularizer,
-            constraint=self.kernel_constraint,
-            trainable=True,
-        )
-
-        if self.use_bias:
+        # Bias: learnable parameter, or None if constant_bias is set / use_bias=False
+        if self.use_bias and self._constant_bias_value is None:
             self.bias = self.add_weight(
                 name="bias",
                 shape=(self.filters,),
@@ -705,14 +1033,56 @@ class YatConv3D(Layer):
         else:
             self.alpha = None
 
+        # Learnable epsilon parameter (softplus-constrained)
+        if self.learnable_epsilon:
+            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            self.epsilon_param = self.add_weight(
+                name="epsilon_param",
+                shape=(1,),
+                initializer=initializers.Constant(raw_eps),
+                trainable=True,
+            )
+        else:
+            self.epsilon_param = None
+
+        # Apply build-time weight normalization (per filter, last axis)
+        # Skipped when tie_kernel_bank to avoid mutating shared state.
+        if self.weight_normalized and not self.tie_kernel_bank:
+            reduce_axes = tuple(range(self.kernel.ndim - 1))
+            kernel_norm = ops.sqrt(
+                ops.sum(ops.square(self.kernel), axis=reduce_axes, keepdims=True)
+            )
+            self.kernel.assign(self.kernel / (kernel_norm + 1e-8))
+
         self.input_spec = InputSpec(ndim=5, axes={channel_axis: input_dim})
         self.built = True
 
-    def call(self, inputs):
+    def call(self, inputs, training=None):
+        kernel = self.kernel
+        # Slice shared bank if tying
+        if self.tie_kernel_bank:
+            kernel = kernel[..., self._kernel_slice]
+
+        # DropConnect: random kernel mask during training
+        if self.use_dropconnect and training and self.drop_rate > 0.0:
+            keep_prob = 1.0 - self.drop_rate
+            mask = ops.cast(
+                ops.random.uniform(ops.shape(kernel), dtype=kernel.dtype) < keep_prob,
+                kernel.dtype,
+            )
+            kernel = (kernel * mask) / keep_prob
+
+        # Optional forward-time weight normalization (per filter, last axis)
+        if self.weight_normalized:
+            reduce_axes = tuple(range(kernel.ndim - 1))
+            kernel = kernel / (
+                ops.sqrt(ops.sum(ops.square(kernel), axis=reduce_axes, keepdims=True)) + 1e-8
+            )
+
         # Compute standard convolution (dot product)
         dot_prod_map = ops.conv(
             inputs,
-            self.kernel,
+            kernel,
             strides=self.strides,
             padding=self.padding,
             data_format=self.data_format,
@@ -721,12 +1091,12 @@ class YatConv3D(Layer):
 
         # Compute squared input patches using convolution with ones
         inputs_squared = inputs * inputs
-        
+
         # Create ones kernel for computing patch squared sums
-        input_channels_per_group = self.kernel.shape[-2]
+        input_channels_per_group = kernel.shape[-2]
         ones_kernel_shape = tuple(self.kernel_size) + (input_channels_per_group, 1)
-        ones_kernel = ops.ones(ones_kernel_shape, dtype=self.kernel.dtype)
-        
+        ones_kernel = ops.ones(ones_kernel_shape, dtype=kernel.dtype)
+
         patch_sq_sum_map_raw = ops.conv(
             inputs_squared,
             ones_kernel,
@@ -742,8 +1112,13 @@ class YatConv3D(Layer):
         else:
             patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
 
-        # Compute kernel squared sum per filter
-        kernel_sq_sum_per_filter = ops.sum(self.kernel**2, axis=tuple(range(self.kernel.ndim - 1)))
+        # Compute kernel squared sum per filter (1.0 if normalized)
+        if self.weight_normalized:
+            kernel_sq_sum_per_filter = ops.ones((self.filters,), dtype=kernel.dtype)
+        else:
+            kernel_sq_sum_per_filter = ops.sum(
+                kernel ** 2, axis=tuple(range(kernel.ndim - 1))
+            )
 
         # Reshape for broadcasting
         if self.data_format == "channels_first":
@@ -754,17 +1129,25 @@ class YatConv3D(Layer):
         # Compute YAT: squared distance
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
 
-        # YAT computation: (dot_product)^2 / (distance_squared + epsilon)
-        outputs = dot_prod_map**2 / (distance_sq_map + self.epsilon)
-
+        # Add bias before squaring (matches all other frameworks: (x·W + b)² / dist)
         if self.use_bias:
-            outputs = ops.add(outputs, self.bias)
+            if self._constant_bias_value is not None:
+                dot_prod_map = dot_prod_map + self._constant_bias_value
+            else:
+                dot_prod_map = ops.add(dot_prod_map, self.bias)
 
-        # Apply alpha scaling
+        # Resolve effective epsilon (learnable via softplus, or constant)
+        if self.learnable_epsilon and self.epsilon_param is not None:
+            eps = ops.softplus(self.epsilon_param)
+        else:
+            eps = self.epsilon
+
+        # YAT computation: (dot_product + bias)^2 / (distance_squared + epsilon)
+        outputs = dot_prod_map ** 2 / (distance_sq_map + eps)
+
+        # Apply alpha scaling (simple multiplicative, matches all other frameworks)
         if self.use_alpha and self.alpha is not None:
-            scale = (ops.sqrt(ops.cast(self.filters, self.compute_dtype)) /
-                    ops.log1p(ops.cast(self.filters, self.compute_dtype))) ** self.alpha
-            outputs = outputs * scale
+            outputs = outputs * self.alpha
 
         return outputs
 
@@ -798,8 +1181,16 @@ class YatConv3D(Layer):
             "dilation_rate": self.dilation_rate,
             "groups": self.groups,
             "use_bias": self.use_bias,
+            "constant_bias": self.constant_bias,
             "use_alpha": self.use_alpha,
             "epsilon": self.epsilon,
+            "learnable_epsilon": self.learnable_epsilon,
+            "weight_normalized": self.weight_normalized,
+            "use_dropconnect": self.use_dropconnect,
+            "drop_rate": self.drop_rate,
+            "tie_kernel_bank": self.tie_kernel_bank,
+            "kernel_bank_size": self.kernel_bank_size,
+            "kernel_bank_id": self.kernel_bank_id,
             "kernel_initializer": initializers.serialize(self.kernel_initializer),
             "bias_initializer": initializers.serialize(self.bias_initializer),
             "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
@@ -813,6 +1204,10 @@ class YatConv3D(Layer):
 
 @keras_export("keras.layers.YatConvTranspose1D")
 class YatConvTranspose1D(Layer):
+    # Class-level shared kernel banks (guarded by a lock for thread safety)
+    _KERNEL_BANKS = {}
+    _KERNEL_BANKS_LOCK = threading.Lock()
+
     """1D YAT transposed convolution layer (deconvolution).
 
     This layer creates a transposed convolution kernel using the YAT algorithm.
@@ -846,8 +1241,16 @@ class YatConvTranspose1D(Layer):
         data_format=None,
         dilation_rate=1,
         use_bias=True,
+        constant_bias=None,
         use_alpha=True,
         epsilon=1e-5,
+        learnable_epsilon=False,
+        weight_normalized=False,
+        use_dropconnect=False,
+        drop_rate=0.0,
+        tie_kernel_bank=False,
+        kernel_bank_size=None,
+        kernel_bank_id="default",
         kernel_initializer="orthogonal",
         bias_initializer="zeros",
         kernel_regularizer=None,
@@ -864,11 +1267,26 @@ class YatConvTranspose1D(Layer):
         self.padding = padding.lower()
         self.data_format = data_format
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate,)
-        self.use_bias = use_bias
         self.use_alpha = use_alpha
         if epsilon <= 0:
             raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
+        self.learnable_epsilon = learnable_epsilon
+        self.weight_normalized = weight_normalized
+        self.use_dropconnect = use_dropconnect
+        self.drop_rate = drop_rate
+        self.tie_kernel_bank = tie_kernel_bank
+        self.kernel_bank_size = kernel_bank_size
+        self.kernel_bank_id = kernel_bank_id
+        self._kernel_slice = slice(None)
+
+        # Bias configuration: learnable, constant, or none
+        self._constant_bias_value = None
+        if constant_bias is not None:
+            self._constant_bias_value = float(constant_bias)
+            use_bias = True
+        self.use_bias = use_bias
+        self.constant_bias = constant_bias
 
         self.kernel_initializer = initializers.get(kernel_initializer)
         self.bias_initializer = initializers.get(bias_initializer)
@@ -885,28 +1303,70 @@ class YatConvTranspose1D(Layer):
             channel_axis = 1
         else:
             channel_axis = -1
-        
+
         if input_shape[channel_axis] is None:
             raise ValueError(
                 "The channel dimension of the inputs should be defined. "
                 f"Found `None`. Full input shape: {input_shape}"
             )
-        
+
         input_dim = int(input_shape[channel_axis])
-        
-        # Kernel shape for transpose conv: [kernel_size, filters, input_dim]
-        kernel_shape = tuple(self.kernel_size) + (self.filters, input_dim)
 
-        self.kernel = self.add_weight(
-            name="kernel",
-            shape=kernel_shape,
-            initializer=self.kernel_initializer,
-            regularizer=self.kernel_regularizer,
-            constraint=self.kernel_constraint,
-            trainable=True,
-        )
+        # Kernel: standalone or from a shared bank
+        # Transpose conv shape: (*kernel_size, filters, input_dim) — filter axis = len(kernel_size)
+        if self.tie_kernel_bank:
+            bank_filters = self.kernel_bank_size or self.filters
+            bank_kernel_shape = tuple(self.kernel_size) + (bank_filters, input_dim)
+            bank_key = (
+                self.kernel_bank_id,
+                tuple(self.kernel_size),
+                input_dim,
+                "transpose",
+            )
+            with type(self)._KERNEL_BANKS_LOCK:
+                shared_kernel = type(self)._KERNEL_BANKS.get(bank_key)
+                if shared_kernel is None:
+                    self.kernel = self.add_weight(
+                        name="kernel",
+                        shape=bank_kernel_shape,
+                        initializer=self.kernel_initializer,
+                        regularizer=self.kernel_regularizer,
+                        constraint=self.kernel_constraint,
+                        trainable=True,
+                    )
+                    type(self)._KERNEL_BANKS[bank_key] = self.kernel
+                else:
+                    filter_axis = len(self.kernel_size)
+                    existing_filters = shared_kernel.shape[filter_axis]
+                    if bank_filters > existing_filters:
+                        logger.info(
+                            "Auto-expanding Keras kernel bank '%s': %d -> %d filters",
+                            self.kernel_bank_id, existing_filters, bank_filters,
+                        )
+                        new_kernel_val = self.kernel_initializer(bank_kernel_shape, dtype=shared_kernel.dtype)
+                        import numpy as _np
+                        old_arr = _np.array(shared_kernel)
+                        new_arr = _np.array(new_kernel_val)
+                        # Splice along the filter axis
+                        slicer = [slice(None)] * new_arr.ndim
+                        slicer[filter_axis] = slice(0, existing_filters)
+                        new_arr[tuple(slicer)] = old_arr
+                        shared_kernel.assign(ops.convert_to_tensor(new_arr))
+                    self.kernel = shared_kernel
+            self._kernel_slice = slice(0, self.filters)
+        else:
+            kernel_shape = tuple(self.kernel_size) + (self.filters, input_dim)
+            self.kernel = self.add_weight(
+                name="kernel",
+                shape=kernel_shape,
+                initializer=self.kernel_initializer,
+                regularizer=self.kernel_regularizer,
+                constraint=self.kernel_constraint,
+                trainable=True,
+            )
 
-        if self.use_bias:
+        # Bias: learnable parameter, or None if constant_bias is set / use_bias=False
+        if self.use_bias and self._constant_bias_value is None:
             self.bias = self.add_weight(
                 name="bias",
                 shape=(self.filters,),
@@ -928,15 +1388,62 @@ class YatConvTranspose1D(Layer):
         else:
             self.alpha = None
 
+        # Learnable epsilon parameter (softplus-constrained)
+        if self.learnable_epsilon:
+            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            self.epsilon_param = self.add_weight(
+                name="epsilon_param",
+                shape=(1,),
+                initializer=initializers.Constant(raw_eps),
+                trainable=True,
+            )
+        else:
+            self.epsilon_param = None
+
+        # Apply build-time weight normalization (per filter)
+        # Filter axis = len(kernel_size); reduce over all OTHER axes
+        if self.weight_normalized:
+            filter_axis = len(self.kernel_size)
+            reduce_axes = tuple(i for i in range(self.kernel.ndim) if i != filter_axis)
+            kernel_norm = ops.sqrt(
+                ops.sum(ops.square(self.kernel), axis=reduce_axes, keepdims=True)
+            )
+            self.kernel.assign(self.kernel / (kernel_norm + 1e-8))
+
         self.input_dim = input_dim
         self.input_spec = InputSpec(ndim=3, axes={channel_axis: input_dim})
         self.built = True
 
-    def call(self, inputs):
+    def call(self, inputs, training=None):
+        kernel = self.kernel
+        # Slice shared bank if tying (transpose conv: filter axis is at len(kernel_size))
+        if self.tie_kernel_bank:
+            filter_axis = len(self.kernel_size)
+            slicer = [slice(None)] * kernel.ndim
+            slicer[filter_axis] = self._kernel_slice
+            kernel = kernel[tuple(slicer)]
+
+        # DropConnect: random kernel mask during training
+        if self.use_dropconnect and training and self.drop_rate > 0.0:
+            keep_prob = 1.0 - self.drop_rate
+            mask = ops.cast(
+                ops.random.uniform(ops.shape(kernel), dtype=kernel.dtype) < keep_prob,
+                kernel.dtype,
+            )
+            kernel = (kernel * mask) / keep_prob
+
+        # Optional forward-time weight normalization (per filter)
+        if self.weight_normalized:
+            filter_axis = len(self.kernel_size)
+            reduce_axes = tuple(i for i in range(kernel.ndim) if i != filter_axis)
+            kernel = kernel / (
+                ops.sqrt(ops.sum(ops.square(kernel), axis=reduce_axes, keepdims=True)) + 1e-8
+            )
+
         # Compute transposed convolution (dot product)
         dot_prod_map = ops.conv_transpose(
             inputs,
-            self.kernel,
+            kernel,
             strides=self.strides,
             padding=self.padding,
             data_format=self.data_format,
@@ -945,11 +1452,11 @@ class YatConvTranspose1D(Layer):
 
         # Compute squared input for YAT distance
         inputs_squared = inputs * inputs
-        
+
         # Create ones kernel for computing patch squared sums
         ones_kernel_shape = tuple(self.kernel_size) + (1, self.input_dim)
-        ones_kernel = ops.ones(ones_kernel_shape, dtype=self.kernel.dtype)
-        
+        ones_kernel = ops.ones(ones_kernel_shape, dtype=kernel.dtype)
+
         patch_sq_sum_map_raw = ops.conv_transpose(
             inputs_squared,
             ones_kernel,
@@ -961,25 +1468,37 @@ class YatConvTranspose1D(Layer):
 
         patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
 
-        # Compute kernel squared sum per filter
-        kernel_sq_sum_per_filter = ops.sum(self.kernel**2, axis=(0, 2))  # Sum over spatial and input channel dims
+        # Compute kernel squared sum per filter (1.0 if normalized)
+        if self.weight_normalized:
+            kernel_sq_sum_per_filter = ops.ones((self.filters,), dtype=kernel.dtype)
+        else:
+            # Sum over all axes except filter axis (= 1 for 1D transpose)
+            kernel_sq_sum_per_filter = ops.sum(kernel ** 2, axis=(0, 2))
 
         kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, -1))
 
         # Compute YAT: squared distance
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
 
-        # YAT computation: (dot_product)^2 / (distance_squared + epsilon)
-        outputs = dot_prod_map**2 / (distance_sq_map + self.epsilon)
-
+        # Add bias before squaring (matches all other frameworks)
         if self.use_bias:
-            outputs = ops.add(outputs, self.bias)
+            if self._constant_bias_value is not None:
+                dot_prod_map = dot_prod_map + self._constant_bias_value
+            else:
+                dot_prod_map = ops.add(dot_prod_map, self.bias)
 
-        # Apply alpha scaling
+        # Resolve effective epsilon (learnable via softplus, or constant)
+        if self.learnable_epsilon and self.epsilon_param is not None:
+            eps = ops.softplus(self.epsilon_param)
+        else:
+            eps = self.epsilon
+
+        # YAT computation: (dot_product + bias)^2 / (distance_squared + epsilon)
+        outputs = dot_prod_map ** 2 / (distance_sq_map + eps)
+
+        # Apply alpha scaling (simple multiplicative)
         if self.use_alpha and self.alpha is not None:
-            scale = (ops.sqrt(ops.cast(self.filters, self.compute_dtype)) /
-                    ops.log1p(ops.cast(self.filters, self.compute_dtype))) ** self.alpha
-            outputs = outputs * scale
+            outputs = outputs * self.alpha
 
         return outputs
 
@@ -1010,8 +1529,16 @@ class YatConvTranspose1D(Layer):
             "data_format": self.data_format,
             "dilation_rate": self.dilation_rate,
             "use_bias": self.use_bias,
+            "constant_bias": self.constant_bias,
             "use_alpha": self.use_alpha,
             "epsilon": self.epsilon,
+            "learnable_epsilon": self.learnable_epsilon,
+            "weight_normalized": self.weight_normalized,
+            "use_dropconnect": self.use_dropconnect,
+            "drop_rate": self.drop_rate,
+            "tie_kernel_bank": self.tie_kernel_bank,
+            "kernel_bank_size": self.kernel_bank_size,
+            "kernel_bank_id": self.kernel_bank_id,
             "kernel_initializer": initializers.serialize(self.kernel_initializer),
             "bias_initializer": initializers.serialize(self.bias_initializer),
             "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
@@ -1025,6 +1552,10 @@ class YatConvTranspose1D(Layer):
 
 @keras_export("keras.layers.YatConvTranspose2D")
 class YatConvTranspose2D(Layer):
+    # Class-level shared kernel banks (guarded by a lock for thread safety)
+    _KERNEL_BANKS = {}
+    _KERNEL_BANKS_LOCK = threading.Lock()
+
     """2D YAT transposed convolution layer (deconvolution).
 
     This layer creates a transposed convolution kernel using the YAT algorithm.
@@ -1058,8 +1589,16 @@ class YatConvTranspose2D(Layer):
         data_format=None,
         dilation_rate=(1, 1),
         use_bias=True,
+        constant_bias=None,
         use_alpha=True,
         epsilon=1e-5,
+        learnable_epsilon=False,
+        weight_normalized=False,
+        use_dropconnect=False,
+        drop_rate=0.0,
+        tie_kernel_bank=False,
+        kernel_bank_size=None,
+        kernel_bank_id="default",
         kernel_initializer="orthogonal",
         bias_initializer="zeros",
         kernel_regularizer=None,
@@ -1076,11 +1615,26 @@ class YatConvTranspose2D(Layer):
         self.padding = padding.lower()
         self.data_format = data_format
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate)
-        self.use_bias = use_bias
         self.use_alpha = use_alpha
         if epsilon <= 0:
             raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
+        self.learnable_epsilon = learnable_epsilon
+        self.weight_normalized = weight_normalized
+        self.use_dropconnect = use_dropconnect
+        self.drop_rate = drop_rate
+        self.tie_kernel_bank = tie_kernel_bank
+        self.kernel_bank_size = kernel_bank_size
+        self.kernel_bank_id = kernel_bank_id
+        self._kernel_slice = slice(None)
+
+        # Bias configuration: learnable, constant, or none
+        self._constant_bias_value = None
+        if constant_bias is not None:
+            self._constant_bias_value = float(constant_bias)
+            use_bias = True
+        self.use_bias = use_bias
+        self.constant_bias = constant_bias
 
         self.kernel_initializer = initializers.get(kernel_initializer)
         self.bias_initializer = initializers.get(bias_initializer)
@@ -1097,16 +1651,16 @@ class YatConvTranspose2D(Layer):
             channel_axis = 1
         else:
             channel_axis = -1
-        
+
         if input_shape[channel_axis] is None:
             raise ValueError(
                 "The channel dimension of the inputs should be defined. "
                 f"Found `None`. Full input shape: {input_shape}"
             )
-        
+
         input_dim = int(input_shape[channel_axis])
-        
-        # Kernel shape for transpose conv: [h, w, filters, input_dim]
+
+        # Kernel shape for transpose conv: (*kernel_size, filters, input_dim)
         kernel_shape = tuple(self.kernel_size) + (self.filters, input_dim)
 
         self.kernel = self.add_weight(
@@ -1118,7 +1672,8 @@ class YatConvTranspose2D(Layer):
             trainable=True,
         )
 
-        if self.use_bias:
+        # Bias: learnable parameter, or None if constant_bias is set / use_bias=False
+        if self.use_bias and self._constant_bias_value is None:
             self.bias = self.add_weight(
                 name="bias",
                 shape=(self.filters,),
@@ -1140,15 +1695,62 @@ class YatConvTranspose2D(Layer):
         else:
             self.alpha = None
 
+        # Learnable epsilon parameter (softplus-constrained)
+        if self.learnable_epsilon:
+            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            self.epsilon_param = self.add_weight(
+                name="epsilon_param",
+                shape=(1,),
+                initializer=initializers.Constant(raw_eps),
+                trainable=True,
+            )
+        else:
+            self.epsilon_param = None
+
+        # Apply build-time weight normalization (per filter)
+        # Skipped when tie_kernel_bank to avoid mutating shared state.
+        if self.weight_normalized and not self.tie_kernel_bank:
+            filter_axis = len(self.kernel_size)
+            reduce_axes = tuple(i for i in range(self.kernel.ndim) if i != filter_axis)
+            kernel_norm = ops.sqrt(
+                ops.sum(ops.square(self.kernel), axis=reduce_axes, keepdims=True)
+            )
+            self.kernel.assign(self.kernel / (kernel_norm + 1e-8))
+
         self.input_dim = input_dim
         self.input_spec = InputSpec(ndim=4, axes={channel_axis: input_dim})
         self.built = True
 
-    def call(self, inputs):
+    def call(self, inputs, training=None):
+        kernel = self.kernel
+        # Slice shared bank if tying (transpose conv: filter axis is at len(kernel_size))
+        if self.tie_kernel_bank:
+            filter_axis = len(self.kernel_size)
+            slicer = [slice(None)] * kernel.ndim
+            slicer[filter_axis] = self._kernel_slice
+            kernel = kernel[tuple(slicer)]
+
+        # DropConnect: random kernel mask during training
+        if self.use_dropconnect and training and self.drop_rate > 0.0:
+            keep_prob = 1.0 - self.drop_rate
+            mask = ops.cast(
+                ops.random.uniform(ops.shape(kernel), dtype=kernel.dtype) < keep_prob,
+                kernel.dtype,
+            )
+            kernel = (kernel * mask) / keep_prob
+
+        # Optional forward-time weight normalization (per filter)
+        if self.weight_normalized:
+            filter_axis = len(self.kernel_size)
+            reduce_axes = tuple(i for i in range(kernel.ndim) if i != filter_axis)
+            kernel = kernel / (
+                ops.sqrt(ops.sum(ops.square(kernel), axis=reduce_axes, keepdims=True)) + 1e-8
+            )
+
         # Compute transposed convolution (dot product)
         dot_prod_map = ops.conv_transpose(
             inputs,
-            self.kernel,
+            kernel,
             strides=self.strides,
             padding=self.padding,
             data_format=self.data_format,
@@ -1157,11 +1759,11 @@ class YatConvTranspose2D(Layer):
 
         # Compute squared input for YAT distance
         inputs_squared = inputs * inputs
-        
+
         # Create ones kernel for computing patch squared sums
         ones_kernel_shape = tuple(self.kernel_size) + (1, self.input_dim)
-        ones_kernel = ops.ones(ones_kernel_shape, dtype=self.kernel.dtype)
-        
+        ones_kernel = ops.ones(ones_kernel_shape, dtype=kernel.dtype)
+
         patch_sq_sum_map_raw = ops.conv_transpose(
             inputs_squared,
             ones_kernel,
@@ -1173,8 +1775,12 @@ class YatConvTranspose2D(Layer):
 
         patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
 
-        # Compute kernel squared sum per filter
-        kernel_sq_sum_per_filter = ops.sum(self.kernel**2, axis=(0, 1, 3))  # Sum over spatial and input channel dims
+        # Compute kernel squared sum per filter (1.0 if normalized)
+        if self.weight_normalized:
+            kernel_sq_sum_per_filter = ops.ones((self.filters,), dtype=kernel.dtype)
+        else:
+            # Sum over all axes except filter axis (= 2 for 2D transpose)
+            kernel_sq_sum_per_filter = ops.sum(kernel ** 2, axis=(0, 1, 3))
 
         if self.data_format == "channels_first":
             kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, -1, 1, 1))
@@ -1184,17 +1790,25 @@ class YatConvTranspose2D(Layer):
         # Compute YAT: squared distance
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
 
-        # YAT computation: (dot_product)^2 / (distance_squared + epsilon)
-        outputs = dot_prod_map**2 / (distance_sq_map + self.epsilon)
-
+        # Add bias before squaring (matches all other frameworks)
         if self.use_bias:
-            outputs = ops.add(outputs, self.bias)
+            if self._constant_bias_value is not None:
+                dot_prod_map = dot_prod_map + self._constant_bias_value
+            else:
+                dot_prod_map = ops.add(dot_prod_map, self.bias)
 
-        # Apply alpha scaling
+        # Resolve effective epsilon (learnable via softplus, or constant)
+        if self.learnable_epsilon and self.epsilon_param is not None:
+            eps = ops.softplus(self.epsilon_param)
+        else:
+            eps = self.epsilon
+
+        # YAT computation: (dot_product + bias)^2 / (distance_squared + epsilon)
+        outputs = dot_prod_map ** 2 / (distance_sq_map + eps)
+
+        # Apply alpha scaling (simple multiplicative)
         if self.use_alpha and self.alpha is not None:
-            scale = (ops.sqrt(ops.cast(self.filters, self.compute_dtype)) /
-                    ops.log1p(ops.cast(self.filters, self.compute_dtype))) ** self.alpha
-            outputs = outputs * scale
+            outputs = outputs * self.alpha
 
         return outputs
 
@@ -1233,8 +1847,16 @@ class YatConvTranspose2D(Layer):
             "data_format": self.data_format,
             "dilation_rate": self.dilation_rate,
             "use_bias": self.use_bias,
+            "constant_bias": self.constant_bias,
             "use_alpha": self.use_alpha,
             "epsilon": self.epsilon,
+            "learnable_epsilon": self.learnable_epsilon,
+            "weight_normalized": self.weight_normalized,
+            "use_dropconnect": self.use_dropconnect,
+            "drop_rate": self.drop_rate,
+            "tie_kernel_bank": self.tie_kernel_bank,
+            "kernel_bank_size": self.kernel_bank_size,
+            "kernel_bank_id": self.kernel_bank_id,
             "kernel_initializer": initializers.serialize(self.kernel_initializer),
             "bias_initializer": initializers.serialize(self.bias_initializer),
             "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
@@ -1248,6 +1870,10 @@ class YatConvTranspose2D(Layer):
 
 @keras_export("keras.layers.YatConvTranspose3D")
 class YatConvTranspose3D(Layer):
+    # Class-level shared kernel banks (guarded by a lock for thread safety)
+    _KERNEL_BANKS = {}
+    _KERNEL_BANKS_LOCK = threading.Lock()
+
     """3D YAT transposed convolution layer (deconvolution).
 
     This layer creates a transposed convolution kernel using the YAT algorithm.
@@ -1281,8 +1907,16 @@ class YatConvTranspose3D(Layer):
         data_format=None,
         dilation_rate=(1, 1, 1),
         use_bias=True,
+        constant_bias=None,
         use_alpha=True,
         epsilon=1e-5,
+        learnable_epsilon=False,
+        weight_normalized=False,
+        use_dropconnect=False,
+        drop_rate=0.0,
+        tie_kernel_bank=False,
+        kernel_bank_size=None,
+        kernel_bank_id="default",
         kernel_initializer="orthogonal",
         bias_initializer="zeros",
         kernel_regularizer=None,
@@ -1299,11 +1933,26 @@ class YatConvTranspose3D(Layer):
         self.padding = padding.lower()
         self.data_format = data_format
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate, dilation_rate)
-        self.use_bias = use_bias
         self.use_alpha = use_alpha
         if epsilon <= 0:
             raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
+        self.learnable_epsilon = learnable_epsilon
+        self.weight_normalized = weight_normalized
+        self.use_dropconnect = use_dropconnect
+        self.drop_rate = drop_rate
+        self.tie_kernel_bank = tie_kernel_bank
+        self.kernel_bank_size = kernel_bank_size
+        self.kernel_bank_id = kernel_bank_id
+        self._kernel_slice = slice(None)
+
+        # Bias configuration: learnable, constant, or none
+        self._constant_bias_value = None
+        if constant_bias is not None:
+            self._constant_bias_value = float(constant_bias)
+            use_bias = True
+        self.use_bias = use_bias
+        self.constant_bias = constant_bias
 
         self.kernel_initializer = initializers.get(kernel_initializer)
         self.bias_initializer = initializers.get(bias_initializer)
@@ -1329,7 +1978,7 @@ class YatConvTranspose3D(Layer):
 
         input_dim = int(input_shape[channel_axis])
 
-        # Kernel shape for transpose conv: [d, h, w, filters, input_dim]
+        # Kernel shape for transpose conv: (*kernel_size, filters, input_dim)
         kernel_shape = tuple(self.kernel_size) + (self.filters, input_dim)
 
         self.kernel = self.add_weight(
@@ -1341,7 +1990,8 @@ class YatConvTranspose3D(Layer):
             trainable=True,
         )
 
-        if self.use_bias:
+        # Bias: learnable parameter, or None if constant_bias is set / use_bias=False
+        if self.use_bias and self._constant_bias_value is None:
             self.bias = self.add_weight(
                 name="bias",
                 shape=(self.filters,),
@@ -1363,15 +2013,62 @@ class YatConvTranspose3D(Layer):
         else:
             self.alpha = None
 
+        # Learnable epsilon parameter (softplus-constrained)
+        if self.learnable_epsilon:
+            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            self.epsilon_param = self.add_weight(
+                name="epsilon_param",
+                shape=(1,),
+                initializer=initializers.Constant(raw_eps),
+                trainable=True,
+            )
+        else:
+            self.epsilon_param = None
+
+        # Apply build-time weight normalization (per filter)
+        # Skipped when tie_kernel_bank to avoid mutating shared state.
+        if self.weight_normalized and not self.tie_kernel_bank:
+            filter_axis = len(self.kernel_size)
+            reduce_axes = tuple(i for i in range(self.kernel.ndim) if i != filter_axis)
+            kernel_norm = ops.sqrt(
+                ops.sum(ops.square(self.kernel), axis=reduce_axes, keepdims=True)
+            )
+            self.kernel.assign(self.kernel / (kernel_norm + 1e-8))
+
         self.input_dim = input_dim
         self.input_spec = InputSpec(ndim=5, axes={channel_axis: input_dim})
         self.built = True
 
-    def call(self, inputs):
+    def call(self, inputs, training=None):
+        kernel = self.kernel
+        # Slice shared bank if tying (transpose conv: filter axis is at len(kernel_size))
+        if self.tie_kernel_bank:
+            filter_axis = len(self.kernel_size)
+            slicer = [slice(None)] * kernel.ndim
+            slicer[filter_axis] = self._kernel_slice
+            kernel = kernel[tuple(slicer)]
+
+        # DropConnect: random kernel mask during training
+        if self.use_dropconnect and training and self.drop_rate > 0.0:
+            keep_prob = 1.0 - self.drop_rate
+            mask = ops.cast(
+                ops.random.uniform(ops.shape(kernel), dtype=kernel.dtype) < keep_prob,
+                kernel.dtype,
+            )
+            kernel = (kernel * mask) / keep_prob
+
+        # Optional forward-time weight normalization (per filter)
+        if self.weight_normalized:
+            filter_axis = len(self.kernel_size)
+            reduce_axes = tuple(i for i in range(kernel.ndim) if i != filter_axis)
+            kernel = kernel / (
+                ops.sqrt(ops.sum(ops.square(kernel), axis=reduce_axes, keepdims=True)) + 1e-8
+            )
+
         # Compute transposed convolution (dot product)
         dot_prod_map = ops.conv_transpose(
             inputs,
-            self.kernel,
+            kernel,
             strides=self.strides,
             padding=self.padding,
             data_format=self.data_format,
@@ -1383,7 +2080,7 @@ class YatConvTranspose3D(Layer):
 
         # Create ones kernel for computing patch squared sums
         ones_kernel_shape = tuple(self.kernel_size) + (1, self.input_dim)
-        ones_kernel = ops.ones(ones_kernel_shape, dtype=self.kernel.dtype)
+        ones_kernel = ops.ones(ones_kernel_shape, dtype=kernel.dtype)
 
         patch_sq_sum_map_raw = ops.conv_transpose(
             inputs_squared,
@@ -1396,9 +2093,12 @@ class YatConvTranspose3D(Layer):
 
         patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
 
-        # Compute kernel squared sum per filter
-        # Kernel shape: [d, h, w, filters, input_dim] — sum over spatial dims (0,1,2) and input_dim (4)
-        kernel_sq_sum_per_filter = ops.sum(self.kernel**2, axis=(0, 1, 2, 4))
+        # Compute kernel squared sum per filter (1.0 if normalized)
+        # Kernel shape: [d, h, w, filters, input_dim] — sum over spatial (0,1,2) and input_dim (4)
+        if self.weight_normalized:
+            kernel_sq_sum_per_filter = ops.ones((self.filters,), dtype=kernel.dtype)
+        else:
+            kernel_sq_sum_per_filter = ops.sum(kernel ** 2, axis=(0, 1, 2, 4))
 
         if self.data_format == "channels_first":
             kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, -1, 1, 1, 1))
@@ -1408,17 +2108,25 @@ class YatConvTranspose3D(Layer):
         # Compute YAT: squared distance
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
 
-        # YAT computation: (dot_product)^2 / (distance_squared + epsilon)
-        outputs = dot_prod_map**2 / (distance_sq_map + self.epsilon)
-
+        # Add bias before squaring (matches all other frameworks)
         if self.use_bias:
-            outputs = ops.add(outputs, self.bias)
+            if self._constant_bias_value is not None:
+                dot_prod_map = dot_prod_map + self._constant_bias_value
+            else:
+                dot_prod_map = ops.add(dot_prod_map, self.bias)
 
-        # Apply alpha scaling
+        # Resolve effective epsilon (learnable via softplus, or constant)
+        if self.learnable_epsilon and self.epsilon_param is not None:
+            eps = ops.softplus(self.epsilon_param)
+        else:
+            eps = self.epsilon
+
+        # YAT computation: (dot_product + bias)^2 / (distance_squared + epsilon)
+        outputs = dot_prod_map ** 2 / (distance_sq_map + eps)
+
+        # Apply alpha scaling (simple multiplicative)
         if self.use_alpha and self.alpha is not None:
-            scale = (ops.sqrt(ops.cast(self.filters, self.compute_dtype)) /
-                    ops.log1p(ops.cast(self.filters, self.compute_dtype))) ** self.alpha
-            outputs = outputs * scale
+            outputs = outputs * self.alpha
 
         return outputs
 
@@ -1452,8 +2160,16 @@ class YatConvTranspose3D(Layer):
             "data_format": self.data_format,
             "dilation_rate": self.dilation_rate,
             "use_bias": self.use_bias,
+            "constant_bias": self.constant_bias,
             "use_alpha": self.use_alpha,
             "epsilon": self.epsilon,
+            "learnable_epsilon": self.learnable_epsilon,
+            "weight_normalized": self.weight_normalized,
+            "use_dropconnect": self.use_dropconnect,
+            "drop_rate": self.drop_rate,
+            "tie_kernel_bank": self.tie_kernel_bank,
+            "kernel_bank_size": self.kernel_bank_size,
+            "kernel_bank_id": self.kernel_bank_id,
             "kernel_initializer": initializers.serialize(self.kernel_initializer),
             "bias_initializer": initializers.serialize(self.bias_initializer),
             "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),

@@ -28,16 +28,21 @@ class YatNMN(nn.Module):
         in_features (int): Size of each input sample
         out_features (int): Size of each output sample
         bias (bool): Whether to add a bias to the output
+        constant_bias: If a float, use that value as a fixed (non-learnable) bias
+            constant. If None (default), use learnable bias when bias=True.
         alpha (bool): Whether to multiply with alpha. Ignored if constant_alpha is set.
         constant_alpha: If True, use sqrt(2) as constant alpha. If a float, use that value.
             If None (default), use learnable alpha when alpha=True.
         dtype (torch.dtype): Data type for computation (default: infer from input and params).
         param_dtype (torch.dtype): Data type for parameter initialization (default: float32).
         epsilon (float): Small constant to avoid division by zero
+        learnable_epsilon (bool): If True, epsilon becomes a learnable parameter passed
+            through softplus to guarantee strict positivity (default: False).
         spherical (bool): Whether to use spherical mode (normalize inputs and kernel)
-        weight_normalized (bool): If True, normalize each neuron (column) of the kernel to
-            have norm 1. This optimization avoids recomputing kernel norms in YAT
-            distance calculation since they are guaranteed to be 1.0.
+        weight_normalized (bool): If True, normalize each neuron (row) of the kernel
+            to have norm 1. (PyTorch kernels use shape ``(out_features, in_features)``,
+            so each row is one neuron.) This optimization avoids recomputing kernel
+            norms in YAT distance calculation since they are guaranteed to be 1.0.
         tie_kernel_bank (bool): If True, reuse shared kernels across compatible layers.
         kernel_bank_size (int): Optional explicit size for shared bank (auto-expands if needed).
         kernel_bank_id (str): Namespace for shared banks (allows multiple independent banks).
@@ -57,11 +62,13 @@ class YatNMN(nn.Module):
         in_features: int,
         out_features: int,
         bias: bool = True,
+        constant_bias: Optional[float] = None,
         alpha: bool = True,
         constant_alpha: Optional[Union[bool, float]] = None,
         dtype: Optional[torch.dtype] = None,
         param_dtype: torch.dtype = torch.float32,
         epsilon: float = 1e-5,
+        learnable_epsilon: bool = False,
         spherical: bool = False,
         positive_init: bool = False,
         weight_normalized: bool = False,
@@ -82,6 +89,15 @@ class YatNMN(nn.Module):
         if epsilon <= 0:
             raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
+        self.learnable_epsilon = learnable_epsilon
+        if learnable_epsilon:
+            # Initialize so that softplus(raw) ≈ epsilon: raw = log(exp(eps) - 1)
+            raw_eps = math.log(math.exp(epsilon) - 1.0)
+            self.epsilon_param = nn.Parameter(
+                torch.full((1,), raw_eps, dtype=param_dtype)
+            )
+        else:
+            self.register_parameter('epsilon_param', None)
         self.spherical = spherical
         self.positive_init = positive_init
         self.weight_normalized = weight_normalized
@@ -166,14 +182,21 @@ class YatNMN(nn.Module):
         self.use_alpha = alpha
         self.constant_alpha = constant_alpha
 
-        # Bias parameter
-        if bias:
+        # Bias parameter (learnable, constant, or none)
+        self._constant_bias_value: Optional[float] = None
+        if constant_bias is not None:
+            self._constant_bias_value = float(constant_bias)
+            self.register_parameter('bias', None)
+            bias = True  # Bias is applied (but constant)
+        elif bias:
             self.bias = nn.Parameter(torch.empty(
                 (out_features,),
                 dtype=param_dtype
             ))
         else:
             self.register_parameter('bias', None)
+        self.use_bias = bias
+        self.constant_bias = constant_bias
 
         # Initialize parameters
         self.reset_parameters(kernel_init, bias_init, alpha_init)
@@ -200,7 +223,7 @@ class YatNMN(nn.Module):
             with torch.no_grad():
                 self.weight.abs_()
 
-        # Bias initialization
+        # Bias initialization (only for learnable bias)
         if self.bias is not None:
             if bias_init is None:
                 # Default: uniform initialization
@@ -209,6 +232,8 @@ class YatNMN(nn.Module):
                 nn.init.uniform_(self.bias, -bound, bound)
             else:
                 bias_init(self.bias)
+        # Note: when constant_bias is set, self.bias is None and the constant
+        # value is held in self._constant_bias_value (used at forward time)
 
         # Alpha initialization (default to 1.0)
         if self.alpha is not None:
@@ -257,7 +282,17 @@ class YatNMN(nn.Module):
         # Slice shared kernel if tying is enabled
         if self.tie_kernel_bank:
             kernel = kernel[self._kernel_slice]
-        bias = self.bias
+
+        # Resolve bias (learnable or constant)
+        if self._constant_bias_value is not None:
+            bias = torch.full(
+                (self.out_features,),
+                self._constant_bias_value,
+                dtype=self.param_dtype,
+                device=kernel.device,
+            )
+        else:
+            bias = self.bias
         alpha_param = self.alpha if self.alpha is not None else None
 
         # Promote all tensors to computation dtype
@@ -300,8 +335,14 @@ class YatNMN(nn.Module):
             # Clamp to zero: bf16 cancellation can make distance negative when x ≈ W
             distances = (inputs_squared_sum + kernel_squared_sum - 2 * dot_for_dist).clamp(min=0.0)
 
+        # Resolve effective epsilon (learnable via softplus, or constant)
+        if self.learnable_epsilon and self.epsilon_param is not None:
+            eps = F.softplus(self.epsilon_param.to(distances.dtype))
+        else:
+            eps = self.epsilon
+
         # Apply squared Euclidean distance transformation: (x·W + b)² / (||x - W||² + ε)
-        y = y ** 2 / (distances + self.epsilon)
+        y = y ** 2 / (distances + eps)
 
         # Dynamic scaling
         if self._constant_alpha_value is not None:

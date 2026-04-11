@@ -50,10 +50,12 @@ class YatNMN(Layer):
         self,
         units,
         use_bias=True,
+        constant_bias=None,
         use_alpha=True,
         constant_alpha=None,
         positive_init=False,
         epsilon=1e-5,
+        learnable_epsilon=False,
         spherical=False,
         weight_normalized=False,
         kernel_initializer="glorot_normal",
@@ -67,13 +69,21 @@ class YatNMN(Layer):
     ):
         super().__init__(activity_regularizer=activity_regularizer, **kwargs)
         self.units = units
-        self.use_bias = use_bias
         if epsilon <= 0:
             raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
+        self.learnable_epsilon = learnable_epsilon
         self.positive_init = positive_init
         self.spherical = spherical
         self.weight_normalized = weight_normalized
+
+        # Bias configuration: learnable, constant, or none
+        self._constant_bias_value = None
+        if constant_bias is not None:
+            self._constant_bias_value = float(constant_bias)
+            use_bias = True  # Bias is applied (but constant)
+        self.use_bias = use_bias
+        self.constant_bias = constant_bias
 
         # Handle alpha configuration
         self._constant_alpha_value = None
@@ -108,7 +118,8 @@ class YatNMN(Layer):
             trainable=True,
         )
 
-        if self.use_bias:
+        # Bias: learnable parameter, or None if constant_bias is set / use_bias=False
+        if self.use_bias and self._constant_bias_value is None:
             self.bias = self.add_weight(
                 name="bias",
                 shape=(self.units,),
@@ -131,13 +142,26 @@ class YatNMN(Layer):
         else:
             self.alpha = None
 
+        # Learnable epsilon parameter (softplus-constrained)
+        if self.learnable_epsilon:
+            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            self.epsilon_param = self.add_weight(
+                name="epsilon_param",
+                shape=(1,),
+                initializer=initializers.Constant(raw_eps),
+                trainable=True,
+            )
+        else:
+            self.epsilon_param = None
+
         # Apply positive init: abs(kernel)
         if self.positive_init:
             self.kernel.assign(ops.abs(self.kernel))
 
-        # Normalize kernel rows to unit norm if weight_normalized
+        # Normalize each kernel column (neuron) to unit norm if weight_normalized.
+        # Kernel shape is (input_dim, units) → each neuron is a column → axis=0.
         if self.weight_normalized:
-            weight_norm = ops.sqrt(ops.sum(ops.square(self.kernel), axis=-1, keepdims=True))
+            weight_norm = ops.sqrt(ops.sum(ops.square(self.kernel), axis=0, keepdims=True))
             self.kernel.assign(self.kernel / (weight_norm + 1e-8))
 
         self.input_spec = InputSpec(min_ndim=2, axes={-1: input_dim})
@@ -152,9 +176,10 @@ class YatNMN(Layer):
             inputs = inputs / (ops.sqrt(ops.sum(ops.square(inputs), axis=-1, keepdims=True)) + 1e-8)
             kernel = kernel / (ops.sqrt(ops.sum(ops.square(kernel), axis=0, keepdims=True)) + 1e-8)
 
-        # Weight normalization: normalize each kernel row to unit norm at forward time
+        # Weight normalization: normalize each kernel column (neuron) at forward time.
+        # Kernel shape is (input_dim, units) → axis=0 to normalize per neuron.
         if self.weight_normalized:
-            kernel = kernel / (ops.sqrt(ops.sum(ops.square(kernel), axis=-1, keepdims=True)) + 1e-8)
+            kernel = kernel / (ops.sqrt(ops.sum(ops.square(kernel), axis=0, keepdims=True)) + 1e-8)
 
         # Compute dot product
         dot_product = ops.matmul(inputs, kernel)
@@ -174,10 +199,19 @@ class YatNMN(Layer):
 
         # Add bias inside the numerator square: (dot + bias)^2 / dist
         if self.use_bias:
-            dot_product = ops.add(dot_product, self.bias)
+            if self._constant_bias_value is not None:
+                dot_product = dot_product + self._constant_bias_value
+            else:
+                dot_product = ops.add(dot_product, self.bias)
+
+        # Resolve effective epsilon (learnable via softplus, or constant)
+        if self.learnable_epsilon and self.epsilon_param is not None:
+            eps = ops.softplus(self.epsilon_param)
+        else:
+            eps = self.epsilon
 
         # Compute inverse square attention
-        outputs = dot_product ** 2 / (distances + self.epsilon)
+        outputs = dot_product ** 2 / (distances + eps)
 
         # Apply alpha scaling
         if self._constant_alpha_value is not None:
@@ -198,10 +232,12 @@ class YatNMN(Layer):
         config.update({
             "units": self.units,
             "use_bias": self.use_bias,
+            "constant_bias": self.constant_bias,
             "use_alpha": self.use_alpha,
             "constant_alpha": self.constant_alpha,
             "positive_init": self.positive_init,
             "epsilon": self.epsilon,
+            "learnable_epsilon": self.learnable_epsilon,
             "spherical": self.spherical,
             "weight_normalized": self.weight_normalized,
             "kernel_initializer": initializers.serialize(self.kernel_initializer),

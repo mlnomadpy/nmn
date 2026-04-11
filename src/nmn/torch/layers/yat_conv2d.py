@@ -55,12 +55,14 @@ class YatConv2D(Conv2d):
         dilation: _size_2_t = 1,
         groups: int = 1,
         bias: bool = True,
+        constant_bias: Optional[float] = None,
         padding_mode: str = "zeros",
         use_alpha: bool = True,
         constant_alpha: Optional[Union[bool, float]] = None,
         use_dropconnect: bool = False,
         mask: Optional[Tensor] = None,
         epsilon: float = 1e-5,
+        learnable_epsilon: bool = False,
         drop_rate: float = 0.0,
         weight_normalized: bool = False,
         tie_kernel_bank: bool = False,
@@ -87,7 +89,10 @@ class YatConv2D(Conv2d):
             bank_out_channels = kernel_bank_size or out_channels
         else:
             bank_out_channels = out_channels
-            
+
+        # If constant_bias is set, don't allocate a learnable bias in the parent.
+        parent_bias = False if constant_bias is not None else bias
+
         super().__init__(
             in_channels,
             bank_out_channels,
@@ -96,11 +101,18 @@ class YatConv2D(Conv2d):
             padding,
             dilation,
             groups,
-            bias,
+            parent_bias,
             padding_mode,
             device,
             storage_dtype,
         )
+
+        # Constant bias handling
+        self._constant_bias_value: Optional[float] = None
+        if constant_bias is not None:
+            self._constant_bias_value = float(constant_bias)
+            bias = True  # Bias is applied (but constant)
+        self.constant_bias = constant_bias
 
         self.compute_dtype = dtype
         self.param_dtype = storage_dtype
@@ -108,6 +120,14 @@ class YatConv2D(Conv2d):
         if epsilon <= 0:
             raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
+        self.learnable_epsilon = learnable_epsilon
+        if learnable_epsilon:
+            raw_eps = math.log(math.exp(epsilon) - 1.0)
+            self.epsilon_param = nn.Parameter(
+                torch.full((1,), raw_eps, dtype=storage_dtype if storage_dtype else torch.float32)
+            )
+        else:
+            self.register_parameter('epsilon_param', None)
         self.drop_rate = drop_rate
         self.weight_normalized = weight_normalized
         self.tie_kernel_bank = tie_kernel_bank
@@ -194,7 +214,16 @@ class YatConv2D(Conv2d):
 
     def _yat_forward(self, input: Tensor, conv_fn: callable, deterministic: bool = False) -> Tensor:
         weight = self.weight
-        bias_val = self.bias
+        # Resolve bias (learnable or constant)
+        if self._constant_bias_value is not None:
+            bias_val = torch.full(
+                (self._actual_out_channels,),
+                self._constant_bias_value,
+                dtype=self.param_dtype if self.param_dtype is not None else weight.dtype,
+                device=weight.device,
+            )
+        else:
+            bias_val = self.bias
 
         # Get alpha value (constant or learnable)
         if self._constant_alpha_value is not None:
@@ -292,8 +321,14 @@ class YatConv2D(Conv2d):
         if bias_val is not None:
             dot_prod_map = dot_prod_map + bias_val.view(*view_shape)
 
+        # Resolve effective epsilon (learnable via softplus, or constant)
+        if self.learnable_epsilon and self.epsilon_param is not None:
+            eps = F.softplus(self.epsilon_param.to(distance_sq_map.dtype))
+        else:
+            eps = self.epsilon
+
         # YAT computation: (dot_product + bias)^2 / (distance_squared + epsilon)
-        y = dot_prod_map**2 / (distance_sq_map + self.epsilon)
+        y = dot_prod_map**2 / (distance_sq_map + eps)
 
         # Apply alpha scaling if enabled
         if self._constant_alpha_value is not None:
