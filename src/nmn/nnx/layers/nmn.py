@@ -64,6 +64,9 @@ class YatNMN(Module):
     softplus_bias: if True, the learnable bias parameter is passed through
       softplus in the forward pass to guarantee strict positivity (default: False).
       Ignored when constant_bias is set or use_bias=False.
+    scalar_bias: if True, the learnable bias is a single scalar (shape ``(1,)``)
+      shared and broadcast across all ``out_features`` neurons (default: False).
+      Ignored when constant_bias is set or use_bias=False.
     use_alpha: whether to use alpha scaling (default: True). Ignored if constant_alpha is set.
     constant_alpha: if True, use sqrt(2) as constant alpha. If a float, use that value.
       If None (default), use learnable alpha when use_alpha=True.
@@ -111,6 +114,7 @@ class YatNMN(Module):
     use_bias: bool = True,
     constant_bias: tp.Optional[float] = None,
     softplus_bias: bool = False,
+    scalar_bias: bool = False,
     use_alpha: bool = True,
     constant_alpha: tp.Optional[tp.Union[bool, float]] = None,
     positive_init: bool = False,
@@ -203,7 +207,8 @@ class YatNMN(Module):
       use_bias = True  # Bias is applied (but constant)
     elif use_bias:
       bias_key = rngs.params()
-      self.bias = nnx.Param(bias_init(bias_key, (out_features,), param_dtype))
+      bias_shape = (1,) if scalar_bias else (out_features,)
+      self.bias = nnx.Param(bias_init(bias_key, bias_shape, param_dtype))
     else:
       self.bias = None
 
@@ -243,6 +248,7 @@ class YatNMN(Module):
     self.use_bias = use_bias
     self.constant_bias = constant_bias
     self.softplus_bias = softplus_bias and self.bias is not None
+    self.scalar_bias = scalar_bias and self.bias is not None
     self.constant_alpha = constant_alpha
     self.use_dropconnect = use_dropconnect
     self.dtype = dtype

@@ -86,6 +86,9 @@ class YatConv(Module):
         softplus_bias: If True, the learnable bias parameter is passed through
             softplus in the forward pass to guarantee strict positivity
             (default: False). Ignored when constant_bias is set or use_bias=False.
+        scalar_bias: If True, the learnable bias is a single scalar (shape
+            ``(1,)``) shared and broadcast across all ``out_features`` filters
+            (default: False). Ignored when constant_bias is set or use_bias=False.
         use_alpha: Whether to use alpha scaling (default: True).
         constant_alpha: If True, use sqrt(2) as constant alpha. If float,
             use that value. If None (default), use learnable alpha.
@@ -130,6 +133,7 @@ class YatConv(Module):
         use_bias: bool = True,
         constant_bias: tp.Optional[float] = None,
         softplus_bias: bool = False,
+        scalar_bias: bool = False,
         use_alpha: bool = True,
         constant_alpha: tp.Optional[tp.Union[bool, float]] = None,
         use_dropconnect: bool = False,
@@ -230,7 +234,7 @@ class YatConv(Module):
             self.bias = None
             use_bias = True  # Bias is applied (but constant)
         elif use_bias:
-            bias_shape = (out_features,)
+            bias_shape = (1,) if scalar_bias else (out_features,)
             bias_key = rngs.params()
             self.bias = nnx.Param(bias_init(bias_key, bias_shape, param_dtype))
         else:
@@ -265,6 +269,7 @@ class YatConv(Module):
         self.use_bias = use_bias
         self.constant_bias = constant_bias
         self.softplus_bias = softplus_bias and self.bias is not None
+        self.scalar_bias = scalar_bias and self.bias is not None
         self.use_alpha = use_alpha
         self.constant_alpha = constant_alpha
         self.use_dropconnect = use_dropconnect
