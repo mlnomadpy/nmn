@@ -30,6 +30,13 @@ class YatNMN(nn.Module):
         bias (bool): Whether to add a bias to the output
         constant_bias: If a float, use that value as a fixed (non-learnable) bias
             constant. If None (default), use learnable bias when bias=True.
+        softplus_bias (bool): If True, the learnable bias parameter is passed
+            through softplus in the forward pass to guarantee strict positivity
+            (default: False). Ignored when constant_bias is set or bias=False.
+        scalar_bias (bool): If True, the learnable bias is a single scalar
+            (shape ``(1,)``) shared and broadcast across all ``out_features``
+            neurons (default: False). Ignored when constant_bias is set or
+            bias=False.
         alpha (bool): Whether to multiply with alpha. Ignored if constant_alpha is set.
         constant_alpha: If True, use sqrt(2) as constant alpha. If a float, use that value.
             If None (default), use learnable alpha when alpha=True.
@@ -63,6 +70,8 @@ class YatNMN(nn.Module):
         out_features: int,
         bias: bool = True,
         constant_bias: Optional[float] = None,
+        softplus_bias: bool = False,
+        scalar_bias: bool = False,
         alpha: bool = True,
         constant_alpha: Optional[Union[bool, float]] = None,
         dtype: Optional[torch.dtype] = None,
@@ -189,14 +198,17 @@ class YatNMN(nn.Module):
             self.register_parameter('bias', None)
             bias = True  # Bias is applied (but constant)
         elif bias:
+            bias_shape = (1,) if scalar_bias else (out_features,)
             self.bias = nn.Parameter(torch.empty(
-                (out_features,),
+                bias_shape,
                 dtype=param_dtype
             ))
         else:
             self.register_parameter('bias', None)
         self.use_bias = bias
         self.constant_bias = constant_bias
+        self.softplus_bias = softplus_bias and self.bias is not None
+        self.scalar_bias = scalar_bias and self.bias is not None
 
         # Initialize parameters
         self.reset_parameters(kernel_init, bias_init, alpha_init)
@@ -293,6 +305,8 @@ class YatNMN(nn.Module):
             )
         else:
             bias = self.bias
+            if bias is not None and self.softplus_bias:
+                bias = F.softplus(bias)
         alpha_param = self.alpha if self.alpha is not None else None
 
         # Promote all tensors to computation dtype

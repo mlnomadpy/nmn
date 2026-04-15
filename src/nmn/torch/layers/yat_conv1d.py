@@ -54,6 +54,8 @@ class YatConv1D(Conv1d):
         groups: int = 1,
         bias: bool = True,
         constant_bias: Optional[float] = None,
+        softplus_bias: bool = False,
+        scalar_bias: bool = False,
         padding_mode: str = "zeros",
         use_alpha: bool = True,
         constant_alpha: Optional[Union[bool, float]] = None,
@@ -79,8 +81,9 @@ class YatConv1D(Conv1d):
         else:
             bank_out_channels = out_channels
 
-        # If constant_bias is set, don't allocate a learnable bias in the parent.
-        parent_bias = False if constant_bias is not None else bias
+        # If constant_bias or scalar_bias is set, don't allocate a per-channel
+        # learnable bias in the parent — we handle bias ourselves.
+        parent_bias = False if (constant_bias is not None or scalar_bias) else bias
 
         super().__init__(
             in_channels,
@@ -102,6 +105,14 @@ class YatConv1D(Conv1d):
             self._constant_bias_value = float(constant_bias)
             bias = True
         self.constant_bias = constant_bias
+
+        # Scalar bias: allocate a shared-scalar learnable parameter that
+        # broadcasts across all output channels.
+        if scalar_bias and constant_bias is None and bias:
+            bias_param_dtype = storage_dtype if storage_dtype is not None else torch.float32
+            self.bias = nn.Parameter(torch.zeros((1,), dtype=bias_param_dtype, device=device))
+        self.softplus_bias = softplus_bias and self.bias is not None
+        self.scalar_bias = scalar_bias and self.bias is not None
 
         self.compute_dtype = dtype
         self.param_dtype = storage_dtype
@@ -212,6 +223,8 @@ class YatConv1D(Conv1d):
             )
         else:
             bias_val = self.bias
+            if bias_val is not None and self.softplus_bias:
+                bias_val = F.softplus(bias_val)
 
         # Get alpha value (constant or learnable)
         if self._constant_alpha_value is not None:
