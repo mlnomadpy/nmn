@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import threading
 import typing as tp
 
@@ -86,7 +87,6 @@ class YatNMN(Module):
     epsilon: A small float added to the denominator to prevent division by zero.
     learnable_epsilon: if True, epsilon becomes a learnable parameter passed
       through softplus to guarantee strict positivity (default: False).
-      Disables the fused kernel path since autodiff must flow through epsilon.
     drop_rate: dropout rate for DropConnect (default: 0.0).
     weight_normalized: if True, normalize each neuron (column) of the kernel to
       have norm 1. This optimization avoids recomputing kernel norms in YAT
@@ -345,11 +345,12 @@ class YatNMN(Module):
     else:
       eps = self.epsilon
 
-    # ── Fused path: custom_vjp saves only (x, W, dot, dist) ──────────
-    # Disabled when epsilon is learnable (autodiff must flow through epsilon)
-    if self.fused and not self.spherical and bias is None and not self.learnable_epsilon:
-      return _fused_yat_call(inputs, kernel, alpha, self.epsilon,
-                             self._constant_alpha_value)
+    # ── Fused path: custom_vjp saves only (x, W, dot, dist, bias, eps) ──
+    if self.fused and not self.spherical:
+      return _fused_yat_call(
+        inputs, kernel, alpha, bias, eps,
+        self._constant_alpha_value,
+      )
 
     # ── Standard path ──────────────────────────────────────────────────
     # Upcast to float32 for YAT score computation.
@@ -395,166 +396,160 @@ class YatNMN(Module):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Fused YatNMN kernel — custom_vjp for reduced activation memory
+# Fused YatNMN kernel — unified custom_vjp for reduced activation memory
 #
 # Standard autodiff saves 5+ intermediates (dot, dot_sq, x_sq, w_sq, dist, out).
-# The fused version saves only (x, kernel, alpha, dot, dist) and recomputes
-# dot_sq, x_sq, w_sq during backward. This gives ~7-8x activation memory
-# reduction with negligible compute overhead (element-wise ops vs matmuls).
+# The fused version saves only (x, kernel, alpha, bias, eps, dot, dist) and
+# recomputes dot_sq, x_sq, w_sq during backward.
+#
+# Supports all combinations of: bias / no-bias, learnable / constant epsilon,
+# learnable / constant / no alpha.  Boolean flags via nondiff_argnums let JAX
+# eliminate dead branches at trace time — zero runtime overhead.
 # ══════════════════════════════════════════════════════════════════════════════
 
 
-def _fused_yat_call(inputs, kernel, alpha, epsilon, constant_alpha_value):
-  """Dispatch to fused forward, handling alpha variants."""
+def _fused_yat_call(inputs, kernel, alpha, bias, eps, constant_alpha_value):
+  """Dispatch to unified fused forward."""
+  # Alpha array + grad flag
   if constant_alpha_value is not None:
-    # Constant alpha — pass as a scalar array, no grad needed
     a = jnp.array(constant_alpha_value, dtype=jnp.float32)
-    return _fused_yat_const_alpha(inputs, kernel, a, epsilon)
+    has_alpha_grad = False
   elif alpha is not None:
-    # Learnable alpha — full custom_vjp with alpha grad
-    return _fused_yat_with_alpha(inputs, kernel, alpha, epsilon)
+    a = alpha
+    has_alpha_grad = True
   else:
-    # No alpha
-    return _fused_yat_no_alpha(inputs, kernel, epsilon)
+    a = jnp.array(1.0, dtype=jnp.float32)
+    has_alpha_grad = False
+
+  # Bias array + flag
+  if bias is not None:
+    b = bias
+    has_bias = True
+  else:
+    b = jnp.zeros(1, dtype=jnp.float32)
+    has_bias = False
+
+  # Epsilon — if it's a JAX array (from softplus), it's learnable
+  if isinstance(eps, jnp.ndarray):
+    e = eps
+    has_eps_grad = True
+  else:
+    e = jnp.array(eps, dtype=jnp.float32)
+    has_eps_grad = False
+
+  return _fused_yat(inputs, kernel, a, b, e, has_alpha_grad, has_bias, has_eps_grad)
 
 
-# ── No alpha variant ──
+# ── Unified custom_vjp ──
 
-@jax.custom_vjp
-def _fused_yat_no_alpha(x, kernel, epsilon):
-  x_f32 = x.astype(jnp.float32)
-  w_f32 = kernel.astype(jnp.float32)
-  dot = x_f32 @ w_f32
-  x_sq = jnp.sum(x_f32 ** 2, axis=-1, keepdims=True)
-  w_sq = jnp.sum(w_f32 ** 2, axis=0, keepdims=True)
-  dist = jnp.maximum(x_sq + w_sq - 2 * dot, 0.0) + epsilon
-  return (dot ** 2 / dist).astype(x.dtype)
-
-def _fused_yat_no_alpha_fwd(x, kernel, epsilon):
-  x_f32 = x.astype(jnp.float32)
-  w_f32 = kernel.astype(jnp.float32)
-  dot = x_f32 @ w_f32
-  x_sq = jnp.sum(x_f32 ** 2, axis=-1, keepdims=True)
-  w_sq = jnp.sum(w_f32 ** 2, axis=0, keepdims=True)
-  dist = jnp.maximum(x_sq + w_sq - 2 * dot, 0.0) + epsilon
-  out = (dot ** 2 / dist).astype(x.dtype)
-  return out, (x, kernel, dot, dist)
-
-def _fused_yat_no_alpha_bwd(res, g):
-  x, kernel, dot, dist = res
-  g_x, g_w = _fused_yat_grad_xw(x, kernel, dot, dist, g, alpha_val=1.0)
-  return g_x, g_w, None
-
-_fused_yat_no_alpha.defvjp(_fused_yat_no_alpha_fwd, _fused_yat_no_alpha_bwd)
-
-
-# ── Constant alpha variant ──
-
-@jax.custom_vjp
-def _fused_yat_const_alpha(x, kernel, alpha, epsilon):
-  x_f32 = x.astype(jnp.float32)
-  w_f32 = kernel.astype(jnp.float32)
-  dot = x_f32 @ w_f32
-  x_sq = jnp.sum(x_f32 ** 2, axis=-1, keepdims=True)
-  w_sq = jnp.sum(w_f32 ** 2, axis=0, keepdims=True)
-  dist = jnp.maximum(x_sq + w_sq - 2 * dot, 0.0) + epsilon
-  return (alpha * dot ** 2 / dist).astype(x.dtype)
-
-def _fused_yat_const_alpha_fwd(x, kernel, alpha, epsilon):
-  x_f32 = x.astype(jnp.float32)
-  w_f32 = kernel.astype(jnp.float32)
-  dot = x_f32 @ w_f32
-  x_sq = jnp.sum(x_f32 ** 2, axis=-1, keepdims=True)
-  w_sq = jnp.sum(w_f32 ** 2, axis=0, keepdims=True)
-  dist = jnp.maximum(x_sq + w_sq - 2 * dot, 0.0) + epsilon
-  out = (alpha * dot ** 2 / dist).astype(x.dtype)
-  return out, (x, kernel, alpha, dot, dist)
-
-def _fused_yat_const_alpha_bwd(res, g):
-  x, kernel, alpha, dot, dist = res
-  g_x, g_w = _fused_yat_grad_xw(x, kernel, dot, dist, g, alpha_val=alpha)
-  return g_x, g_w, None, None
-
-_fused_yat_const_alpha.defvjp(_fused_yat_const_alpha_fwd, _fused_yat_const_alpha_bwd)
-
-
-# ── Learnable alpha variant ──
-
-@jax.custom_vjp
-def _fused_yat_with_alpha(x, kernel, alpha, epsilon):
+@functools.partial(jax.custom_vjp, nondiff_argnums=(5, 6, 7))
+def _fused_yat(x, kernel, alpha, bias, eps, has_alpha_grad, has_bias, has_eps_grad):
   x_f32 = x.astype(jnp.float32)
   w_f32 = kernel.astype(jnp.float32)
   a_f32 = alpha.astype(jnp.float32)
   dot = x_f32 @ w_f32
   x_sq = jnp.sum(x_f32 ** 2, axis=-1, keepdims=True)
   w_sq = jnp.sum(w_f32 ** 2, axis=0, keepdims=True)
-  dist = jnp.maximum(x_sq + w_sq - 2 * dot, 0.0) + epsilon
-  return (a_f32 * dot ** 2 / dist).astype(x.dtype)
+  dist = jnp.maximum(x_sq + w_sq - 2 * dot, 0.0) + eps.astype(jnp.float32)
+  num = dot + bias.astype(jnp.float32) if has_bias else dot
+  return (a_f32 * num ** 2 / dist).astype(x.dtype)
 
-def _fused_yat_with_alpha_fwd(x, kernel, alpha, epsilon):
+
+def _fused_yat_fwd(x, kernel, alpha, bias, eps, has_alpha_grad, has_bias, has_eps_grad):
   x_f32 = x.astype(jnp.float32)
   w_f32 = kernel.astype(jnp.float32)
   a_f32 = alpha.astype(jnp.float32)
+  e_f32 = eps.astype(jnp.float32)
   dot = x_f32 @ w_f32
   x_sq = jnp.sum(x_f32 ** 2, axis=-1, keepdims=True)
   w_sq = jnp.sum(w_f32 ** 2, axis=0, keepdims=True)
-  dist = jnp.maximum(x_sq + w_sq - 2 * dot, 0.0) + epsilon
-  out = (a_f32 * dot ** 2 / dist).astype(x.dtype)
-  return out, (x, kernel, alpha, dot, dist)
+  dist = jnp.maximum(x_sq + w_sq - 2 * dot, 0.0) + e_f32
+  num = dot + bias.astype(jnp.float32) if has_bias else dot
+  out = (a_f32 * num ** 2 / dist).astype(x.dtype)
+  return out, (x, kernel, alpha, bias, eps, dot, dist)
 
-def _fused_yat_with_alpha_bwd(res, g):
-  x, kernel, alpha, dot, dist = res
+
+def _fused_yat_bwd(has_alpha_grad, has_bias, has_eps_grad, res, g):
+  x, kernel, alpha, bias, eps, dot, dist = res
   a_f32 = alpha.astype(jnp.float32)
-  g_x, g_w = _fused_yat_grad_xw(x, kernel, dot, dist, g, alpha_val=a_f32)
-
-  # Grad alpha: d_out/d_alpha = dot^2 / dist
-  # alpha shape is (1,) — sum over all dims except none to get scalar grad
   g_f32 = g.astype(jnp.float32)
-  raw_yat = dot ** 2 / dist
-  g_alpha = jnp.sum(g_f32 * raw_yat).reshape(alpha.shape)
 
-  return g_x, g_w, g_alpha.astype(alpha.dtype), None
+  num = dot + bias.astype(jnp.float32) if has_bias else dot
 
-_fused_yat_with_alpha.defvjp(_fused_yat_with_alpha_fwd, _fused_yat_with_alpha_bwd)
+  g_x, g_w = _fused_yat_grad_xw(x, kernel, num, dist, g, alpha_val=a_f32)
+
+  # Alpha grad
+  if has_alpha_grad:
+    raw_yat = num ** 2 / dist
+    g_alpha = jnp.sum(g_f32 * raw_yat).reshape(alpha.shape).astype(alpha.dtype)
+  else:
+    g_alpha = jnp.zeros_like(alpha)
+
+  # Bias grad
+  if has_bias:
+    inv_dist = 1.0 / dist
+    g_bias = jnp.sum(g_f32 * a_f32 * 2 * num * inv_dist,
+                     axis=tuple(range(g.ndim - 1)))
+    if bias.shape != g_bias.shape:
+      g_bias = jnp.sum(g_bias, keepdims=True)
+    g_bias = g_bias.astype(bias.dtype)
+  else:
+    g_bias = jnp.zeros_like(bias)
+
+  # Epsilon grad
+  if has_eps_grad:
+    inv_dist_sq = 1.0 / (dist ** 2)
+    g_eps = jnp.sum(g_f32 * (-a_f32 * num ** 2 * inv_dist_sq))
+    g_eps = g_eps.reshape(eps.shape).astype(eps.dtype)
+  else:
+    g_eps = jnp.zeros_like(eps)
+
+  return g_x, g_w, g_alpha, g_bias, g_eps
+
+
+_fused_yat.defvjp(_fused_yat_fwd, _fused_yat_bwd)
 
 
 # ── Shared gradient computation ──
 
-def _fused_yat_grad_xw(x, kernel, dot, dist, g, alpha_val):
-  """Compute gradients for x and kernel. Shared across all alpha variants.
+def _fused_yat_grad_xw(x, kernel, num, dist, g, alpha_val):
+  """Compute gradients for x and kernel.
 
-  out = alpha * dot^2 / dist
+  out = alpha * num^2 / dist,  where num = dot + bias (or just dot)
   dist = ||x||^2 + ||W||^2 - 2*(x@W) + eps
 
-  d_out/d_dot = alpha * (2*dot/dist + 2*dot^2/dist^2)
-  d_out/d_dist = -alpha * dot^2 / dist^2
-  d_dist/d_x = 2*x - 2*W  (via x_sq and dot)
-  d_dist/d_W = 2*W - 2*x  (via w_sq and dot)
+  Partials (holding other intermediates constant):
+    d_out/d_num  = alpha * 2*num / dist
+    d_out/d_dist = -alpha * num^2 / dist^2
+
+  The dist→dot path (-2) is handled separately in the gradient assembly.
   """
   g_f32 = g.astype(jnp.float32)
   x_f32 = x.astype(jnp.float32)
   w_f32 = kernel.astype(jnp.float32)
 
-  dot_sq = dot ** 2
+  num_sq = num ** 2
   inv_dist = 1.0 / dist
   inv_dist_sq = inv_dist ** 2
 
-  d_out_d_dot = alpha_val * (2 * dot * inv_dist + 2 * dot_sq * inv_dist_sq)
-  d_out_d_dist = -alpha_val * dot_sq * inv_dist_sq
+  d_out_d_num = alpha_val * 2 * num * inv_dist
+  d_out_d_dist = -alpha_val * num_sq * inv_dist_sq
 
-  g_dot = g_f32 * d_out_d_dot
+  g_num = g_f32 * d_out_d_num
   g_dist = g_f32 * d_out_d_dist
 
-  # Grad x: through dot path + through dist path
-  g_dist_summed = jnp.sum(g_dist, axis=-1, keepdims=True)
-  g_x = (g_dot + g_dist * (-2)) @ w_f32.T + g_dist_summed * (2 * x_f32)
+  # Total dot gradient = through numerator (d_num/d_dot=1) + through dist (d_dist/d_dot=-2)
+  g_dot_total = g_num + g_dist * (-2)
 
-  # Grad kernel: through dot path + through dist path
+  # Grad x: through dot + through x_sq in dist
+  g_dist_summed = jnp.sum(g_dist, axis=-1, keepdims=True)
+  g_x = g_dot_total @ w_f32.T + g_dist_summed * (2 * x_f32)
+
+  # Grad kernel: through dot + through w_sq in dist
   x_flat = x_f32.reshape(-1, x_f32.shape[-1])
-  g_dot_flat = g_dot.reshape(-1, g_dot.shape[-1])
+  g_dot_flat = g_dot_total.reshape(-1, g_dot_total.shape[-1])
   g_dist_flat = g_dist.reshape(-1, g_dist.shape[-1])
   g_w = x_flat.T @ g_dot_flat
-  g_w += x_flat.T @ (g_dist_flat * (-2))
   g_w += 2 * w_f32 * jnp.sum(g_dist_flat, axis=0, keepdims=True)
 
   return g_x.astype(x.dtype), g_w.astype(kernel.dtype)

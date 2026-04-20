@@ -58,6 +58,15 @@ Modules:
     - masks: Mask utility functions
 """
 
+# Fused YAT L1 Attention (memory-efficient custom_vjp)
+from .fused_yat_attention import (
+    fused_yat_l1_attention,
+    fused_yat_l1_self_attention,
+)
+
+# Pallas-fused YAT L1 Attention (tiled, FlashAttention-style)
+from .pallas_yat_attention import pallas_yat_l1_attention
+
 # YAT Attention (with Performer support)
 from .yat_attention import (
     yat_attention,
@@ -106,6 +115,10 @@ from .masks import (
 )
 
 __all__ = [
+    # Fused YAT L1 Attention
+    "fused_yat_l1_attention",
+    "fused_yat_l1_self_attention",
+    "pallas_yat_l1_attention",
     # YAT Attention
     "yat_attention",
     "yat_attention_weights",
