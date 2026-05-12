@@ -70,7 +70,9 @@ class YatNMN(Module):
       Ignored when constant_bias is set or use_bias=False.
     use_alpha: whether to use alpha scaling (default: True). Ignored if constant_alpha is set.
     constant_alpha: if True, use sqrt(2) as constant alpha. If a float, use that value.
-      If None (default), use learnable alpha when use_alpha=True.
+      If None (default) or False, use learnable alpha when use_alpha=True.
+      Note: False is treated as None — pass a float (e.g. 0.0) to actually freeze
+      alpha at a numeric value.
     use_dropconnect: whether to use DropConnect (default: False).
     dtype: the dtype of the computation (default: infer from input and params).
     param_dtype: the dtype passed to parameter initializers (default: float32).
@@ -201,7 +203,7 @@ class YatNMN(Module):
       self.kernel = nnx.Param(kernel_val)
     self.bias: nnx.Param[jax.Array] | None
     self._constant_bias_value: tp.Optional[float] = None
-    if constant_bias is not None:
+    if constant_bias is not None and constant_bias is not False:
       self._constant_bias_value = float(constant_bias)
       self.bias = None
       use_bias = True  # Bias is applied (but constant)
@@ -223,7 +225,7 @@ class YatNMN(Module):
     
     self.alpha: nnx.Param[jax.Array] | None
     
-    if constant_alpha is not None:
+    if constant_alpha is not None and constant_alpha is not False:
       # Use constant alpha (no learnable parameter)
       if constant_alpha is True:
         self._constant_alpha_value = self.DEFAULT_CONSTANT_ALPHA

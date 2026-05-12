@@ -229,7 +229,7 @@ class YatConv(Module):
 
         self.bias: nnx.Param[jax.Array] | None
         self._constant_bias_value: tp.Optional[float] = None
-        if constant_bias is not None:
+        if constant_bias is not None and constant_bias is not False:
             self._constant_bias_value = float(constant_bias)
             self.bias = None
             use_bias = True  # Bias is applied (but constant)
@@ -244,7 +244,7 @@ class YatConv(Module):
         self.alpha: nnx.Param[jax.Array] | None
         self._constant_alpha_value: tp.Optional[float] = None
 
-        if constant_alpha is not None:
+        if constant_alpha is not None and constant_alpha is not False:
             if constant_alpha is True:
                 self._constant_alpha_value = float(DEFAULT_CONSTANT_ALPHA)
             else:

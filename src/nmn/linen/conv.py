@@ -69,7 +69,7 @@ class YatConv1D(Module):
         
         kernel = self.param('kernel', self.kernel_init, kernel_shape, self.param_dtype)
         
-        if self.constant_bias is not None:
+        if self.constant_bias is not None and self.constant_bias is not False:
             bias = jnp.full((self.features,), float(self.constant_bias), dtype=self.param_dtype)
         elif self.use_bias:
             bias = self.param('bias', self.bias_init, (self.features,), self.param_dtype)
@@ -214,7 +214,7 @@ class YatConv2D(Module):
         
         kernel = self.param('kernel', self.kernel_init, kernel_shape, self.param_dtype)
         
-        if self.constant_bias is not None:
+        if self.constant_bias is not None and self.constant_bias is not False:
             bias = jnp.full((self.features,), float(self.constant_bias), dtype=self.param_dtype)
         elif self.use_bias:
             bias = self.param('bias', self.bias_init, (self.features,), self.param_dtype)
@@ -359,7 +359,7 @@ class YatConv3D(Module):
         
         kernel = self.param('kernel', self.kernel_init, kernel_shape, self.param_dtype)
         
-        if self.constant_bias is not None:
+        if self.constant_bias is not None and self.constant_bias is not False:
             bias = jnp.full((self.features,), float(self.constant_bias), dtype=self.param_dtype)
         elif self.use_bias:
             bias = self.param('bias', self.bias_init, (self.features,), self.param_dtype)
@@ -498,7 +498,7 @@ class YatConvTranspose1D(Module):
 
         kernel = self.param('kernel', self.kernel_init, kernel_shape, self.param_dtype)
 
-        if self.constant_bias is not None:
+        if self.constant_bias is not None and self.constant_bias is not False:
             bias = jnp.full((self.features,), float(self.constant_bias), dtype=self.param_dtype)
         elif self.use_bias:
             bias = self.param('bias', self.bias_init, (self.features,), self.param_dtype)
@@ -627,7 +627,7 @@ class YatConvTranspose2D(Module):
 
         kernel = self.param('kernel', self.kernel_init, kernel_shape, self.param_dtype)
 
-        if self.constant_bias is not None:
+        if self.constant_bias is not None and self.constant_bias is not False:
             bias = jnp.full((self.features,), float(self.constant_bias), dtype=self.param_dtype)
         elif self.use_bias:
             bias = self.param('bias', self.bias_init, (self.features,), self.param_dtype)
@@ -756,7 +756,7 @@ class YatConvTranspose3D(Module):
 
         kernel = self.param('kernel', self.kernel_init, kernel_shape, self.param_dtype)
 
-        if self.constant_bias is not None:
+        if self.constant_bias is not None and self.constant_bias is not False:
             bias = jnp.full((self.features,), float(self.constant_bias), dtype=self.param_dtype)
         elif self.use_bias:
             bias = self.param('bias', self.bias_init, (self.features,), self.param_dtype)

@@ -56,7 +56,7 @@ class YatEmbed(Layer):
         self.embedding_initializer = initializers.get(embedding_initializer)
 
         self._constant_alpha_value = None
-        if constant_alpha is not None:
+        if constant_alpha is not None and constant_alpha is not False:
             if constant_alpha is True:
                 self._constant_alpha_value = DEFAULT_CONSTANT_ALPHA
             else:

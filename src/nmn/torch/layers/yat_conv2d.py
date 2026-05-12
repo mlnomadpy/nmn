@@ -112,7 +112,7 @@ class YatConv2D(Conv2d):
 
         # Constant bias handling
         self._constant_bias_value: Optional[float] = None
-        if constant_bias is not None:
+        if constant_bias is not None and constant_bias is not False:
             self._constant_bias_value = float(constant_bias)
             bias = True  # Bias is applied (but constant)
         self.constant_bias = constant_bias
@@ -188,7 +188,7 @@ class YatConv2D(Conv2d):
         # Handle alpha configuration
         # Priority: constant_alpha > use_alpha
         self._constant_alpha_value = None
-        if constant_alpha is not None:
+        if constant_alpha is not None and constant_alpha is not False:
             if constant_alpha is True:
                 self._constant_alpha_value = DEFAULT_CONSTANT_ALPHA
             else:

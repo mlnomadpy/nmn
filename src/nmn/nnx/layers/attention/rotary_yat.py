@@ -482,7 +482,7 @@ class RotaryYatAttention(Module):
         # Handle alpha configuration (same logic as MultiHeadAttention)
         self.alpha: nnx.Param[Array] | None
         
-        if constant_alpha is not None:
+        if constant_alpha is not None and constant_alpha is not False:
             # Use constant alpha (no learnable parameter)
             if constant_alpha is True:
                 self._constant_alpha_value = float(DEFAULT_CONSTANT_ALPHA)

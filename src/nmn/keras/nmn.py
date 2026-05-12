@@ -79,7 +79,7 @@ class YatNMN(Layer):
 
         # Bias configuration: learnable, constant, or none
         self._constant_bias_value = None
-        if constant_bias is not None:
+        if constant_bias is not None and constant_bias is not False:
             self._constant_bias_value = float(constant_bias)
             use_bias = True  # Bias is applied (but constant)
         self.use_bias = use_bias
@@ -87,7 +87,7 @@ class YatNMN(Layer):
 
         # Handle alpha configuration
         self._constant_alpha_value = None
-        if constant_alpha is not None:
+        if constant_alpha is not None and constant_alpha is not False:
             if constant_alpha is True:
                 self._constant_alpha_value = DEFAULT_CONSTANT_ALPHA
             else:

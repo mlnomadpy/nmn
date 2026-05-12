@@ -173,7 +173,7 @@ class YatNMN(nn.Module):
         #   3. alpha=True (default) -> learnable alpha parameter
         #   4. alpha=False -> no alpha scaling
         self._constant_alpha_value = None
-        if constant_alpha is not None:
+        if constant_alpha is not None and constant_alpha is not False:
             # Use constant alpha (no learnable parameter)
             if constant_alpha is True:
                 self._constant_alpha_value = self.DEFAULT_CONSTANT_ALPHA
@@ -193,7 +193,7 @@ class YatNMN(nn.Module):
 
         # Bias parameter (learnable, constant, or none)
         self._constant_bias_value: Optional[float] = None
-        if constant_bias is not None:
+        if constant_bias is not None and constant_bias is not False:
             self._constant_bias_value = float(constant_bias)
             self.register_parameter('bias', None)
             bias = True  # Bias is applied (but constant)
