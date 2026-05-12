@@ -260,7 +260,7 @@ class MultiHeadAttention(Module):
         # Alpha
         _constant_alpha_value = None
         alpha_val = None
-        if self.constant_alpha is not None:
+        if self.constant_alpha is not None and self.constant_alpha is not False:
             if self.constant_alpha is True:
                 _constant_alpha_value = DEFAULT_CONSTANT_ALPHA
             else:
