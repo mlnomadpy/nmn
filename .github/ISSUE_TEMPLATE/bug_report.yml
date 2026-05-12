@@ -1,0 +1,110 @@
+name: Bug Report
+description: Report a reproducible bug in NMN
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report! Please fill in as much as you can.
+        For security vulnerabilities, please **do not file a public issue** — see [SECURITY.md](https://github.com/azettaai/nmn/blob/master/SECURITY.md).
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of the bug.
+      placeholder: "When I call `YatNMN(in_features=128, out_features=64)(x)` with..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: framework
+    attributes:
+      label: Framework
+      description: Which framework backend is affected?
+      multiple: true
+      options:
+        - PyTorch (nmn.torch)
+        - Flax NNX (nmn.nnx)
+        - Flax Linen (nmn.linen)
+        - Keras (nmn.keras)
+        - TensorFlow (nmn.tf)
+        - Cross-framework / consistency
+        - Build / packaging
+        - Documentation
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: The shortest snippet that reproduces the bug. Please use code blocks.
+      render: python
+      placeholder: |
+        import torch
+        from nmn.torch import YatNMN
+
+        layer = YatNMN(in_features=128, out_features=64)
+        x = torch.randn(32, 128)
+        y = layer(x)  # raises ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: "Expected y.shape == (32, 64)..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Stack traces, error messages, unexpected outputs. Paste full tracebacks.
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: nmn-version
+    attributes:
+      label: NMN version
+      description: Output of `python -c "import nmn; print(nmn.__version__)"`
+      placeholder: "0.2.30"
+    validations:
+      required: true
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      placeholder: "3.11.7"
+    validations:
+      required: true
+
+  - type: input
+    id: framework-version
+    attributes:
+      label: Framework version
+      description: e.g. `torch.__version__`, `jax.__version__`, `tf.__version__`
+      placeholder: "torch 2.4.0"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: "macOS 14.5 / Ubuntu 22.04 / Windows 11"
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: GPU/TPU/CPU, any related issues, anything else relevant.
