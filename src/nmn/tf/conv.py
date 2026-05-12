@@ -57,7 +57,7 @@ class YatConv1D(tf.Module):
 
         # Bias configuration: learnable, constant, or none
         self._constant_bias_value: Optional[float] = None
-        if constant_bias is not None:
+        if constant_bias is not None and constant_bias is not False:
             self._constant_bias_value = float(constant_bias)
             use_bias = True  # Bias is applied (but constant)
         self.use_bias = use_bias
@@ -273,7 +273,7 @@ class YatConv2D(tf.Module):
 
         # Bias configuration: learnable, constant, or none
         self._constant_bias_value: Optional[float] = None
-        if constant_bias is not None:
+        if constant_bias is not None and constant_bias is not False:
             self._constant_bias_value = float(constant_bias)
             use_bias = True  # Bias is applied (but constant)
         self.use_bias = use_bias
@@ -488,7 +488,7 @@ class YatConv3D(tf.Module):
 
         # Bias configuration: learnable, constant, or none
         self._constant_bias_value: Optional[float] = None
-        if constant_bias is not None:
+        if constant_bias is not None and constant_bias is not False:
             self._constant_bias_value = float(constant_bias)
             use_bias = True  # Bias is applied (but constant)
         self.use_bias = use_bias
@@ -694,7 +694,7 @@ class YatConvTranspose1D(tf.Module):
 
         # Bias configuration: learnable, constant, or none
         self._constant_bias_value: Optional[float] = None
-        if constant_bias is not None:
+        if constant_bias is not None and constant_bias is not False:
             self._constant_bias_value = float(constant_bias)
             use_bias = True  # Bias is applied (but constant)
         self.use_bias = use_bias
@@ -895,7 +895,7 @@ class YatConvTranspose2D(tf.Module):
 
         # Bias configuration: learnable, constant, or none
         self._constant_bias_value: Optional[float] = None
-        if constant_bias is not None:
+        if constant_bias is not None and constant_bias is not False:
             self._constant_bias_value = float(constant_bias)
             use_bias = True  # Bias is applied (but constant)
         self.use_bias = use_bias
@@ -1084,7 +1084,7 @@ class YatConvTranspose3D(tf.Module):
 
         # Bias configuration: learnable, constant, or none
         self._constant_bias_value: Optional[float] = None
-        if constant_bias is not None:
+        if constant_bias is not None and constant_bias is not False:
             self._constant_bias_value = float(constant_bias)
             use_bias = True  # Bias is applied (but constant)
         self.use_bias = use_bias
