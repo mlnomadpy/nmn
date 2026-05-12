@@ -40,7 +40,7 @@ jobs:
           cache-dependency-path: website/docusaurus/package-lock.json
 
       - name: Setup Pages
-        uses: actions/configure-pages@v4
+        uses: actions/configure-pages@v6
 
       - name: Copy images from paper to website
         run: |
