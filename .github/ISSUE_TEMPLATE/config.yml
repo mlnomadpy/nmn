@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or general discussion
+    url: https://github.com/azettaai/nmn/discussions
+    about: Ask questions, share ideas, or discuss design with the community.
+  - name: Security vulnerability
+    url: https://github.com/azettaai/nmn/blob/master/SECURITY.md
+    about: Please report security issues privately (see SECURITY.md).

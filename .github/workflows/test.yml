@@ -71,48 +71,67 @@ jobs:
       continue-on-error: true
 
   test-torch:
-    name: Test PyTorch
-    runs-on: ubuntu-latest
+    name: Test PyTorch (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         python-version: ["3.10", "3.11", "3.12"]
+        include:
+          # Smoke-test on macOS and Windows with the middle Python version only,
+          # to keep total CI time reasonable while still catching platform regressions.
+          - os: macos-latest
+            python-version: "3.11"
+          - os: windows-latest
+            python-version: "3.11"
 
     steps:
     - uses: actions/checkout@v4
-    
-    - name: Free disk space
+
+    - name: Free disk space (Linux)
+      if: runner.os == 'Linux'
       run: |
         sudo rm -rf /usr/share/dotnet
         sudo rm -rf /opt/ghc
         sudo rm -rf /usr/local/share/boost
         df -h
-    
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
-    
-    - name: Install dependencies
+
+    - name: Install dependencies (Linux/macOS)
+      if: runner.os != 'Windows'
       run: |
         python -m pip install --upgrade pip
         pip install pytest pytest-cov
         pip install -e ".[dev]"
         pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-    
-    - name: Clear pycache
+
+    - name: Install dependencies (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-cov
+        pip install -e ".[dev]"
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+    - name: Clear pycache (Linux/macOS)
+      if: runner.os != 'Windows'
       run: |
         find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
         find . -name "*.pyc" -delete 2>/dev/null || true
-    
+
     - name: Run PyTorch tests
-      run: |
-        pytest tests/test_torch/ -v --cov=nmn --cov-report=xml
-    
+      run: pytest tests/test_torch/ -v --cov=nmn --cov-report=xml
+
     - name: Upload coverage
       uses: codecov/codecov-action@v4
-      if: matrix.python-version == '3.11'
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
       with:
         file: ./coverage.xml
         flags: torch
@@ -120,49 +139,56 @@ jobs:
       continue-on-error: true
 
   test-keras:
-    name: Test Keras/TF
-    runs-on: ubuntu-latest
+    name: Test Keras/TF (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         python-version: ["3.10", "3.11", "3.12"]
+        include:
+          # macOS smoke test — TF on Windows is not reliably available in CI,
+          # so we restrict cross-platform Keras/TF coverage to macOS for now.
+          - os: macos-latest
+            python-version: "3.11"
 
     steps:
     - uses: actions/checkout@v4
-    
-    - name: Free disk space
+
+    - name: Free disk space (Linux)
+      if: runner.os == 'Linux'
       run: |
         sudo rm -rf /usr/share/dotnet
         sudo rm -rf /opt/ghc
         sudo rm -rf /usr/local/share/boost
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
         df -h
-    
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
-    
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install pytest pytest-cov
         pip install -e ".[dev]"
         pip install tensorflow
-    
+
     - name: Clear pycache
       run: |
         find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
         find . -name "*.pyc" -delete 2>/dev/null || true
-    
+
     - name: Run Keras/TF tests
       run: |
         pytest tests/test_keras/ tests/test_tf/ -v --cov=nmn --cov-report=xml
-    
+
     - name: Upload coverage
       uses: codecov/codecov-action@v4
-      if: matrix.python-version == '3.11'
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
       with:
         file: ./coverage.xml
         flags: keras
