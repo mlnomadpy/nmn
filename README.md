@@ -1,8 +1,4 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/azettaai/nmn/master/assets/logo.png" alt="NMN Logo" width="180" height="180" onerror="this.style.display='none'">
-</p>
-
-<h1 align="center">⚛️ NMN — Neural Matter Networks</h1>
+<h1 align="center">NMN — Neural Matter Networks</h1>
 
 <p align="center">
   <em>Activation-free neural layers that learn non-linearity through geometric operations.</em>
@@ -259,18 +255,18 @@ Run yourself: `pytest tests/integration/test_cross_framework_consistency.py -v`.
 
 ## The math, in one minute
 
-A Yat neuron is a ratio of *similarity* to *distance*:
+A Yat neuron is a ratio of *similarity* to *distance*, with the bias absorbed into the (squared) inner product:
 
 $$
-\mathrm{ⵟ}(\mathbf{w}, \mathbf{x}) = \frac{\langle \mathbf{w}, \mathbf{x} \rangle^2}{\lVert \mathbf{w} - \mathbf{x} \rVert^2 + \varepsilon}
+\mathrm{ⵟ}(\mathbf{w}, \mathbf{x}, b) = \frac{\bigl(\langle \mathbf{w}, \mathbf{x} \rangle + b\bigr)^2}{\lVert \mathbf{w} - \mathbf{x} \rVert^2 + \varepsilon}
 $$
 
-Maximum response requires **w** and **x** to be both *aligned* AND *close*. That's the geometric prior that lets you drop the activation function.
+Maximum response requires **w** and **x** to be both *aligned* AND *close*. That's the geometric prior that lets you drop the activation function. The bias `b` shifts the affine score *inside* the polynomial (biased polynomial kernel) — not added to the output after the ratio.
 
 For convolutions, the same identity applies per patch:
 
 $$
-\mathrm{ⵟ}^*(\mathbf{W}, \mathbf{X}) = \frac{\left(\sum_{i,j} w_{ij} x_{ij}\right)^2}{\sum_{i,j} (w_{ij} - x_{ij})^2 + \varepsilon}
+\mathrm{ⵟ}^*(\mathbf{W}, \mathbf{X}, b) = \frac{\bigl(\sum_{i,j} w_{ij} x_{ij} + b\bigr)^2}{\sum_{i,j} (w_{ij} - x_{ij})^2 + \varepsilon}
 $$
 
 `ε` (`epsilon`, default `1e-5`) prevents division by zero; bump it to `1e-3` for fp16/bf16. Some layers also expose a learnable `alpha` scalar (set `use_alpha=True`, or `constant_alpha=True` to fix α = √2).
