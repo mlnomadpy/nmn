@@ -17,6 +17,13 @@ on:
       - '.github/workflows/test.yml'
   workflow_dispatch:
 
+# Cancel an in-flight run when a new commit lands on the same ref. The
+# test matrix is heavy (three backends × multiple Python versions); without
+# this every rebase-push wastes the full previous run.
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test-jax:
     name: Test JAX/Flax
@@ -57,7 +64,7 @@ jobs:
     
     - name: Run JAX tests
       run: |
-        pytest tests/test_nnx/ tests/test_linen/ tests/integration/ -v --cov=nmn --cov-report=xml
+        pytest tests/test_nnx/ tests/test_linen/ tests/integration/ tests/benchmarks/ -v -m "not slow" --cov=nmn --cov-report=xml
       env:
         JAX_PLATFORM_NAME: cpu
     

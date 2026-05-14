@@ -10,6 +10,8 @@ from keras.src.layers.layer import Layer
 from keras.src import ops
 import math
 
+from ._yat_core import yat_score
+
 logger = logging.getLogger(__name__)
 
 
@@ -321,10 +323,11 @@ class YatConv1D(Layer):
         )
 
         # Handle grouped convolution
+        channel_axis = 1 if self.data_format == "channels_first" else -1
         if self.groups > 1:
-            patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters // self.groups, axis=-1)
+            patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters // self.groups, axis=channel_axis)
         else:
-            patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
+            patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=channel_axis)
 
         # Compute kernel squared sum per filter (1.0 if normalized)
         if self.weight_normalized:
@@ -335,33 +338,14 @@ class YatConv1D(Layer):
             )
 
         # Reshape for broadcasting
-        kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, -1))
-
-        # Compute YAT: squared distance
-        distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
-
-        # Add bias before squaring (learnable or constant)
-        if self.use_bias:
-            if self._constant_bias_value is not None:
-                dot_prod_map = dot_prod_map + self._constant_bias_value
-            else:
-                dot_prod_map = ops.add(dot_prod_map, self.bias)
-
-        # Resolve effective epsilon (learnable via softplus, or constant)
-        if self.learnable_epsilon and self.epsilon_param is not None:
-            eps = ops.softplus(self.epsilon_param)
+        if self.data_format == "channels_first":
+            kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, -1, 1))
         else:
-            eps = self.epsilon
+            kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, -1))
 
-        # YAT computation: (dot_product + bias)^2 / (distance_squared + epsilon)
-        outputs = dot_prod_map**2 / (distance_sq_map + eps)
-
-        # Apply alpha scaling
-        if self.use_alpha and self.alpha is not None:
-            # Simple learnable alpha scaling
-            outputs = outputs * self.alpha
-
-        return outputs
+        # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha
+        distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
+        return yat_score(self, dot_prod_map, distance_sq_map)
 
     def compute_output_shape(self, input_shape):
         if self.data_format == "channels_first":
@@ -728,10 +712,11 @@ class YatConv2D(Layer):
         )
 
         # Handle grouped convolution
+        channel_axis = 1 if self.data_format == "channels_first" else -1
         if self.groups > 1:
-            patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters // self.groups, axis=-1)
+            patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters // self.groups, axis=channel_axis)
         else:
-            patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
+            patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=channel_axis)
 
         # Compute kernel squared sum per filter (1.0 if normalized)
         if self.weight_normalized:
@@ -747,30 +732,9 @@ class YatConv2D(Layer):
         else:
             kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, 1, -1))
 
-        # Compute YAT: squared distance
+        # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
-
-        # Add bias before squaring (matches all other frameworks: (x·W + b)² / dist)
-        if self.use_bias:
-            if self._constant_bias_value is not None:
-                dot_prod_map = dot_prod_map + self._constant_bias_value
-            else:
-                dot_prod_map = ops.add(dot_prod_map, self.bias)
-
-        # Resolve effective epsilon (learnable via softplus, or constant)
-        if self.learnable_epsilon and self.epsilon_param is not None:
-            eps = ops.softplus(self.epsilon_param)
-        else:
-            eps = self.epsilon
-
-        # YAT computation: (dot_product + bias)^2 / (distance_squared + epsilon)
-        outputs = dot_prod_map ** 2 / (distance_sq_map + eps)
-
-        # Apply alpha scaling (simple multiplicative, matches all other frameworks)
-        if self.use_alpha and self.alpha is not None:
-            outputs = outputs * self.alpha
-
-        return outputs
+        return yat_score(self, dot_prod_map, distance_sq_map)
 
     def compute_output_shape(self, input_shape):
         if self.data_format == "channels_first":
@@ -1107,10 +1071,11 @@ class YatConv3D(Layer):
         )
 
         # Handle grouped convolution
+        channel_axis = 1 if self.data_format == "channels_first" else -1
         if self.groups > 1:
-            patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters // self.groups, axis=-1)
+            patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters // self.groups, axis=channel_axis)
         else:
-            patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
+            patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=channel_axis)
 
         # Compute kernel squared sum per filter (1.0 if normalized)
         if self.weight_normalized:
@@ -1126,30 +1091,9 @@ class YatConv3D(Layer):
         else:
             kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, 1, 1, -1))
 
-        # Compute YAT: squared distance
+        # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
-
-        # Add bias before squaring (matches all other frameworks: (x·W + b)² / dist)
-        if self.use_bias:
-            if self._constant_bias_value is not None:
-                dot_prod_map = dot_prod_map + self._constant_bias_value
-            else:
-                dot_prod_map = ops.add(dot_prod_map, self.bias)
-
-        # Resolve effective epsilon (learnable via softplus, or constant)
-        if self.learnable_epsilon and self.epsilon_param is not None:
-            eps = ops.softplus(self.epsilon_param)
-        else:
-            eps = self.epsilon
-
-        # YAT computation: (dot_product + bias)^2 / (distance_squared + epsilon)
-        outputs = dot_prod_map ** 2 / (distance_sq_map + eps)
-
-        # Apply alpha scaling (simple multiplicative, matches all other frameworks)
-        if self.use_alpha and self.alpha is not None:
-            outputs = outputs * self.alpha
-
-        return outputs
+        return yat_score(self, dot_prod_map, distance_sq_map)
 
     def compute_output_shape(self, input_shape):
         if self.data_format == "channels_first":
@@ -1466,41 +1410,27 @@ class YatConvTranspose1D(Layer):
             dilation_rate=self.dilation_rate,
         )
 
-        patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
+        channel_axis = 1 if self.data_format == "channels_first" else -1
+        patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=channel_axis)
 
         # Compute kernel squared sum per filter (1.0 if normalized)
         if self.weight_normalized:
             kernel_sq_sum_per_filter = ops.ones((self.filters,), dtype=kernel.dtype)
         else:
-            # Sum over all axes except filter axis (= 1 for 1D transpose)
-            kernel_sq_sum_per_filter = ops.sum(kernel ** 2, axis=(0, 2))
+            # Sum over all axes except the filter axis.
+            # Transpose conv kernel shape: (*kernel_size, filters, in_dim)
+            filter_axis = len(self.kernel_size)
+            reduce_axes = tuple(i for i in range(kernel.ndim) if i != filter_axis)
+            kernel_sq_sum_per_filter = ops.sum(kernel ** 2, axis=reduce_axes)
 
-        kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, -1))
-
-        # Compute YAT: squared distance
-        distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
-
-        # Add bias before squaring (matches all other frameworks)
-        if self.use_bias:
-            if self._constant_bias_value is not None:
-                dot_prod_map = dot_prod_map + self._constant_bias_value
-            else:
-                dot_prod_map = ops.add(dot_prod_map, self.bias)
-
-        # Resolve effective epsilon (learnable via softplus, or constant)
-        if self.learnable_epsilon and self.epsilon_param is not None:
-            eps = ops.softplus(self.epsilon_param)
+        if self.data_format == "channels_first":
+            kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, -1, 1))
         else:
-            eps = self.epsilon
+            kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, -1))
 
-        # YAT computation: (dot_product + bias)^2 / (distance_squared + epsilon)
-        outputs = dot_prod_map ** 2 / (distance_sq_map + eps)
-
-        # Apply alpha scaling (simple multiplicative)
-        if self.use_alpha and self.alpha is not None:
-            outputs = outputs * self.alpha
-
-        return outputs
+        # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha
+        distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
+        return yat_score(self, dot_prod_map, distance_sq_map)
 
     def compute_output_shape(self, input_shape):
         if self.data_format == "channels_first":
@@ -1773,44 +1703,27 @@ class YatConvTranspose2D(Layer):
             dilation_rate=self.dilation_rate,
         )
 
-        patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
+        channel_axis = 1 if self.data_format == "channels_first" else -1
+        patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=channel_axis)
 
         # Compute kernel squared sum per filter (1.0 if normalized)
         if self.weight_normalized:
             kernel_sq_sum_per_filter = ops.ones((self.filters,), dtype=kernel.dtype)
         else:
-            # Sum over all axes except filter axis (= 2 for 2D transpose)
-            kernel_sq_sum_per_filter = ops.sum(kernel ** 2, axis=(0, 1, 3))
+            # Sum over all axes except the filter axis.
+            # Transpose conv kernel shape: (*kernel_size, filters, in_dim)
+            filter_axis = len(self.kernel_size)
+            reduce_axes = tuple(i for i in range(kernel.ndim) if i != filter_axis)
+            kernel_sq_sum_per_filter = ops.sum(kernel ** 2, axis=reduce_axes)
 
         if self.data_format == "channels_first":
             kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, -1, 1, 1))
         else:
             kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, 1, -1))
 
-        # Compute YAT: squared distance
+        # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
-
-        # Add bias before squaring (matches all other frameworks)
-        if self.use_bias:
-            if self._constant_bias_value is not None:
-                dot_prod_map = dot_prod_map + self._constant_bias_value
-            else:
-                dot_prod_map = ops.add(dot_prod_map, self.bias)
-
-        # Resolve effective epsilon (learnable via softplus, or constant)
-        if self.learnable_epsilon and self.epsilon_param is not None:
-            eps = ops.softplus(self.epsilon_param)
-        else:
-            eps = self.epsilon
-
-        # YAT computation: (dot_product + bias)^2 / (distance_squared + epsilon)
-        outputs = dot_prod_map ** 2 / (distance_sq_map + eps)
-
-        # Apply alpha scaling (simple multiplicative)
-        if self.use_alpha and self.alpha is not None:
-            outputs = outputs * self.alpha
-
-        return outputs
+        return yat_score(self, dot_prod_map, distance_sq_map)
 
     def compute_output_shape(self, input_shape):
         if self.data_format == "channels_first":
@@ -2091,44 +2004,26 @@ class YatConvTranspose3D(Layer):
             dilation_rate=self.dilation_rate,
         )
 
-        patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
+        channel_axis = 1 if self.data_format == "channels_first" else -1
+        patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=channel_axis)
 
-        # Compute kernel squared sum per filter (1.0 if normalized)
-        # Kernel shape: [d, h, w, filters, input_dim] — sum over spatial (0,1,2) and input_dim (4)
+        # Compute kernel squared sum per filter (1.0 if normalized).
+        # Transpose conv kernel shape: (*kernel_size, filters, in_dim)
         if self.weight_normalized:
             kernel_sq_sum_per_filter = ops.ones((self.filters,), dtype=kernel.dtype)
         else:
-            kernel_sq_sum_per_filter = ops.sum(kernel ** 2, axis=(0, 1, 2, 4))
+            filter_axis = len(self.kernel_size)
+            reduce_axes = tuple(i for i in range(kernel.ndim) if i != filter_axis)
+            kernel_sq_sum_per_filter = ops.sum(kernel ** 2, axis=reduce_axes)
 
         if self.data_format == "channels_first":
             kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, -1, 1, 1, 1))
         else:
             kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, 1, 1, -1))
 
-        # Compute YAT: squared distance
+        # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
-
-        # Add bias before squaring (matches all other frameworks)
-        if self.use_bias:
-            if self._constant_bias_value is not None:
-                dot_prod_map = dot_prod_map + self._constant_bias_value
-            else:
-                dot_prod_map = ops.add(dot_prod_map, self.bias)
-
-        # Resolve effective epsilon (learnable via softplus, or constant)
-        if self.learnable_epsilon and self.epsilon_param is not None:
-            eps = ops.softplus(self.epsilon_param)
-        else:
-            eps = self.epsilon
-
-        # YAT computation: (dot_product + bias)^2 / (distance_squared + epsilon)
-        outputs = dot_prod_map ** 2 / (distance_sq_map + eps)
-
-        # Apply alpha scaling (simple multiplicative)
-        if self.use_alpha and self.alpha is not None:
-            outputs = outputs * self.alpha
-
-        return outputs
+        return yat_score(self, dot_prod_map, distance_sq_map)
 
     def compute_output_shape(self, input_shape):
         if self.data_format == "channels_first":
@@ -2181,7 +2076,11 @@ class YatConvTranspose3D(Layer):
         return config
 
 
-# Aliases for backward compatibility
+# DEPRECATED: lowercase aliases. The canonical names are the uppercase
+# variants (YatConv1D, YatConv2D, ...) — they match the names exported
+# from every other backend (torch / nnx / linen / tf). The lowercase
+# aliases are kept for backward compatibility and will be removed in a
+# future minor release.
 YatConv1d = YatConv1D
 YatConv2d = YatConv2D
 YatConv3d = YatConv3D

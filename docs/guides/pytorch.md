@@ -95,7 +95,23 @@ for epoch in range(3):
     print(f"epoch {epoch}: loss={loss.item():.4f}")
 ```
 
-Expect ~97–98% test accuracy in 3 epochs.
+A complete runnable version of this is at
+[`src/nmn/torch/examples/vision/mnist.py`](../../src/nmn/torch/examples/vision/mnist.py):
+
+```bash
+PYTHONPATH=src python -m nmn.torch.examples.vision.mnist \
+    --epochs 3 --report .context/torch_mnist.json
+```
+
+**Measured baseline** (Apple Silicon CPU, fp32, batch=128, lr=3e-4, seed=0):
+
+| Epoch | Train loss | Test loss | Test acc |
+| ----- | ---------- | --------- | -------- |
+| 0     | 0.9561     | 0.2656    | 92.07 %  |
+| 1     | 0.2391     | 0.1978    | 93.88 %  |
+| 2     | 0.1818     | 0.1584    | **94.97 %** |
+
+3 epochs ≈ 4.7 s wall time on CPU. Add more epochs to reach ~97 %.
 
 ---
 

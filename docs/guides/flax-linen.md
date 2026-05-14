@@ -95,6 +95,25 @@ for epoch in range(3):
     print(f"epoch {epoch}: loss={loss:.4f}")
 ```
 
+A runnable version (no tfds, uses torchvision for data) is at
+[`src/nmn/linen/examples/mnist.py`](../../src/nmn/linen/examples/mnist.py):
+
+```bash
+PYTHONPATH=src python -m nmn.linen.examples.mnist \
+    --epochs 3 --report .context/linen_mnist.json
+```
+
+**Measured baseline** (CPU JAX, fp32, batch=128, lr=3e-4, seed=0):
+
+| Epoch | Train loss | Test loss | Test acc |
+| ----- | ---------- | --------- | -------- |
+| 0     | 0.8967     | 0.2652    | 91.79 %  |
+| 1     | 0.2386     | 0.1973    | 93.79 %  |
+| 2     | 0.1808     | 0.1538    | **95.28 %** |
+
+3 epochs ≈ 1.3 s on CPU. Final accuracy matches the NNX run (95.39 %) within
+seed noise, confirming the Linen and NNX backends are numerically aligned.
+
 ---
 
 ## 4. CNN

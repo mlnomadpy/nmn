@@ -107,6 +107,7 @@ wandb/
 *.pt
 *.pth
 *.ckpt
+.data/
 
 # Framework specific
 # JAX

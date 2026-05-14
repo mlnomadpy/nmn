@@ -4,6 +4,8 @@ import tensorflow as tf
 import math
 from typing import Optional, Any, Tuple, Union, List, Callable
 
+from ._yat_core import yat_score
+
 
 class YatConv1D(tf.Module):
     """1D YAT convolution module using TensorFlow operations.
@@ -36,7 +38,7 @@ class YatConv1D(tf.Module):
         use_bias: bool = True,
         constant_bias: Optional[float] = None,
         use_alpha: bool = True,
-        epsilon: float = 1e-6,
+        epsilon: float = 1e-5,
         learnable_epsilon: bool = False,
         dtype: tf.DType = tf.float32,
         name: Optional[str] = None
@@ -191,31 +193,9 @@ class YatConv1D(tf.Module):
         # Reshape for broadcasting: [1, 1, filters]
         kernel_sq_sum_reshaped = tf.reshape(kernel_sq_sum_per_filter, [1, 1, -1])
 
-        # Compute YAT: distance_squared = ||patch||^2 + ||kernel||^2 - 2 * dot_product
+        # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
-
-        # Add bias before squaring (learnable or constant)
-        if self.use_bias:
-            if self._constant_bias_value is not None:
-                dot_prod_map = dot_prod_map + tf.cast(self._constant_bias_value, self.dtype)
-            else:
-                dot_prod_map = dot_prod_map + self.bias
-
-        # Resolve effective epsilon (learnable via softplus, or constant)
-        if self.learnable_epsilon and self.epsilon_param is not None:
-            eps = tf.nn.softplus(self.epsilon_param)
-        else:
-            eps = self.epsilon
-
-        # YAT computation: (dot_product + bias)^2 / (distance_squared + epsilon)
-        y = dot_prod_map**2 / (distance_sq_map + eps)
-
-        # Apply alpha scaling
-        if self.use_alpha and self.alpha is not None:
-            # Simple learnable alpha scaling
-            y = y * self.alpha
-
-        return y
+        return yat_score(self, dot_prod_map, distance_sq_map)
 
 
 class YatConv2D(tf.Module):
@@ -252,7 +232,7 @@ class YatConv2D(tf.Module):
         use_bias: bool = True,
         constant_bias: Optional[float] = None,
         use_alpha: bool = True,
-        epsilon: float = 1e-6,
+        epsilon: float = 1e-5,
         learnable_epsilon: bool = False,
         dtype: tf.DType = tf.float32,
         name: Optional[str] = None
@@ -409,28 +389,7 @@ class YatConv2D(tf.Module):
 
         # Compute YAT: distance_squared = ||patch||^2 + ||kernel||^2 - 2 * dot_product
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
-
-        # Add bias inside the numerator square: (dot + bias)^2 / dist (learnable or constant)
-        if self.use_bias:
-            if self._constant_bias_value is not None:
-                dot_prod_map = dot_prod_map + tf.cast(self._constant_bias_value, self.dtype)
-            else:
-                dot_prod_map = dot_prod_map + self.bias
-
-        # Resolve effective epsilon (learnable via softplus, or constant)
-        if self.learnable_epsilon and self.epsilon_param is not None:
-            eps = tf.nn.softplus(self.epsilon_param)
-        else:
-            eps = self.epsilon
-
-        # YAT computation: (dot_product + bias)^2 / (distance_squared + epsilon)
-        y = dot_prod_map**2 / (distance_sq_map + eps)
-
-        # Apply alpha scaling
-        if self.use_alpha and self.alpha is not None:
-            y = y * self.alpha
-
-        return y
+        return yat_score(self, dot_prod_map, distance_sq_map)
 
 
 class YatConv3D(tf.Module):
@@ -467,7 +426,7 @@ class YatConv3D(tf.Module):
         use_bias: bool = True,
         constant_bias: Optional[float] = None,
         use_alpha: bool = True,
-        epsilon: float = 1e-6,
+        epsilon: float = 1e-5,
         learnable_epsilon: bool = False,
         dtype: tf.DType = tf.float32,
         name: Optional[str] = None
@@ -625,28 +584,7 @@ class YatConv3D(tf.Module):
 
         # Compute YAT: distance_squared = ||patch||^2 + ||kernel||^2 - 2 * dot_product
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
-
-        # Add bias inside the numerator square: (dot + bias)^2 / dist (learnable or constant)
-        if self.use_bias:
-            if self._constant_bias_value is not None:
-                dot_prod_map = dot_prod_map + tf.cast(self._constant_bias_value, self.dtype)
-            else:
-                dot_prod_map = dot_prod_map + self.bias
-
-        # Resolve effective epsilon (learnable via softplus, or constant)
-        if self.learnable_epsilon and self.epsilon_param is not None:
-            eps = tf.nn.softplus(self.epsilon_param)
-        else:
-            eps = self.epsilon
-
-        # YAT computation: (dot_product + bias)^2 / (distance_squared + epsilon)
-        y = dot_prod_map**2 / (distance_sq_map + eps)
-
-        # Apply alpha scaling
-        if self.use_alpha and self.alpha is not None:
-            y = y * self.alpha
-
-        return y
+        return yat_score(self, dot_prod_map, distance_sq_map)
 
 
 class YatConvTranspose1D(tf.Module):
@@ -675,7 +613,7 @@ class YatConvTranspose1D(tf.Module):
         use_bias: bool = True,
         constant_bias: Optional[float] = None,
         use_alpha: bool = True,
-        epsilon: float = 1e-6,
+        epsilon: float = 1e-5,
         learnable_epsilon: bool = False,
         dtype: tf.DType = tf.float32,
         name: Optional[str] = None
@@ -825,29 +763,9 @@ class YatConvTranspose1D(tf.Module):
         kernel_sq_sum_per_filter = tf.reduce_sum(self.kernel**2, axis=[0, 2])
         kernel_sq_sum_reshaped = tf.reshape(kernel_sq_sum_per_filter, [1, 1, -1])
 
-        # YAT computation
+        # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
-        # Add bias before squaring (learnable or constant)
-        if self.use_bias:
-            if self._constant_bias_value is not None:
-                dot_prod_map = dot_prod_map + tf.cast(self._constant_bias_value, self.dtype)
-            else:
-                dot_prod_map = dot_prod_map + self.bias
-
-        # Resolve effective epsilon (learnable via softplus, or constant)
-        if self.learnable_epsilon and self.epsilon_param is not None:
-            eps = tf.nn.softplus(self.epsilon_param)
-        else:
-            eps = self.epsilon
-
-        # YAT computation
-        y = dot_prod_map**2 / (distance_sq_map + eps)
-
-        if self.use_alpha and self.alpha is not None:
-            # Simple learnable alpha scaling
-            y = y * self.alpha
-
-        return y
+        return yat_score(self, dot_prod_map, distance_sq_map)
 
 
 class YatConvTranspose2D(tf.Module):
@@ -876,7 +794,7 @@ class YatConvTranspose2D(tf.Module):
         use_bias: bool = True,
         constant_bias: Optional[float] = None,
         use_alpha: bool = True,
-        epsilon: float = 1e-6,
+        epsilon: float = 1e-5,
         learnable_epsilon: bool = False,
         dtype: tf.DType = tf.float32,
         name: Optional[str] = None
@@ -1017,26 +935,7 @@ class YatConvTranspose2D(tf.Module):
 
         # YAT computation
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
-
-        # Add bias inside the numerator square: (dot + bias)^2 / dist (learnable or constant)
-        if self.use_bias:
-            if self._constant_bias_value is not None:
-                dot_prod_map = dot_prod_map + tf.cast(self._constant_bias_value, self.dtype)
-            else:
-                dot_prod_map = dot_prod_map + self.bias
-
-        # Resolve effective epsilon (learnable via softplus, or constant)
-        if self.learnable_epsilon and self.epsilon_param is not None:
-            eps = tf.nn.softplus(self.epsilon_param)
-        else:
-            eps = self.epsilon
-
-        y = dot_prod_map**2 / (distance_sq_map + eps)
-
-        if self.use_alpha and self.alpha is not None:
-            y = y * self.alpha
-
-        return y
+        return yat_score(self, dot_prod_map, distance_sq_map)
 
 
 class YatConvTranspose3D(tf.Module):
@@ -1065,7 +964,7 @@ class YatConvTranspose3D(tf.Module):
         use_bias: bool = True,
         constant_bias: Optional[float] = None,
         use_alpha: bool = True,
-        epsilon: float = 1e-6,
+        epsilon: float = 1e-5,
         learnable_epsilon: bool = False,
         dtype: tf.DType = tf.float32,
         name: Optional[str] = None
@@ -1211,29 +1110,14 @@ class YatConvTranspose3D(tf.Module):
 
         # YAT computation
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
-
-        # Add bias inside the numerator square: (dot + bias)^2 / dist (learnable or constant)
-        if self.use_bias:
-            if self._constant_bias_value is not None:
-                dot_prod_map = dot_prod_map + tf.cast(self._constant_bias_value, self.dtype)
-            else:
-                dot_prod_map = dot_prod_map + self.bias
-
-        # Resolve effective epsilon (learnable via softplus, or constant)
-        if self.learnable_epsilon and self.epsilon_param is not None:
-            eps = tf.nn.softplus(self.epsilon_param)
-        else:
-            eps = self.epsilon
-
-        y = dot_prod_map**2 / (distance_sq_map + eps)
-
-        if self.use_alpha and self.alpha is not None:
-            y = y * self.alpha
-
-        return y
+        return yat_score(self, dot_prod_map, distance_sq_map)
 
 
-# Aliases for backward compatibility
+# DEPRECATED: lowercase aliases. The canonical names are the uppercase
+# variants (YatConv1D, YatConv2D, ...) — they match the names exported
+# from every other backend (torch / nnx / linen / keras). The lowercase
+# aliases are kept for backward compatibility and will be removed in a
+# future minor release.
 YatConv1d = YatConv1D
 YatConv2d = YatConv2D
 YatConv3d = YatConv3D

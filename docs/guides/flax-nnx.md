@@ -94,6 +94,25 @@ for epoch in range(3):
     print(f"epoch {epoch}: loss={loss:.4f}")
 ```
 
+A complete runnable version (using torchvision to avoid the tfds dependency)
+lives at [`src/nmn/nnx/examples/vision/mnist.py`](../../src/nmn/nnx/examples/vision/mnist.py):
+
+```bash
+PYTHONPATH=src python -m nmn.nnx.examples.vision.mnist \
+    --epochs 3 --report .context/nnx_mnist.json
+```
+
+**Measured baseline** (CPU JAX, fp32, batch=128, lr=3e-4, seed=0):
+
+| Epoch | Train loss | Test loss | Test acc |
+| ----- | ---------- | --------- | -------- |
+| 0     | 0.8841     | 0.2567    | 92.06 %  |
+| 1     | 0.2249     | 0.1824    | 94.38 %  |
+| 2     | 0.1710     | 0.1477    | **95.39 %** |
+
+3 epochs ≈ 1.7 s on CPU — JAX's JIT is ~3× faster than PyTorch eager here on
+the same model. See the [cross-framework benchmark blog post](https://github.com/azettaai/nmn/blob/master/website/blog-pages/20-cross-framework-mnist.html) for a side-by-side.
+
 ---
 
 ## 4. Convolutional model

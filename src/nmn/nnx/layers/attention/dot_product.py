@@ -23,6 +23,8 @@ from flax.nnx.nn.dtypes import promote_dtype
 from flax.typing import Dtype, PrecisionLike
 from jax import Array
 
+from ._attention_core import finalize_attention_weights
+
 
 def dot_product_attention_weights(
     query: Array,
@@ -79,34 +81,13 @@ def dot_product_attention_weights(
         "...qhd,...khd->...hqk", query, key, precision=precision
     )
 
-    # Apply attention bias
-    if bias is not None:
-        attn_weights = attn_weights + bias
-
-    # Apply attention mask
-    if mask is not None:
-        big_neg = jnp.finfo(dtype).min
-        attn_weights = jnp.where(mask, attn_weights, big_neg)
-
-    # Normalize the attention weights
-    attn_weights = jax.nn.softmax(attn_weights).astype(dtype)
-
-    # Sow attention weights for introspection
-    if module:
-        module.sow(nnx.Intermediate, "attention_weights", attn_weights)
-
-    # Apply attention dropout
-    if not deterministic and dropout_rate > 0.0:
-        keep_prob = 1.0 - dropout_rate
-        if broadcast_dropout:
-            dropout_shape = tuple([1] * (key.ndim - 2)) + attn_weights.shape[-2:]
-            keep = random.bernoulli(dropout_rng, keep_prob, dropout_shape)
-        else:
-            keep = random.bernoulli(dropout_rng, keep_prob, attn_weights.shape)
-        multiplier = keep.astype(dtype) / jnp.asarray(keep_prob, dtype=dtype)
-        attn_weights = attn_weights * multiplier
-
-    return attn_weights
+    return finalize_attention_weights(
+        attn_weights,
+        dtype=dtype, key=key,
+        bias=bias, mask=mask,
+        broadcast_dropout=broadcast_dropout, dropout_rng=dropout_rng,
+        dropout_rate=dropout_rate, deterministic=deterministic, module=module,
+    )
 
 
 def dot_product_attention(

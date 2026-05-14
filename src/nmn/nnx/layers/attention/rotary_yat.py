@@ -128,6 +128,16 @@ def apply_rotary_emb(
     """
     seq_len = x.shape[-3]
 
+    # Bounds check: precomputed tables have a fixed length.
+    max_seq_len = freqs_cos.shape[0]
+    if position_offset + seq_len > max_seq_len:
+        raise ValueError(
+            f"Rotary frequencies were precomputed for max_seq_len={max_seq_len}, "
+            f"but position_offset + seq_len = {position_offset + seq_len} exceeds it. "
+            f"Increase max_seq_len when constructing the layer / calling "
+            f"precompute_freqs_cis."
+        )
+
     # Slice frequencies for the current sequence
     # freqs shape: [seq_len, head_dim//2]
     freqs_cos = freqs_cos[position_offset : position_offset + seq_len]

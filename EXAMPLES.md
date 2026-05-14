@@ -680,37 +680,51 @@ The repository contains complete, runnable training examples:
 ```
 src/nmn/
 ├── torch/examples/
-│   ├── yat_examples.py          # Basic PyTorch usage patterns
-│   ├── yat_cifar10.py           # CIFAR-10 image classification
+│   ├── quick_example.py             # Basic PyTorch usage patterns
 │   └── vision/
-│       └── resnet_training.py   # ResNet architectures comparison
+│       ├── mnist.py                 # MNIST MLP — 3 epochs, ~95 % test acc
+│       └── resnet_training.py       # ResNet architectures comparison
 │
 ├── nnx/examples/
 │   ├── vision/
+│   │   ├── mnist.py                 # MNIST MLP — 3 epochs, ~95 % test acc
 │   │   └── aether_resnet50_tpu.py   # ResNet50 training on TPU/GPU
 │   └── language/
 │       ├── m3za.py                  # MiniBERT pre-training (MLM + SimCSE)
 │       └── m3za_perf.py             # Performance benchmarking
+│
+├── linen/examples/
+│   └── mnist.py                     # Flax Linen MNIST MLP
+│
+├── tf/examples/
+│   └── mnist.py                     # Native TensorFlow MNIST MLP
+│
+└── keras/examples/
+    └── mnist.py                     # Keras 3 (backend-agnostic) MNIST MLP
 ```
 
 ### Running Examples
 
 ```bash
-# PyTorch Examples
-cd /workspaces/nmn
-python src/nmn/torch/examples/yat_cifar10.py        # CIFAR-10 classification
-python src/nmn/torch/examples/yat_examples.py       # Various architectures
-python src/nmn/torch/examples/vision/resnet_training.py  # ResNet comparison
+# PyTorch / Flax NNX / Flax Linen (all runnable on CPU in seconds)
+PYTHONPATH=src python -m nmn.torch.examples.vision.mnist --report .context/torch_mnist.json
+PYTHONPATH=src python -m nmn.nnx.examples.vision.mnist   --report .context/nnx_mnist.json
+PYTHONPATH=src python -m nmn.linen.examples.mnist        --report .context/linen_mnist.json
 
-# Flax NNX Examples  
+# TensorFlow / Keras (need separate framework installs)
+PYTHONPATH=src python -m nmn.tf.examples.mnist                          --report .context/tf_mnist.json
+KERAS_BACKEND=jax PYTHONPATH=src python -m nmn.keras.examples.mnist     --report .context/keras_mnist.json
+
+# Larger workloads
+python src/nmn/torch/examples/vision/resnet_training.py
 python src/nmn/nnx/examples/vision/aether_resnet50_tpu.py \
-    --model resnet50 \
-    --batch-size 1024 \
-    --epochs 200
-    
+    --model resnet50 --batch-size 1024 --epochs 200
 python src/nmn/nnx/examples/language/m3za.py        # MiniBERT training
 python src/nmn/nnx/examples/language/m3za_perf.py   # Benchmark
 ```
+
+For a cross-framework comparison with real measured numbers see
+[`website/blog-pages/20-cross-framework-mnist.html`](website/blog-pages/20-cross-framework-mnist.html).
 
 ---
 

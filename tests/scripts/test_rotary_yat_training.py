@@ -10,7 +10,7 @@ from flax import nnx
 import optax
 
 from nmn.nnx.layers.attention import RotaryYatAttention
-from nmn.nnx.nmn import YatNMN
+from nmn.nnx import YatNMN
 from nmn.nnx.layers.attention.yat_attention import (
     normalize_qk,
     yat_performer_feature_map,

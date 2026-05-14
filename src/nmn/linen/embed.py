@@ -136,7 +136,9 @@ class YatEmbed(Module):
         else:
             query_sq = jnp.sum(query ** 2, axis=-1, keepdims=True)
             embed_sq = jnp.sum(embedding ** 2, axis=1, keepdims=True).T
-            distances = query_sq + embed_sq - 2.0 * y
+            # Clamp to zero: bf16/fp16 cancellation can make distance slightly
+            # negative when query ≈ embedding row.
+            distances = jnp.maximum(query_sq + embed_sq - 2.0 * y, 0.0)
 
         # YAT
         y = y ** 2 / (distances + self.epsilon)

@@ -78,7 +78,18 @@ model.fit(x_train, y_train, batch_size=128, epochs=3,
           validation_data=(x_test, y_test))
 ```
 
-Expect ~97–98% test accuracy.
+A runnable version is at
+[`src/nmn/keras/examples/mnist.py`](../../src/nmn/keras/examples/mnist.py):
+
+```bash
+KERAS_BACKEND=jax PYTHONPATH=src python -m nmn.keras.examples.mnist \
+    --epochs 3 --report .context/keras_mnist.json
+```
+
+Set `KERAS_BACKEND={jax,tensorflow,torch}` before invocation. Expect
+~95 % after 3 epochs (matches the equivalent
+[PyTorch / NNX / Linen runs](../../website/blog-pages/20-cross-framework-mnist.html));
+~97 % after 8–10 epochs.
 
 ---
 

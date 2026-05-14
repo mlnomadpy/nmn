@@ -84,6 +84,18 @@ for epoch in range(3):
     print(f"epoch {epoch}: loss={loss.numpy():.4f}")
 ```
 
+A runnable version is at
+[`src/nmn/tf/examples/mnist.py`](../../src/nmn/tf/examples/mnist.py):
+
+```bash
+PYTHONPATH=src python -m nmn.tf.examples.mnist \
+    --epochs 3 --report .context/tf_mnist.json
+```
+
+Expect ~95 % after 3 epochs (matches the equivalent
+[PyTorch / NNX / Linen runs](../../website/blog-pages/20-cross-framework-mnist.html)).
+The script writes a JSON receipt with per-epoch loss/accuracy/time.
+
 ---
 
 ## 4. Convolutional model

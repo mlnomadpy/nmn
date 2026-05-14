@@ -151,6 +151,24 @@ from nmn.nnx.layers import (
 
 
 # =============================================================================
+# Cross-framework name aliases
+# =============================================================================
+# Torch / Keras / Linen / TF backends expose `YatEmbed`,
+# `YatConv1D/2D/3D`, `YatConvTranspose1D/2D/3D`, and
+# `MultiHeadYatAttention`. The NNX backend uses shorter / dimension-generic
+# names internally; expose the longer names too so user code can stay the
+# same when porting between backends.
+YatEmbed = Embed
+YatConv1D = YatConv
+YatConv2D = YatConv
+YatConv3D = YatConv
+YatConvTranspose1D = YatConvTranspose
+YatConvTranspose2D = YatConvTranspose
+YatConvTranspose3D = YatConvTranspose
+MultiHeadYatAttention = MultiHeadAttention
+
+
+# =============================================================================
 # Public API
 # =============================================================================
 
@@ -160,12 +178,22 @@ __all__ = [
     # -------------------------------------------------------------------------
     "YatNMN",
     "Embed",
-    
+    "YatEmbed",  # alias of Embed for cross-framework consistency
+
     # -------------------------------------------------------------------------
     # Convolution Layers
     # -------------------------------------------------------------------------
     "YatConv",
     "YatConvTranspose",
+    # Dimension-specific aliases (match torch / keras / linen / tf names).
+    # They all resolve to the dimension-generic YatConv / YatConvTranspose
+    # in NNX; the dim is inferred from kernel_size at call time.
+    "YatConv1D",
+    "YatConv2D",
+    "YatConv3D",
+    "YatConvTranspose1D",
+    "YatConvTranspose2D",
+    "YatConvTranspose3D",
     # Conv Utilities
     "canonicalize_padding",
     "conv_dimension_numbers",
@@ -179,6 +207,7 @@ __all__ = [
     # -------------------------------------------------------------------------
     # Multi-Head Attention
     "MultiHeadAttention",
+    "MultiHeadYatAttention",  # alias of MultiHeadAttention for cross-framework consistency
     "ATTENTION_DEFAULT_CONSTANT_ALPHA",
     
     # YAT Attention

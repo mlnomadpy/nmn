@@ -161,7 +161,7 @@ class AttentionBenchmarks:
             num_heads=NUM_HEADS,
             max_seq_len=self.seq_len,
             use_performer=True,
-            num_features=NUM_FEATURES,
+            num_prf_features=NUM_FEATURES,
             performer_normalize=False,
             rngs=self.rngs,
         )
@@ -172,7 +172,7 @@ class AttentionBenchmarks:
             num_heads=NUM_HEADS,
             max_seq_len=self.seq_len,
             use_performer=True,
-            num_features=NUM_FEATURES,
+            num_prf_features=NUM_FEATURES,
             performer_normalize=True,
             rngs=self.rngs,
         )
@@ -477,8 +477,8 @@ class TestAttentionCorrectness:
         # Test Rotary attention modules
         rotary_tests = [
             ("Rotary YAT", RotaryYatAttention(embed_dim=embed_dim, num_heads=num_heads, max_seq_len=seq_len, rngs=rngs)),
-            ("Rotary YAT Performer", RotaryYatAttention(embed_dim=embed_dim, num_heads=num_heads, max_seq_len=seq_len, use_performer=True, num_features=64, rngs=rngs)),
-            ("Rotary YAT Perf+Norm", RotaryYatAttention(embed_dim=embed_dim, num_heads=num_heads, max_seq_len=seq_len, use_performer=True, num_features=64, performer_normalize=True, rngs=rngs)),
+            ("Rotary YAT Performer", RotaryYatAttention(embed_dim=embed_dim, num_heads=num_heads, max_seq_len=seq_len, use_performer=True, num_prf_features=64, rngs=rngs)),
+            ("Rotary YAT Perf+Norm", RotaryYatAttention(embed_dim=embed_dim, num_heads=num_heads, max_seq_len=seq_len, use_performer=True, num_prf_features=64, performer_normalize=True, rngs=rngs)),
         ]
         
         for name, module in rotary_tests:
@@ -613,7 +613,7 @@ class TestLongSequences:
             num_heads=heads,
             max_seq_len=seq_len,
             use_performer=True,
-            num_features=128,
+            num_prf_features=128,
             performer_normalize=True,
             rngs=rngs,
         )

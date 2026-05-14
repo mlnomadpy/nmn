@@ -11,6 +11,8 @@ from flax.linen.dtypes import promote_dtype
 from flax.linen.initializers import zeros_init
 from typing import Any, Optional, Sequence, Union, Tuple
 
+from ._yat_core import yat_score
+
 
 class YatConv1D(Module):
     """1D YAT convolution layer for Flax Linen.
@@ -49,7 +51,7 @@ class YatConv1D(Module):
     kernel_init: Any = nn.initializers.orthogonal()
     bias_init: Any = zeros_init()
     alpha_init: Any = lambda key, shape, dtype: jnp.ones(shape, dtype)
-    epsilon: float = 1e-6
+    epsilon: float = 1e-5
     learnable_epsilon: bool = False
 
     @compact
@@ -135,27 +137,11 @@ class YatConv1D(Module):
         kernel_sq_sum = jnp.sum(kernel**2, axis=tuple(range(kernel.ndim - 1)))
         kernel_sq_sum = kernel_sq_sum.reshape((1, 1, -1))
         
-        # YAT distance
         distance_sq = patch_sq_sum + kernel_sq_sum - 2 * dot_prod_map
-        
-        # Add bias before squaring
-        if bias is not None:
-            dot_prod_map = dot_prod_map + bias.reshape((1, 1, -1))
-        
-        # Resolve effective epsilon (learnable via softplus, or constant)
-        if epsilon_param is not None:
-            eps = jax.nn.softplus(epsilon_param.astype(dot_prod_map.dtype))
-        else:
-            eps = self.epsilon
-
-        # YAT output: (x·W + b)² / (dist + ε)
-        y = dot_prod_map**2 / (distance_sq + eps)
-        
-        if alpha is not None:
-            # Simple learnable alpha scaling
-            y = y * alpha
-        
-        return y
+        return yat_score(
+            dot_prod_map, distance_sq,
+            bias=bias, epsilon=self.epsilon, epsilon_param=epsilon_param, alpha=alpha,
+        )
 
 
 class YatConv2D(Module):
@@ -194,7 +180,7 @@ class YatConv2D(Module):
     kernel_init: Any = nn.initializers.orthogonal()
     bias_init: Any = zeros_init()
     alpha_init: Any = lambda key, shape, dtype: jnp.ones(shape, dtype)
-    epsilon: float = 1e-6
+    epsilon: float = 1e-5
     learnable_epsilon: bool = False
 
     @compact
@@ -282,25 +268,10 @@ class YatConv2D(Module):
         
         # YAT distance
         distance_sq = patch_sq_sum + kernel_sq_sum - 2 * dot_prod_map
-        
-        # Add bias before squaring
-        if bias is not None:
-            dot_prod_map = dot_prod_map + bias.reshape((1, 1, 1, -1))
-        
-        # Resolve effective epsilon (learnable via softplus, or constant)
-        if epsilon_param is not None:
-            eps = jax.nn.softplus(epsilon_param.astype(dot_prod_map.dtype))
-        else:
-            eps = self.epsilon
-
-        # YAT output: (x·W + b)² / (dist + ε)
-        y = dot_prod_map**2 / (distance_sq + eps)
-        
-        if alpha is not None:
-            # Simple learnable alpha scaling
-            y = y * alpha
-        
-        return y
+        return yat_score(
+            dot_prod_map, distance_sq,
+            bias=bias, epsilon=self.epsilon, epsilon_param=epsilon_param, alpha=alpha,
+        )
 
 
 class YatConv3D(Module):
@@ -339,7 +310,7 @@ class YatConv3D(Module):
     kernel_init: Any = nn.initializers.orthogonal()
     bias_init: Any = zeros_init()
     alpha_init: Any = lambda key, shape, dtype: jnp.ones(shape, dtype)
-    epsilon: float = 1e-6
+    epsilon: float = 1e-5
     learnable_epsilon: bool = False
 
     @compact
@@ -427,25 +398,10 @@ class YatConv3D(Module):
         
         # YAT distance
         distance_sq = patch_sq_sum + kernel_sq_sum - 2 * dot_prod_map
-        
-        # Add bias before squaring
-        if bias is not None:
-            dot_prod_map = dot_prod_map + bias.reshape((1, 1, 1, 1, -1))
-        
-        # Resolve effective epsilon (learnable via softplus, or constant)
-        if epsilon_param is not None:
-            eps = jax.nn.softplus(epsilon_param.astype(dot_prod_map.dtype))
-        else:
-            eps = self.epsilon
-
-        # YAT output: (x·W + b)² / (dist + ε)
-        y = dot_prod_map**2 / (distance_sq + eps)
-        
-        if alpha is not None:
-            # Simple learnable alpha scaling
-            y = y * alpha
-        
-        return y
+        return yat_score(
+            dot_prod_map, distance_sq,
+            bias=bias, epsilon=self.epsilon, epsilon_param=epsilon_param, alpha=alpha,
+        )
 
 
 class YatConvTranspose1D(Module):
@@ -478,7 +434,7 @@ class YatConvTranspose1D(Module):
     kernel_init: Any = nn.initializers.orthogonal()
     bias_init: Any = zeros_init()
     alpha_init: Any = lambda key, shape, dtype: jnp.ones(shape, dtype)
-    epsilon: float = 1e-6
+    epsilon: float = 1e-5
     learnable_epsilon: bool = False
 
     @compact
@@ -557,24 +513,10 @@ class YatConvTranspose1D(Module):
 
         # YAT distance
         distance_sq = patch_sq_sum + kernel_sq_sum - 2 * dot_prod_map
-
-        # Add bias before squaring
-        if bias is not None:
-            dot_prod_map = dot_prod_map + bias.reshape((1, 1, -1))
-
-        # Resolve effective epsilon (learnable via softplus, or constant)
-        if epsilon_param is not None:
-            eps = jax.nn.softplus(epsilon_param.astype(dot_prod_map.dtype))
-        else:
-            eps = self.epsilon
-
-        # YAT output: (x·W + b)² / (dist + ε)
-        y = dot_prod_map**2 / (distance_sq + eps)
-
-        if alpha is not None:
-            y = y * alpha
-
-        return y
+        return yat_score(
+            dot_prod_map, distance_sq,
+            bias=bias, epsilon=self.epsilon, epsilon_param=epsilon_param, alpha=alpha,
+        )
 
 
 class YatConvTranspose2D(Module):
@@ -607,7 +549,7 @@ class YatConvTranspose2D(Module):
     kernel_init: Any = nn.initializers.orthogonal()
     bias_init: Any = zeros_init()
     alpha_init: Any = lambda key, shape, dtype: jnp.ones(shape, dtype)
-    epsilon: float = 1e-6
+    epsilon: float = 1e-5
     learnable_epsilon: bool = False
 
     @compact
@@ -686,24 +628,10 @@ class YatConvTranspose2D(Module):
 
         # YAT distance
         distance_sq = patch_sq_sum + kernel_sq_sum - 2 * dot_prod_map
-
-        # Add bias before squaring
-        if bias is not None:
-            dot_prod_map = dot_prod_map + bias.reshape((1, 1, 1, -1))
-
-        # Resolve effective epsilon (learnable via softplus, or constant)
-        if epsilon_param is not None:
-            eps = jax.nn.softplus(epsilon_param.astype(dot_prod_map.dtype))
-        else:
-            eps = self.epsilon
-
-        # YAT output: (x·W + b)² / (dist + ε)
-        y = dot_prod_map**2 / (distance_sq + eps)
-
-        if alpha is not None:
-            y = y * alpha
-
-        return y
+        return yat_score(
+            dot_prod_map, distance_sq,
+            bias=bias, epsilon=self.epsilon, epsilon_param=epsilon_param, alpha=alpha,
+        )
 
 
 class YatConvTranspose3D(Module):
@@ -736,7 +664,7 @@ class YatConvTranspose3D(Module):
     kernel_init: Any = nn.initializers.orthogonal()
     bias_init: Any = zeros_init()
     alpha_init: Any = lambda key, shape, dtype: jnp.ones(shape, dtype)
-    epsilon: float = 1e-6
+    epsilon: float = 1e-5
     learnable_epsilon: bool = False
 
     @compact
@@ -815,27 +743,17 @@ class YatConvTranspose3D(Module):
 
         # YAT distance
         distance_sq = patch_sq_sum + kernel_sq_sum - 2 * dot_prod_map
-
-        # Add bias before squaring
-        if bias is not None:
-            dot_prod_map = dot_prod_map + bias.reshape((1, 1, 1, 1, -1))
-
-        # Resolve effective epsilon (learnable via softplus, or constant)
-        if epsilon_param is not None:
-            eps = jax.nn.softplus(epsilon_param.astype(dot_prod_map.dtype))
-        else:
-            eps = self.epsilon
-
-        # YAT output: (x·W + b)² / (dist + ε)
-        y = dot_prod_map**2 / (distance_sq + eps)
-
-        if alpha is not None:
-            y = y * alpha
-
-        return y
+        return yat_score(
+            dot_prod_map, distance_sq,
+            bias=bias, epsilon=self.epsilon, epsilon_param=epsilon_param, alpha=alpha,
+        )
 
 
-# Aliases
+# DEPRECATED: lowercase aliases. The canonical names are the uppercase
+# variants (YatConv1D, YatConv2D, ...) — they match the names exported
+# from every other backend (torch / nnx / keras / tf). The lowercase
+# aliases are kept for backward compatibility and will be removed in a
+# future minor release.
 YatConv1d = YatConv1D
 YatConv2d = YatConv2D
 YatConv3d = YatConv3D

@@ -334,8 +334,8 @@ class YatNMN(Module):
       kernel = kernel / (jnp.sqrt(jnp.sum(kernel**2, axis=0, keepdims=True)) + 1e-8)
 
     if self.spherical:
-       inputs = inputs / jnp.linalg.norm(inputs, axis=-1, keepdims=True)
-       kernel = kernel / jnp.linalg.norm(kernel, axis=0, keepdims=True)
+       inputs = inputs / (jnp.linalg.norm(inputs, axis=-1, keepdims=True) + 1e-8)
+       kernel = kernel / (jnp.linalg.norm(kernel, axis=0, keepdims=True) + 1e-8)
 
     inputs, kernel, bias, alpha = self.promote_dtype(
       (inputs, kernel, bias, alpha), dtype=self.dtype

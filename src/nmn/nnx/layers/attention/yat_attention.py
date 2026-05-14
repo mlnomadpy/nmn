@@ -43,6 +43,8 @@ from jax import Array
 
 from nmn.nnx.layers.squashers import softermax
 
+from ._attention_core import finalize_attention_weights
+
 
 def yat_attention_weights(
     query: Array,
@@ -140,58 +142,27 @@ def yat_attention_weights(
         q_norm_transposed + k_norm_transposed - 2.0 * dot_product, 0.0
     )
 
-    # YAT scores: (q·k)² / ((||q-k||² + ε) * √d)
+    # YAT scores: (q·k)² / ((||q-k||² + ε) * √d), still in float32.
     scale = jnp.sqrt(jnp.float32(head_dim))
     attn_weights = jnp.square(dot_product) / (
         (squared_dist + epsilon) * scale
     )
 
-    # Apply alpha scaling
-    if alpha is not None:
-        alpha_val = jnp.asarray(alpha, dtype=jnp.float32)
-        attn_weights = attn_weights * alpha_val
+    # All score math stays in float32 — cast alpha / bias accordingly so the
+    # shared tail can run in f32 too, then it casts the final softmax /
+    # softermax / l1 output back to the caller's `dtype`.
+    alpha_val = jnp.asarray(alpha, dtype=jnp.float32) if alpha is not None else None
+    bias_val = bias.astype(jnp.float32) if bias is not None else None
 
-    # Apply attention bias
-    if bias is not None:
-        attn_weights = attn_weights + bias.astype(jnp.float32)
-
-    # Apply attention mask
-    if mask is not None:
-        if normalization == "l1":
-            # L1 norm: zero out masked positions (scores are non-negative)
-            attn_weights = jnp.where(mask, attn_weights, 0.0)
-        else:
-            # Softmax/softermax: use -inf for masked positions
-            big_neg = jnp.finfo(jnp.float32).min
-            attn_weights = jnp.where(mask, attn_weights, big_neg)
-
-    # Normalize attention weights — all in f32, cast back to caller's dtype
-    if normalization == "l1":
-        # L1 normalization: score / sum(scores). Natural for YAT since
-        # scores are non-negative — no exp() means no overflow risk.
-        attn_sum = jnp.sum(attn_weights, axis=-1, keepdims=True)
-        attn_weights = (attn_weights / (attn_sum + epsilon)).astype(dtype)
-    elif use_softermax or normalization == "softermax":
-        attn_weights = softermax(attn_weights, n=power).astype(dtype)
-    else:
-        attn_weights = jax.nn.softmax(attn_weights).astype(dtype)
-
-    # Sow attention weights for introspection
-    if module:
-        module.sow(nnx.Intermediate, "attention_weights", attn_weights)
-
-    # Apply attention dropout
-    if not deterministic and dropout_rate > 0.0:
-        keep_prob = 1.0 - dropout_rate
-        if broadcast_dropout:
-            dropout_shape = tuple([1] * (key.ndim - 2)) + attn_weights.shape[-2:]
-            keep = random.bernoulli(dropout_rng, keep_prob, dropout_shape)
-        else:
-            keep = random.bernoulli(dropout_rng, keep_prob, attn_weights.shape)
-        multiplier = keep.astype(dtype) / jnp.asarray(keep_prob, dtype=dtype)
-        attn_weights = attn_weights * multiplier
-
-    return attn_weights
+    return finalize_attention_weights(
+        attn_weights,
+        dtype=dtype, key=key,
+        alpha=alpha_val, bias=bias_val, mask=mask,
+        normalization=normalization, use_softermax=use_softermax, power=power,
+        epsilon=epsilon,
+        broadcast_dropout=broadcast_dropout, dropout_rng=dropout_rng,
+        dropout_rate=dropout_rate, deterministic=deterministic, module=module,
+    )
 
 
 def yat_attention(
@@ -381,40 +352,15 @@ def yat_attention_normalized(
     distance_sq = jnp.maximum(2.0 - 2.0 * dot_product, 0.0)
     attn_weights = jnp.square(dot_product) / ((distance_sq + epsilon) * scale)
 
-    # Apply alpha scaling: y *= alpha (simple multiply)
-    if alpha is not None:
-        alpha_val = jnp.asarray(alpha, dtype=dtype)
-        attn_weights = attn_weights * alpha_val
-
-    # Apply bias
-    if bias is not None:
-        attn_weights = attn_weights + bias
-
-    # Apply mask
-    if mask is not None:
-        big_neg = jnp.finfo(dtype).min
-        attn_weights = jnp.where(mask, attn_weights, big_neg)
-
-    # Normalize
-    if use_softermax:
-        attn_weights = softermax(attn_weights, n=power).astype(dtype)
-    else:
-        attn_weights = jax.nn.softmax(attn_weights).astype(dtype)
-
-    # Sow weights
-    if module:
-        module.sow(nnx.Intermediate, "attention_weights", attn_weights)
-
-    # Dropout
-    if not deterministic and dropout_rate > 0.0:
-        keep_prob = 1.0 - dropout_rate
-        if broadcast_dropout:
-            dropout_shape = tuple([1] * (key.ndim - 2)) + attn_weights.shape[-2:]
-            keep = random.bernoulli(dropout_rng, keep_prob, dropout_shape)
-        else:
-            keep = random.bernoulli(dropout_rng, keep_prob, attn_weights.shape)
-        multiplier = keep.astype(dtype) / jnp.asarray(keep_prob, dtype=dtype)
-        attn_weights = attn_weights * multiplier
+    alpha_val = jnp.asarray(alpha, dtype=dtype) if alpha is not None else None
+    attn_weights = finalize_attention_weights(
+        attn_weights,
+        dtype=dtype, key=key,
+        alpha=alpha_val, bias=bias, mask=mask,
+        use_softermax=use_softermax, power=power,
+        broadcast_dropout=broadcast_dropout, dropout_rng=dropout_rng,
+        dropout_rate=dropout_rate, deterministic=deterministic, module=module,
+    )
 
     # Weighted sum
     return jnp.einsum(

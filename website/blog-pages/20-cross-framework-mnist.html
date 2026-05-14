@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cross-Framework MNIST — Neural Matter Networks</title>
+    <meta name="description"
+        content="Same Yat MLP, three frameworks, real numbers: PyTorch / Flax NNX / Flax Linen trained on MNIST and benchmarked head-to-head.">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tifinagh&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/blog-pages.css">
+</head>
+
+<body>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="../index.html" class="nav-logo">
+                <span class="yat-symbol">ⵟ</span>
+                <span>NMN</span>
+            </a>
+            <div class="nav-links">
+                <a href="../index.html#introduction">Introduction</a>
+                <a href="../index.html#yat-product">ⵟ-Product</a>
+                <a href="../index.html#visualizations">Visualizations</a>
+                <a href="../index.html#results">Results</a>
+                <a href="../index.html#theory" class="nav-blog">Blog</a>
+                <a href="../index.html#code">Code</a>
+                <a href="https://github.com/azettaai/nmn" target="_blank" class="nav-github">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path
+                            d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="blog-page">
+        <div class="container">
+            <article class="blog-post">
+                <header class="blog-post-header">
+                    <a href="../index.html#theory" class="blog-back-link">← Back to Theory</a>
+                    <span class="blog-post-badge">Benchmark</span>
+                    <h1 class="blog-post-title">Cross-Framework MNIST</h1>
+                    <p style="color: var(--text-muted); font-size: 0.95rem; margin-top: 0.5rem;">
+                        Same Yat MLP. Three frameworks. Real numbers, not vibes.
+                    </p>
+                </header>
+
+                <div class="blog-post-content">
+
+                    <!-- ELI5 Section -->
+                    <div class="eli5-section">
+                        <div class="eli5-header">
+                            <span class="eli5-icon">🧒</span>
+                            <h4>Explain Like I'm 5</h4>
+                        </div>
+                        <div class="eli5-content">
+                            <p>
+                                We built the <em>same</em> tiny robot brain three times — once with PyTorch
+                                LEGO, once with JAX (NNX) LEGO, and once with JAX (Linen) LEGO. 🧱
+                            </p>
+                            <ul>
+                                <li>📐 Same number of bricks: <strong>235,148</strong> in every build.</li>
+                                <li>🎯 Same skill after training: <strong>≈95%</strong> on handwritten digits.</li>
+                                <li>⚡ JAX finished faster on a laptop CPU thanks to its compiler.</li>
+                            </ul>
+                            <p>
+                                The point isn't who wins. The point is that <strong>Yat layers behave the
+                                same everywhere</strong> — so pick the framework you already know.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="theorem-content">
+
+                        <h3>The setup</h3>
+
+                        <p>
+                            We trained a <em>two-hidden-layer</em> Yat MLP on MNIST in three NMN
+                            backends: <code>nmn.torch</code>, <code>nmn.nnx</code>, and
+                            <code>nmn.linen</code>. The architecture is identical across all three:
+                        </p>
+
+                        <pre><code>Flatten(28×28) → YatNMN(256) → YatNMN(128) → Linear(10)</code></pre>
+
+                        <p>
+                            No ReLU. No GELU. The non-linearity is baked into the
+                            <a href="08-methodology.html">ⵟ-Product</a> itself.
+                            Optimizer: AdamW, lr = 3 × 10⁻⁴, batch = 128, 3 epochs, seed = 0.
+                            Hardware: Apple Silicon CPU, fp32. The full scripts are in the repo:
+                        </p>
+
+                        <ul>
+                            <li><code>src/nmn/torch/examples/vision/mnist.py</code></li>
+                            <li><code>src/nmn/nnx/examples/vision/mnist.py</code></li>
+                            <li><code>src/nmn/linen/examples/mnist.py</code></li>
+                        </ul>
+
+                        <p>
+                            Equivalent (unrun-on-py3.14) scripts are shipped for
+                            <code>nmn.tf</code> and <code>nmn.keras</code>; see the
+                            <em>Reproducibility</em> note below.
+                        </p>
+
+                        <h3>Results</h3>
+
+                        <p>
+                            Each row is a real run (not "expected"). JSON receipts are checked into
+                            the repo under <code>.context/&lt;framework&gt;_mnist.json</code>.
+                        </p>
+
+                        <div style="overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse; margin: 1.5rem 0; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem;">
+                                <thead>
+                                    <tr style="background: rgba(0,255,136,0.08); border-bottom: 1px solid rgba(0,255,136,0.3);">
+                                        <th style="padding: 0.6rem 1rem; text-align: left;">Framework</th>
+                                        <th style="padding: 0.6rem 1rem; text-align: right;">Params</th>
+                                        <th style="padding: 0.6rem 1rem; text-align: right;">Test acc</th>
+                                        <th style="padding: 0.6rem 1rem; text-align: right;">Test loss</th>
+                                        <th style="padding: 0.6rem 1rem; text-align: right;">Total (s)</th>
+                                        <th style="padding: 0.6rem 1rem; text-align: right;">s / epoch</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                        <td style="padding: 0.6rem 1rem;">PyTorch</td>
+                                        <td style="padding: 0.6rem 1rem; text-align: right;">235,148</td>
+                                        <td style="padding: 0.6rem 1rem; text-align: right;">94.97 %</td>
+                                        <td style="padding: 0.6rem 1rem; text-align: right;">0.1584</td>
+                                        <td style="padding: 0.6rem 1rem; text-align: right;">4.67</td>
+                                        <td style="padding: 0.6rem 1rem; text-align: right;">≈ 1.41</td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                        <td style="padding: 0.6rem 1rem;">Flax NNX</td>
+                                        <td style="padding: 0.6rem 1rem; text-align: right;">235,148</td>
+                                        <td style="padding: 0.6rem 1rem; text-align: right;"><strong>95.39 %</strong></td>
+                                        <td style="padding: 0.6rem 1rem; text-align: right;">0.1477</td>
+                                        <td style="padding: 0.6rem 1rem; text-align: right;"><strong>1.68</strong></td>
+                                        <td style="padding: 0.6rem 1rem; text-align: right;">≈ 0.52</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 0.6rem 1rem;">Flax Linen</td>
+                                        <td style="padding: 0.6rem 1rem; text-align: right;">235,148</td>
+                                        <td style="padding: 0.6rem 1rem; text-align: right;">95.28 %</td>
+                                        <td style="padding: 0.6rem 1rem; text-align: right;">0.1538</td>
+                                        <td style="padding: 0.6rem 1rem; text-align: right;">1.26</td>
+                                        <td style="padding: 0.6rem 1rem; text-align: right;">≈ 0.38</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <p>
+                            <strong>Three things to notice.</strong>
+                        </p>
+
+                        <ol>
+                            <li>
+                                <strong>The parameter counts are byte-identical</strong> (235,148).
+                                Three completely independent implementations agree on the model
+                                size — a small but real cross-framework consistency check.
+                            </li>
+                            <li>
+                                <strong>Final test accuracies fall in a 0.42 pp window</strong>
+                                (94.97 – 95.39). The remaining gap is the same kind of seed /
+                                shuffle-order noise you'd see comparing PyTorch to PyTorch with
+                                different seeds. There is no framework that "doesn't work" with
+                                Yat layers.
+                            </li>
+                            <li>
+                                <strong>JAX (NNX & Linen) is ≈ 3× faster on CPU here.</strong>
+                                Same model, same data, same optimizer. The difference is the
+                                XLA JIT pipeline — Yat's element-wise + reduce structure is
+                                friendly to it. On GPU/TPU the gap closes (and PyTorch's
+                                <code>torch.compile</code> recovers most of it).
+                            </li>
+                        </ol>
+
+                        <h3>Loss curves</h3>
+
+                        <p>
+                            Train-loss trajectories per epoch (numbers from the receipt JSONs):
+                        </p>
+
+                        <div style="overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse; margin: 1rem 0; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem;">
+                                <thead>
+                                    <tr style="background: rgba(0,255,136,0.08); border-bottom: 1px solid rgba(0,255,136,0.3);">
+                                        <th style="padding: 0.5rem 1rem; text-align: left;">Framework</th>
+                                        <th style="padding: 0.5rem 1rem; text-align: right;">Epoch 0</th>
+                                        <th style="padding: 0.5rem 1rem; text-align: right;">Epoch 1</th>
+                                        <th style="padding: 0.5rem 1rem; text-align: right;">Epoch 2</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td style="padding: 0.5rem 1rem;">PyTorch</td>
+                                        <td style="padding: 0.5rem 1rem; text-align: right;">0.9561</td>
+                                        <td style="padding: 0.5rem 1rem; text-align: right;">0.2391</td>
+                                        <td style="padding: 0.5rem 1rem; text-align: right;">0.1818</td></tr>
+                                    <tr><td style="padding: 0.5rem 1rem;">Flax NNX</td>
+                                        <td style="padding: 0.5rem 1rem; text-align: right;">0.8841</td>
+                                        <td style="padding: 0.5rem 1rem; text-align: right;">0.2249</td>
+                                        <td style="padding: 0.5rem 1rem; text-align: right;">0.1710</td></tr>
+                                    <tr><td style="padding: 0.5rem 1rem;">Flax Linen</td>
+                                        <td style="padding: 0.5rem 1rem; text-align: right;">0.8967</td>
+                                        <td style="padding: 0.5rem 1rem; text-align: right;">0.2386</td>
+                                        <td style="padding: 0.5rem 1rem; text-align: right;">0.1808</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <p>
+                            The shape is the same — fast first-epoch drop (Yat's
+                            <a href="04-stable-gradients.html">naturally bounded gradients</a>
+                            mean you can use a small LR without losing the first-epoch transient),
+                            then a quieter pair of refinement epochs.
+                        </p>
+
+                        <h3>Why the numbers agree</h3>
+
+                        <p>
+                            Each backend implements the same ⵟ-Product:
+                        </p>
+
+                        <p>
+                            $$
+                            \mathrm{yat}(x, w) \;=\;
+                            \frac{(x \cdot w)^2}{\lVert x - w \rVert^2 + \varepsilon}
+                            $$
+                        </p>
+
+                        <p>
+                            Different frameworks, but the op decomposes into
+                            <code>matmul → square → divide → broadcast-add ε</code>
+                            in all of them. Our cross-framework parity tests
+                            (<code>tests/test_cross_framework_parity*.py</code>) show
+                            &lt; 10⁻⁶ max element-wise difference in fp32 — so identical
+                            initialization + identical mini-batches would give bit-similar
+                            losses up to floating-point reduction order. The 0.4-pp accuracy
+                            spread above is dominated by per-framework PRNG seeding and
+                            shuffle order, not by any Yat-side difference.
+                        </p>
+
+                        <h3>What about TensorFlow and Keras?</h3>
+
+                        <p>
+                            We ship the same MNIST script for <code>nmn.tf</code> and
+                            <code>nmn.keras</code> at
+                            <code>src/nmn/tf/examples/mnist.py</code> and
+                            <code>src/nmn/keras/examples/mnist.py</code>. They were
+                            <em>not</em> run for this post because TensorFlow has no
+                            wheel for the CPython 3.14 we tested on — see
+                            <a href="https://www.tensorflow.org/install" target="_blank" rel="noopener">tensorflow.org/install</a>
+                            for supported Python versions. The scripts mirror the
+                            PyTorch / NNX / Linen ones exactly, so on Python 3.11/3.12
+                            you should see numbers in the same ballpark; please
+                            <a href="https://github.com/azettaai/nmn/issues" target="_blank" rel="noopener">open
+                                an issue</a> with your run if it lands meaningfully outside it.
+                        </p>
+
+                        <h3>Reproducibility</h3>
+
+                        <p>
+                            From a fresh checkout:
+                        </p>
+
+                        <pre><code># PyTorch
+PYTHONPATH=src python -m nmn.torch.examples.vision.mnist \
+    --epochs 3 --report .context/torch_mnist.json
+
+# Flax NNX
+PYTHONPATH=src python -m nmn.nnx.examples.vision.mnist \
+    --epochs 3 --report .context/nnx_mnist.json
+
+# Flax Linen
+PYTHONPATH=src python -m nmn.linen.examples.mnist \
+    --epochs 3 --report .context/linen_mnist.json
+
+# TensorFlow (needs tensorflow + tensorflow-datasets)
+PYTHONPATH=src python -m nmn.tf.examples.mnist \
+    --epochs 3 --report .context/tf_mnist.json
+
+# Keras 3 (set KERAS_BACKEND first)
+KERAS_BACKEND=jax PYTHONPATH=src python -m nmn.keras.examples.mnist \
+    --epochs 3 --report .context/keras_mnist.json</code></pre>
+
+                        <p>
+                            Every run drops a JSON receipt with the full per-epoch history,
+                            so the numbers above are <em>auditable</em>, not narrated.
+                        </p>
+
+                        <h3>Takeaway</h3>
+
+                        <div
+                            style="margin: 2rem 0; padding: 1.5rem; background: linear-gradient(135deg, rgba(0,100,255,0.08), rgba(0,255,136,0.05)); border-radius: 12px; border-left: 3px solid var(--terminal-green);">
+                            <p style="margin: 0;">
+                                <strong>Yat is framework-portable in practice, not just in theory.</strong>
+                                The implementation parity tests said it should be; this post is the
+                                experimental receipt. Pick the framework that fits your stack — the
+                                model you build will train the same.
+                            </p>
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="blog-page-nav">
+                    <a href="19-conclusion-future.html" class="blog-nav-btn">← Previous: Conclusion & Future</a>
+                    <a href="../index.html#theory" class="blog-nav-btn">All Topics</a>
+                    <a href="01-mercer-kernel.html" class="blog-nav-btn">Start Over: Mercer Kernel →</a>
+                </div>
+            </article>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="yat-symbol">ⵟ</span>
+                    <span>Neural Matter Networks</span>
+                </div>
+                <div class="footer-links">
+                    <a href="https://github.com/azettaai/nmn" target="_blank">GitHub</a>
+                    <a href="https://pypi.org/project/nmn/" target="_blank">PyPI</a>
+                    <a href="mailto:taha@azetta.ai">Contact</a>
+                </div>
+                <div class="footer-copy">
+                    <p>Built with ❤️ by <a href="https://azetta.ai" target="_blank">azetta.ai</a></p>
+                    <p>AGPL-3.0 License</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '$', right: '$', display: false }
+                ]
+            });
+        });
+    </script>
+</body>
+
+</html>
