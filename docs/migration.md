@@ -183,6 +183,51 @@ class MLP(nn.Module):
 
 ---
 
+## MLX (Apple Silicon)
+
+### Before
+
+```python
+import mlx.nn as nn
+
+class MLP(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(784, 256)
+        self.fc2 = nn.Linear(256, 128)
+        self.fc3 = nn.Linear(128, 10)
+    def __call__(self, x):
+        x = nn.relu(self.fc1(x))
+        x = nn.relu(self.fc2(x))
+        return self.fc3(x)
+```
+
+### After
+
+```python
+import mlx.core as mx
+import mlx.nn as nn
+from nmn.mlx import YatNMN
+
+class MLP(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = YatNMN(features=256)
+        self.fc2 = YatNMN(features=128)
+        self.fc3 = nn.Linear(128, 10)
+        # MLX YatNMN builds parameters lazily — warm up with a dummy
+        # input so nn.value_and_grad captures them.
+        _ = self.fc2(self.fc1(mx.zeros((1, 784))))
+
+    def __call__(self, x):
+        return self.fc3(self.fc2(self.fc1(x)))
+```
+
+The lazy-build pattern matches `nmn.tf` / `nmn.keras`; see
+[`docs/guides/mlx.md` § 8](guides/mlx.md) for the full reasoning.
+
+---
+
 ## Common patterns and gotchas
 
 ### Final classification layer
@@ -240,3 +285,4 @@ See [`architecture.md` § Numerical stability](architecture.md#3-numerical-stabi
 - [Keras step-by-step](guides/keras.md)
 - [TensorFlow step-by-step](guides/tensorflow.md)
 - [Flax Linen step-by-step](guides/flax-linen.md)
+- [MLX step-by-step](guides/mlx.md)

@@ -12,6 +12,7 @@ Comprehensive examples for using Neural Matter Networks across all supported fra
   - [TensorFlow](#tensorflow)
   - [Flax NNX](#flax-nnx)
   - [Flax Linen](#flax-linen)
+  - [MLX](#mlx)
 - [Architecture Examples](#architecture-examples)
   - [Vision: CNN with Yat Layers](#vision-cnn-with-yat-layers)
   - [NLP: Transformer Block](#nlp-transformer-block-with-yat-attention)
@@ -291,6 +292,46 @@ model = YatMLP()
 params = model.init(key, jnp.zeros((1, 128)))
 output = model.apply(params, jnp.zeros((32, 128)))  # (32, 10)
 ```
+
+### MLX
+
+```python
+import mlx.core as mx
+import mlx.nn as nn
+from nmn.mlx import YatNMN, YatConv2D
+
+# ═══════════════════════════════════════════════════════════════
+# Dense Layer
+# ═══════════════════════════════════════════════════════════════
+dense = YatNMN(features=64, constant_alpha=True)
+x = mx.random.normal(shape=(32, 128))
+y = dense(x)  # (32, 64)
+
+# ═══════════════════════════════════════════════════════════════
+# 2D Convolution — channels-last (N, H, W, C)
+# ═══════════════════════════════════════════════════════════════
+conv = YatConv2D(filters=32, kernel_size=3, padding="same")
+images = mx.random.normal(shape=(8, 32, 32, 3))
+features = conv(images)  # (8, 32, 32, 32)
+
+# ═══════════════════════════════════════════════════════════════
+# A small Sequential-style MLP
+# ═══════════════════════════════════════════════════════════════
+class YatMLP(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = YatNMN(features=128)
+        self.fc2 = YatNMN(features=10)
+        # Build lazy params eagerly so value_and_grad sees them.
+        _ = self.fc2(self.fc1(mx.zeros((1, 28 * 28))))
+
+    def __call__(self, x):
+        x = x.reshape((x.shape[0], -1))
+        return self.fc2(self.fc1(x))
+```
+
+> MLX wheels are Apple-Silicon-only — install via `pip install "nmn[mlx]"`
+> on macOS arm64.
 
 ---
 
@@ -699,8 +740,11 @@ src/nmn/
 ├── tf/examples/
 │   └── mnist.py                     # Native TensorFlow MNIST MLP
 │
-└── keras/examples/
-    └── mnist.py                     # Keras 3 (backend-agnostic) MNIST MLP
+├── keras/examples/
+│   └── mnist.py                     # Keras 3 (backend-agnostic) MNIST MLP
+│
+└── mlx/examples/
+    └── mnist.py                     # MLX MNIST MLP (Apple Silicon — GPU or CPU)
 ```
 
 ### Running Examples
@@ -710,6 +754,9 @@ src/nmn/
 PYTHONPATH=src python -m nmn.torch.examples.vision.mnist --report .context/torch_mnist.json
 PYTHONPATH=src python -m nmn.nnx.examples.vision.mnist   --report .context/nnx_mnist.json
 PYTHONPATH=src python -m nmn.linen.examples.mnist        --report .context/linen_mnist.json
+
+# MLX (Apple Silicon, Metal GPU by default)
+PYTHONPATH=src python -m nmn.mlx.examples.mnist --device gpu --report .context/mlx_mnist.json
 
 # TensorFlow / Keras (need separate framework installs)
 PYTHONPATH=src python -m nmn.tf.examples.mnist                          --report .context/tf_mnist.json
@@ -795,6 +842,22 @@ from nmn.linen.nmn import YatNMN
 
 # Convolutions
 from nmn.linen.conv import YatConv1D, YatConv2D, YatConv3D
+
+# ═══════════════════════════════════════════════════════════════
+# MLX (Apple Silicon)
+# ═══════════════════════════════════════════════════════════════
+from nmn.mlx import YatNMN
+
+# Convolutions
+from nmn.mlx import YatConv1D, YatConv2D, YatConv3D
+from nmn.mlx import YatConvTranspose1D, YatConvTranspose2D, YatConvTranspose3D
+
+# Attention + embedding
+from nmn.mlx import MultiHeadYatAttention, YatEmbed
+from nmn.mlx import yat_attention, yat_attention_weights, normalize_qk
+
+# Squashers
+from nmn.mlx import softermax, softer_sigmoid, soft_tanh
 ```
 
 ---

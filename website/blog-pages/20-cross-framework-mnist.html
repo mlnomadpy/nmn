@@ -92,9 +92,10 @@
                         <h3>The setup</h3>
 
                         <p>
-                            We trained a <em>two-hidden-layer</em> Yat MLP on MNIST in three NMN
-                            backends: <code>nmn.torch</code>, <code>nmn.nnx</code>, and
-                            <code>nmn.linen</code>. The architecture is identical across all three:
+                            We trained a <em>two-hidden-layer</em> Yat MLP on MNIST in four NMN
+                            backends: <code>nmn.torch</code>, <code>nmn.nnx</code>,
+                            <code>nmn.linen</code>, and <code>nmn.mlx</code>. The architecture is
+                            identical across all four:
                         </p>
 
                         <pre><code>Flatten(28×28) → YatNMN(256) → YatNMN(128) → Linear(10)</code></pre>
@@ -110,6 +111,7 @@
                             <li><code>src/nmn/torch/examples/vision/mnist.py</code></li>
                             <li><code>src/nmn/nnx/examples/vision/mnist.py</code></li>
                             <li><code>src/nmn/linen/examples/mnist.py</code></li>
+                            <li><code>src/nmn/mlx/examples/mnist.py</code></li>
                         </ul>
 
                         <p>
@@ -154,13 +156,21 @@
                                         <td style="padding: 0.6rem 1rem; text-align: right;"><strong>1.68</strong></td>
                                         <td style="padding: 0.6rem 1rem; text-align: right;">≈ 0.52</td>
                                     </tr>
-                                    <tr>
+                                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                                         <td style="padding: 0.6rem 1rem;">Flax Linen</td>
                                         <td style="padding: 0.6rem 1rem; text-align: right;">235,148</td>
                                         <td style="padding: 0.6rem 1rem; text-align: right;">95.28 %</td>
                                         <td style="padding: 0.6rem 1rem; text-align: right;">0.1538</td>
                                         <td style="padding: 0.6rem 1rem; text-align: right;">1.26</td>
                                         <td style="padding: 0.6rem 1rem; text-align: right;">≈ 0.38</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 0.6rem 1rem;">MLX (Metal GPU)</td>
+                                        <td style="padding: 0.6rem 1rem; text-align: right;">235,148</td>
+                                        <td style="padding: 0.6rem 1rem; text-align: right;"><strong>96.28 %</strong></td>
+                                        <td style="padding: 0.6rem 1rem; text-align: right;"><strong>0.1220</strong></td>
+                                        <td style="padding: 0.6rem 1rem; text-align: right;">1.62</td>
+                                        <td style="padding: 0.6rem 1rem; text-align: right;">≈ 0.54</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -173,22 +183,31 @@
                         <ol>
                             <li>
                                 <strong>The parameter counts are byte-identical</strong> (235,148).
-                                Three completely independent implementations agree on the model
+                                Four completely independent implementations agree on the model
                                 size — a small but real cross-framework consistency check.
                             </li>
                             <li>
-                                <strong>Final test accuracies fall in a 0.42 pp window</strong>
-                                (94.97 – 95.39). The remaining gap is the same kind of seed /
-                                shuffle-order noise you'd see comparing PyTorch to PyTorch with
-                                different seeds. There is no framework that "doesn't work" with
-                                Yat layers.
+                                <strong>Final test accuracies fall in a 1.31 pp window</strong>
+                                (94.97 – 96.28). The remaining gap is the same kind of seed /
+                                shuffle-order / device-rounding noise you'd see comparing PyTorch
+                                to PyTorch with different seeds. There is no framework that
+                                "doesn't work" with Yat layers.
                             </li>
                             <li>
-                                <strong>JAX (NNX & Linen) is ≈ 3× faster on CPU here.</strong>
-                                Same model, same data, same optimizer. The difference is the
-                                XLA JIT pipeline — Yat's element-wise + reduce structure is
+                                <strong>JAX (NNX & Linen) is ≈ 3× faster on CPU here</strong> —
+                                same model, same data, same optimizer. The difference is the
+                                XLA JIT pipeline; Yat's element-wise + reduce structure is
                                 friendly to it. On GPU/TPU the gap closes (and PyTorch's
                                 <code>torch.compile</code> recovers most of it).
+                            </li>
+                            <li>
+                                <strong>MLX on Metal lands a real receipt</strong>: 96.28 %
+                                in 1.62 s on the Apple Silicon GPU — slightly faster than the
+                                XLA-CPU runs and the best accuracy of the four. The
+                                <code>cpu</code> device run is bit-identical to the GPU run
+                                (96.28 % both ways), so MLX's <em>backend</em> isn't doing
+                                anything funny — the Yat trajectory simply lands on a slightly
+                                better local minimum at this seed. We'll take it.
                             </li>
                         </ol>
 
@@ -221,6 +240,10 @@
                                         <td style="padding: 0.5rem 1rem; text-align: right;">0.8967</td>
                                         <td style="padding: 0.5rem 1rem; text-align: right;">0.2386</td>
                                         <td style="padding: 0.5rem 1rem; text-align: right;">0.1808</td></tr>
+                                    <tr><td style="padding: 0.5rem 1rem;">MLX (Metal GPU)</td>
+                                        <td style="padding: 0.5rem 1rem; text-align: right;">0.4490</td>
+                                        <td style="padding: 0.5rem 1rem; text-align: right;">0.1630</td>
+                                        <td style="padding: 0.5rem 1rem; text-align: right;">0.1271</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -291,6 +314,10 @@ PYTHONPATH=src python -m nmn.nnx.examples.vision.mnist \
 # Flax Linen
 PYTHONPATH=src python -m nmn.linen.examples.mnist \
     --epochs 3 --report .context/linen_mnist.json
+
+# MLX (Apple Silicon, --device gpu or cpu)
+PYTHONPATH=src python -m nmn.mlx.examples.mnist \
+    --epochs 3 --device gpu --report .context/mlx_mnist.json
 
 # TensorFlow (needs tensorflow + tensorflow-datasets)
 PYTHONPATH=src python -m nmn.tf.examples.mnist \

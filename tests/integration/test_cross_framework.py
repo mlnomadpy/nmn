@@ -49,7 +49,13 @@ def get_available_frameworks():
         frameworks.append('nnx')
     except ImportError:
         pass
-    
+
+    try:
+        import mlx.core  # noqa: F401
+        frameworks.append('mlx')
+    except ImportError:
+        pass
+
     return frameworks
 
 
@@ -214,6 +220,36 @@ def get_linen_output(inputs_np, weights_np, bias_np=None, alpha_np=None, epsilon
     return np.array(output)
 
 
+def get_mlx_output(inputs_np, weights_np, bias_np=None, alpha_np=None, epsilon=1e-6):
+    """Get YAT output from MLX implementation."""
+    import mlx.core as mx
+    from nmn.mlx.nmn import YatNMN as MlxYatNMN
+
+    # Pin to CPU so the 1e-3 rtol below stays meaningful — Metal matmul
+    # accumulates at lower precision than numpy CPU fp32.
+    prev_device = mx.default_device()
+    mx.set_default_device(mx.cpu)
+    try:
+        in_features, out_features = weights_np.shape
+        layer = MlxYatNMN(
+            features=out_features,
+            use_bias=(bias_np is not None),
+            use_alpha=(alpha_np is not None),
+            epsilon=epsilon,
+        )
+        layer.build(in_features)
+        # MLX kernel is (features, in_features) — transpose canonical W.
+        layer.kernel = mx.array(weights_np.T.astype(np.float32))
+        if bias_np is not None:
+            layer.bias = mx.array(bias_np.astype(np.float32))
+        if alpha_np is not None:
+            layer.alpha = mx.array(np.array([alpha_np], dtype=np.float32))
+        out = layer(mx.array(inputs_np.astype(np.float32)))
+        return np.asarray(out)
+    finally:
+        mx.set_default_device(prev_device)
+
+
 def get_nnx_output(inputs_np, weights_np, bias_np=None, alpha_np=None, epsilon=1e-6):
     """Get YAT output from NNX implementation."""
     import jax.numpy as jnp
@@ -282,14 +318,17 @@ class TestCrossFrameworkConsistency:
         
         if 'nnx' in AVAILABLE_FRAMEWORKS:
             outputs['nnx'] = get_nnx_output(inputs, weights, epsilon=epsilon)
-        
+
+        if 'mlx' in AVAILABLE_FRAMEWORKS:
+            outputs['mlx'] = get_mlx_output(inputs, weights, epsilon=epsilon)
+
         # Compare all frameworks to reference
         for name, output in outputs.items():
             np.testing.assert_allclose(
                 output, ref_output, rtol=1e-3, atol=1e-3,
                 err_msg=f"{name} output differs from reference"
             )
-    
+
     def test_yat_with_bias(self, test_data):
         """Test YAT with bias across frameworks."""
         inputs = test_data['inputs']
@@ -310,13 +349,16 @@ class TestCrossFrameworkConsistency:
         
         if 'nnx' in AVAILABLE_FRAMEWORKS:
             outputs['nnx'] = get_nnx_output(inputs, weights, bias_np=bias, epsilon=epsilon)
-        
+
+        if 'mlx' in AVAILABLE_FRAMEWORKS:
+            outputs['mlx'] = get_mlx_output(inputs, weights, bias_np=bias, epsilon=epsilon)
+
         for name, output in outputs.items():
             np.testing.assert_allclose(
                 output, ref_output, rtol=1e-3, atol=1e-3,
                 err_msg=f"{name} output with bias differs from reference"
             )
-    
+
     def test_yat_with_alpha(self, test_data):
         """Test YAT with alpha scaling across frameworks."""
         inputs = test_data['inputs']
@@ -337,7 +379,10 @@ class TestCrossFrameworkConsistency:
         
         if 'nnx' in AVAILABLE_FRAMEWORKS:
             outputs['nnx'] = get_nnx_output(inputs, weights, alpha_np=alpha, epsilon=epsilon)
-        
+
+        if 'mlx' in AVAILABLE_FRAMEWORKS:
+            outputs['mlx'] = get_mlx_output(inputs, weights, alpha_np=alpha, epsilon=epsilon)
+
         for name, output in outputs.items():
             np.testing.assert_allclose(
                 output, ref_output, rtol=1e-3, atol=1e-3,
@@ -361,6 +406,10 @@ class TestCrossFrameworkConsistency:
         if 'nnx' in AVAILABLE_FRAMEWORKS:
             output = get_nnx_output(inputs, weights, epsilon=epsilon)
             assert np.all(output >= 0), "NNX produced negative values"
+
+        if 'mlx' in AVAILABLE_FRAMEWORKS:
+            output = get_mlx_output(inputs, weights, epsilon=epsilon)
+            assert np.all(output >= 0), "MLX produced negative values"
 
 
 # ============================================================================
@@ -388,17 +437,45 @@ class TestTorchVsLinen:
                     reason="Need both Linen and NNX")
 class TestLinenVsNNX:
     """Direct comparison between Linen and NNX."""
-    
+
     def test_dense_layer_match(self):
         """Test that dense layers match between Linen and NNX."""
         np.random.seed(42)
         inputs = np.random.randn(4, 8).astype(np.float32)
         weights = np.random.randn(8, 16).astype(np.float32)
-        
+
         linen_out = get_linen_output(inputs, weights)
         nnx_out = get_nnx_output(inputs, weights)
-        
+
         np.testing.assert_allclose(linen_out, nnx_out, rtol=1e-3, atol=1e-3)
+
+
+@pytest.mark.skipif('mlx' not in AVAILABLE_FRAMEWORKS or 'torch' not in AVAILABLE_FRAMEWORKS,
+                    reason="Need both MLX and PyTorch")
+class TestMlxVsTorch:
+    """Direct comparison between MLX and PyTorch."""
+
+    def test_dense_layer_match(self):
+        """Dense layers should match bit-for-bit (within fp32 ULP) on CPU."""
+        np.random.seed(42)
+        inputs = np.random.randn(4, 8).astype(np.float32)
+        weights = np.random.randn(8, 16).astype(np.float32)
+
+        mlx_out = get_mlx_output(inputs, weights)
+        torch_out = get_torch_output(inputs, weights)
+
+        np.testing.assert_allclose(mlx_out, torch_out, rtol=1e-3, atol=1e-3)
+
+    def test_dense_with_bias_match(self):
+        np.random.seed(7)
+        inputs = np.random.randn(4, 8).astype(np.float32)
+        weights = np.random.randn(8, 16).astype(np.float32)
+        bias = np.random.randn(16).astype(np.float32)
+
+        mlx_out = get_mlx_output(inputs, weights, bias_np=bias)
+        torch_out = get_torch_output(inputs, weights, bias_np=bias)
+
+        np.testing.assert_allclose(mlx_out, torch_out, rtol=1e-3, atol=1e-3)
 
 
 # ============================================================================
@@ -424,7 +501,12 @@ class TestNumericalStabilityAllFrameworks:
             output = get_linen_output(inputs, weights)
             assert not np.isnan(output).any(), "Linen NaN with large values"
             assert not np.isinf(output).any(), "Linen Inf with large values"
-    
+
+        if 'mlx' in AVAILABLE_FRAMEWORKS:
+            output = get_mlx_output(inputs, weights)
+            assert not np.isnan(output).any(), "MLX NaN with large values"
+            assert not np.isinf(output).any(), "MLX Inf with large values"
+
     def test_small_values(self):
         """Test with small input values."""
         np.random.seed(42)
@@ -438,7 +520,11 @@ class TestNumericalStabilityAllFrameworks:
         if 'linen' in AVAILABLE_FRAMEWORKS:
             output = get_linen_output(inputs, weights)
             assert not np.isnan(output).any(), "Linen NaN with small values"
-    
+
+        if 'mlx' in AVAILABLE_FRAMEWORKS:
+            output = get_mlx_output(inputs, weights)
+            assert not np.isnan(output).any(), "MLX NaN with small values"
+
     def test_matching_input_weight(self):
         """Test when input exactly matches a weight vector."""
         np.random.seed(42)
@@ -453,3 +539,7 @@ class TestNumericalStabilityAllFrameworks:
         if 'linen' in AVAILABLE_FRAMEWORKS:
             output = get_linen_output(inputs, weights)
             assert not np.isnan(output).any(), "Linen NaN with matching vectors"
+
+        if 'mlx' in AVAILABLE_FRAMEWORKS:
+            output = get_mlx_output(inputs, weights)
+            assert not np.isnan(output).any(), "MLX NaN with matching vectors"

@@ -27,6 +27,7 @@ Each guide is self-contained: install → hello world → MNIST → CNN → atte
 - [⚡ **Flax Linen**](guides/flax-linen.md)
 - [🟨 **Keras 3**](guides/keras.md) (multi-backend)
 - [🟧 **TensorFlow**](guides/tensorflow.md)
+- [🍎 **MLX**](guides/mlx.md) (Apple Silicon)
 
 ---
 
@@ -39,23 +40,24 @@ Each guide is self-contained: install → hello world → MNIST → CNN → atte
 | **Flax Linen** | You're maintaining a legacy Linen codebase.                                                |
 | **Keras 3**    | You want a high-level API that runs on JAX, TF, *or* PyTorch backends.                     |
 | **TensorFlow** | You need TF-specific deployment (TFLite, Serving) or `tf.Module`-level control.            |
+| **MLX**        | You're on Apple Silicon and want the best perf-per-watt + native Metal GPU acceleration.   |
 
-All five **produce numerically equivalent outputs** (max abs error < 1e-6 in fp32). You can prototype in one and serve from another.
+All six **produce numerically equivalent outputs** (max abs error < 1e-6 in fp32). You can prototype in one and serve from another.
 
 ---
 
 ## Layer support matrix
 
-All layers are available across **all 5 frameworks**.
+All layers are available across **all 6 frameworks**.
 
-| Layer                                      | PyTorch                | TF                     | Keras                  | NNX                                       | Linen                  |
-| ------------------------------------------ | :--------------------: | :--------------------: | :--------------------: | :---------------------------------------: | :--------------------: |
-| Dense                                       | `YatNMN`               | `YatNMN`               | `YatNMN`               | `YatNMN`                                  | `YatNMN`               |
-| Conv 1D / 2D / 3D                          | `YatConv{1,2,3}D`      | `YatConv{1,2,3}D`      | `YatConv{1,2,3}D`      | `YatConv`                                 | `YatConv{1,2,3}D`      |
-| ConvTranspose 1D / 2D / 3D                 | `YatConvTranspose{1,2,3}D` | `YatConvTranspose{1,2,3}D` | `YatConvTranspose{1,2,3}D` | `YatConvTranspose`                        | `YatConvTranspose{1,2,3}D` |
-| Multi-Head Attention                       | `MultiHeadYatAttention`| `MultiHeadYatAttention`| `MultiHeadYatAttention`| `MultiHeadAttention`                      | `MultiHeadAttention`   |
-| Embedding                                  | `YatEmbed`             | `YatEmbed`             | `YatEmbed`             | `Embed`                                   | `YatEmbed`             |
-| Squashers (`softermax`, `softer_sigmoid`, `soft_tanh`) | ✅       | ✅                     | ✅                     | ✅                                        | ✅                     |
+| Layer                                      | PyTorch                | TF                     | Keras                  | NNX                                       | Linen                  | MLX                    |
+| ------------------------------------------ | :--------------------: | :--------------------: | :--------------------: | :---------------------------------------: | :--------------------: | :--------------------: |
+| Dense                                       | `YatNMN`               | `YatNMN`               | `YatNMN`               | `YatNMN`                                  | `YatNMN`               | `YatNMN`               |
+| Conv 1D / 2D / 3D                          | `YatConv{1,2,3}D`      | `YatConv{1,2,3}D`      | `YatConv{1,2,3}D`      | `YatConv`                                 | `YatConv{1,2,3}D`      | `YatConv{1,2,3}D`      |
+| ConvTranspose 1D / 2D / 3D                 | `YatConvTranspose{1,2,3}D` | `YatConvTranspose{1,2,3}D` | `YatConvTranspose{1,2,3}D` | `YatConvTranspose`                        | `YatConvTranspose{1,2,3}D` | `YatConvTranspose{1,2,3}D` (groups=1) |
+| Multi-Head Attention                       | `MultiHeadYatAttention`| `MultiHeadYatAttention`| `MultiHeadYatAttention`| `MultiHeadAttention`                      | `MultiHeadAttention`   | `MultiHeadYatAttention`|
+| Embedding                                  | `YatEmbed`             | `YatEmbed`             | `YatEmbed`             | `Embed`                                   | `YatEmbed`             | `YatEmbed`             |
+| Squashers (`softermax`, `softer_sigmoid`, `soft_tanh`) | ✅       | ✅                     | ✅                     | ✅                                        | ✅                     | ✅                     |
 
 **NNX-only advanced variants:**
 
@@ -74,7 +76,8 @@ nmn/
 │   ├── nnx/        Flax NNX implementation + examples + Pallas kernels
 │   ├── linen/      Flax Linen implementation
 │   ├── keras/      Keras 3 implementation
-│   └── tf/         TensorFlow implementation
+│   ├── tf/         TensorFlow implementation
+│   └── mlx/        MLX implementation (Apple Silicon)
 ├── tests/
 │   ├── test_<framework>/   Per-framework unit tests
 │   ├── integration/         Cross-framework consistency

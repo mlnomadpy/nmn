@@ -3,7 +3,7 @@
 <p align="center">
   <em>Activation-free neural layers that learn non-linearity through geometric operations.</em>
   <br>
-  <strong>One library. Five frameworks. Numerically equivalent.</strong>
+  <strong>One library. Six frameworks. Numerically equivalent.</strong>
 </p>
 
 <p align="center">
@@ -21,6 +21,7 @@
   <a href="docs/guides/flax-nnx.md"><strong>⚡ JAX/Flax</strong></a> ·
   <a href="docs/guides/keras.md"><strong>🟨 Keras</strong></a> ·
   <a href="docs/guides/tensorflow.md"><strong>🟧 TF</strong></a> ·
+  <a href="docs/guides/mlx.md"><strong>🍎 MLX</strong></a> ·
   <a href="docs/architecture.md"><strong>🧮 Theory</strong></a> ·
   <a href="docs/migration.md"><strong>🔄 Migrate</strong></a> ·
   <a href="https://azettaai.github.io/nmn/paper/"><strong>📄 Paper</strong></a>
@@ -65,7 +66,7 @@ y = YatNMN(in_features=128, out_features=64)(x)   # geometric, intrinsically non
 | Requires an external activation for non-linearity      | Non-linearity is intrinsic                                              |
 | Fires for distant-but-aligned vectors (spurious)       | Penalizes distance → cleaner, prototype-like features                   |
 
-NMN ships across **PyTorch, Flax NNX, Flax Linen, Keras 3, and TensorFlow** with numerically equivalent outputs (< 1e-6 max-abs error in fp32). Pick the framework you like; switch later without retraining math.
+NMN ships across **PyTorch, Flax NNX, Flax Linen, Keras 3, TensorFlow, and MLX** (Apple Silicon) with numerically equivalent outputs (< 1e-6 max-abs error in fp32, verified by an integration parity matrix). Pick the framework you like; switch later without retraining math.
 
 ---
 
@@ -78,7 +79,8 @@ pip install "nmn[nnx]"            # + Flax NNX (JAX)
 pip install "nmn[linen]"          # + Flax Linen (JAX)
 pip install "nmn[keras]"          # + Keras 3 / TensorFlow
 pip install "nmn[tf]"             # + TensorFlow
-pip install "nmn[all]"            # everything
+pip install "nmn[mlx]"            # + MLX (Apple Silicon only)
+pip install "nmn[all]"            # everything except MLX (Linux/Windows safe)
 ```
 
 **Requirements:** Python ≥ 3.10 (≥ 3.11 if you want JAX/Flax).

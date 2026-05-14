@@ -240,12 +240,46 @@ def _run_tf(spherical, weight_normalized, learnable_epsilon, bias_mode):
     return layer(tf.constant(X)).numpy()
 
 
+def _run_mlx(spherical, weight_normalized, learnable_epsilon, bias_mode):
+    mx = pytest.importorskip("mlx.core")
+    # Pin to CPU: MLX's Metal matmul accumulates at lower precision than
+    # numpy fp32, so the < 1e-4 rtol used here is only meaningful on CPU.
+    prev_device = mx.default_device()
+    mx.set_default_device(mx.cpu)
+    try:
+        from nmn.mlx.nmn import YatNMN as MlxYatNMN
+
+        bias_arr, const_bias = _bias_for(bias_mode)
+        use_bias = bias_arr is not None or const_bias is not None
+
+        layer = MlxYatNMN(
+            features=OUT_FEATURES,
+            use_bias=use_bias,
+            constant_bias=const_bias,
+            use_alpha=False,
+            spherical=spherical,
+            weight_normalized=weight_normalized,
+            epsilon=EPSILON,
+            learnable_epsilon=learnable_epsilon,
+        )
+        layer.build(IN_FEATURES)
+        # MLX kernel is (features, in_features) — transpose canonical W.
+        layer.kernel = mx.array(W_LOGICAL.T)
+        if bias_arr is not None:
+            layer.bias = mx.array(bias_arr)
+        out = layer(mx.array(X))
+        return np.asarray(out)
+    finally:
+        mx.set_default_device(prev_device)
+
+
 FRAMEWORKS = {
     "nnx": _run_nnx,
     "linen": _run_linen,
     "torch": _run_torch,
     "keras": _run_keras,
     "tf": _run_tf,
+    "mlx": _run_mlx,
 }
 
 
