@@ -25,6 +25,11 @@ from .performer import (
     yat_tp_features,
     yat_tp_attention,
 )
+from .goat import (
+    GoatYatAttention,
+    goat_yat_attention,
+    goat_yat_attention_weights,
+)
 from .fused import fused_yat_score, is_gpu_available
 from .squashers import softermax, softer_sigmoid, soft_tanh
 
@@ -60,6 +65,9 @@ __all__ = [
     "create_yat_tp_projection",
     "yat_tp_features",
     "yat_tp_attention",
+    "GoatYatAttention",
+    "goat_yat_attention",
+    "goat_yat_attention_weights",
     "fused_yat_score",
     "is_gpu_available",
     "softermax", "softer_sigmoid", "soft_tanh",
