@@ -14,7 +14,15 @@ from .layers import (
 from .nmn import YatNMN
 
 # Import attention
-from .attention import MultiHeadYatAttention
+from .attention import (
+    MultiHeadYatAttention,
+    create_maclaurin_projection,
+    maclaurin_features,
+    maclaurin_yat_attention,
+    create_radial_projection,
+    radial_features,
+    radial_yat_attention,
+)
 
 # Import embedding
 from .embed import YatEmbed
@@ -35,6 +43,13 @@ __all__ = [
     "YatNMN",
     # YAT Attention
     "MultiHeadYatAttention",
+    # MAY / RAY linear-attention feature maps
+    "create_maclaurin_projection",
+    "maclaurin_features",
+    "maclaurin_yat_attention",
+    "create_radial_projection",
+    "radial_features",
+    "radial_yat_attention",
     # YAT Embedding
     "YatEmbed",
     # Squashers

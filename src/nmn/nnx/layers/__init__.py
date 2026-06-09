@@ -11,7 +11,7 @@ This module contains all YAT (You Are There) layer implementations and related c
 # Core YAT Layers
 # =============================================================================
 
-from nmn.nnx.layers.nmn import YatNMN
+from nmn.nnx.layers.nmn import YatNMN, FrozenParam
 from nmn.nnx.layers.embed import Embed
 
 
@@ -71,6 +71,17 @@ from nmn.nnx.layers.attention import (
     create_yat_tp_projection,
 )
 
+# MAY / RAY bias-aware linear-attention feature maps
+from nmn.nnx.layers.attention import (
+    create_maclaurin_projection,
+    maclaurin_features,
+    maclaurin_yat_attention,
+    maclaurin_coeffs,
+    create_radial_projection,
+    radial_features,
+    radial_yat_attention,
+)
+
 # Standard Dot-Product Attention
 from nmn.nnx.layers.attention import (
     dot_product_attention,
@@ -106,8 +117,9 @@ __all__ = [
     # Core Layers
     # -------------------------------------------------------------------------
     "YatNMN",
+    "FrozenParam",
     "Embed",
-    
+
     # -------------------------------------------------------------------------
     # Convolution Layers
     # -------------------------------------------------------------------------
@@ -149,7 +161,16 @@ __all__ = [
     "yat_tp_attention",
     "yat_tp_features",
     "create_yat_tp_projection",
-    
+
+    # MAY / RAY bias-aware feature maps
+    "create_maclaurin_projection",
+    "maclaurin_features",
+    "maclaurin_yat_attention",
+    "maclaurin_coeffs",
+    "create_radial_projection",
+    "radial_features",
+    "radial_yat_attention",
+
     # Standard Attention
     "dot_product_attention",
     "dot_product_attention_weights",

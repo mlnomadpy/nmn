@@ -50,6 +50,12 @@ class YatNMN(nn.Module):
             to have norm 1. (PyTorch kernels use shape ``(out_features, in_features)``,
             so each row is one neuron.) This optimization avoids recomputing kernel
             norms in YAT distance calculation since they are guaranteed to be 1.0.
+        lazy (bool): If True, freeze ONLY the kernel (``weight.requires_grad =
+            False``) so it is excluded from gradients/optimizer; bias, alpha,
+            and the learnable epsilon stay trainable. Composes with
+            ``use_bias`` / ``use_alpha`` / ``learnable_epsilon``. Default False
+            (fully backward compatible). Alias: ``freeze_kernel``.
+        freeze_kernel (bool): Alias for ``lazy`` (logical OR with ``lazy``).
         tie_kernel_bank (bool): If True, reuse shared kernels across compatible layers.
         kernel_bank_size (int): Optional explicit size for shared bank (auto-expands if needed).
         kernel_bank_id (str): Namespace for shared banks (allows multiple independent banks).
@@ -81,6 +87,8 @@ class YatNMN(nn.Module):
         spherical: bool = False,
         positive_init: bool = False,
         weight_normalized: bool = False,
+        lazy: bool = False,
+        freeze_kernel: bool = False,
         tie_kernel_bank: bool = False,
         kernel_bank_size: Optional[int] = None,
         kernel_bank_id: str = 'default',
@@ -110,6 +118,8 @@ class YatNMN(nn.Module):
         self.spherical = spherical
         self.positive_init = positive_init
         self.weight_normalized = weight_normalized
+        # Lazy mode: freeze ONLY the kernel; bias/alpha/epsilon stay trainable.
+        self.lazy = bool(lazy or freeze_kernel)
         self.tie_kernel_bank = tie_kernel_bank
         self.kernel_bank_size = kernel_bank_size
         self.kernel_bank_id = kernel_bank_id
@@ -217,6 +227,12 @@ class YatNMN(nn.Module):
         if self.weight_normalized:
             weight_norm = torch.sqrt(torch.sum(self.weight**2, dim=-1, keepdim=True))
             self.weight.data = self.weight.data / (weight_norm + 1e-8)
+
+        # Lazy mode: freeze ONLY the kernel so it is excluded from gradients and
+        # the optimizer. bias / alpha / epsilon_param stay requires_grad=True.
+        # Applied last so it survives reset_parameters and weight normalization.
+        if self.lazy:
+            self.weight.requires_grad_(False)
 
     def reset_parameters(
         self,
@@ -377,6 +393,7 @@ class YatNMN(nn.Module):
                 f"bias={self.bias is not None}, "
                 f"alpha={self.alpha is not None}, "
                 f"constant_alpha={self.constant_alpha}, "
+                f"lazy={self.lazy}, "
                 f"spherical={self.spherical}, "
                 f"dtype={self.dtype}, "
                 f"param_dtype={self.param_dtype}")

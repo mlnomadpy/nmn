@@ -253,6 +253,46 @@ Flax NNX ↔ Flax Linen      │ < 1e-7       │ ✅
 
 Run yourself: `pytest tests/integration/test_cross_framework_consistency.py -v`.
 
+### Bias-aware linear-attention feature maps (MAY / RAY)
+
+Linearized spherical-Yat attention approximates the kernel
+`κ(s) = (s + b)² / ((2 + ε) − 2s)` (with `s = q̂·k̂`) by a feature map `φ` so that
+`φ(q)·φ(k) ≈ κ`, giving **O(n)** attention. Three feature maps ship across all
+frameworks (`create_*_projection` + `*_features` + `*_yat_attention`):
+
+| Feature map | Module (per framework) | Bias `b` | Best regime |
+| ----------- | ---------------------- | :------: | ----------- |
+| **SLAY** (anchor) | `spherical_yat_performer` / `performer` | `b = 0` only | bias-free kernel |
+| **MAY** (Random Maclaurin) | `maclaurin_yat` / `may` / `performer_yat` | **any `b`** | `b > 0` — near-exact |
+| **RAY** (radial) | `radial_yat` / `ray` / `performer_yat` | **any `b`** | sharp-`ε` route |
+
+Trained Yat-attention learns a per-head bias `b > 0`, which SLAY's `b = 0` anchors
+cannot represent. **MAY** is bias-aware and near-exact there. Benchmark (cosine
+similarity of linearized vs exact attention output, `d=64`, `N=512`, matched
+`F=256`, `ε = median sq-distance`, reproduced by `tests/scripts/benchmark_may_ray.py`):
+
+```
+   b  │  MAY   │  SLAY      b  │  MAY   │  SLAY
+ ─────┼────────┼──────    ─────┼────────┼──────
+ 0.00 │  0.20  │  0.52     1.00 │  0.89  │  0.84
+ 0.25 │  0.52  │  0.66     2.00 │  0.97  │  0.86
+ 0.50 │  0.74  │  0.78     4.00 │  0.99  │  0.87   ← SLAY floors, MAY → exact
+```
+
+SLAY wins only at its `b = 0` design point; for the `b > 0` deployment regime MAY
+beats it and keeps improving with the feature budget. On NNX the attention layer
+takes a selector: `performer_kind="slay" | "maclaurin" | "radial"` (default `slay`).
+MAY/RAY features are sign-indefinite — see the module docstrings for the caveat.
+
+### Lazy YatNMN training (freeze kernel)
+
+`YatNMN(..., lazy=True)` (alias `freeze_kernel=True`) freezes **only the kernel**
+(feature directions) while keeping **`bias`, `alpha`, and `epsilon` trainable** — a
+cheap-adaptation / α-ε-probing regime. The freeze uses each backend's idiomatic
+mechanism (NNX `FrozenParam` excluded from `nnx.state(model, nnx.Param)`, torch
+`requires_grad=False`, mlx `freeze`, Keras/TF `trainable=False`, linen
+`stop_gradient`). Defaults are unchanged (`lazy=False`).
+
 ---
 
 ## The math, in one minute

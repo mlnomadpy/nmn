@@ -42,6 +42,44 @@ class YatNMN(Module):
         norm at forward time. This optimization avoids recomputing kernel norms
         in YAT distance calculation since they are guaranteed to be 1.0
         (default: False).
+      lazy: if True, run in "lazy" mode where ONLY the ``kernel`` is frozen
+        (its feature directions do not receive gradients); ``bias``, ``alpha``
+        and the learnable ``epsilon`` remain trainable (default: False). Alias:
+        ``freeze_kernel``. See the freezing note below.
+      freeze_kernel: alias for ``lazy``; if either is True the kernel is frozen.
+
+    Freezing the kernel (lazy mode)
+    -------------------------------
+    Linen parameters are functional: there is no per-variable "trainable" flag
+    to remove the kernel from the optimizer. Two complementary mechanisms are
+    provided / recommended:
+
+    1. **In-layer (this module):** when ``lazy=True`` the kernel is read through
+       ``jax.lax.stop_gradient`` in ``__call__``, so no gradient flows into it.
+       The ``bias`` is NOT wrapped — it stays fully trainable, along with
+       ``alpha`` and the learnable ``epsilon``. This guarantees correctness even
+       if the caller forgets the optimizer-level mask below.
+
+    2. **Optimizer-level (recommended for true exclusion):** use ``optax``
+       ``multi_transform`` with a param-label tree that maps the ``kernel`` leaf
+       to a frozen transform and everything else to your real optimizer, so the
+       frozen kernel is excluded from the optimizer state entirely::
+
+           import optax
+           from flax.traverse_util import path_aware_map
+
+           def label_fn(params):
+               return path_aware_map(
+                   lambda path, _: "frozen" if path[-1] == "kernel" else "trainable",
+                   params,
+               )
+
+           tx = optax.multi_transform(
+               {"trainable": optax.adam(1e-3), "frozen": optax.set_to_zero()},
+               label_fn,
+           )
+
+       ``optax.set_to_zero()`` keeps the frozen kernel exactly constant.
     """
     features: int
     use_bias: bool = True
@@ -59,6 +97,8 @@ class YatNMN(Module):
     learnable_epsilon: bool = False
     spherical: bool = False
     weight_normalized: bool = False
+    lazy: bool = False
+    freeze_kernel: bool = False
     dot_general: DotGeneralT | None = None
     dot_general_cls: Any = None
     return_weights: bool = False
@@ -82,6 +122,14 @@ class YatNMN(Module):
             (self.features, jnp.shape(inputs)[-1]),
             self.param_dtype,
         )
+
+        # Lazy mode: freeze ONLY the kernel feature directions. Linen has no
+        # per-variable trainable flag, so we stop gradient on the kernel read
+        # here (bias/alpha/epsilon are intentionally NOT wrapped and stay
+        # trainable). For true exclusion from the optimizer state, also use the
+        # optax multi_transform pattern documented in the class docstring.
+        if self.lazy or self.freeze_kernel:
+            kernel = jax.lax.stop_gradient(kernel)
 
         # Apply positive init
         if self.positive_init:

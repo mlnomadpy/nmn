@@ -58,6 +58,8 @@ class YatNMN(Layer):
         learnable_epsilon=False,
         spherical=False,
         weight_normalized=False,
+        lazy=False,
+        freeze_kernel=None,
         kernel_initializer="glorot_normal",
         bias_initializer="zeros",
         kernel_regularizer=None,
@@ -76,6 +78,14 @@ class YatNMN(Layer):
         self.positive_init = positive_init
         self.spherical = spherical
         self.weight_normalized = weight_normalized
+
+        # Lazy mode (issue #37): freeze ONLY the kernel (its feature directions),
+        # while bias, alpha, and learnable epsilon stay trainable. `freeze_kernel`
+        # is an alias; if either is truthy the kernel becomes non-trainable.
+        if freeze_kernel is None:
+            freeze_kernel = lazy
+        self.lazy = bool(lazy or freeze_kernel)
+        self.freeze_kernel = self.lazy
 
         # Bias configuration: learnable, constant, or none
         self._constant_bias_value = None
@@ -109,13 +119,16 @@ class YatNMN(Layer):
     def build(self, input_shape):
         input_dim = input_shape[-1]
 
+        # In lazy mode the kernel is frozen: trainable=False excludes it from
+        # the optimizer/gradient updates entirely (not merely zero-grad). Bias,
+        # alpha, and epsilon below stay trainable=True.
         self.kernel = self.add_weight(
             name="kernel",
             shape=(input_dim, self.units),
             initializer=self.kernel_initializer,
             regularizer=self.kernel_regularizer,
             constraint=self.kernel_constraint,
-            trainable=True,
+            trainable=not self.lazy,
         )
 
         # Bias: learnable parameter, or None if constant_bias is set / use_bias=False
@@ -240,6 +253,8 @@ class YatNMN(Layer):
             "learnable_epsilon": self.learnable_epsilon,
             "spherical": self.spherical,
             "weight_normalized": self.weight_normalized,
+            "lazy": self.lazy,
+            "freeze_kernel": self.freeze_kernel,
             "kernel_initializer": initializers.serialize(self.kernel_initializer),
             "bias_initializer": initializers.serialize(self.bias_initializer),
             "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),

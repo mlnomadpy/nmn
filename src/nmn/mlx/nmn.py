@@ -57,6 +57,14 @@ class YatNMN(nn.Module):
             distance term as it is known to be 1.
         return_weights: If ``True``, ``__call__`` returns
             ``(output, kernel)`` instead of just ``output``.
+        lazy: If ``True``, freeze ONLY the ``kernel`` (the feature directions)
+            so it is excluded from :meth:`trainable_parameters` and the
+            optimizer never updates it. The ``bias``, ``alpha`` and learnable
+            ``epsilon`` remain fully trainable. Implemented via mlx's
+            ``Module.freeze(keys=["kernel"])`` (the idiomatic per-variable
+            freeze), not stop-gradient. ``freeze_kernel`` is an accepted alias.
+            Default ``False`` (fully backward compatible).
+        freeze_kernel: Alias for ``lazy``.
 
     Example::
 
@@ -85,12 +93,17 @@ class YatNMN(nn.Module):
         spherical: bool = False,
         weight_normalized: bool = False,
         return_weights: bool = False,
+        lazy: bool = False,
+        freeze_kernel: Optional[bool] = None,
     ) -> None:
         super().__init__()
         if epsilon <= 0:
             raise ValueError(f"epsilon must be positive, got {epsilon}")
         if not 0.0 <= drop_rate < 1.0:
             raise ValueError(f"drop_rate must be in [0, 1), got {drop_rate}")
+
+        # ``freeze_kernel`` is an alias for ``lazy``; either enables lazy mode.
+        self.lazy = bool(lazy) or bool(freeze_kernel)
 
         self.features = features
         self.dtype = dtype
@@ -159,6 +172,12 @@ class YatNMN(nn.Module):
             self.epsilon_param = mx.array([raw_eps], dtype=self.dtype)
 
         self.is_built = True
+
+        # Lazy mode: freeze ONLY the kernel so it is excluded from
+        # ``trainable_parameters()`` (the optimizer never updates it). The
+        # bias, alpha and learnable epsilon stay trainable.
+        if self.lazy:
+            self.freeze(keys=["kernel"], recurse=False)
 
     # -----------------------------------------------------------------
     # Forward

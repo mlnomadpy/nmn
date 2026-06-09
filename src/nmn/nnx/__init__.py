@@ -65,7 +65,7 @@ Quick Start
 # Core YAT Layers
 # =============================================================================
 
-from nmn.nnx.layers import YatNMN, Embed
+from nmn.nnx.layers import YatNMN, Embed, FrozenParam
 
 
 # =============================================================================
@@ -124,6 +124,17 @@ from nmn.nnx.layers import (
     create_yat_tp_projection,
 )
 
+# MAY / RAY bias-aware linear-attention feature maps
+from nmn.nnx.layers import (
+    create_maclaurin_projection,
+    maclaurin_features,
+    maclaurin_yat_attention,
+    maclaurin_coeffs,
+    create_radial_projection,
+    radial_features,
+    radial_yat_attention,
+)
+
 # Standard Dot-Product Attention
 from nmn.nnx.layers import (
     dot_product_attention,
@@ -177,6 +188,7 @@ __all__ = [
     # Core Layers
     # -------------------------------------------------------------------------
     "YatNMN",
+    "FrozenParam",
     "Embed",
     "YatEmbed",  # alias of Embed for cross-framework consistency
 
@@ -231,7 +243,16 @@ __all__ = [
     "yat_tp_attention",
     "yat_tp_features",
     "create_yat_tp_projection",
-    
+
+    # MAY / RAY bias-aware feature maps
+    "create_maclaurin_projection",
+    "maclaurin_features",
+    "maclaurin_yat_attention",
+    "maclaurin_coeffs",
+    "create_radial_projection",
+    "radial_features",
+    "radial_yat_attention",
+
     # Standard Attention
     "dot_product_attention",
     "dot_product_attention_weights",

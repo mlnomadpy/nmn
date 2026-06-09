@@ -56,6 +56,14 @@ from .spherical_yat_performer import (
     yat_tp_attention,
     create_yat_tp_projection,
 )
+from .maclaurin_yat import (
+    create_maclaurin_projection,
+    maclaurin_yat_attention,
+)
+from .radial_yat import (
+    create_radial_projection,
+    radial_yat_attention,
+)
 from .multi_head import DEFAULT_CONSTANT_ALPHA
 from .masks import combine_masks
 from nmn.nnx.layers.squashers import softermax
@@ -430,9 +438,16 @@ class RotaryYatAttention(Module):
         use_softermax: bool = False,
         power: float = 1.0,
         use_performer: bool = False,
+        performer_kind: str = "slay",
         num_anchor_features: int = 16,
         num_prf_features: int = 8,
         num_quad_nodes: int = 1,
+        performer_num_features: int = 256,
+        performer_bias: float = 1.0,
+        performer_nmax: int = 40,
+        performer_sketch_m: int = 128,
+        performer_num_radial: int = 8,
+        performer_radial_dim: int = 64,
         causal: bool = False,
         performer_normalize: bool = True,
         use_alpha: bool = True,
@@ -486,6 +501,12 @@ class RotaryYatAttention(Module):
         self.use_softermax = use_softermax
         self.power = power
         self.use_performer = use_performer
+        if performer_kind not in ("slay", "maclaurin", "radial"):
+            raise ValueError(
+                f"performer_kind must be one of 'slay', 'maclaurin', 'radial', "
+                f"got {performer_kind!r}."
+            )
+        self.performer_kind = performer_kind
         self.causal = causal
         self.performer_normalize = performer_normalize
 
@@ -537,27 +558,73 @@ class RotaryYatAttention(Module):
         self.perf_anchors: nnx.Cache | None
         self.perf_quad_nodes: nnx.Cache | None
         self.perf_quad_weights: nnx.Cache | None
+        # Generic store for non-slay performer params (maclaurin / radial).
+        # The frozen projection arrays live under nnx.Cache so they are excluded
+        # from nnx.Param state; non-array scalars are kept as static meta.
+        _perf_cache: dict[str, nnx.Cache] = {}
+        _perf_meta: dict = {}
         if use_performer:
             self.num_anchor_features = num_anchor_features
             self.num_prf_features_per_node = num_prf_features
             self.num_scales = num_quad_nodes
             self.num_features_per_scale = num_prf_features
-            self.num_features = num_quad_nodes * num_anchor_features * num_prf_features
 
-            params = create_yat_tp_projection(
-                rngs.params(),
-                self.head_dim,
-                num_prf_features=num_prf_features,
-                num_quad_nodes=num_quad_nodes,
-                num_anchor_features=num_anchor_features,
-                dtype=param_dtype,
-            )
+            if performer_kind == "slay":
+                self.num_features = num_quad_nodes * num_anchor_features * num_prf_features
 
-            self.perf_projections = nnx.Cache(params['projections'])
-            self.perf_anchors = nnx.Cache(params['anchors'])
-            self.perf_quad_nodes = nnx.Cache(params['quad_nodes'])
-            self.perf_quad_weights = nnx.Cache(params['quad_weights'])
-            self.perf_head_dim = params['head_dim']
+                params = create_yat_tp_projection(
+                    rngs.params(),
+                    self.head_dim,
+                    num_prf_features=num_prf_features,
+                    num_quad_nodes=num_quad_nodes,
+                    num_anchor_features=num_anchor_features,
+                    dtype=param_dtype,
+                )
+
+                self.perf_projections = nnx.Cache(params['projections'])
+                self.perf_anchors = nnx.Cache(params['anchors'])
+                self.perf_quad_nodes = nnx.Cache(params['quad_nodes'])
+                self.perf_quad_weights = nnx.Cache(params['quad_weights'])
+                self.perf_head_dim = params['head_dim']
+            else:
+                # MAY / RAY: store the whole param dict generically.
+                self.perf_projections = None
+                self.perf_anchors = None
+                self.perf_quad_nodes = None
+                self.perf_quad_weights = None
+                self.perf_head_dim = self.head_dim
+
+                if performer_kind == "maclaurin":
+                    params = create_maclaurin_projection(
+                        rngs.params(),
+                        self.head_dim,
+                        num_features=performer_num_features,
+                        bias=performer_bias,
+                        epsilon=epsilon,
+                        nmax=performer_nmax,
+                        dtype=param_dtype,
+                    )
+                    self.num_features = performer_num_features
+                else:  # radial
+                    params = create_radial_projection(
+                        rngs.params(),
+                        self.head_dim,
+                        sketch_m=performer_sketch_m,
+                        num_radial=performer_num_radial,
+                        radial_dim=performer_radial_dim,
+                        bias=performer_bias,
+                        epsilon=epsilon,
+                        dtype=param_dtype,
+                    )
+                    self.num_features = (
+                        performer_sketch_m * performer_num_radial * performer_radial_dim
+                    )
+
+                for k, val in params.items():
+                    if isinstance(val, (jnp.ndarray, jax.Array)):
+                        _perf_cache[k] = nnx.Cache(val)
+                    else:
+                        _perf_meta[k] = val
         else:
             self.num_features = None
             self.num_scales = None
@@ -567,6 +634,10 @@ class RotaryYatAttention(Module):
             self.perf_quad_nodes = None
             self.perf_quad_weights = None
             self.perf_head_dim = None
+
+        # Wrap the generic performer cache as nnx data (arrays) + static meta.
+        self._perf_cache = nnx.data(_perf_cache)
+        self._perf_meta = _perf_meta
 
         # Q, K, V projections
         linear_kwargs = dict(
@@ -722,9 +793,9 @@ class RotaryYatAttention(Module):
                 alpha_value = self.alpha[...]
 
         # Apply Rotary YAT attention
-        if self.use_performer:
-            # Performer mode: O(n) complexity
-            
+        if self.use_performer and self.performer_kind == "slay":
+            # Performer mode (SLAY anchor approximation): O(n) complexity
+
             # Reconstruct params dict
             performer_params = {
                 'projections': jax.device_put(self.perf_projections[...]),
@@ -736,7 +807,7 @@ class RotaryYatAttention(Module):
                 'num_anchor_features': self.num_anchor_features,
                 'num_scales': self.num_scales,
             }
-            
+
             output = rotary_yat_performer_attention(
                 q,
                 k,
@@ -758,6 +829,39 @@ class RotaryYatAttention(Module):
                 normalize_inputs=self.performer_normalize,
                 alpha=alpha_value,
             )
+        elif self.use_performer:
+            # MAY / RAY performer: bias-aware Random Maclaurin / radial features.
+            # Apply RoPE then dispatch to the matching linear-attention readout.
+            q_rot = apply_rotary_emb(q, freqs_cos, freqs_sin, position_offset)
+            k_rot = apply_rotary_emb(k, freqs_cos, freqs_sin, position_offset)
+
+            # Rebuild the param dict from the generic cache + meta store.
+            performer_params = {
+                k_: jax.device_put(c[...]) for k_, c in self._perf_cache.items()
+            }
+            performer_params.update(self._perf_meta)
+
+            if self.performer_kind == "maclaurin":
+                output = maclaurin_yat_attention(
+                    q_rot, k_rot, v, performer_params,
+                    causal=self.causal,
+                    precision=self.precision,
+                )
+            else:  # radial
+                output = radial_yat_attention(
+                    q_rot, k_rot, v, performer_params,
+                    causal=self.causal,
+                    precision=self.precision,
+                )
+
+            # Apply learnable alpha scaling (matches the SLAY path behavior).
+            if alpha_value is not None:
+                output = output * jnp.asarray(alpha_value, dtype=output.dtype)
+
+            if not deterministic and self.dropout_rate > 0.0:
+                keep_prob = 1.0 - self.dropout_rate
+                keep = random.bernoulli(dropout_rng, keep_prob, output.shape)
+                output = output * keep / keep_prob
         else:
             # Standard O(n²) attention
             output = rotary_yat_attention(

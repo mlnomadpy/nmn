@@ -97,6 +97,21 @@ from .spherical_yat_performer import (
     create_yat_tp_projection,
 )
 
+# MAY — Random Maclaurin features (bias-aware linear YAT attention)
+from .maclaurin_yat import (
+    create_maclaurin_projection,
+    maclaurin_features,
+    maclaurin_yat_attention,
+    maclaurin_coeffs,
+)
+
+# RAY — sketched degree-2 modulation × radial RFF (bias-aware)
+from .radial_yat import (
+    create_radial_projection,
+    radial_features,
+    radial_yat_attention,
+)
+
 # Standard Dot-Product Attention
 from .dot_product import (
     dot_product_attention,
@@ -139,6 +154,15 @@ __all__ = [
     "yat_tp_attention",
     "yat_tp_features",
     "create_yat_tp_projection",
+    # MAY — Random Maclaurin features
+    "create_maclaurin_projection",
+    "maclaurin_features",
+    "maclaurin_yat_attention",
+    "maclaurin_coeffs",
+    # RAY — radial features
+    "create_radial_projection",
+    "radial_features",
+    "radial_yat_attention",
     # Standard Attention
     "dot_product_attention",
     "dot_product_attention_weights",

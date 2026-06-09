@@ -10,6 +10,17 @@ from .attention import (
     yat_attention_normalized,
 )
 from .squashers import softermax, softer_sigmoid, soft_tanh
+from .performer_yat import (
+    spherical_kappa,
+    maclaurin_coeffs,
+    create_maclaurin_projection,
+    maclaurin_features,
+    maclaurin_yat_attention,
+    create_radial_projection,
+    radial_features,
+    radial_yat_attention,
+    linear_attention,
+)
 
 try:
     from .conv import (
@@ -39,5 +50,15 @@ __all__ = [
     "yat_attention_normalized",
     # Squashers
     "softermax", "softer_sigmoid", "soft_tanh",
+    # Performer / linear-attention feature maps (MAY + RAY)
+    "spherical_kappa",
+    "maclaurin_coeffs",
+    "create_maclaurin_projection",
+    "maclaurin_features",
+    "maclaurin_yat_attention",
+    "create_radial_projection",
+    "radial_features",
+    "radial_yat_attention",
+    "linear_attention",
 ] + _conv_all
 

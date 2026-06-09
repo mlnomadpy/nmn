@@ -37,6 +37,14 @@ class YatNMN(tf.Module):
         learnable_epsilon: If ``True``, epsilon becomes a learnable parameter
             passed through softplus to guarantee strict positivity
             (default: ``False``).
+        lazy: If ``True``, freeze ONLY the kernel (the feature directions): the
+            kernel ``tf.Variable`` is created with ``trainable=False`` so it is
+            excluded from gradients/optimizer updates. The ``bias``, ``alpha``,
+            and learnable ``epsilon`` remain trainable. Composes with
+            ``use_bias`` / ``use_alpha`` / ``learnable_epsilon``. Defaults to
+            ``False`` (fully backward compatible). ``freeze_kernel`` is an alias.
+        freeze_kernel: Alias for ``lazy``. If either is ``True`` the kernel is
+            frozen.
         spherical: If ``True``, normalize inputs and each kernel row (neuron)
             to unit norm before computing the YAT formula (default: ``False``).
         weight_normalized: If ``True``, normalize each kernel row (neuron) to
@@ -69,6 +77,8 @@ class YatNMN(tf.Module):
         spherical: bool = False,
         weight_normalized: bool = False,
         return_weights: bool = False,
+        lazy: bool = False,
+        freeze_kernel: bool = False,
         name: Optional[str] = None
     ):
         super().__init__(name=name)
@@ -78,6 +88,8 @@ class YatNMN(tf.Module):
             raise ValueError(f"epsilon must be positive, got {epsilon}")
         self.epsilon = epsilon
         self.learnable_epsilon = learnable_epsilon
+        # Lazy mode: freeze ONLY the kernel (bias/alpha/epsilon stay trainable).
+        self.lazy = bool(lazy or freeze_kernel)
         self.spherical = spherical
         self.weight_normalized = weight_normalized
         self.return_weights = return_weights
@@ -131,9 +143,13 @@ class YatNMN(tf.Module):
         initial_kernel = tf.random.normal(kernel_shape, stddev=std, dtype=self.dtype)
         if self.positive_init:
             initial_kernel = tf.abs(initial_kernel)
+        # In lazy mode the kernel feature directions are frozen: creating the
+        # Variable with trainable=False excludes it from gradients/optimizer
+        # (it will not appear in self.trainable_variables). bias/alpha/epsilon
+        # below stay trainable.
         self.kernel = tf.Variable(
             initial_kernel,
-            trainable=True,
+            trainable=not self.lazy,
             name='kernel',
             dtype=self.dtype
         )

@@ -25,6 +25,17 @@ from .performer import (
     yat_tp_features,
     yat_tp_attention,
 )
+from .may import (
+    maclaurin_coeffs,
+    create_maclaurin_projection,
+    maclaurin_features,
+    maclaurin_yat_attention,
+)
+from .ray import (
+    create_radial_projection,
+    radial_features,
+    radial_yat_attention,
+)
 from .goat import (
     GoatYatAttention,
     goat_yat_attention,
@@ -65,6 +76,13 @@ __all__ = [
     "create_yat_tp_projection",
     "yat_tp_features",
     "yat_tp_attention",
+    "maclaurin_coeffs",
+    "create_maclaurin_projection",
+    "maclaurin_features",
+    "maclaurin_yat_attention",
+    "create_radial_projection",
+    "radial_features",
+    "radial_yat_attention",
     "GoatYatAttention",
     "goat_yat_attention",
     "goat_yat_attention_weights",

@@ -29,6 +29,21 @@ default_kernel_init = initializers.xavier_normal()
 default_bias_init = initializers.zeros_init()
 default_alpha_init = initializers.ones_init()
 
+
+class FrozenParam(nnx.Variable):
+  """A frozen (non-trainable) parameter variable.
+
+  Used by :class:`YatNMN` in *lazy* mode (issue #37) to hold the kernel so that
+  it is naturally excluded from ``nnx.state(model, nnx.Param)`` — and therefore
+  from the optimizer/gradient — while ``bias``, ``alpha`` and the learnable
+  ``epsilon`` remain ordinary :class:`flax.nnx.Param` and stay trainable.
+
+  This is the idiomatic NNX mechanism (preferred over ``jax.lax.stop_gradient``):
+  the kernel is excluded by *variable type* from the trainable state, not merely
+  zero-gradient. ``nnx.state(model, FrozenParam)`` recovers the frozen kernel.
+  """
+  pass
+
 class YatNMN(Module):
   """A YAT linear transformation applied over the last dimension of the input.
 
@@ -138,8 +153,27 @@ class YatNMN(Module):
     tie_kernel_bank: bool = False,
     kernel_bank_size: tp.Optional[int] = None,
     kernel_bank_id: str = 'default',
+    lazy: bool = False,
+    freeze_kernel: tp.Optional[bool] = None,
     rngs: rnglib.Rngs,
   ):
+
+    # ── Lazy mode (issue #37): freeze ONLY the kernel ───────────────────────
+    # `freeze_kernel` is an alias for `lazy`. When enabled, the kernel is stored
+    # under FrozenParam (a non-Param nnx.Variable) so it is excluded from
+    # nnx.state(model, nnx.Param) — and hence from the optimizer/grad — while
+    # bias, alpha and the learnable epsilon stay ordinary nnx.Param (trainable).
+    if freeze_kernel is not None:
+      lazy = bool(freeze_kernel)
+    self.lazy = lazy
+    self.freeze_kernel = lazy
+    if lazy and tie_kernel_bank:
+      raise ValueError(
+        "lazy/freeze_kernel is not supported together with tie_kernel_bank: "
+        "a shared kernel bank cannot be frozen per-instance."
+      )
+    # Pick the variable type used to wrap the kernel.
+    _kernel_var = FrozenParam if lazy else nnx.Param
 
     self._tie_kernel_bank = tie_kernel_bank
     self._kernel_slice = slice(None)
@@ -200,7 +234,9 @@ class YatNMN(Module):
       kernel_val = kernel_init(kernel_key, (in_features, out_features), param_dtype)
       if positive_init:
         kernel_val = jnp.abs(kernel_val)
-      self.kernel = nnx.Param(kernel_val)
+      # In lazy mode the kernel is a FrozenParam (excluded from trainable state);
+      # otherwise a normal trainable nnx.Param.
+      self.kernel = _kernel_var(kernel_val)
     self.bias: nnx.Param[jax.Array] | None
     self._constant_bias_value: tp.Optional[float] = None
     if constant_bias is not None and constant_bias is not False:
