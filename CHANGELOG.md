@@ -5,9 +5,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [Unreleased]
+## [0.3.2] — 2026-06-09
 
 ### Added
+- **`nmn` command-line interface + `python -m nmn`** — a discovery/diagnostics CLI exposed via the `nmn` console script (and `python -m nmn`). It is import-light: importing the CLI does **not** import torch/jax/tf/mlx, so it stays fast and works even when no backend is installed. Commands:
+  - `nmn` / `nmn info` — banner with name, version, one-line description, the six frameworks with their pip extras (`nmn[torch]`, `nmn[nnx]`, `nmn[keras]`, `nmn[tf]`, `nmn[linen]`, `nmn[mlx]`), and a pointer to `nmn guide <framework>`.
+  - `nmn version` — prints the version string only.
+  - `nmn frameworks` — per-framework import line + the `YatNMN` constructor signature for that framework.
+  - `nmn guide <framework>` — self-contained quickstart (import + a small `YatNMN` MLP + a one-liner attention example) for `torch`/`pytorch`, `nnx`/`flax-nnx`, `linen`/`flax-linen`, `keras`, `tf`/`tensorflow`, `mlx` (aliases accepted).
+  - `nmn features` — concise usage of the MAY/RAY performer feature maps and lazy `YatNMN` mode, including a nnx `performer_kind` snippet.
+  - `nmn doctor` — reports import OK/missing + version for each of the six backends, plus the running Python and `nmn` version. Never raises on a missing backend.
+  - `nmn examples` — where to find runnable examples + a nnx quickstart, with a link to `EXAMPLES.md`.
+- **Programmatic helpers** `nmn.help()` and `nmn.doctor()` in `src/nmn/__init__.py` (kept import-light via lazy import). `nmn.help()` prints the `nmn info` banner; `nmn.doctor()` prints the `nmn doctor` report and returns a `{framework: version_str_or_None}` dict.
+- **Docs & developer-experience refresh** — updated `README.md` (CLI / discovery section, per-framework install extras), `CHANGELOG.md`, agent-oriented `llms.txt` / `AGENTS.md`, per-framework guides under `docs/guides/` (lazy-training notes + MAY/RAY/SLAY section), `EXAMPLES.md`, `docs/architecture.md`, `docs/migration.md`, plus `Makefile`, `.pre-commit-config.yaml`, and `CONTRIBUTING.md`.
+
+### Notes
+- Fully additive and backward compatible — no layer behavior changed in this release.
+
+---
+
+## [0.3.1] — 2026-06-08
+
+### Added
+- **Bias-aware linear-attention feature maps (MAY / RAY)** in **all six frameworks** (`nmn.torch`, `nmn.nnx`, `nmn.linen`, `nmn.keras`, `nmn.tf`, `nmn.mlx`). Linearized spherical-Yat attention approximates the kernel `κ(s) = (s + b)² / ((2 + ε) − 2s)` (with `s = q̂·k̂`) by a feature map `φ` so that `φ(q)·φ(k) ≈ κ`, giving **O(n)** attention.
+  - **MAY** (Random-Maclaurin, bias-aware): `create_maclaurin_projection`, `maclaurin_features`, `maclaurin_yat_attention` (+ `maclaurin_coeffs`).
+  - **RAY** (radial, sharp-`ε` route): `create_radial_projection`, `radial_features`, `radial_yat_attention`.
+  - Canonical kwargs `bias` and `epsilon`. MAY/RAY are bias-aware (`b > 0`), where the `b = 0` SLAY anchor cannot follow the learned per-head bias. Features are sign-indefinite — see the module docstrings for the caveat.
+  - On **Flax NNX**, the attention layer takes a selector `performer_kind="slay" | "maclaurin" | "radial"` (default `"slay"`).
+- **Lazy `YatNMN` training (freeze kernel)** in **all six frameworks** — `YatNMN(..., lazy=True)` (alias `freeze_kernel=True`) freezes **only the kernel** (feature directions) while keeping `bias`, `alpha`, and `epsilon` trainable. Each backend uses its idiomatic mechanism: NNX `FrozenParam` (excluded from `nnx.state(model, nnx.Param)`), torch `requires_grad=False`, mlx `freeze`, Keras/TF `trainable=False`, linen `stop_gradient`. Default is unchanged (`lazy=False`).
+- **GOAT value-only / projection-free YAT attention (MLX)** — `GoatYatAttention`, `goat_yat_attention`, `goat_yat_attention_weights` in `nmn.mlx`.
+
+### Notes
+- Backward compatible: new attention helpers and the `lazy`/`freeze_kernel` kwargs are additive; existing defaults and outputs are unchanged.
+
+---
+
+## [0.3.0] — 2026-05-14
+
+### Added
+- **MLX backend (Apple Silicon) — the sixth NMN framework** (`nmn.mlx`). Apple-Silicon-native YAT layers mirroring the `nmn.tf` / `nmn.keras` surface: `YatNMN` (alias `YatDense`, `features=`), `YatConv{1,2,3}D` / `YatConvTranspose{1,2,3}D`, `YatEmbed`, `MultiHeadYatAttention`, `RotaryYatAttention` (RoPE + KV cache), the Spherical-YAT-Performer (`create_yat_tp_projection` / `yat_tp_features` / `yat_tp_attention`), CIRCULAR/REFLECT/CAUSAL conv padding, a fused Metal-kernel YAT score (`fused_yat_score`, `is_gpu_available`), DropConnect + `weight_normalized` conv fast path, and the `softermax` / `softer_sigmoid` / `soft_tanh` squashers. Install with `nmn[mlx]`. MLX is wired into the cross-framework parity matrix and ships an MNIST example + framework guide.
 - **`learnable_epsilon` parameter** added to **every `YatNMN` and YAT conv layer in every framework**. When `True`, epsilon becomes a trainable parameter passed through softplus to guarantee strict positivity (it can never be zero or negative). The raw parameter is initialized via inverse softplus so that `softplus(param) ≈ epsilon`.
   - **Flax NNX**: `YatNMN`, `YatConv`, `YatConvTranspose`, `Embed`, `MultiHeadAttention`, `RotaryYatAttention`. The fused kernel path in NNX `YatNMN` is automatically disabled when epsilon is learnable to allow gradient flow.
   - **PyTorch**: `YatNMN`, `YatConv1D/2D/3D`, `YatConvTranspose1D/2D/3D`.

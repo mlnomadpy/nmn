@@ -157,14 +157,14 @@ print(attn(x).shape)  # (4, 16, 512)
 ```python
 from nmn.nnx import RotaryYatAttention
 
-attn = RotaryYatAttention(num_heads=8, in_features=512, rngs=nnx.Rngs(0))
+attn = RotaryYatAttention(embed_dim=512, num_heads=8, rngs=nnx.Rngs(0))
 y = attn(x)
 ```
 
 ### c) Spherical YAT-Performer — O(n) linear attention
 
 ```python
-attn = MultiHeadAttention(num_heads=8, in_features=512,
+attn = RotaryYatAttention(embed_dim=512, num_heads=8,
                           use_performer=True, rngs=nnx.Rngs(0))
 y = attn(x)
 ```
@@ -176,7 +176,89 @@ For long-context training on TPU/GPU, NMN ships a fused yat-attention kernel (Pa
 
 ---
 
-## 6. Embeddings
+## 6. Linear attention: MAY / RAY / SLAY
+
+For long sequences the quadratic `O(n²)` Yat softmax is replaced by a
+**bias-aware feature decomposition** that runs in `O(n)`. NMN ships three
+performer feature maps, selected by `performer_kind` on `RotaryYatAttention`:
+
+| `performer_kind` | Name | Feature map | Bias `b` |
+| ---------------- | ---- | ----------- | -------- |
+| `"slay"` (default) | Spherical-anchor performer | anchor + PRF decomposition | `b = 0` anchor regime |
+| `"maclaurin"`      | **MAY** — Random-Maclaurin | unbiased Maclaurin expansion of the Yat kernel | bias-aware (`b > 0`) |
+| `"radial"`         | **RAY** — radial / Gauss-Laguerre RFF | degree-2 sketch × radial random features | bias-aware (`b > 0`) |
+
+SLAY's bias-free approximation degrades when the deployment bias `b > 0`; MAY
+and RAY carry the bias term `b` through the feature map, so they stay faithful
+in that regime.
+
+```python
+from nmn.nnx import RotaryYatAttention
+from flax import nnx
+import jax.numpy as jnp
+
+# Bias-aware linear attention via Random-Maclaurin (MAY):
+attn = RotaryYatAttention(
+    embed_dim=512, num_heads=8,
+    use_performer=True, performer_kind="maclaurin",
+    num_prf_features=8,         # M — feature budget per scale
+    num_quad_nodes=1,           # R — quadrature nodes
+    rngs=nnx.Rngs(0),
+)
+x = jnp.ones((4, 4096, 512))    # long sequence
+y = attn(x)
+print(y.shape)                  # (4, 4096, 512)
+
+# Radial variant (RAY): same call, performer_kind="radial".
+```
+
+### Functional API
+
+Both maps expose a precompute-then-apply pair, mirroring the SLAY
+`create_yat_tp_projection` style. Build the projection once, then attend:
+
+```python
+import jax, jax.numpy as jnp
+from nmn.nnx import (
+    create_maclaurin_projection, maclaurin_yat_attention,   # MAY
+    create_radial_projection, radial_yat_attention,         # RAY
+)
+
+key = jax.random.PRNGKey(0)
+head_dim = 64
+
+# MAY — Random-Maclaurin projection (fixed at construction, shared by q & k).
+params = create_maclaurin_projection(
+    key, head_dim,
+    num_features=256,   # M
+    bias=1.0,           # the deployment bias b (canonical kwarg)
+    epsilon=1e-5,       # Yat epsilon → C = 2 + epsilon
+)
+
+q = jnp.ones((2, 4096, 8, head_dim))   # [..., seq, heads, head_dim]
+k = jnp.ones((2, 4096, 8, head_dim))
+v = jnp.ones((2, 4096, 8, head_dim))
+out = maclaurin_yat_attention(q, k, v, params, causal=False)   # O(n)
+
+# RAY — radial projection. Feature dim = sketch_m * num_radial * radial_dim.
+rparams = create_radial_projection(
+    key, head_dim,
+    sketch_m=128, num_radial=8, radial_dim=64,
+    bias=1.0, epsilon=1e-5,
+)
+out_ray = radial_yat_attention(q, k, v, rparams, causal=True)   # causal decode
+```
+
+`create_maclaurin_projection` / `maclaurin_features` / `maclaurin_yat_attention`
+and the matching `radial_*` functions are all re-exported from `nmn.nnx`. The
+canonical kwargs are `bias` and `epsilon`. Run `nmn features` for the
+framework-agnostic summary, and see [Architecture & theory](../architecture.md)
+for the spherical kernel `kappa(s) = (s + b)² / ((2 + eps) − 2s)` these maps
+approximate.
+
+---
+
+## 7. Embeddings
 
 ```python
 from nmn.nnx import Embed
@@ -192,7 +274,7 @@ scores = embed.attend(h[0, -1]) # (10_000,) — retrieval scoring
 
 ---
 
-## 7. Saving & loading
+## 8. Saving & loading
 
 Use [Orbax checkpointing](https://orbax.readthedocs.io/), the JAX-recommended pattern:
 
@@ -211,7 +293,7 @@ nnx.update(model, restored)
 
 ---
 
-## 8. Sharding / distributed training
+## 9. Sharding / distributed training
 
 `YatNMN` and `YatConv` are plain `nnx.Module`s. They compose with:
 
@@ -223,7 +305,40 @@ See the TPU ResNet example for a worked pattern.
 
 ---
 
-## 9. Troubleshooting
+## 10. Lazy training (freeze kernel)
+
+Pass `lazy=True` (alias: `freeze_kernel=True`) to freeze **only** the kernel.
+In NNX the kernel is then stored under a `FrozenParam` (a non-`nnx.Param`
+variable), so it is naturally excluded from `nnx.state(model, nnx.Param)` — and
+therefore from the optimizer and gradients — while `bias`, `alpha`, and the
+learnable `epsilon` stay ordinary `nnx.Param`s (trainable). Default
+`lazy=False`, fully backward compatible.
+
+```python
+import jax.numpy as jnp
+from flax import nnx
+from nmn.nnx import YatNMN
+
+layer = YatNMN(in_features=128, out_features=64, lazy=True, rngs=nnx.Rngs(0))
+
+# Only the trainable Params are visited by grads / the optimizer; the frozen
+# kernel is not in nnx.state(layer, nnx.Param).
+trainable = nnx.state(layer, nnx.Param)
+print(layer.lazy, layer.freeze_kernel)   # True True
+print(layer(jnp.ones((8, 128))).shape)   # (8, 64)
+```
+
+Because the frozen kernel lives outside `nnx.Param`, an
+`nnx.Optimizer(model, tx)` built with the default `wrt=nnx.Param` filter never
+touches it — no manual masking needed. Use this for a fixed feature basis where
+only the scale/shift/`epsilon` adapt.
+
+> `lazy/freeze_kernel` is not supported together with `tie_kernel_bank` (a
+> shared kernel bank cannot be frozen per-instance) — it raises `ValueError`.
+
+---
+
+## 11. Troubleshooting
 
 | Symptom                                  | Likely cause                                            | Fix                                                                |
 | ---------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------ |
@@ -235,7 +350,7 @@ See the TPU ResNet example for a worked pattern.
 
 ---
 
-## 10. Next steps
+## 12. Next steps
 
 - [Architecture & theory](../architecture.md)
 - [Flax Linen guide](flax-linen.md) — for legacy Linen codebases

@@ -6,6 +6,10 @@ This page shows how to convert an existing model from standard `Linear/Conv + ac
 
 For the underlying math, see [`architecture.md`](architecture.md).
 
+> **Tip:** run `nmn guide <framework>` for a self-contained quickstart, or
+> `nmn features` for the MAY/RAY performer maps and the lazy `YatNMN` mode
+> covered below. `nmn doctor` tells you which backends are importable.
+
 ---
 
 ## Drop-in replacement table
@@ -261,6 +265,45 @@ YatNMN(in_features=..., out_features=..., epsilon=1e-3)  # bumped from 1e-5
 ```
 
 See [`architecture.md` § Numerical stability](architecture.md#3-numerical-stability) for the full guidance.
+
+### Long sequences → linear attention (Flax NNX)
+
+Migrating a Performer / linear-attention block? NMN ships **bias-aware** O(n)
+spherical-Yat feature maps. Select one with `performer_kind` on
+`RotaryYatAttention`:
+
+```python
+from nmn.nnx import RotaryYatAttention
+
+attn = RotaryYatAttention(
+    embed_dim=512, num_heads=8,
+    use_performer=True,
+    performer_kind="maclaurin",     # "slay" (b=0 anchor) | "maclaurin" (MAY) | "radial" (RAY)
+    performer_num_features=256,     # feature budget M
+    performer_bias=1.0,             # the spherical-Yat bias b
+    rngs=nnx.Rngs(0),
+)
+```
+
+The standalone maps (`create_maclaurin_projection` / `maclaurin_yat_attention`
+and the `radial_*` equivalents) are exported from `nmn.nnx`. See
+[`architecture.md` § Spherical Yat attention](architecture.md#9-spherical-yat-attention-slay--may--ray).
+
+### Fine-tuning → freeze only the kernel
+
+To adapt a pretrained Yat layer without retraining the prototype matrix, pass
+`lazy=True` (alias `freeze_kernel=True`). Only the kernel is frozen; bias, α and
+the learnable ε stay trainable. Backward compatible — `lazy=False` is the default.
+
+```python
+# Flax NNX — frozen kernel is excluded from nnx.state(model, nnx.Param)
+YatNMN(in_features=128, out_features=64, lazy=True, rngs=nnx.Rngs(0))
+
+# PyTorch — kernel weight.requires_grad = False; alpha / bias stay trainable
+YatNMN(in_features=128, out_features=64, lazy=True)
+```
+
+See [`architecture.md` § Lazy mode](architecture.md#10-lazy-mode--freezing-only-the-kernel).
 
 ---
 

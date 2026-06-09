@@ -1,0 +1,65 @@
+# NMN — Neural Matter Networks
+
+> NMN is a drop-in replacement for `Linear + activation` and `Conv + activation`
+> blocks: the non-linearity is built into the layer via a geometric ratio
+> `y = (x·W)² / (||x − W||² + ε) · alpha`, so no ReLU/GELU/Sigmoid is needed. The
+> same `YatNMN` layer (plus YAT conv, embedding, and attention) ships across six
+> frameworks — PyTorch, Flax NNX, Flax Linen, Keras 3, TensorFlow, and MLX (Apple
+> Silicon) — with numerically equivalent outputs. Each backend is an independent
+> optional install (`pip install nmn[<framework>]`). Current release: 0.3.2.
+
+## Docs
+
+- [README](README.md): What NMN is, install matrix, 60-second tour, layer reference, the math.
+- [Docs index](docs/README.md): Local documentation entry point; framework comparison and links.
+- [Architecture & theory](docs/architecture.md): The YAT/spherical kernel, the three linear-attention feature maps (SLAY/MAY/RAY), why bias matters, and the lazy-mode regime.
+- [Migration cheat sheet](docs/migration.md): Porting existing `Linear`/`Conv`/attention models to YAT layers.
+- [Examples](EXAMPLES.md): Copy-paste snippets per framework, MAY/RAY linear attention, and YatNMN lazy-mode training.
+
+## Guides (one per framework)
+
+- [PyTorch](docs/guides/pytorch.md): `from nmn.torch import YatNMN` — `YatNMN(in_features=, out_features=)`.
+- [Flax NNX](docs/guides/flax-nnx.md): `from nmn.nnx import YatNMN` — `YatNMN(in_features=, out_features=, rngs=)`; recommended JAX entry point. Includes the MAY/RAY/SLAY `performer_kind` selector.
+- [Flax Linen](docs/guides/flax-linen.md): `from nmn.linen import YatNMN` — `YatNMN(features=)`.
+- [Keras 3](docs/guides/keras.md): `from nmn.keras import YatNMN` — `YatNMN(units=)` (also exported as `YatDense`).
+- [TensorFlow](docs/guides/tensorflow.md): `from nmn.tf import YatNMN` — `YatNMN(features=)`.
+- [MLX](docs/guides/mlx.md): `from nmn.mlx import YatNMN` — `YatNMN(features=)` (Apple Silicon).
+
+## Imports
+
+Import only the backend you have installed; importing `nmn` itself pulls in no ML
+framework. The `YatNMN` constructor's size argument differs per backend:
+
+- PyTorch — `from nmn.torch import YatNMN, YatConv2D, MultiHeadYatAttention, YatEmbed` → `YatNMN(in_features=128, out_features=64)`
+- Flax NNX — `from nmn.nnx import YatNMN, YatConv, MultiHeadAttention, Embed` → `YatNMN(in_features=128, out_features=64, rngs=nnx.Rngs(0))`
+- Flax Linen — `from nmn.linen import YatNMN, MultiHeadAttention, YatEmbed` → `YatNMN(features=64)`
+- Keras 3 — `from nmn.keras import YatNMN, MultiHeadYatAttention, YatEmbed` → `YatNMN(units=64)`
+- TensorFlow — `from nmn.tf import YatNMN, MultiHeadYatAttention, YatEmbed` → `YatNMN(features=64)`
+- MLX — `from nmn.mlx import YatNMN, MultiHeadYatAttention, YatEmbed` → `YatNMN(features=64)`
+
+Multi-head YAT attention is `MultiHeadYatAttention(embed_dim=, num_heads=, ...)`
+in torch/keras/tf/mlx; in NNX it is `MultiHeadAttention(num_heads=, in_features=,
+rngs=)` (also exported under the alias `MultiHeadYatAttention`).
+
+MAY/RAY bias-aware linear-attention feature maps are exported from every backend:
+`create_maclaurin_projection` / `maclaurin_features` / `maclaurin_yat_attention`
+(MAY) and `create_radial_projection` / `radial_features` / `radial_yat_attention`
+(RAY); the canonical kwargs are `bias=` and `epsilon=`. Lazy / frozen-kernel
+training is `YatNMN(..., lazy=True)` (alias `freeze_kernel=True`), which freezes
+ONLY the kernel — bias, alpha, and a learnable epsilon stay trainable.
+
+## CLI
+
+The `nmn` console command (also `python -m nmn`) helps agents discover the API
+without importing any ML framework:
+
+- `nmn` / `nmn info` — banner with version, the six frameworks, and pip extras.
+- `nmn version` — the version string only.
+- `nmn frameworks` — table of each framework's import line + `YatNMN` signature.
+- `nmn guide <framework>` — self-contained quickstart (import + small YatNMN MLP + attention one-liner). Aliases: torch/pytorch, tf/tensorflow, nnx/flax-nnx, linen/flax-linen, keras, mlx.
+- `nmn features` — MAY/RAY performer maps and YatNMN lazy mode, with a NNX `performer_kind` snippet.
+- `nmn doctor` — reports import OK/missing + version for each backend; never raises on a missing one.
+- `nmn examples` — where to find runnable examples + a NNX quickstart, linking [EXAMPLES.md](EXAMPLES.md).
+
+Programmatic equivalents: `nmn.help()` (same as `nmn info`) and `nmn.doctor()`
+(same as `nmn doctor`, returns `{framework: version_or_None}`).

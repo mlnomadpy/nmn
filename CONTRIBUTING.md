@@ -11,6 +11,8 @@ Thanks for your interest in contributing to **Neural Matter Networks (NMN)**. Th
 - [Code of Conduct](#code-of-conduct)
 - [Where to Start](#where-to-start)
 - [Development Setup](#development-setup)
+- [Make Targets](#make-targets)
+- [The Optional-Dependency Model](#the-optional-dependency-model)
 - [Running Tests](#running-tests)
 - [Code Style](#code-style)
 - [Adding a New Layer](#adding-a-new-layer)
@@ -33,7 +35,7 @@ Good first contributions:
 - 📚 **Documentation** — typo fixes, clarifications, new examples, new guides under [`docs/`](docs/).
 - ✅ **Tests** — increasing coverage in `tests/test_*/`, adding edge cases, cross-framework consistency checks.
 - ⚡ **Examples** — new application examples under `src/nmn/<framework>/examples/`.
-- ✨ **New layers** — implementing parity for a layer that exists in one framework but not another (see the [Layer Support Matrix](README.md#-layer-support-matrix)).
+- ✨ **New layers** — implementing parity for a layer that exists in one framework but not another (see the [Layer Reference](README.md#layer-reference)).
 
 Larger work (new layer families, new framework backends, kernel optimizations) should start with an issue or [discussion](https://github.com/azettaai/nmn/discussions) so we can align on the design.
 
@@ -82,6 +84,69 @@ python -c "import nmn; print(nmn.__version__)"
 pytest tests/test_torch/ -v       # or whichever framework you installed
 ```
 
+You can also confirm the install with the bundled CLI:
+
+```bash
+nmn doctor        # reports which backends are importable + their versions
+nmn info          # banner with the six frameworks and their pip extras
+```
+
+### 5. (Optional) install the pre-commit hooks
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+This wires up the hooks in [`.pre-commit-config.yaml`](.pre-commit-config.yaml) — **black**, **isort**, **flake8** (config in [`setup.cfg`](setup.cfg)), plus whitespace/merge-conflict checks — to run automatically on every commit. Run them across the whole tree at any time with `pre-commit run --all-files`.
+
+---
+
+## Make Targets
+
+A [`Makefile`](Makefile) wraps the common workflows. Every target invokes its tool through `python3 -m …`, so it works inside your virtualenv without globally-installed console scripts. Run `make help` (the default target) to see the full list.
+
+```bash
+make install        # editable install with dev extras (".[dev]")
+
+make test           # full test suite
+make test-fast      # skip slow tests (-m "not slow")
+make test-torch     # one backend's tests (also: -nnx, -linen, -keras, -tf, -mlx)
+
+make lint           # flake8 errors (E9,F63,F7,F82) + advisory style pass
+make format         # auto-format with black + isort
+make format-check   # check formatting without writing
+make typecheck      # mypy on the torch and nnx backends
+
+make build          # build sdist + wheel
+make docs           # where to find the documentation
+make clean          # remove build/test/cache artifacts
+```
+
+Override the interpreter when needed, e.g. `make PYTHON=python3.11 test-nnx`.
+
+---
+
+## The Optional-Dependency Model
+
+Each of the six framework backends — `nmn.torch`, `nmn.nnx`, `nmn.linen`, `nmn.keras`, `nmn.tf`, `nmn.mlx` — is an **independent optional install**. Installing `nmn` pulls in *no* heavyweight framework by default; you opt in via extras:
+
+| Extra | Installs | Backend(s) it enables |
+| --- | --- | --- |
+| `nmn[torch]` | torch, torchvision | `nmn.torch` |
+| `nmn[nnx]` | jax, jaxlib, flax | `nmn.nnx` |
+| `nmn[linen]` | jax, jaxlib, flax | `nmn.linen` |
+| `nmn[keras]` | tensorflow | `nmn.keras` |
+| `nmn[tf]` | tensorflow | `nmn.tf` |
+| `nmn[mlx]` | mlx (Apple Silicon) | `nmn.mlx` |
+
+Practical consequences for contributors:
+
+- **Only install the backends you touch.** A torch-only change needs `pip install -e ".[dev,torch]"`, and `make test-torch` will pass even with no other framework present.
+- **Never import a framework at top level in shared code.** Keep framework imports inside the relevant `nmn.<framework>` subpackage so that `import nmn` (and `nmn.cli`) stay import-light.
+- **`make test-mlx` only runs on Apple Silicon** (mlx is not available on other platforms); CI skips it accordingly.
+- Use `nmn doctor` to see exactly which backends are importable in your environment.
+
 ---
 
 ## Running Tests
@@ -95,10 +160,17 @@ tests/
 ├── test_tf/         TensorFlow
 ├── test_nnx/        Flax NNX (JAX)
 ├── test_linen/      Flax Linen (JAX)
+├── test_mlx/        MLX (Apple Silicon)
 ├── integration/     Cross-framework numerical consistency
 ├── benchmarks/      Performance benchmarks
 └── scripts/         One-off validation scripts
 ```
+
+The quickest way to run a backend's tests is the matching `make` target —
+`make test-torch`, `make test-nnx`, `make test-linen`, `make test-keras`,
+`make test-tf`, `make test-mlx` — or `make test` / `make test-fast` for the
+whole suite. The raw `pytest` invocations below are equivalent and handy when
+you need finer control.
 
 ### Common commands
 
@@ -136,7 +208,16 @@ Custom markers are declared in [`pyproject.toml`](pyproject.toml): `slow`, `inte
 
 ## Code Style
 
-Style is enforced by **black**, **isort**, **flake8**, and **mypy** — all configured in [`pyproject.toml`](pyproject.toml).
+Style is enforced by **black**, **isort**, **flake8**, and **mypy**. black/isort/mypy are configured in [`pyproject.toml`](pyproject.toml); flake8 is configured in [`setup.cfg`](setup.cfg). The simplest entry points are the `make` targets:
+
+```bash
+make format        # black + isort (writes changes)
+make format-check  # black + isort in --check mode
+make lint          # flake8 errors (must pass) + advisory style pass
+make typecheck     # mypy on the torch and nnx backends
+```
+
+The equivalent raw commands:
 
 ```bash
 # Format
@@ -166,7 +247,7 @@ CI fails only on **flake8 errors** (`E9,F63,F7,F82`) and test failures. Black/is
 
 ## Adding a New Layer
 
-Layers should reach **all 5 frameworks** before being considered complete. The recommended order:
+Layers should reach **all 6 frameworks** before being considered complete. The recommended order:
 
 1. **Reference implementation in Flax NNX** (`src/nmn/nnx/layers/`). NNX is the cleanest place to prototype because of explicit state.
 2. **PyTorch** (`src/nmn/torch/layers/` or top-level). Mirror parameter names where possible.
@@ -175,7 +256,7 @@ Layers should reach **all 5 frameworks** before being considered complete. The r
 5. **Cross-framework consistency test** in `tests/integration/`.
 6. **Per-framework unit tests** in `tests/test_<framework>/`.
 7. **Update**:
-   - [`README.md`](README.md) Layer Support Matrix
+   - [`README.md`](README.md) Layer reference
    - [`EXAMPLES.md`](EXAMPLES.md) with a usage snippet
    - [`CHANGELOG.md`](CHANGELOG.md) under the **Unreleased** section
    - Public `__init__.py` re-exports

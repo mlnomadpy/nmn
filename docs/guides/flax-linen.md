@@ -171,7 +171,44 @@ ckpt.save("/tmp/yat_linen", state.params)
 
 ---
 
-## 7. Differences vs NNX
+## 7. Lazy training (freeze kernel)
+
+Pass `lazy=True` (alias: `freeze_kernel=True`) to freeze **only** the kernel.
+Linen parameters are functional — there is no per-variable "trainable" flag — so
+in lazy mode the kernel is read through `jax.lax.stop_gradient` inside
+`__call__`. No gradient flows into the kernel, while `bias`, `alpha`, and the
+learnable `epsilon` stay fully trainable. Default `lazy=False`, fully backward
+compatible.
+
+```python
+import jax, jax.numpy as jnp
+import flax.linen as nn
+from nmn.linen import YatNMN
+
+class FC(nn.Module):
+    @nn.compact
+    def __call__(self, x):
+        return YatNMN(features=64, lazy=True)(x)   # kernel frozen via stop_gradient
+
+m = FC()
+params = m.init(jax.random.PRNGKey(0), jnp.ones((32, 128)))
+grads = jax.grad(lambda p: m.apply(p, jnp.ones((32, 128))).sum())(params)
+# The 'kernel' leaf receives zero gradient; bias / alpha / epsilon update.
+```
+
+Because the kernel still lives in the `params` pytree, its leaf simply gets a
+zero gradient. For *true* exclusion from the optimizer state (so it is not even
+carried), pair `lazy=True` with an `optax.multi_transform` that routes the
+`kernel` leaf to `optax.set_to_zero()` — see the class docstring for the
+pattern. Use lazy mode for a fixed random/anchored feature basis where only the
+scale/shift/`epsilon` adapt.
+
+> CLI: `nmn guide flax-linen` prints the quickstart; `nmn features` summarizes
+> lazy mode and the MAY/RAY performer maps.
+
+---
+
+## 8. Differences vs NNX
 
 | Aspect              | Linen                                            | NNX                                                  |
 | ------------------- | ------------------------------------------------ | ---------------------------------------------------- |
@@ -184,7 +221,7 @@ If you're new, learn NNX. If you're maintaining a Linen codebase, `nmn.linen` sl
 
 ---
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Symptom                                  | Likely cause                                            | Fix                                                                |
 | ---------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------ |
@@ -195,7 +232,7 @@ If you're new, learn NNX. If you're maintaining a Linen codebase, `nmn.linen` sl
 
 ---
 
-## 9. Next steps
+## 10. Next steps
 
 - [Flax NNX guide](flax-nnx.md) — recommended for new code
 - [Architecture & theory](../architecture.md)

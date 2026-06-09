@@ -23,3 +23,10 @@ repos:
     hooks:
       - id: isort
         files: ^(src|tests)/.*\.py$
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.1.1
+    hooks:
+      - id: flake8
+        # Configuration (max-line-length, ignores, per-file-ignores) lives in setup.cfg.
+        files: ^(src|tests)/.*\.py$

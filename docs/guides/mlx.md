@@ -295,7 +295,40 @@ for your custom modules.
 
 ---
 
-## 9. Fused metal-kernel forward (Apple GPU only)
+## 9. Lazy training (freeze kernel)
+
+Distinct from the lazy *build* in § 8 (which is about *when* parameters are
+created), `lazy=True` (alias: `freeze_kernel=True`) freezes **only** the kernel
+so the optimizer never updates it. It is implemented with mlx's idiomatic
+per-variable freeze, `Module.freeze(keys=["kernel"])` — not stop-gradient — so
+the kernel is excluded from `trainable_parameters()`, while `bias`, `alpha`, and
+the learnable `epsilon` stay trainable. Default `lazy=False`, fully backward
+compatible.
+
+```python
+import mlx.core as mx
+from nmn.mlx import YatNMN
+
+layer = YatNMN(features=64, lazy=True)
+_ = layer(mx.zeros((1, 128)))   # build the (frozen) kernel on first call
+
+# 'kernel' is absent from the trainable tree; bias/alpha/epsilon remain.
+import mlx.utils
+print([k for k, _ in mlx.utils.tree_flatten(layer.trainable_parameters())])
+```
+
+Because the frozen kernel is removed from `trainable_parameters()`,
+`nn.value_and_grad(model, loss_fn)` and `optimizer.update(model, grads)` skip it
+automatically — no manual masking. (You still need the §8 warm-up so the kernel
+*exists* before you wrap the model.) Use lazy mode for a fixed feature basis
+where only the scale/shift/`epsilon` adapt.
+
+> CLI: `nmn guide mlx` prints the quickstart; `nmn features` summarizes the lazy
+> mode and the MAY/RAY performer maps.
+
+---
+
+## 10. Fused metal-kernel forward (Apple GPU only)
 
 `YatNMN` ships an opt-in fused forward that computes
 `α · (x · Wᵀ + b)² / (‖x − W‖² + ε)` in a single Metal kernel launch
@@ -329,7 +362,7 @@ y = fused_yat_score(x, w, bias=b, alpha=mx.array([1.5]), epsilon=1e-5)
 
 ---
 
-## 10. DropConnect regularization
+## 11. DropConnect regularization
 
 `YatNMN`, `YatConv{1,2,3}D`, and `YatConvTranspose{1,2,3}D` all accept a
 weight-level DropConnect:
@@ -350,7 +383,7 @@ with DropConnect.
 
 ---
 
-## 11. Device & precision notes
+## 12. Device & precision notes
 
 - **Default device is the Metal GPU** on Apple Silicon. The first kernel
   launch incurs a small JIT cost; subsequent steps are fast.
@@ -365,7 +398,7 @@ with DropConnect.
 
 ---
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 | Symptom                                  | Likely cause                                      | Fix                                                                |
 | ---------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------ |
@@ -374,11 +407,11 @@ with DropConnect.
 | `ValueError: padding must have length …` | Mixed scalar/tuple padding spec                   | Use a single scalar or a tuple matching the conv ndim               |
 | Slow first step, fast after              | Metal kernel JIT                                  | Reuse the same Module across steps                                  |
 | 3-D conv slower than expected            | First call is uncached                            | Warm up with a dummy `(1, *spatial, C)` input before benchmarking   |
-| Tests assert tighter than ~1e-3 fail     | Comparing GPU output to CPU numpy reference       | Pin the run to `mx.cpu` for parity tests (see § 9)                  |
+| Tests assert tighter than ~1e-3 fail     | Comparing GPU output to CPU numpy reference       | Pin the run to `mx.cpu` for parity tests (see § 12)                 |
 
 ---
 
-## 13. Next steps
+## 14. Next steps
 
 - [Architecture & theory](../architecture.md)
 - [Migration cheat sheet](../migration.md) — switching from PyTorch / NNX / TF

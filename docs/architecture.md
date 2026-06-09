@@ -158,6 +158,127 @@ This is why Yat networks often learn cleaner, more interpretable representations
 
 ---
 
+## 9. Spherical Yat attention: SLAY / MAY / RAY
+
+Quadratic Yat attention scores every query against every key — `O(n²)` in
+sequence length. For long sequences NMN provides **linear-attention feature
+maps**: a function `φ` such that `φ(q̂)·φ(k̂)` approximates the Yat score, which
+lets the `softmax`-free readout be reordered into `O(n)` work (the standard
+Performer / FAVOR+ associativity trick).
+
+### The spherical kernel
+
+On **unit vectors** (`‖q̂‖ = ‖k̂‖ = 1`, so `s = q̂·k̂ ∈ [-1, 1]`), the Yat score
+reduces to a one-variable kernel:
+
+$$
+\kappa(s) = \frac{(s + b)^2}{(2 + \varepsilon) - 2s}
+$$
+
+This is exactly the geometric reading from § 1 specialized to the sphere: the
+denominator `(2 + ε) − 2s` is `‖q̂ − k̂‖² + ε` (since `‖q̂‖² + ‖k̂‖² = 2`), and the
+numerator is the squared (biased) inner product. Here `b` is a **per-head bias**
+and `ε` is the Yat epsilon. The whole job of a feature map is to reproduce this
+`κ(s)` cheaply and unbiasedly.
+
+### Why bias matters
+
+The numerator `(s + b)²` expands to `s² + 2bs + b²`. The `b²` term is a
+**constant** in `s`: it lets the kernel assign a non-zero floor to *every*
+key, i.e. attend diffusely. A feature map that drops `b` (sets `b = 0`) collapses
+the numerator to `s²` and **cannot** represent that constant — it can only sharpen
+toward the most-aligned keys. In the deployment regime `b ≥ 1`, ignoring bias is
+a large, structural approximation error, not a small one.
+
+### The three feature maps
+
+| Map      | `performer_kind` | Kernel modelled            | Idea                                                                 |
+| -------- | ---------------- | -------------------------- | ------------------------------------------------------------------- |
+| **SLAY** | `"slay"`         | `s² / ((2+ε) − 2s)` (`b=0`) | Bias-free **anchor** map; the original spherical performer.         |
+| **MAY**  | `"maclaurin"`    | full `(s+b)² / ((2+ε)−2s)` | **Random Maclaurin**: bias-aware, with a degree-0 (constant) feature. |
+| **RAY**  | `"radial"`       | full `(s+b)² / ((2+ε)−2s)` | **Radial** Gauss-Laguerre RFF over the exponential-integral form.   |
+
+**SLAY (anchor, `b = 0`).** Approximates only `s²/((2+ε)−2s)`. It is the cheapest
+and the historical baseline, but it structurally cannot carry the bias term — so
+it cannot attend diffusely.
+
+**MAY (Random Maclaurin, bias-aware).** Expands `κ` as a power series in `s`. The
+base `1/((2+ε)−2s)` has all-positive coefficients `βₙ`; multiplying by `(s+b)²`
+shifts indices to `aₙ = β_{n-2} + 2b·β_{n-1} + b²·βₙ ≥ 0`. Per feature it draws a
+random degree `Nᵣ ~ Categorical(aₙ/Z)` and `Nᵣ` Rademacher vectors, forming a
+product of projections. **Degree-0 draws produce the constant feature** — exactly
+what encodes `b²` and lets MAY attend diffusely. It is an *unbiased* estimator:
+`E[φ(q̂)·φ(k̂)] = κ(q̂·k̂)`. At `b ≥ 1`, MAY clearly beats SLAY.
+
+**RAY (radial, bias-aware).** Augments `x̂` to `z = [x̂, √b]` (folding the bias in
+geometrically), takes a degree-2 sketch of the numerator, and approximates the
+radial `1/(ε + r²)` denominator with a Gauss-Laguerre quadrature of random Fourier
+features (using `1/(ε+r²) = ∫₀^∞ e^{−t(ε+r²)} dt`). Also bias-aware; trades a
+different cost/variance profile than MAY.
+
+### Sign-indefinite caveat
+
+MAY/RAY features can be negative (odd-degree products / Fourier features), so the
+linear-attention denominator can in principle go non-positive. The implementation
+adds a stabilizing `epsilon` **only to the denominator** — never to the features,
+which would bias the estimator. Empirically the maps are well-conditioned at
+`b > 0`.
+
+### Tuning note
+
+These maps target the **deployment** regime, so set `epsilon` to the *median
+squared distance* between normalized q and k for your data — **not** the `1e-5`
+training default. The feature budget (`performer_num_features` / `num_features`)
+trades cost for fidelity: more features raise `φ(q̂)·φ(k̂)` toward exact attention.
+
+```python
+from nmn.nnx import RotaryYatAttention
+attn = RotaryYatAttention(
+    embed_dim=512, num_heads=8,
+    use_performer=True, performer_kind="maclaurin",  # or "slay" / "radial"
+    performer_num_features=256, performer_bias=1.0, epsilon=1e-5,
+    rngs=nnx.Rngs(0),
+)
+```
+
+The standalone maps (`create_maclaurin_projection` / `maclaurin_features` /
+`maclaurin_yat_attention`, and the `radial_*` equivalents) are exported from
+`nmn.nnx` for custom attention layers. See
+[`EXAMPLES.md` § MAY / RAY Linear Attention](../EXAMPLES.md#may--ray-linear-attention-flax-nnx).
+
+---
+
+## 10. Lazy mode — freezing only the kernel
+
+`YatNMN(lazy=True)` (alias `freeze_kernel=True`) freezes **only the kernel
+matrix**; the per-neuron scalars — bias, the learnable α, and the learnable ε
+(when enabled) — stay trainable. Everything is backward compatible: `lazy=False`
+is the default and changes nothing.
+
+This separates the two kinds of capacity in a Yat layer:
+
+- the **kernel** holds the prototypes (the expensive `in×out` matrix), and
+- **α / bias / ε** are cheap per-output scalars that rescale and shift the
+  response distribution.
+
+Freezing the kernel and training only the scalars is a lightweight regime for:
+
+- **Fine-tuning / domain shift** — keep learned prototypes, re-calibrate the
+  response (α, bias) and the numerical floor (ε) for new data.
+- **Probing** — measure how much signal the frozen prototypes already carry.
+- **Cheap warm starts** — fewer trainable parameters, smaller optimizer state.
+
+The mechanism differs per framework but the semantics are identical:
+
+| Framework | Mechanism                                                                 |
+| --------- | ------------------------------------------------------------------------- |
+| Flax NNX  | kernel stored under a `FrozenParam` → excluded from `nnx.state(m, nnx.Param)`, so the optimizer/grad never see it. |
+| PyTorch   | kernel `weight.requires_grad = False`; α / bias keep `requires_grad = True`. |
+
+See [`EXAMPLES.md` § Lazy Mode](../EXAMPLES.md#lazy-mode--freeze-the-kernel-train-bias--α--ε) for runnable training snippets.
+
+---
+
 ## Further reading
 
 - [`docs/migration.md`](migration.md) — drop-in replacement cheat sheet

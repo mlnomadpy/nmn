@@ -2,6 +2,19 @@
 
 Comprehensive examples for using Neural Matter Networks across all supported frameworks.
 
+> **New to NMN?** Run the bundled CLI to discover what is installed and grab a
+> per-framework quickstart without leaving the terminal:
+>
+> ```bash
+> nmn                     # banner: version, the six frameworks + pip extras
+> nmn guide nnx           # self-contained Flax NNX quickstart
+> nmn features            # MAY / RAY performer maps + lazy YatNMN mode
+> nmn doctor              # which backends are importable, with versions
+> nmn examples            # pointer back to this file + nnx quickstart
+> ```
+>
+> Equivalently from Python: `import nmn; nmn.help(); nmn.doctor()`.
+
 ---
 
 ## Table of Contents
@@ -16,7 +29,6 @@ Comprehensive examples for using Neural Matter Networks across all supported fra
 - [Architecture Examples](#architecture-examples)
   - [Vision: CNN with Yat Layers](#vision-cnn-with-yat-layers)
   - [NLP: Transformer Block](#nlp-transformer-block-with-yat-attention)
-  - [Sequence: RNN Cells](#sequence-yat-rnn-cells)
 - [Advanced Usage](#advanced-usage)
   - [DropConnect Regularization](#dropconnect-regularization)
   - [Custom Squashing Functions](#custom-squashing-functions)
@@ -88,7 +100,7 @@ from nmn.keras.conv import YatConv1D, YatConv2D, YatConvTranspose2D
 # Dense Layer
 # ═══════════════════════════════════════════════════════════════
 dense = YatNMN(
-    features=64,
+    units=64,
     use_bias=True,
     use_alpha=True,
     epsilon=1e-5
@@ -119,8 +131,8 @@ model = keras.Sequential([
     YatConv2D(64, (3, 3), padding='same'),
     keras.layers.MaxPooling2D((2, 2)),
     keras.layers.Flatten(),
-    YatNMN(features=128),
-    YatNMN(features=10),
+    YatNMN(units=128),
+    YatNMN(units=10),
 ])
 
 model.compile(optimizer='adam', loss='categorical_crossentropy')
@@ -175,8 +187,7 @@ result = forward(tf.random.normal((16, 128)))
 import jax
 import jax.numpy as jnp
 from flax import nnx
-from nmn.nnx.nmn import YatNMN
-from nmn.nnx.conv import YatConv, YatConvTranspose
+from nmn.nnx import YatNMN, YatConv, YatConvTranspose
 
 # ═══════════════════════════════════════════════════════════════
 # Dense Layer
@@ -396,8 +407,7 @@ Using Flax NNX for a transformer architecture:
 ```python
 from flax import nnx
 import jax.numpy as jnp
-from nmn.nnx.attention import MultiHeadAttention
-from nmn.nnx.nmn import YatNMN
+from nmn.nnx import MultiHeadAttention, YatNMN
 
 class YatTransformerBlock(nnx.Module):
     """
@@ -460,69 +470,6 @@ sequence = jnp.zeros((2, 100, 512))  # (batch, seq_len, dim)
 output = block(sequence)  # (2, 100, 512)
 ```
 
-### Sequence: Yat-RNN Cells
-
-Using Yat-based RNN cells:
-
-```python
-from flax import nnx
-import jax
-import jax.numpy as jnp
-from nmn.nnx.rnn import YatSimpleCell, YatLSTMCell, YatGRUCell
-
-# ═══════════════════════════════════════════════════════════════
-# Simple RNN Cell
-# ═══════════════════════════════════════════════════════════════
-simple_cell = YatSimpleCell(
-    in_features=64,
-    hidden_features=128,
-    rngs=nnx.Rngs(0)
-)
-
-# Initialize hidden state
-batch_size = 16
-carry = simple_cell.initialize_carry(jax.random.key(0), (batch_size,))
-
-# Process one timestep
-x_t = jnp.zeros((batch_size, 64))
-new_carry, output = simple_cell(carry, x_t)
-
-# ═══════════════════════════════════════════════════════════════
-# LSTM Cell
-# ═══════════════════════════════════════════════════════════════
-lstm_cell = YatLSTMCell(
-    in_features=64,
-    hidden_features=128,
-    rngs=nnx.Rngs(1)
-)
-
-# LSTM carry is (cell_state, hidden_state)
-lstm_carry = lstm_cell.initialize_carry(jax.random.key(1), (batch_size,))
-
-# Process sequence
-sequence = jnp.zeros((batch_size, 20, 64))  # (batch, time, features)
-outputs = []
-carry = lstm_carry
-
-for t in range(20):
-    carry, output = lstm_cell(carry, sequence[:, t, :])
-    outputs.append(output)
-
-final_output = jnp.stack(outputs, axis=1)  # (batch, time, hidden)
-
-# ═══════════════════════════════════════════════════════════════
-# GRU Cell
-# ═══════════════════════════════════════════════════════════════
-gru_cell = YatGRUCell(
-    in_features=64,
-    hidden_features=128,
-    rngs=nnx.Rngs(2)
-)
-
-gru_carry = gru_cell.initialize_carry(jax.random.key(2), (batch_size,))
-new_carry, output = gru_cell(gru_carry, x_t)
-```
-
 ---
 
 ## Advanced Usage
@@ -533,7 +480,7 @@ Weight-level dropout for regularization (Flax NNX only):
 
 ```python
 from flax import nnx
-from nmn.nnx.nmn import YatNMN
+from nmn.nnx import YatNMN
 import jax.numpy as jnp
 
 # Create layer with DropConnect
@@ -559,7 +506,7 @@ y_eval = layer(x, deterministic=True)
 Smooth alternatives to standard activations:
 
 ```python
-from nmn.nnx.squashers import softermax, softer_sigmoid, soft_tanh
+from nmn.nnx import softermax, softer_sigmoid, soft_tanh
 import jax.numpy as jnp
 
 x = jnp.array([1.0, 2.0, 3.0, 4.0])
@@ -592,7 +539,7 @@ Yat-based attention mechanism:
 
 ```python
 from flax import nnx
-from nmn.nnx.attention import MultiHeadAttention
+from nmn.nnx import MultiHeadAttention
 import jax.numpy as jnp
 
 # ═══════════════════════════════════════════════════════════════
@@ -631,7 +578,7 @@ output = cross_attn(queries, context)  # (2, 50, 512)
 **Rotary YAT Attention** — Combines RoPE with YAT attention for position-aware transformers:
 
 ```python
-from nmn.nnx.attention import RotaryYatAttention
+from nmn.nnx import RotaryYatAttention
 import jax.numpy as jnp
 from flax import nnx
 
@@ -640,7 +587,6 @@ rotary_attn = RotaryYatAttention(
     embed_dim=512,
     num_heads=8,
     max_seq_len=2048,      # Maximum sequence length
-    use_yat=True,          # Use YAT formula (set False for standard attention)
     constant_alpha=True,   # Use constant alpha scaling
     rngs=nnx.Rngs(0)
 )
@@ -653,15 +599,14 @@ output = rotary_attn(x)  # (2, 100, 512)
 **Performer Attention** — O(n) linear complexity using FAVOR+ approximation:
 
 ```python
-from nmn.nnx.attention import RotaryYatAttention
+from nmn.nnx import RotaryYatAttention
 
 # Enable Performer mode for long sequences
 performer_attn = RotaryYatAttention(
     embed_dim=512,
     num_heads=8,
-    use_performer=True,    # Enable linear complexity
-    num_features=256,      # Number of random features
-    use_yat=True,          # Combine Performer with YAT
+    use_performer=True,           # Enable linear complexity
+    performer_num_features=256,   # Number of random features
     rngs=nnx.Rngs(0)
 )
 
@@ -670,46 +615,126 @@ long_sequence = jnp.zeros((2, 10000, 512))  # 10K tokens
 output = performer_attn(long_sequence)  # Still runs in O(n) time
 ```
 
-### RNN Wrappers
+### MAY / RAY Linear Attention (Flax NNX)
 
-**RNN Wrapper** — Process sequences with any RNN cell:
+The 0.3.x line adds two **bias-aware** O(n) feature maps for spherical Yat
+attention. Both approximate the full spherical Yat kernel
 
-```python
-from nmn.nnx.rnn import YatLSTMCell, RNN, Bidirectional
-from flax import nnx
-import jax.numpy as jnp
-
-# Create cell
-cell = YatLSTMCell(hidden_dim=256, rngs=nnx.Rngs(0))
-
-# Wrap in RNN for automatic sequence processing
-rnn = RNN(cell, return_sequences=True)  # Returns all timesteps
-
-# Process batch of sequences
-sequences = jnp.zeros((16, 50, 128))  # (batch, time, features)
-outputs, final_state = rnn(sequences)
-# outputs: (16, 50, 256) — all hidden states
-# final_state: tuple of (cell_state, hidden_state)
-
-# Return only final output
-rnn_final = RNN(cell, return_sequences=False)
-final_output, final_state = rnn_final(sequences)
-# final_output: (16, 256) — only last hidden state
+```
+kappa(s) = (s + b)^2 / ((2 + eps) - 2 s)     # s = q̂·k̂ on unit vectors
 ```
 
-**Bidirectional RNN** — Process sequences in both directions:
+including the bias term `b`, where the older **SLAY** anchor map only models the
+`b = 0` case `s^2 / ((2 + eps) - 2 s)`. Pick the map with `performer_kind`:
+
+- `slay` — the bias-free anchor map (default).
+- `maclaurin` (**MAY**) — Random-Maclaurin features; bias-aware, best at `b ≥ 1`.
+- `radial` (**RAY**) — radial / Gauss-Laguerre features; bias-aware.
 
 ```python
-from nmn.nnx.rnn import Bidirectional, YatGRUCell
+import jax.numpy as jnp
+from flax import nnx
+from nmn.nnx import RotaryYatAttention
 
-# Create bidirectional cell
-gru_cell = YatGRUCell(hidden_dim=256, rngs=nnx.Rngs(0))
-bi_rnn = Bidirectional(gru_cell)
+# Selector lives on RotaryYatAttention; performer_num_features is the budget M.
+attn = RotaryYatAttention(
+    embed_dim=512,
+    num_heads=8,
+    use_performer=True,
+    performer_kind="maclaurin",     # "slay" | "maclaurin" | "radial"
+    performer_num_features=256,     # feature budget M
+    performer_bias=1.0,             # the spherical-Yat bias b
+    epsilon=1e-5,
+    rngs=nnx.Rngs(0),
+)
 
-# Processes sequences forward and backward, concatenates results
-sequences = jnp.zeros((16, 50, 128))
-bi_output = bi_rnn(sequences)
-# Output shape: (16, 50, 512) — 256*2 from both directions
+long_sequence = jnp.zeros((2, 8000, 512))  # (batch, seq_len, embed_dim)
+output = attn(long_sequence)               # (2, 8000, 512), O(n) time
+```
+
+You can also call the feature maps directly — handy for custom attention or for
+checking the unbiased-estimator guarantee `E[φ(q̂)·φ(k̂)] = kappa(q̂·k̂)`:
+
+```python
+import jax
+import jax.numpy as jnp
+from nmn.nnx import (
+    create_maclaurin_projection, maclaurin_features, maclaurin_yat_attention,
+    create_radial_projection, radial_features, radial_yat_attention,
+)
+
+key = jax.random.key(0)
+heads, head_dim = 8, 64
+q = jnp.zeros((2, 256, heads, head_dim))  # (batch, q_len, heads, head_dim)
+k = jnp.zeros((2, 256, heads, head_dim))
+v = jnp.zeros((2, 256, heads, head_dim))
+
+# MAY — Random Maclaurin
+may = create_maclaurin_projection(key, head_dim=head_dim, num_features=256,
+                                  bias=1.0, epsilon=1e-5)
+out_may = maclaurin_yat_attention(q, k, v, may, causal=False)  # (2, 256, 8, 64)
+
+# RAY — radial / Gauss-Laguerre
+ray = create_radial_projection(key, head_dim=head_dim, sketch_m=128,
+                               num_radial=8, radial_dim=64, bias=1.0, epsilon=1e-5)
+out_ray = radial_yat_attention(q, k, v, ray, causal=False)     # (2, 256, 8, 64)
+```
+
+> **Bias matters.** SLAY's `b = 0` map cannot produce a constant (degree-0)
+> feature, so it cannot attend diffusely. MAY/RAY carry `b`, so at `b ≥ 1` they
+> faithfully track the deployed Yat kernel where SLAY's approximation breaks
+> down. Set `epsilon` to the *median squared distance* between normalized q and
+> k for the regime these maps target (not the `1e-5` training default).
+> See [`docs/architecture.md` § Spherical Yat attention](docs/architecture.md#9-spherical-yat-attention-slay--may--ray).
+
+### Lazy Mode — Freeze the Kernel, Train Bias / α / ε
+
+`YatNMN(lazy=True)` (alias `freeze_kernel=True`) freezes **only the kernel**: the
+bias, the learnable α, and a learnable ε stay trainable. This is a cheap
+fine-tuning / probing regime — you adapt the cheap per-neuron scalars while the
+expensive prototype matrix stays fixed. It is fully backward compatible
+(`lazy=False` is the default).
+
+**Flax NNX** — the frozen kernel is excluded from `nnx.state(model, nnx.Param)`,
+so the optimizer never sees it:
+
+```python
+import jax, jax.numpy as jnp
+from flax import nnx
+from nmn.nnx import YatNMN
+
+layer = YatNMN(in_features=128, out_features=64, lazy=True, rngs=nnx.Rngs(0))
+
+# Only bias / alpha (and learnable epsilon, if enabled) are trainable —
+# the frozen kernel is a FrozenParam, excluded from nnx.state(..., nnx.Param).
+trainable = nnx.state(layer, nnx.Param)
+print([p[0] for p in jax.tree_util.tree_leaves_with_path(trainable)])  # no 'kernel'
+
+def loss_fn(model, x, y):
+    return jnp.mean((model(x) - y) ** 2)
+
+x = jnp.ones((32, 128)); y = jnp.zeros((32, 64))
+grads = nnx.grad(loss_fn)(layer, x, y)   # gradients only for alpha / bias
+# Feed `grads` to your optimizer (e.g. nnx.Optimizer / optax) — the kernel,
+# having no gradient, stays fixed across every training step.
+```
+
+**PyTorch** — the kernel's `requires_grad` is set to `False`; α and bias remain
+trainable, so a standard optimizer over `model.parameters()` skips the kernel:
+
+```python
+import torch
+from nmn.torch import YatNMN
+
+layer = YatNMN(in_features=128, out_features=64, lazy=True)  # or freeze_kernel=True
+for name, p in layer.named_parameters():
+    print(name, p.requires_grad)   # weight False, alpha True, bias True
+
+opt = torch.optim.Adam(p for p in layer.parameters() if p.requires_grad)
+x = torch.randn(32, 128)
+loss = layer(x).pow(2).mean()
+loss.backward()
+opt.step()                          # only alpha / bias move
 ```
 
 ---
@@ -816,24 +841,20 @@ from nmn.tf.conv import YatConvTranspose1D, YatConvTranspose2D, YatConvTranspose
 # ═══════════════════════════════════════════════════════════════
 # Flax NNX (Most Feature-Complete)
 # ═══════════════════════════════════════════════════════════════
-from nmn.nnx.nmn import YatNMN
+from nmn.nnx import YatNMN
 
 # Convolutions
-from nmn.nnx.conv import YatConv
+from nmn.nnx import YatConv
 
 # Transposed Convolutions
-from nmn.nnx.conv import YatConvTranspose
+from nmn.nnx import YatConvTranspose
 
 # Attention Mechanisms
-from nmn.nnx.attention import MultiHeadAttention, RotaryYatAttention
-from nmn.nnx.attention import yat_attention, rotary_yat_attention
-
-# RNN Cells
-from nmn.nnx.rnn import YatSimpleCell, YatLSTMCell, YatGRUCell
-from nmn.nnx.rnn import RNN, Bidirectional
+from nmn.nnx import MultiHeadAttention, RotaryYatAttention
+from nmn.nnx import yat_attention, rotary_yat_attention
 
 # Custom Squashing Functions
-from nmn.nnx.squashers import softermax, softer_sigmoid, soft_tanh
+from nmn.nnx import softermax, softer_sigmoid, soft_tanh
 
 # ═══════════════════════════════════════════════════════════════
 # Flax Linen
@@ -864,6 +885,7 @@ from nmn.mlx import softermax, softer_sigmoid, soft_tanh
 
 ## Next Steps
 
+- Run `nmn` / `nmn guide <framework>` / `nmn features` to discover the API from the terminal
 - Check out the [README](README.md) for installation and core concepts
 - See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines
 - Browse the [examples/](examples/) directory for complete training scripts

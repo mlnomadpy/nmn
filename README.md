@@ -33,6 +33,7 @@
 
 - [What is NMN?](#what-is-nmn)
 - [Install](#install)
+- [CLI / discovery](#cli--discovery)
 - [60-second tour](#60-second-tour)
 - [Choose your framework](#choose-your-framework)
 - [Layer reference](#layer-reference)
@@ -86,6 +87,43 @@ pip install "nmn[all]"            # everything except MLX (Linux/Windows safe)
 **Requirements:** Python ≥ 3.10 (≥ 3.11 if you want JAX/Flax).
 
 > **GPU/TPU note:** install the GPU/TPU build of your framework *first* (see [PyTorch](https://pytorch.org/get-started/locally/) or [JAX](https://jax.readthedocs.io/en/latest/installation.html) install pages), then `pip install nmn`.
+
+---
+
+## CLI / discovery
+
+`pip install nmn` ships a small `nmn` command (also `python -m nmn`) for discovery and diagnostics. It is **import-light** — it never imports a deep-learning framework just to print help, so it's instant and works even before any backend is installed.
+
+```bash
+nmn                       # banner: version, the six backends + pip extras
+nmn frameworks            # import line + YatNMN signature per framework
+nmn guide nnx             # self-contained quickstart for one framework
+nmn guide pytorch         # aliases: torch/pytorch, tf/tensorflow, nnx/flax-nnx, linen/flax-linen, keras, mlx
+nmn features              # MAY/RAY performer maps + lazy YatNMN, incl. a nnx performer_kind snippet
+nmn examples             # where to find runnable examples + a nnx quickstart
+nmn version              # the version string only
+nmn doctor               # which of the six backends import OK (+ versions), Python and nmn version
+```
+
+`nmn doctor` reports each backend independently and never fails on a missing one, so it's the quickest way (for humans or coding agents) to see what's installed:
+
+```bash
+$ nmn doctor
+torch       ok        2.x.x
+nnx/linen   ok        jax 0.9.x / flax 0.12.x
+keras       missing   pip install "nmn[keras]"
+tf          missing   pip install "nmn[tf]"
+mlx         ok        0.x.x
+```
+
+The same content is available programmatically (both stay import-light):
+
+```python
+import nmn
+
+nmn.help()                # prints the `nmn info` banner
+status = nmn.doctor()     # prints the report AND returns {framework: version_str_or_None}
+```
 
 ---
 
@@ -148,8 +186,8 @@ from nmn.keras import YatNMN
 model = keras.Sequential([
     keras.layers.Input((28, 28)),
     keras.layers.Flatten(),
-    YatNMN(features=256),
-    YatNMN(features=128),
+    YatNMN(units=256),
+    YatNMN(units=128),
     keras.layers.Dense(10),
 ])
 print(model(keras.ops.ones((32, 28, 28))).shape)  # (32, 10)
@@ -205,7 +243,7 @@ print(model.apply(params, jnp.ones((32, 28, 28, 1))).shape)  # (32, 10)
 
 ## Choose your framework
 
-All five backends expose the same operations with framework-idiomatic naming. They are **numerically equivalent** (verified in `tests/integration/`).
+All six backends expose the same operations with framework-idiomatic naming. They are **numerically equivalent** (verified in `tests/integration/`).
 
 | Framework      | Pick it when…                                                                   | Guide                                          |
 | -------------- | ------------------------------------------------------------------------------- | ---------------------------------------------- |
@@ -214,21 +252,22 @@ All five backends expose the same operations with framework-idiomatic naming. Th
 | **Flax Linen** | You're maintaining a legacy Linen codebase.                                     | [docs/guides/flax-linen.md](docs/guides/flax-linen.md) |
 | **Keras 3**    | You want one API that runs on JAX, TF, *or* PyTorch backends.                  | [docs/guides/keras.md](docs/guides/keras.md)     |
 | **TensorFlow** | You need TF-specific deployment (SavedModel, TFLite, Serving).                 | [docs/guides/tensorflow.md](docs/guides/tensorflow.md) |
+| **MLX**        | You're on Apple Silicon and want native Metal acceleration.                    | [docs/guides/mlx.md](docs/guides/mlx.md)         |
 
 ---
 
 ## Layer reference
 
-All layers are available across **all 5 frameworks** with verified parity.
+All layers are available across **all 6 frameworks** with verified parity.
 
-| Operation                  | PyTorch                    | TF / Keras                 | Flax NNX                 | Flax Linen                 |
-| -------------------------- | -------------------------- | -------------------------- | ------------------------ | -------------------------- |
-| Dense                      | `YatNMN`                   | `YatNMN`                   | `YatNMN`                 | `YatNMN`                   |
-| Conv 1D / 2D / 3D          | `YatConv{1,2,3}D`          | `YatConv{1,2,3}D`          | `YatConv`                | `YatConv{1,2,3}D`          |
-| ConvTranspose 1D / 2D / 3D | `YatConvTranspose{1,2,3}D` | `YatConvTranspose{1,2,3}D` | `YatConvTranspose`       | `YatConvTranspose{1,2,3}D` |
-| Multi-Head Attention       | `MultiHeadYatAttention`    | `MultiHeadYatAttention`    | `MultiHeadAttention`     | `MultiHeadAttention`       |
-| Embedding                  | `YatEmbed`                 | `YatEmbed`                 | `Embed`                  | `YatEmbed`                 |
-| Squashers                  | `softermax`, `softer_sigmoid`, `soft_tanh` | same                       | same                     | same                       |
+| Operation                  | PyTorch                    | TF / Keras                 | Flax NNX                 | Flax Linen                 | MLX                        |
+| -------------------------- | -------------------------- | -------------------------- | ------------------------ | -------------------------- | -------------------------- |
+| Dense                      | `YatNMN`                   | `YatNMN`                   | `YatNMN`                 | `YatNMN`                   | `YatNMN`                   |
+| Conv 1D / 2D / 3D          | `YatConv{1,2,3}D`          | `YatConv{1,2,3}D`          | `YatConv`                | `YatConv{1,2,3}D`          | `YatConv{1,2,3}D`          |
+| ConvTranspose 1D / 2D / 3D | `YatConvTranspose{1,2,3}D` | `YatConvTranspose{1,2,3}D` | `YatConvTranspose`       | `YatConvTranspose{1,2,3}D` | `YatConvTranspose{1,2,3}D` |
+| Multi-Head Attention       | `MultiHeadYatAttention`    | `MultiHeadYatAttention`    | `MultiHeadAttention`     | `MultiHeadAttention`       | `MultiHeadYatAttention`    |
+| Embedding                  | `YatEmbed`                 | `YatEmbed`                 | `Embed`                  | `YatEmbed`                 | `YatEmbed`                 |
+| Squashers                  | `softermax`, `softer_sigmoid`, `soft_tanh` | same                       | same                     | same                       | same                       |
 
 **Flax NNX exclusives:**
 
@@ -353,7 +392,7 @@ CI matrix: Linux × Python {3.10, 3.11, 3.12} for all frameworks, plus macOS-3.1
 
 | Area                       | Status                                                              |
 | -------------------------- | ------------------------------------------------------------------- |
-| Core layers across 5 frameworks | ✅ Production-ready, on PyPI                                  |
+| Core layers across 6 frameworks | ✅ Production-ready, on PyPI                                  |
 | Cross-framework consistency tests | ✅ Verified < 1e-6 in fp32                                  |
 | Documentation               | ✅ Per-platform guides, architecture, migration                     |
 | ONNX export                | 🚧 Should work (standard ops) — not yet covered in CI ([TODO.md](TODO.md)) |

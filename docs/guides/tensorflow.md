@@ -124,7 +124,7 @@ model = tf.keras.Sequential([
 from nmn.tf import MultiHeadYatAttention
 import tensorflow as tf
 
-attn = MultiHeadYatAttention(num_heads=8, key_dim=64)
+attn = MultiHeadYatAttention(embed_dim=512, num_heads=8)
 x = tf.ones((4, 16, 512))
 y = attn(x, x)
 print(y.shape)
@@ -183,18 +183,46 @@ with strategy.scope():
 
 ---
 
-## 8. Troubleshooting
+## 8. Lazy training (freeze kernel)
+
+Pass `lazy=True` (alias: `freeze_kernel=True`) to freeze **only** the kernel.
+The kernel `tf.Variable` is created with `trainable=False`, so it never shows up
+in `model.trainable_variables` and the optimizer never updates it, while
+`bias`, `alpha`, and the learnable `epsilon` stay trainable. Default
+`lazy=False`, fully backward compatible.
+
+```python
+import tensorflow as tf
+from nmn.tf import YatNMN
+
+layer = YatNMN(features=64, lazy=True)
+_ = layer(tf.zeros((1, 128)))   # builds the (frozen) kernel Variable
+
+# The frozen kernel is excluded from gradients/optimizer:
+print([v.name for v in layer.trainable_variables])  # no 'kernel'
+```
+
+In a `tf.GradientTape` step, `tape.gradient(loss, model.trainable_variables)`
+simply never sees the kernel — no masking required. Use lazy mode for a fixed
+feature basis where only the scale/shift/`epsilon` adapt.
+
+> CLI: `nmn guide tensorflow` prints the quickstart; `nmn features` summarizes
+> the lazy mode and the MAY/RAY performer maps.
+
+---
+
+## 9. Troubleshooting
 
 | Symptom                                | Likely cause                                  | Fix                                                                          |
 | -------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------- |
 | `NaN` in early steps                    | `epsilon` too small                           | `YatNMN(features=..., epsilon=1e-3)`                                          |
 | `tf.function` retraces every step       | Python-int args mixed with tensors            | Wrap input shapes; ensure `train_step` signature is consistent               |
-| Wrong shape on attention output         | `key_dim` missing                             | Pass `key_dim=embed_dim // num_heads` to `MultiHeadYatAttention`              |
+| Wrong shape on attention output         | `embed_dim` not divisible by `num_heads`      | `MultiHeadYatAttention(embed_dim=512, num_heads=8)`                           |
 | `SavedModel` reload fails                | Custom layer class not on import path         | Ensure `nmn.tf` is importable in the loading process                          |
 
 ---
 
-## 9. Next steps
+## 10. Next steps
 
 - [Architecture & theory](../architecture.md)
 - [Keras guide](keras.md) — usually a nicer API for new TF code

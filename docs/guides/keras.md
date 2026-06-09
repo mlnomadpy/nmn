@@ -20,7 +20,7 @@ import keras
 from nmn.keras import YatNMN
 
 print(keras.__version__)
-layer = YatNMN(features=64)
+layer = YatNMN(units=64)
 print(layer(keras.ops.ones((32, 128))).shape)  # (32, 64)
 ```
 
@@ -42,7 +42,7 @@ from nmn.keras import YatNMN
 # fc = keras.layers.Dense(64, activation="relu")
 
 # After:
-fc = YatNMN(features=64)
+fc = YatNMN(units=64)
 
 x = keras.ops.ones((32, 128))
 print(fc(x).shape)  # (32, 64)
@@ -63,8 +63,8 @@ x_test  = x_test.astype("float32") / 255.0
 model = keras.Sequential([
     keras.layers.Input((28, 28)),
     keras.layers.Flatten(),
-    YatNMN(features=256),
-    YatNMN(features=128),
+    YatNMN(units=256),
+    YatNMN(units=128),
     keras.layers.Dense(10),
 ])
 
@@ -106,7 +106,7 @@ model = keras.Sequential([
     YatConv2D(filters=64, kernel_size=3, padding="same"),
     keras.layers.MaxPooling2D(),
     keras.layers.GlobalAveragePooling2D(),
-    YatNMN(features=64),
+    YatNMN(units=64),
     keras.layers.Dense(10),
 ])
 ```
@@ -119,7 +119,7 @@ model = keras.Sequential([
 from nmn.keras import MultiHeadYatAttention
 import keras
 
-attn = MultiHeadYatAttention(num_heads=8, key_dim=64)
+attn = MultiHeadYatAttention(embed_dim=512, num_heads=8)
 x = keras.ops.ones((4, 16, 512))
 y = attn(x, x)
 print(y.shape)  # (4, 16, 512)
@@ -150,7 +150,35 @@ restored = keras.models.load_model(
 
 ---
 
-## 7. Export & deployment
+## 7. Lazy training (freeze kernel)
+
+Pass `lazy=True` (alias: `freeze_kernel=True`) to freeze **only** the kernel.
+The kernel weight is created with `trainable=False`, so it never appears in
+`model.trainable_variables` and the optimizer leaves it untouched, while `bias`,
+`alpha`, and the learnable `epsilon` stay trainable. Default `lazy=False`, fully
+backward compatible.
+
+```python
+import keras
+from nmn.keras import YatNMN
+
+layer = YatNMN(units=64, lazy=True)
+_ = layer(keras.ops.ones((1, 128)))   # build() creates the (frozen) kernel
+
+# The frozen kernel is excluded from training entirely:
+print([w.name for w in layer.trainable_weights])  # no 'kernel'
+```
+
+`lazy` and `freeze_kernel` are round-tripped through `get_config()`, so a model
+with frozen-kernel layers reloads correctly via `custom_objects=` (see § 6). Use
+lazy mode for a fixed feature basis where only the scale/shift/`epsilon` learn.
+
+> CLI: `nmn guide keras` prints the quickstart; `nmn features` summarizes the
+> lazy mode and the MAY/RAY performer maps.
+
+---
+
+## 8. Export & deployment
 
 - **TensorFlow SavedModel**: `model.export("yat_model_savedmodel")`
 - **TFLite**: convert from SavedModel with `tf.lite.TFLiteConverter.from_saved_model(...)` — Yat layers use only standard TF ops and should convert cleanly. Not currently in CI; please report results.
@@ -158,18 +186,18 @@ restored = keras.models.load_model(
 
 ---
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Symptom                                | Likely cause                                       | Fix                                                            |
 | -------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------- |
-| `NaN` in early training                 | `epsilon` too small                                | `YatNMN(features=..., epsilon=1e-3)`                            |
+| `NaN` in early training                 | `epsilon` too small                                | `YatNMN(units=..., epsilon=1e-3)`                              |
 | `ValueError` on model load              | Custom layers not registered                       | Pass `custom_objects=` (see § 6)                                |
 | Slow training on CPU                    | Keras backend defaulted to TF and op fallback      | Switch to JAX backend: `KERAS_BACKEND=jax`                      |
-| Shape mismatch in attention block       | Forgot `key_dim`                                   | `MultiHeadYatAttention(num_heads=8, key_dim=embed_dim // 8)`    |
+| Shape mismatch in attention block       | `embed_dim` not divisible by `num_heads`           | `MultiHeadYatAttention(embed_dim=512, num_heads=8)`            |
 
 ---
 
-## 9. Next steps
+## 10. Next steps
 
 - [Architecture & theory](../architecture.md)
 - [Migration cheat sheet](../migration.md)

@@ -11,6 +11,7 @@ Welcome to the **Neural Matter Networks** documentation. This is the local-repo 
 | **Understand the math**                       | [Architecture & Theory](architecture.md)                    |
 | **Port an existing model**                   | [Migration Cheat Sheet](migration.md)                       |
 | **Pick the right framework**                 | [Framework comparison](#framework-comparison) below          |
+| **Discover the package from a terminal**     | Run `nmn` / `nmn guide <fw>` / `nmn features` / `nmn doctor`  |
 | **See code snippets per framework**          | [`EXAMPLES.md`](../EXAMPLES.md) at repo root                |
 | **Run a full training script**               | [`src/nmn/<framework>/examples/`](../src/nmn/)              |
 | **Contribute**                                | [`CONTRIBUTING.md`](../CONTRIBUTING.md)                     |
@@ -63,7 +64,21 @@ All layers are available across **all 6 frameworks**.
 
 - `RotaryYatAttention` — YAT + RoPE positional encoding
 - `MultiHeadAttention(use_performer=True)` — Spherical YAT-Performer, O(n) complexity
+- `RotaryYatAttention(use_performer=True, performer_kind=...)` — selects the
+  linear-attention feature map: `"slay"` (default, bias-free anchor), `"maclaurin"`
+  (**MAY**, bias-aware Random-Maclaurin), or `"radial"` (**RAY**, bias-aware radial
+  RFF). Functional API: `create_maclaurin_projection` / `maclaurin_yat_attention`
+  and `create_radial_projection` / `radial_yat_attention` (canonical kwargs
+  `bias`, `epsilon`). See the [Flax NNX guide](guides/flax-nnx.md#6-linear-attention-may--ray--slay).
 - Pallas fused / flash yat-attention kernel (TPU/GPU)
+
+**Lazy mode — freeze the kernel (all frameworks):** every `YatNMN` accepts
+`lazy=True` (alias `freeze_kernel=True`) to freeze **only** the kernel (its
+feature directions) while `bias`, `alpha`, and the learnable `epsilon` keep
+training. Each framework implements it idiomatically — `requires_grad=False`
+(torch), `trainable=False` (tf/keras), `FrozenParam` (nnx), `stop_gradient`
+(linen), `Module.freeze(keys=["kernel"])` (mlx). See each guide's "Lazy training
+(freeze kernel)" section.
 
 ---
 

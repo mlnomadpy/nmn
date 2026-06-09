@@ -196,7 +196,38 @@ If you successfully export a non-trivial Yat model to ONNX, please open a PR add
 
 ---
 
-## 7. Distributed training
+## 7. Lazy training (freeze kernel)
+
+Pass `lazy=True` (alias: `freeze_kernel=True`) to freeze **only** the kernel —
+its feature directions. The `weight` tensor is created with
+`requires_grad_(False)` so it is excluded from gradients and the optimizer,
+while `bias`, `alpha`, and the learnable `epsilon` stay trainable. This is fully
+backward compatible (default `lazy=False`).
+
+```python
+import torch
+from nmn.torch import YatNMN
+
+# Frozen kernel; bias / alpha / epsilon still learn.
+layer = YatNMN(in_features=128, out_features=64, lazy=True)
+
+# The kernel does not appear among the parameters that receive gradients:
+trainable = [n for n, p in layer.named_parameters() if p.requires_grad]
+print(trainable)  # ['bias', 'alpha', ...] — no 'weight'
+```
+
+Because the frozen `weight` still requires no special handling, you can build a
+model out of `lazy=True` layers and hand `model.parameters()` straight to the
+optimizer — frozen kernels are skipped automatically. Use this when you want a
+fixed random/anchored feature basis (cheaper to train, often a strong baseline)
+but still want the scale (`alpha`), shift (`bias`), and `epsilon` to adapt.
+
+> CLI: `nmn guide pytorch` prints this quickstart; `nmn features` summarizes the
+> lazy mode and the MAY/RAY performer maps across frameworks.
+
+---
+
+## 8. Distributed training
 
 `YatNMN` and `YatConv*` are plain `nn.Module`s, so they work unchanged with:
 
@@ -207,7 +238,7 @@ If you successfully export a non-trivial Yat model to ONNX, please open a PR add
 
 ---
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Symptom                                       | Likely cause                                             | Fix                                                                          |
 | --------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------- |
@@ -219,7 +250,7 @@ If you successfully export a non-trivial Yat model to ONNX, please open a PR add
 
 ---
 
-## 9. Next steps
+## 10. Next steps
 
 - [Architecture & theory](../architecture.md)
 - [Migration cheat sheet](../migration.md)

@@ -29,6 +29,9 @@ classifiers = [
 "Homepage" = "https://github.com/azettaai/nmn"
 "Bug Tracker" = "https://github.com/azettaai/nmn/issues"
 
+[project.scripts]
+nmn = "nmn.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",

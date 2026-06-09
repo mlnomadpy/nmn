@@ -394,7 +394,7 @@ class RotaryYatAttention(Module):
 
     Example:
         >>> from flax import nnx
-        >>> from nmn.nnx.attention import RotaryYatAttention
+        >>> from nmn.nnx import RotaryYatAttention
         >>>
         >>> rngs = nnx.Rngs(0)
         >>> # Standard quadratic attention
@@ -411,7 +411,7 @@ class RotaryYatAttention(Module):
         ...     num_heads=8,
         ...     max_seq_len=8192,
         ...     use_performer=True,
-        ...     num_features=256,
+        ...     performer_num_features=256,
         ...     rngs=rngs,
         ... )
     """
