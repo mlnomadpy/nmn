@@ -61,6 +61,12 @@ try:
 except ImportError:
     FRAMEWORKS['nnx'] = False
 
+try:
+    import mlx.core as mx
+    FRAMEWORKS['mlx'] = True
+except ImportError:
+    FRAMEWORKS['mlx'] = False
+
 
 def get_available_frameworks() -> List[str]:
     """Get list of available frameworks."""
@@ -192,6 +198,41 @@ def run_nnx_dense(inputs: np.ndarray, weights: np.ndarray,
     return np.array(output)
 
 
+def run_mlx_dense(inputs: np.ndarray, weights: np.ndarray,
+                  bias: Optional[np.ndarray] = None,
+                  alpha: Optional[float] = None,
+                  epsilon: float = 1e-6) -> np.ndarray:
+    """Run YAT dense layer in MLX."""
+    import mlx.core as mx
+    from nmn.mlx.nmn import YatNMN
+
+    # Pin to CPU: MLX's Metal matmul accumulates at lower precision than
+    # numpy fp32, so the tolerances used here are only meaningful on CPU.
+    prev_device = mx.default_device()
+    mx.set_default_device(mx.cpu)
+    try:
+        in_features, out_features = weights.shape
+        layer = YatNMN(
+            features=out_features,
+            use_bias=(bias is not None),
+            use_alpha=(alpha is not None),
+            epsilon=epsilon,
+        )
+        layer.build(in_features)
+
+        # MLX kernel is (features, in_features) — transpose canonical weights.
+        layer.kernel = mx.array(weights.T)
+        if bias is not None:
+            layer.bias = mx.array(bias)
+        if alpha is not None:
+            layer.alpha = mx.array([alpha])
+
+        output = layer(mx.array(inputs))
+        return np.asarray(output)
+    finally:
+        mx.set_default_device(prev_device)
+
+
 # ============================================================================
 # Reference NumPy Implementation
 # ============================================================================
@@ -317,7 +358,10 @@ class TestCrossFrameworkYATConsistency:
         
         if FRAMEWORKS.get('nnx'):
             outputs['NNX'] = run_nnx_dense(inputs, weights, bias, alpha, epsilon)
-        
+
+        if FRAMEWORKS.get('mlx'):
+            outputs['MLX'] = run_mlx_dense(inputs, weights, bias, alpha, epsilon)
+
         return outputs
     
     def compare_all_pairs(self, outputs: Dict[str, np.ndarray],
@@ -492,6 +536,11 @@ class TestYATGeometricProperties:
             out = run_nnx_dense(inputs, weights)
             assert np.all(out >= 0), "NNX produced negative values"
             print(f"NNX: min={out.min():.6f}, all positive [PASS]")
+
+        if FRAMEWORKS.get('mlx'):
+            out = run_mlx_dense(inputs, weights)
+            assert np.all(out >= 0), "MLX produced negative values"
+            print(f"MLX: min={out.min():.6f}, all positive [PASS]")
     
     def test_epsilon_effect(self):
         """Epsilon should only affect outputs where distance is near 0."""
@@ -558,6 +607,11 @@ class TestYATGeometricProperties:
             print(f"NNX first output: {out[0, 0]:.6f}")
             np.testing.assert_allclose(out[0, 0], expected_first, rtol=1e-3)
 
+        if FRAMEWORKS.get('mlx'):
+            out = run_mlx_dense(inputs, weights, epsilon=epsilon)
+            print(f"MLX first output: {out[0, 0]:.6f}")
+            np.testing.assert_allclose(out[0, 0], expected_first, rtol=1e-3)
+
 
 # ============================================================================
 # Summary Report Generator
@@ -589,7 +643,9 @@ def test_generate_consistency_report():
         outputs['Linen'] = run_linen_dense(inputs, weights, epsilon=epsilon)
     if FRAMEWORKS.get('nnx'):
         outputs['NNX'] = run_nnx_dense(inputs, weights, epsilon=epsilon)
-    
+    if FRAMEWORKS.get('mlx'):
+        outputs['MLX'] = run_mlx_dense(inputs, weights, epsilon=epsilon)
+
     # Compare all pairs
     names = list(outputs.keys())
     all_errors = []

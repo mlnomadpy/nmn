@@ -286,8 +286,10 @@ PyTorch ↔ TensorFlow       │ < 1e-6       │ ✅
 PyTorch ↔ Keras            │ < 1e-6       │ ✅
 PyTorch ↔ Flax NNX         │ < 1e-6       │ ✅
 PyTorch ↔ Flax Linen       │ < 1e-6       │ ✅
+PyTorch ↔ MLX (CPU)        │ < 1e-6       │ ✅
 TensorFlow ↔ Keras         │ < 1e-7       │ ✅
 Flax NNX ↔ Flax Linen      │ < 1e-7       │ ✅
+Flax NNX ↔ MLX (CPU)       │ < 1e-6       │ ✅
 ```
 
 Run yourself: `pytest tests/integration/test_cross_framework_consistency.py -v`.
