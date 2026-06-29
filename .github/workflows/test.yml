@@ -35,7 +35,7 @@ jobs:
         python-version: ["3.11", "3.12"]
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     
     - name: Free disk space
       run: |
@@ -94,7 +94,7 @@ jobs:
             python-version: "3.11"
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Free disk space (Linux)
       if: runner.os == 'Linux'
@@ -160,7 +160,7 @@ jobs:
             python-version: "3.11"
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Free disk space (Linux)
       if: runner.os == 'Linux'
@@ -206,7 +206,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -237,7 +237,7 @@ jobs:
     name: Type Check (MyPy)
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Set up Python
       uses: actions/setup-python@v5
