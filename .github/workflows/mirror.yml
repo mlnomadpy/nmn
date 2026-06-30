@@ -1,0 +1,48 @@
+name: Mirror to mlnomadpy/nmn
+
+# Keeps the original repository github.com/mlnomadpy/nmn in sync with the
+# canonical github.com/azettaai/nmn. On every push to master (and on version
+# tags) this fast-forwards the mirror's master and pushes all tags.
+#
+# Setup (one-time): create a Personal Access Token with `contents:write` (repo)
+# scope on mlnomadpy/nmn and add it to this repo's secrets as `MIRROR_PAT`
+# (Settings → Secrets and variables → Actions). Without the secret the job is a
+# no-op, so it never fails CI.
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mirror-mlnomadpy
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    name: Push master + tags to mlnomadpy/nmn
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # full history + tags for a clean fast-forward
+
+      - name: Mirror to mlnomadpy/nmn
+        env:
+          MIRROR_PAT: ${{ secrets.MIRROR_PAT }}
+        run: |
+          if [ -z "${MIRROR_PAT}" ]; then
+            echo "MIRROR_PAT secret not set — skipping mirror (no-op)."
+            exit 0
+          fi
+          remote="https://x-access-token:${MIRROR_PAT}@github.com/mlnomadpy/nmn.git"
+          # Sync master (fast-forward only; the mirror should never diverge).
+          git push "${remote}" "HEAD:refs/heads/master"
+          # Sync all version tags.
+          git push "${remote}" --tags

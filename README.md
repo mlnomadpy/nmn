@@ -27,6 +27,14 @@
   <a href="https://azettaai.github.io/nmn/paper/"><strong>📄 Paper</strong></a>
 </p>
 
+<p align="center">
+  <sub>
+    Canonical repo: <a href="https://github.com/azettaai/nmn">azettaai/nmn</a> ·
+    Mirror of the original <a href="https://github.com/mlnomadpy/nmn">mlnomadpy/nmn</a> ·
+    Install from <a href="https://pypi.org/project/nmn/">PyPI</a> (<code>pip install nmn</code>)
+  </sub>
+</p>
+
 ---
 
 ## Contents
