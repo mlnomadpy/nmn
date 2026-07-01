@@ -5,6 +5,25 @@ Concise, accurate orientation for an agent working with the `nmn` package
 [docs/README.md](docs/README.md), and the per-framework guides under
 [docs/guides/](docs/guides/). For a machine-readable map see [llms.txt](llms.txt).
 
+## Install the agent skill
+
+This repo ships an [Agent Skill](https://docs.claude.com/en/docs/claude-code/skills)
+at [`.claude/skills/nmn/`](.claude/skills/nmn/SKILL.md). Install it so your coding
+agent auto-loads NMN expertise whenever you `import nmn` or work with YAT layers —
+no manual lookup:
+
+```bash
+# user-level (applies to all your projects)
+cp -r .claude/skills/nmn ~/.claude/skills/nmn
+
+# or project-level (commit it with your repo)
+mkdir -p .claude/skills && cp -r /path/to/nmn/.claude/skills/nmn .claude/skills/nmn
+```
+
+It triggers on `import nmn` / `from nmn.<framework> import ...`, `YatNMN`, YAT
+attention, MAY/RAY, and lazy mode, and encodes the per-framework constructor
+differences and gotchas below.
+
 ## What NMN is
 
 `YatNMN` is a drop-in replacement for `Linear + activation`. The non-linearity is

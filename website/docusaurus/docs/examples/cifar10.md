@@ -9,8 +9,7 @@ Image classification with YatConv on CIFAR-10.
 ## Model
 
 ```python
-from nmn.nnx.conv import YatConv
-from nmn.nnx.nmn import YatNMN
+from nmn.nnx import YatConv, YatNMN
 
 class CIFAR10Net(nnx.Module):
     def __init__(self, rngs: nnx.Rngs):

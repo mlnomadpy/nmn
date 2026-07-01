@@ -4,21 +4,22 @@ sidebar_position: 3
 
 # Transformer Example
 
-Building a transformer with YatAttention.
+Building a transformer with multi-head ⵟ-attention (Flax NNX).
 
 ## Model
 
 ```python
-from nmn.nnx.attention import YatAttention
-from nmn.nnx.nmn import YatNMN
+from flax import nnx
+from nmn.nnx import MultiHeadAttention, YatNMN
 
 class TransformerBlock(nnx.Module):
     def __init__(self, dim: int, num_heads: int, rngs: nnx.Rngs):
-        self.attn = YatAttention(dim, num_heads, rngs=rngs)
+        # NNX: MultiHeadAttention(num_heads, in_features, rngs=...)
+        self.attn = MultiHeadAttention(num_heads=num_heads, in_features=dim, rngs=rngs)
         self.ff = YatNMN(dim, dim, constant_alpha=True, rngs=rngs)
-    
+
     def __call__(self, x, mask=None):
-        x = x + self.attn(x, mask=mask)
+        x = x + self.attn(x, x, x, mask=mask)   # self-attention: q = k = v
         x = x + self.ff(x)
         return x
 
@@ -30,7 +31,7 @@ class Transformer(nnx.Module):
             for _ in range(num_layers)
         ]
         self.head = nnx.Linear(dim, vocab_size, rngs=rngs)
-    
+
     def __call__(self, x, mask=None):
         x = self.embed(x)
         for block in self.blocks:
@@ -38,8 +39,16 @@ class Transformer(nnx.Module):
         return self.head(x)
 ```
 
+For long sequences, swap `MultiHeadAttention` for
+[`RotaryYatAttention`](/docs/attention/rotary) with `use_performer=True` to get
+O(n) [linear attention](/docs/attention/linear-attention) (SLAY / MAY / RAY).
+
+In torch / Keras / TensorFlow / MLX the class is
+`MultiHeadYatAttention(embed_dim, num_heads)` — there is no `key_dim` kwarg on
+any backend.
+
 ## Key Points
 
-- **No LayerNorm needed**: YatAttention is self-regularizing
+- **No LayerNorm needed**: ⵟ-attention is self-regularizing
 - **No GELU/ReLU in FFN**: YatNMN provides non-linearity
 - **Simpler architecture**: Fewer components to tune

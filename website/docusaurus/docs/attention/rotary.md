@@ -9,13 +9,13 @@ Rotary position embeddings (RoPE) with ⵟ-attention for positional encoding, pl
 ## Import
 
 ```python
-from nmn.nnx.attention import RotaryYatAttention
+from nmn.nnx import RotaryYatAttention
 ```
 
 ## Basic Usage
 
 ```python
-from nmn.nnx.attention import RotaryYatAttention
+from nmn.nnx import RotaryYatAttention
 from flax import nnx
 import jax.numpy as jnp
 
@@ -23,8 +23,7 @@ attn = RotaryYatAttention(
     embed_dim=512,
     num_heads=8,
     max_seq_len=2048,
-    use_yat=True,          # Use YAT formula (default)
-    constant_alpha=True,   # Use constant alpha scaling
+    constant_alpha=True,   # Use constant sqrt(2) alpha scaling
     rngs=nnx.Rngs(0)
 )
 
@@ -34,16 +33,20 @@ y = attn(x)
 
 ## Performer Mode — O(n) Complexity
 
-For long sequences, enable Performer mode using FAVOR+ random feature approximation:
+For long sequences, enable Performer mode using linear-attention feature maps.
+Pick the map with `performer_kind` — `"slay"` (bias-free anchor), `"maclaurin"`
+(**MAY**, bias-aware), or `"radial"` (**RAY**, bias-aware):
 
 ```python
 performer_attn = RotaryYatAttention(
     embed_dim=512,
     num_heads=8,
-    max_seq_len=2048,
-    use_performer=True,    # Enable linear complexity
-    num_features=256,      # Number of random features
-    use_yat=True,          # Combine Performer with YAT
+    max_seq_len=10000,
+    use_performer=True,             # Enable linear complexity
+    performer_kind="maclaurin",     # "slay" | "maclaurin" | "radial"
+    performer_num_features=256,     # feature budget M
+    performer_bias=1.0,             # spherical-Yat bias b
+    epsilon=1e-5,
     rngs=nnx.Rngs(0)
 )
 
@@ -51,6 +54,12 @@ performer_attn = RotaryYatAttention(
 long_seq = jnp.ones((2, 10000, 512))  # 10K tokens
 output = performer_attn(long_seq)  # Runs in O(n) time instead of O(n²)
 ```
+
+:::note
+The kwargs are `performer_num_features` (not `num_features`) and
+`performer_bias`. See [Linear Attention](/docs/attention/linear-attention) for
+what the three feature maps model and when to pick each.
+:::
 
 ### Complexity Comparison
 
@@ -66,18 +75,21 @@ attn = RotaryYatAttention(
     embed_dim=512,
     num_heads=8,
     max_seq_len=2048,
-    
+
     # YAT Options
-    use_yat=True,          # Use YAT formula vs standard attention
-    constant_alpha=True,   # Use constant sqrt(2) scaling
-    learnable_alpha=False, # Make alpha learnable
-    learnable_epsilon=True, # Make epsilon learnable (softplus-constrained)
-    qk_norm=True,          # Normalize Q and K
-    
-    # Performer Options
-    use_performer=False,   # Enable linear complexity
-    num_features=256,      # Random features (if performer=True)
-    
+    constant_alpha=True,     # Use constant sqrt(2) scaling (None = learnable alpha)
+    use_alpha=True,          # Enable alpha scaling
+    learnable_epsilon=True,  # Make epsilon learnable (softplus-constrained)
+    normalize_qk=True,       # Normalize Q and K
+    normalization="softmax", # "softmax" (default), "l1", or "softermax"
+    epsilon=1e-5,            # Numerical stability
+
+    # Performer Options (linear attention)
+    use_performer=False,        # Enable O(n) complexity
+    performer_kind="slay",      # "slay" | "maclaurin" | "radial"
+    performer_num_features=256, # feature budget (if use_performer=True)
+    performer_bias=1.0,         # spherical-Yat bias b (MAY / RAY)
+
     rngs=nnx.Rngs(0)
 )
 ```
@@ -91,5 +103,6 @@ attn = RotaryYatAttention(
 
 ## See Also
 
-- [YatAttention](/docs/attention/yat-attention) - Basic attention
+- [YAT Attention](/docs/attention/yat-attention) - Concept + GOAT (MLX)
 - [Multi-Head Attention](/docs/attention/multi-head) - Standard multi-head
+- [Linear Attention](/docs/attention/linear-attention) - SLAY / MAY / RAY feature maps

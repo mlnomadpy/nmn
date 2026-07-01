@@ -9,7 +9,7 @@ Transposed convolution (deconvolution) using the ⵟ-product for upsampling oper
 ## Import
 
 ```python
-from nmn.nnx.conv import YatConvTranspose
+from nmn.nnx import YatConvTranspose
 ```
 
 ## Constructor
@@ -35,7 +35,7 @@ YatConvTranspose(
 ## Usage Example
 
 ```python
-from nmn.nnx.conv import YatConvTranspose
+from nmn.nnx import YatConvTranspose
 
 # Upsample by 2x
 deconv = YatConvTranspose(

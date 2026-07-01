@@ -40,7 +40,7 @@ Traditional neural networks separate geometry from non-linearity:
 
 ```python
 from flax import nnx
-from nmn.nnx.nmn import YatNMN
+from nmn.nnx import YatNMN
 
 # YatNMN replaces nn.Dense + activation
 layer = YatNMN(
@@ -54,6 +54,27 @@ layer = YatNMN(
 y = layer(x)
 ```
 
+## Six Frameworks, One Layer
+
+The same YAT layer family ships across **six independent backends** with
+numerically equivalent outputs (< 1e-6 fp32). Each backend is a **separate
+optional install** — installing one does not install the others.
+
+| Framework | Import root | `pip install` | `YatNMN` size argument |
+|-----------|-------------|---------------|------------------------|
+| PyTorch | `nmn.torch` | `nmn[torch]` | `YatNMN(in_features, out_features)` |
+| Flax NNX | `nmn.nnx` | `nmn[nnx]` | `YatNMN(in_features, out_features, rngs=nnx.Rngs(0))` |
+| Flax Linen | `nmn.linen` | `nmn[linen]` | `YatNMN(features=N)` |
+| Keras 3 | `nmn.keras` | `nmn[keras]` | `YatNMN(units=N)` — **`units`, not `features`** |
+| TensorFlow | `nmn.tf` | `nmn[tf]` | `YatNMN(features=N)` |
+| MLX | `nmn.mlx` | `nmn[mlx]` | `YatNMN(features=N)` (Apple Silicon) |
+
+:::tip
+The `YatNMN` size argument differs per backend — this is the #1 gotcha. Run
+`nmn frameworks` (or see the [CLI reference](/docs/cli)) to print the exact
+import line and constructor signature for every framework.
+:::
+
 ## Available Modules
 
 | Module | Description |
@@ -61,7 +82,9 @@ y = layer(x)
 | [`YatNMN`](/docs/layers/yat-nmn) | Dense layer with ⵟ-product |
 | [`YatConv`](/docs/layers/yat-conv) | Convolution with ⵟ-product |
 | [`YatAttention`](/docs/attention/yat-attention) | Self-attention with ⵟ-product |
-| [`YatLSTM`](/docs/rnn/lstm) | LSTM with ⵟ-product gates |
+| [`MultiHeadAttention`](/docs/attention/multi-head) | Multi-head ⵟ-attention |
+| [`RotaryYatAttention`](/docs/attention/rotary) | RoPE + optional O(n) performer |
+| [Linear attention](/docs/attention/linear-attention) | SLAY / MAY / RAY feature maps |
 
 ## Why YAT Works: Geometric Intuition
 
@@ -104,5 +127,8 @@ In practice this means: **fewer components, same expressiveness** — leading to
 
 - [**Installation**](/docs/installation) - Get NMN set up
 - [**Quick Start**](/docs/quick-start) - Build your first model
+- [**CLI Reference**](/docs/cli) - Discover the API from the shell (`nmn doctor` / `nmn guide`)
 - [**Migration Guide**](/docs/migration-guide) - Drop in NMN layers
+- [**Linear Attention**](/docs/attention/linear-attention) - SLAY / MAY / RAY performer maps
+- [**Lazy Training**](/docs/guides/lazy-training) - Freeze the kernel, train the scalars
 - [**Interactive Paper**](/paper/) - Explore visualizations

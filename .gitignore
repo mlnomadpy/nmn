@@ -140,4 +140,7 @@ venv.bak/.backup
 website/docusaurus/node_modules/
 website/docusaurus/build/
 website/docusaurus/.docusaurus/
-.claude/
+
+# Local Claude Code config is ignored, but the shipped agent skill is tracked.
+.claude/*
+!.claude/skills/

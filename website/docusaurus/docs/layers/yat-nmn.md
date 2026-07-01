@@ -23,8 +23,23 @@ $$
 ## Import
 
 ```python
-from nmn.nnx.nmn import YatNMN
+from nmn.nnx import YatNMN
 ```
+
+`YatNMN` ships in all six backends with numerically equivalent outputs. The
+**size argument differs per backend** — this is the #1 gotcha:
+
+| Framework | Import | Constructor |
+|-----------|--------|-------------|
+| PyTorch | `from nmn.torch import YatNMN` | `YatNMN(in_features, out_features)` |
+| Flax NNX | `from nmn.nnx import YatNMN` | `YatNMN(in_features, out_features, rngs=nnx.Rngs(0))` |
+| Flax Linen | `from nmn.linen import YatNMN` | `YatNMN(features=N)` |
+| Keras 3 | `from nmn.keras import YatNMN` | `YatNMN(units=N)` — **`units`, not `features`** |
+| TensorFlow | `from nmn.tf import YatNMN` | `YatNMN(features=N)` |
+| MLX | `from nmn.mlx import YatNMN` | `YatNMN(features=N)` |
+
+Keras, TensorFlow, and MLX also export `YatDense` as an alias. The reference
+below documents the Flax NNX signature.
 
 ## Constructor
 
@@ -37,6 +52,7 @@ YatNMN(
     use_alpha: bool = True,
     constant_alpha: Optional[Union[bool, float]] = None,
     use_dropconnect: bool = False,
+    lazy: bool = False,            # alias: freeze_kernel — freezes ONLY the kernel
     dtype: Optional[Dtype] = None,
     param_dtype: Dtype = jnp.float32,
     precision: PrecisionLike = None,
@@ -60,6 +76,7 @@ YatNMN(
 | `use_alpha` | `bool` | `True` | Whether to use alpha scaling (ignored if `constant_alpha` is set) |
 | `constant_alpha` | `bool \| float \| None` | `None` | If `True`: use √2, if `float`: use that value, if `None`: learnable |
 | `use_dropconnect` | `bool` | `False` | Whether to use DropConnect regularization |
+| `lazy` | `bool` | `False` | Freeze **only** the kernel (alias `freeze_kernel`); bias / alpha / epsilon stay trainable. See [Lazy Training](/docs/guides/lazy-training) |
 | `dtype` | `Dtype` | `None` | Computation dtype (inferred if None) |
 | `param_dtype` | `Dtype` | `float32` | Parameter dtype |
 | `precision` | `PrecisionLike` | `None` | JAX precision for dot product |
@@ -77,7 +94,7 @@ YatNMN(
 
 ```python
 from flax import nnx
-from nmn.nnx.nmn import YatNMN
+from nmn.nnx import YatNMN
 import jax.numpy as jnp
 
 # Create layer with learnable alpha (default)
@@ -160,6 +177,24 @@ layer = YatNMN(
 Learnable epsilon lets the model adapt the numerical stability constant per layer. This can be useful when different layers benefit from different epsilon scales. The softplus activation ensures the learned value stays strictly positive.
 :::
 
+### Lazy / Frozen-Kernel Mode
+
+```python
+# Freeze ONLY the kernel; bias / alpha / (learnable) epsilon stay trainable.
+layer = YatNMN(
+    in_features=784,
+    out_features=256,
+    lazy=True,          # alias: freeze_kernel=True
+    rngs=nnx.Rngs(0)
+)
+
+# In NNX the frozen kernel is a FrozenParam, excluded from nnx.state(layer, nnx.Param),
+# so the optimizer/gradients never touch it. Same semantics in every backend.
+```
+
+This is a lightweight regime for fine-tuning, probing, and cheap warm starts.
+See [Lazy Training](/docs/guides/lazy-training) for the per-framework details.
+
 ## Comparison with nn.Linear
 
 | Feature | `nn.Linear` | `YatNMN` |
@@ -211,4 +246,6 @@ print(layer.bias.value.shape)    # (32,)
 ## See Also
 
 - [YatConv](/docs/layers/yat-conv) - Convolutional variant
+- [Lazy Training](/docs/guides/lazy-training) - Freeze-kernel mode
 - [Quick Start](/docs/quick-start) - Getting started guide
+- [CLI Reference](/docs/cli) - `nmn frameworks` prints the per-backend signature

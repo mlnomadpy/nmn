@@ -6,13 +6,31 @@ sidebar_position: 3
 
 Build your first Neural Matter Network in minutes.
 
+## Discover the API from the shell
+
+Before writing code, use the import-light `nmn` CLI (it imports no ML framework)
+to see which backends are installed and grab a per-framework quickstart:
+
+```bash
+nmn doctor              # which of the 6 backends import + versions
+nmn frameworks          # import line + YatNMN signature per framework
+nmn guide nnx           # self-contained quickstart (torch/nnx/linen/keras/tf/mlx)
+nmn features            # MAY/RAY performer maps + lazy YatNMN mode
+```
+
+See the [CLI reference](/docs/cli) for the full command set.
+
+The examples below use the **Flax NNX** backend. The same YAT math is available
+across all six frameworks — only the `YatNMN` size argument differs (see the
+[installation table](/docs/installation#framework-support)).
+
 ## Basic Usage
 
 ### 1. Create a YatNMN Layer
 
 ```python
 from flax import nnx
-from nmn.nnx.nmn import YatNMN
+from nmn.nnx import YatNMN
 import jax.numpy as jnp
 
 # YatNMN replaces nn.Dense + activation
@@ -76,7 +94,7 @@ for batch in dataloader:
 ## Using with Convolutions
 
 ```python
-from nmn.nnx.conv import YatConv
+from nmn.nnx import YatConv
 
 class ConvNet(nnx.Module):
     def __init__(self, rngs: nnx.Rngs):
@@ -142,7 +160,7 @@ class NMNBlock(nnx.Module):
 ### Attention Mechanisms
 
 ```python
-from nmn.nnx.attention import RotaryYatAttention, MultiHeadAttention
+from nmn.nnx import RotaryYatAttention, MultiHeadAttention
 
 # Multi-head attention
 mha = MultiHeadAttention(
@@ -164,28 +182,23 @@ performer = RotaryYatAttention(
     embed_dim=512,
     num_heads=8,
     use_performer=True,
-    num_features=256,
+    performer_kind="maclaurin",     # "slay" | "maclaurin" | "radial"
+    performer_num_features=256,     # feature budget
+    performer_bias=1.0,             # spherical-Yat bias b
     rngs=nnx.Rngs(0)
 )
 ```
 
-### Recurrent Layers
-
-```python
-from nmn.nnx.rnn import YatLSTMCell, YatGRUCell, RNN, Bidirectional
-
-# LSTM with Yat operations
-lstm_cell = YatLSTMCell(hidden_dim=256, rngs=nnx.Rngs(0))
-lstm = RNN(lstm_cell, return_sequences=True)
-
-# Bidirectional processing
-bi_gru = Bidirectional(YatGRUCell(hidden_dim=256, rngs=nnx.Rngs(0)))
-```
+In torch / Keras / TensorFlow / MLX, multi-head attention is
+`MultiHeadYatAttention(embed_dim, num_heads)` — there is no `key_dim` kwarg on
+any backend. See [Multi-Head Attention](/docs/attention/multi-head) and
+[Linear Attention](/docs/attention/linear-attention) for the SLAY / MAY / RAY
+feature maps.
 
 ### Regularization
 
 ```python
-from nmn.nnx.conv import YatConv
+from nmn.nnx import YatConv
 
 # DropConnect: weight-level dropout
 conv = YatConv(
@@ -205,7 +218,7 @@ eval_output = conv(x, deterministic=True)    # DropConnect disabled
 ### Custom Squashing Functions
 
 ```python
-from nmn.nnx.squashers import softermax, softer_sigmoid, soft_tanh
+from nmn.nnx import softermax, softer_sigmoid, soft_tanh
 
 # Smoother alternatives to standard activations
 probs = softermax(logits, n=2)              # Smooth softmax
@@ -213,8 +226,25 @@ activated = softer_sigmoid(x, sharpness=1)  # Smooth sigmoid
 output = soft_tanh(x)                       # Smooth tanh
 ```
 
+### Lazy / Frozen-Kernel Training
+
+Pass `lazy=True` (alias `freeze_kernel=True`) to any `YatNMN` to freeze **only
+the kernel** — bias, alpha, and (if enabled) epsilon stay trainable:
+
+```python
+from nmn.nnx import YatNMN
+
+layer = YatNMN(in_features=128, out_features=64, lazy=True, rngs=nnx.Rngs(0))
+# Only bias / alpha / (learnable) epsilon are trainable; the kernel is frozen.
+```
+
+See [Lazy Training](/docs/guides/lazy-training) for the per-framework details.
+
 ## Next Steps
 
+- [CLI Reference](/docs/cli) — `nmn doctor` / `nmn guide` / `nmn features`
 - [YatNMN API Reference](/docs/layers/yat-nmn)
 - [Attention Modules](/docs/attention/yat-attention)
+- [Linear Attention](/docs/attention/linear-attention) — SLAY / MAY / RAY
+- [Lazy Training](/docs/guides/lazy-training)
 - [Example: CIFAR-10](/docs/examples/cifar10)

@@ -71,6 +71,76 @@
     flex-wrap: wrap;
 }
 
+.install {
+    margin: 2rem auto 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.install code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1rem;
+    color: #00ff88;
+    background: rgba(0, 255, 136, 0.06);
+    border: 1px solid rgba(0, 255, 136, 0.25);
+    border-radius: 8px;
+    padding: 0.6rem 1.2rem;
+}
+
+/* Frameworks Section */
+.frameworks {
+    padding: 4rem 0;
+    background: #0a0a0f;
+    border-top: 1px solid rgba(0, 255, 136, 0.08);
+}
+
+.frameworkGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    max-width: 860px;
+    margin: 2.5rem auto 0;
+}
+
+.frameworkChip {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(0, 212, 255, 0.15);
+    border-radius: 10px;
+    padding: 1.1rem 1.25rem;
+    transition: all 0.3s ease;
+}
+
+.frameworkChip:hover {
+    border-color: rgba(0, 212, 255, 0.4);
+    transform: translateY(-3px);
+}
+
+.frameworkName {
+    color: #fff;
+    font-weight: 600;
+    font-size: 1.05rem;
+}
+
+.frameworkModule {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: rgba(0, 212, 255, 0.85);
+    background: transparent;
+}
+
+.sectionSubtitle {
+    text-align: center;
+    font-size: 1.05rem;
+    color: rgba(255, 255, 255, 0.6);
+    max-width: 640px;
+    margin: 0 auto 1rem;
+    line-height: 1.6;
+}
+
 /* Features Section */
 .features {
     padding: 4rem 0;
@@ -202,6 +272,16 @@
 
     .statValue {
         font-size: 2rem;
+    }
+
+    .frameworkGrid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .frameworkGrid {
+        grid-template-columns: 1fr;
     }
 }
 

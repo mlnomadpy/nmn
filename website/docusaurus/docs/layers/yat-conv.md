@@ -19,8 +19,14 @@ Where $K$ is the kernel and $I_{i,j}$ is the input patch at position $(i, j)$.
 ## Import
 
 ```python
-from nmn.nnx.conv import YatConv
+from nmn.nnx import YatConv
 ```
+
+YAT convolutions ship across the backends. Flax NNX exposes a single
+dimension-generic `YatConv` (plus `YatConv1D` / `YatConv2D` / `YatConv3D`
+aliases); PyTorch, Keras, TensorFlow, Linen, and MLX expose explicit
+`YatConv1D` / `YatConv2D` / `YatConv3D` and their `YatConvTranspose*D`
+variants. The reference below documents the Flax NNX `YatConv`.
 
 ## Constructor
 
@@ -72,7 +78,7 @@ YatConv(
 
 ```python
 from flax import nnx
-from nmn.nnx.conv import YatConv
+from nmn.nnx import YatConv
 import jax.numpy as jnp
 
 # Create 2D conv layer

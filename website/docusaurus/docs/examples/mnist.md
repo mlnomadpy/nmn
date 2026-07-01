@@ -13,7 +13,7 @@ import jax
 import jax.numpy as jnp
 from flax import nnx
 import optax
-from nmn.nnx.nmn import YatNMN
+from nmn.nnx import YatNMN
 
 # Model
 class MNISTClassifier(nnx.Module):

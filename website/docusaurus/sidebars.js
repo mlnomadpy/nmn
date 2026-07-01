@@ -38,15 +38,21 @@ export default {
                 'attention/yat-attention',
                 'attention/multi-head',
                 'attention/rotary',
+                'attention/linear-attention',
             ],
         },
         {
             type: 'category',
-            label: 'RNN',
+            label: 'Guides',
             items: [
-                'rnn/lstm',
-                'rnn/gru',
-                'rnn/simple',
+                'guides/lazy-training',
+            ],
+        },
+        {
+            type: 'category',
+            label: 'CLI',
+            items: [
+                'cli',
             ],
         },
         {

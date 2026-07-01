@@ -6,6 +6,18 @@ sidebar_position: 4
 
 Replace standard framework layers with NMN equivalents. NMN layers are **drop-in replacements** — same shape in, same shape out, no activation function required.
 
+The `YatNMN` **size argument differs per backend** — this is the #1 porting
+gotcha:
+
+| Framework | Import | `YatNMN` constructor |
+|-----------|--------|----------------------|
+| PyTorch | `from nmn.torch import YatNMN` | `YatNMN(in_features, out_features)` |
+| Flax NNX | `from nmn.nnx import YatNMN` | `YatNMN(in_features, out_features, rngs=nnx.Rngs(0))` |
+| Flax Linen | `from nmn.linen import YatNMN` | `YatNMN(features=N)` |
+| Keras 3 | `from nmn.keras import YatNMN` | `YatNMN(units=N)` — **`units`, not `features`** |
+| TensorFlow | `from nmn.tf import YatNMN` | `YatNMN(features=N)` |
+| MLX | `from nmn.mlx import YatNMN` | `YatNMN(features=N)` |
+
 ## Dense / Linear Layers
 
 ### Flax NNX
@@ -17,7 +29,7 @@ layer = nnx.Linear(in_features=256, out_features=128, rngs=nnx.Rngs(0))
 x = nnx.relu(layer(x))          # needs activation
 
 # After
-from nmn.nnx.nmn import YatNMN
+from nmn.nnx import YatNMN
 layer = YatNMN(in_features=256, out_features=128, constant_alpha=True, rngs=nnx.Rngs(0))
 x = layer(x)                     # activation-free
 ```
@@ -31,7 +43,7 @@ layer = nn.Linear(in_features=256, out_features=128)
 x = nn.functional.relu(layer(x))
 
 # After
-from nmn.torch.nmn import YatNMN
+from nmn.torch import YatNMN
 layer = YatNMN(in_features=256, out_features=128)
 x = layer(x)
 ```
@@ -44,8 +56,8 @@ from tensorflow import keras
 layer = keras.layers.Dense(128, activation='relu')
 
 # After
-from nmn.keras.nmn import YatNMN
-layer = YatNMN(features=128)
+from nmn.keras import YatNMN
+layer = YatNMN(units=128)         # Keras uses `units`, NOT `features`
 ```
 
 ### TensorFlow
@@ -56,7 +68,7 @@ import tensorflow as tf
 layer = tf.keras.layers.Dense(128, activation='relu')
 
 # After
-from nmn.tf.nmn import YatNMN
+from nmn.tf import YatNMN
 layer = YatNMN(features=128)
 ```
 
@@ -69,9 +81,21 @@ layer = nn.Dense(features=128)
 x = nn.relu(layer(x))
 
 # After
-from nmn.linen.nmn import YatNMN
+from nmn.linen import YatNMN
 layer = YatNMN(features=128)
 x = layer(x)
+```
+
+### MLX
+
+```python
+# Before (Apple Silicon)
+import mlx.nn as nn
+layer = nn.Sequential(nn.Linear(256, 128), nn.ReLU())
+
+# After
+from nmn.mlx import YatNMN
+layer = YatNMN(features=128)
 ```
 
 ---
@@ -86,7 +110,7 @@ conv = nnx.Conv(in_features=3, out_features=32, kernel_size=(3, 3), rngs=nnx.Rng
 x = nnx.relu(conv(x))
 
 # After
-from nmn.nnx.conv import YatConv
+from nmn.nnx import YatConv
 conv = YatConv(in_features=3, out_features=32, kernel_size=(3, 3), rngs=nnx.Rngs(0))
 x = conv(x)
 ```
@@ -100,7 +124,7 @@ conv = nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3, padding=1)
 x = nn.functional.relu(conv(x))
 
 # After
-from nmn.torch.layers import YatConv2D
+from nmn.torch import YatConv2D
 conv = YatConv2D(in_channels=3, out_channels=32, kernel_size=3, padding=1)
 x = conv(x)
 ```
@@ -113,7 +137,7 @@ from tensorflow import keras
 conv = keras.layers.Conv2D(32, kernel_size=(3, 3), activation='relu')
 
 # After
-from nmn.keras.conv import YatConv2D
+from nmn.keras import YatConv2D
 conv = YatConv2D(filters=32, kernel_size=(3, 3))
 ```
 
@@ -125,7 +149,7 @@ import tensorflow as tf
 conv = tf.keras.layers.Conv2D(32, kernel_size=(3, 3), activation='relu')
 
 # After
-from nmn.tf.conv import YatConv2D
+from nmn.tf import YatConv2D
 conv = YatConv2D(filters=32, kernel_size=(3, 3))
 ```
 
@@ -141,7 +165,7 @@ from torch.nn import ConvTranspose2d
 up = ConvTranspose2d(in_channels=64, out_channels=32, kernel_size=2, stride=2)
 
 # After
-from nmn.torch.layers import YatConvTranspose2D
+from nmn.torch import YatConvTranspose2D
 up = YatConvTranspose2D(in_channels=64, out_channels=32, kernel_size=2, stride=2)
 ```
 
@@ -153,7 +177,7 @@ from tensorflow import keras
 up = keras.layers.Conv2DTranspose(32, kernel_size=(2, 2), strides=(2, 2))
 
 # After
-from nmn.keras.conv import YatConvTranspose2D   # or nmn.tf.conv
+from nmn.keras import YatConvTranspose2D   # or from nmn.tf import ...
 up = YatConvTranspose2D(filters=32, kernel_size=(2, 2), strides=(2, 2))
 ```
 
@@ -175,7 +199,7 @@ class Block(nnx.Module):
         return self.norm(nnx.relu(self.linear(x)))
 
 # After — 1 operation
-from nmn.nnx.nmn import YatNMN
+from nmn.nnx import YatNMN
 class Block(nnx.Module):
     def __init__(self, dim, rngs):
         self.layer = YatNMN(dim, dim, constant_alpha=True, rngs=rngs)
@@ -196,7 +220,7 @@ class Block(nn.Module):
         return self.norm(nn.functional.relu(self.linear(x)))
 
 # After
-from nmn.torch.nmn import YatNMN
+from nmn.torch import YatNMN
 class Block(nn.Module):
     def __init__(self, dim):
         super().__init__()
@@ -265,7 +289,7 @@ class FFN(nnx.Module):
         return self.fc2(nnx.gelu(self.fc1(x)))
 
 # After (NMN FFN — no activation needed)
-from nmn.nnx.nmn import YatNMN
+from nmn.nnx import YatNMN
 class FFN(nnx.Module):
     def __init__(self, dim, hidden_dim, rngs):
         self.fc1 = YatNMN(dim, hidden_dim, constant_alpha=True, rngs=rngs)
@@ -291,7 +315,7 @@ class BasicBlock(nn.Module):
         return nn.functional.relu(out + x)
 
 # After — remove BN and activations
-from nmn.torch.layers import YatConv2D
+from nmn.torch import YatConv2D
 class BasicBlock(nn.Module):
     def __init__(self, channels):
         super().__init__()
@@ -311,3 +335,5 @@ class BasicBlock(nn.Module):
 - **No need for activation functions** after any NMN layer. If you have existing `relu`/`gelu`/`silu` calls between layers, remove them.
 - **Batch norm is optional** — YAT responses are bounded, so training often stays stable without normalization. Experiment with removing it.
 - **DropConnect** (available in NNX `YatConv`) is a stronger regularizer than Dropout for convolutional weights. Use `use_dropconnect=True, drop_rate=0.1` and pass `deterministic=False` during training.
+- **Fine-tuning / warm starts** — pass `lazy=True` (alias `freeze_kernel=True`) to any `YatNMN` to freeze only the kernel while keeping bias / alpha / epsilon trainable. See [Lazy Training](/docs/guides/lazy-training).
+- **Verify imports first** — run `nmn doctor` and `nmn frameworks` (see the [CLI reference](/docs/cli)) to confirm the exact import path and `YatNMN` size argument for your backend before porting.

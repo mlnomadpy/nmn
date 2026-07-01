@@ -7,7 +7,6 @@ import Heading from '@theme/Heading';
 import styles from './index.module.css';
 
 function HomepageHeader() {
-    const { siteConfig } = useDocusaurusContext();
     return (
         <header className={clsx('hero', styles.heroBanner)}>
             <div className="container">
@@ -23,12 +22,14 @@ function HomepageHeader() {
                     Neural Matter Networks
                 </Heading>
                 <p className={styles.heroSubtitle}>
-                    Activation-Free Neural Computation with the <span className={styles.yatSymbol}>ⵟ</span>-Product
+                    Activation-free <span className={styles.yatSymbol}>ⵟ</span>YAT layers.
+                    One library, six frameworks, numerically equivalent.
                 </p>
                 <p className={styles.heroDescription}>
-                    The ⵟ-product unifies alignment and proximity in a single geometric operator,
-                    enabling neural networks without activation functions while maintaining
-                    universal approximation capabilities.
+                    The <span className={styles.yatSymbol}>ⵟ</span>-product fuses alignment and
+                    proximity into a single geometric kernel, giving you non-linearity without
+                    activation functions. Ship the same YatNMN math across PyTorch, Flax NNX,
+                    Flax Linen, Keras, TensorFlow, and MLX.
                 </p>
                 <div className={styles.buttons}>
                     <Link
@@ -47,8 +48,41 @@ function HomepageHeader() {
                         Interactive Paper 📄
                     </Link>
                 </div>
+                <div className={styles.install}>
+                    <code>pip install nmn</code>
+                </div>
             </div>
         </header>
+    );
+}
+
+function Frameworks() {
+    const frameworks = [
+        { name: 'PyTorch', module: 'nmn.torch' },
+        { name: 'Flax NNX', module: 'nmn.nnx' },
+        { name: 'Flax Linen', module: 'nmn.linen' },
+        { name: 'Keras', module: 'nmn.keras' },
+        { name: 'TensorFlow', module: 'nmn.tf' },
+        { name: 'MLX', module: 'nmn.mlx' },
+    ];
+    return (
+        <section className={styles.frameworks}>
+            <div className="container">
+                <h2 className={styles.sectionTitle}>Six frameworks, one kernel</h2>
+                <p className={styles.sectionSubtitle}>
+                    Each backend is an independent, optional install. The YAT math stays
+                    numerically equivalent across all of them.
+                </p>
+                <div className={styles.frameworkGrid}>
+                    {frameworks.map((fw) => (
+                        <div key={fw.name} className={styles.frameworkChip}>
+                            <span className={styles.frameworkName}>{fw.name}</span>
+                            <code className={styles.frameworkModule}>{fw.module}</code>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </section>
     );
 }
 
@@ -67,40 +101,41 @@ function Feature({ title, description, icon }) {
 function HomepageFeatures() {
     const features = [
         {
-            title: 'Activation-Free',
-            icon: '🎯',
-            description: 'No ReLU, sigmoid, or tanh needed. The ⵟ-product provides intrinsic non-linearity through geometry.',
+            title: 'Six Frameworks',
+            icon: '🧩',
+            description: 'PyTorch, Flax NNX, Flax Linen, Keras, TensorFlow, and MLX — independent optional installs, numerically equivalent YAT layers everywhere.',
         },
         {
-            title: 'Self-Regularizing',
-            icon: '📉',
-            description: 'Responses remain bounded and gradients decay naturally — no explicit normalization required.',
+            title: 'YAT Geometric Kernel',
+            icon: '📐',
+            description: 'The ⵟ-product unifies alignment and proximity into one operator — a symmetric, positive-semidefinite kernel that removes the need for activation functions.',
         },
         {
-            title: 'Universal Approximation',
-            icon: '∞',
-            description: 'NMNs are dense in C(𝒳) under uniform norm on compact domains. Theoretical guarantees included.',
+            title: 'O(n) Linear Attention',
+            icon: '⚡',
+            description: 'MAY (Maclaurin) and RAY (radial) performer feature maps give linear-time YAT attention. Bias-aware and sign-indefinite — MAY beats bias-free SLAY at bias b > 0.',
         },
         {
-            title: 'Mercer Kernel',
-            icon: '🎓',
-            description: 'Symmetric and positive semidefinite, connecting to established kernel theory and RKHS.',
+            title: 'Lazy Mode',
+            icon: '🧊',
+            description: 'lazy=True / freeze_kernel=True freezes only the kernel while bias, alpha, and epsilon stay trainable — cheap adaptation from pretrained weights.',
+        },
+        {
+            title: 'nmn CLI',
+            icon: '🛠️',
+            description: 'nmn doctor, nmn guide <framework>, nmn features, and nmn frameworks help you discover backends and verify your install from the terminal.',
         },
         {
             title: 'Drop-in Replacement',
             icon: '🔄',
-            description: 'NMN layers work as direct replacements for Linear + Activation in existing architectures.',
-        },
-        {
-            title: 'Flax NNX Native',
-            icon: '⚡',
-            description: 'Built with Flax NNX for modern JAX-based deep learning with full pytree support.',
+            description: 'YatNMN layers slot in wherever you use Linear + Activation, with universal-approximation guarantees backed by kernel theory.',
         },
     ];
 
     return (
         <section className={styles.features}>
             <div className="container">
+                <h2 className={styles.sectionTitle}>Why NMN</h2>
                 <div className="row">
                     {features.map((props, idx) => (
                         <Feature key={idx} {...props} />
@@ -116,21 +151,24 @@ function CodeExample() {
         <section className={styles.codeSection}>
             <div className="container">
                 <h2 className={styles.sectionTitle}>Quick Example</h2>
+                <p className={styles.sectionSubtitle}>
+                    A YatNMN layer replaces Linear + activation. Same math, whichever
+                    framework you reach for.
+                </p>
                 <div className={styles.codeBlock}>
                     <pre>
                         <code className="language-python">{`from flax import nnx
 from nmn.nnx.nmn import YatNMN
 
-# Create a YatNMN layer (replaces nn.Dense + activation)
+# A YatNMN layer replaces nn.Dense + activation
 layer = YatNMN(
     in_features=768,
     out_features=256,
-    constant_alpha=True,  # Use sqrt(2) scaling
-    rngs=nnx.Rngs(0)
+    rngs=nnx.Rngs(0),
 )
 
-# Forward pass - intrinsic non-linearity, no activation needed
-y = layer(x)  # y = (x·W)² / (||x-W||² + ε)`}
+# Forward pass — intrinsic non-linearity, no activation needed
+y = layer(x)  # y = ⟨x, W⟩² / (||x - W||² + ε)`}
                         </code>
                     </pre>
                 </div>
@@ -145,12 +183,12 @@ function Stats() {
             <div className="container">
                 <div className={styles.statsGrid}>
                     <div className={styles.statItem}>
-                        <span className={styles.statValue}>15-25%</span>
-                        <span className={styles.statLabel}>Memory Reduction</span>
+                        <span className={styles.statValue}>6</span>
+                        <span className={styles.statLabel}>Frameworks</span>
                     </div>
                     <div className={styles.statItem}>
-                        <span className={styles.statValue}>11.2%</span>
-                        <span className={styles.statLabel}>Loss Improvement (BF16)</span>
+                        <span className={styles.statValue}>O(n)</span>
+                        <span className={styles.statLabel}>MAY / RAY Attention</span>
                     </div>
                     <div className={styles.statItem}>
                         <span className={styles.statValue}>0</span>
@@ -167,10 +205,11 @@ export default function Home() {
     return (
         <Layout
             title={`${siteConfig.title}`}
-            description="Activation-Free Neural Computation with the ⵟ-Product">
+            description="Activation-free YAT layers. One library, six frameworks, numerically equivalent.">
             <HomepageHeader />
             <main>
                 <Stats />
+                <Frameworks />
                 <HomepageFeatures />
                 <CodeExample />
             </main>
