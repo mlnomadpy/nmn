@@ -7,7 +7,7 @@ import weakref
 from keras.src import activations, constraints, initializers, regularizers
 from keras.src import ops
 from keras.src.api_export import keras_export
-from keras.src.backend import standardize_dtype
+from keras.src.backend import backend, standardize_dtype
 from keras.src.backend.common.backend_utils import compute_conv_transpose_output_shape
 from keras.src.layers.input_spec import InputSpec
 from keras.src.layers.layer import Layer
@@ -43,6 +43,10 @@ class _KernelBankRef:
         self.signature = _freeze_signature(signature)
         self.capacity = int(capacity)
         self.variable = None
+        # Registry lookup and Variable creation are separate operations.  This
+        # per-reference lock keeps the first creation and every attachment
+        # atomic without serializing unrelated kernel banks.
+        self.lock = threading.Lock()
 
     def get_config(self):
         return {
@@ -97,6 +101,14 @@ def _validate_kernel_bank_config(layer):
 
 
 def _get_bank_ref(layer, signature, capacity):
+    policy_signature = (
+        "dtype_policy",
+        backend(),
+        layer.dtype_policy.name,
+        standardize_dtype(layer.variable_dtype),
+        standardize_dtype(layer.compute_dtype),
+    )
+    signature = tuple(signature) + (policy_signature,)
     supplied = layer._kernel_bank_ref
     if supplied is not None:
         if supplied.signature != _freeze_signature(signature):
@@ -168,19 +180,17 @@ def _build_forward_kernel(layer, input_dim):
         layer.groups,
     )
     bank = _get_bank_ref(layer, signature, capacity)
-    if bank.variable is None:
-        bank.variable = layer.add_weight(
-            name="kernel",
-            shape=tuple(layer.kernel_size)
-            + (input_dim // layer.groups, bank.capacity),
-            initializer=_safe_kernel_initializer(layer.kernel_initializer),
-            regularizer=layer.kernel_regularizer,
-            constraint=layer.kernel_constraint,
-            trainable=True,
-        )
-    else:
-        layer.kernel = bank.variable
-    if not hasattr(layer, "kernel"):
+    with bank.lock:
+        if bank.variable is None:
+            bank.variable = layer.add_weight(
+                name="kernel",
+                shape=tuple(layer.kernel_size)
+                + (input_dim // layer.groups, bank.capacity),
+                initializer=_safe_kernel_initializer(layer.kernel_initializer),
+                regularizer=layer.kernel_regularizer,
+                constraint=layer.kernel_constraint,
+                trainable=True,
+            )
         layer.kernel = bank.variable
     layer._kernel_slice = slice(0, layer.filters)
 
@@ -201,18 +211,16 @@ def _build_transpose_kernel(layer, input_dim):
     capacity = layer.kernel_bank_size or layer.filters
     signature = ("transpose", tuple(layer.kernel_size), input_dim)
     bank = _get_bank_ref(layer, signature, capacity)
-    if bank.variable is None:
-        bank.variable = layer.add_weight(
-            name="kernel",
-            shape=tuple(layer.kernel_size) + (bank.capacity, input_dim),
-            initializer=_safe_kernel_initializer(layer.kernel_initializer),
-            regularizer=layer.kernel_regularizer,
-            constraint=layer.kernel_constraint,
-            trainable=True,
-        )
-    else:
-        layer.kernel = bank.variable
-    if not hasattr(layer, "kernel"):
+    with bank.lock:
+        if bank.variable is None:
+            bank.variable = layer.add_weight(
+                name="kernel",
+                shape=tuple(layer.kernel_size) + (bank.capacity, input_dim),
+                initializer=_safe_kernel_initializer(layer.kernel_initializer),
+                regularizer=layer.kernel_regularizer,
+                constraint=layer.kernel_constraint,
+                trainable=True,
+            )
         layer.kernel = bank.variable
     layer._kernel_slice = slice(0, layer.filters)
 

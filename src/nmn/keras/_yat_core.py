@@ -56,12 +56,14 @@ def stable_yat_ratio(dot_product, distance_sq, epsilon):
             if source_dtype == "float16":
                 dot_grad = ops.clip(dot_grad, -65504.0, 65504.0)
                 distance_grad = ops.clip(distance_grad, -65504.0, 65504.0)
-                denominator_grad = ops.clip(
-                    denominator_grad, -65504.0, 65504.0
-                )
-            epsilon_grad = ops.reshape(
-                ops.sum(denominator_grad), ops.shape(eps)
-            )
+            # ``eps`` is scalar for every current caller, so its cotangent must
+            # sum all broadcast denominator contributions.  Reduce before
+            # clipping: clipping each element first can still overflow when
+            # two or more fp16 contributions are added together.
+            epsilon_grad = ops.sum(denominator_grad)
+            epsilon_max = 65504.0 if source_dtype == "float16" else 3.38953139e38
+            epsilon_grad = ops.clip(epsilon_grad, -epsilon_max, epsilon_max)
+            epsilon_grad = ops.reshape(epsilon_grad, ops.shape(eps))
             return (
                 ops.cast(dot_grad, source_dtype),
                 ops.cast(distance_grad, source_dtype),

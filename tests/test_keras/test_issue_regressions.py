@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+import threading
 import tomllib
 from pathlib import Path
 
@@ -19,6 +21,7 @@ from nmn.keras import (
     YatConvTranspose3D,
     YatEmbed,
 )
+from nmn.keras._yat_core import stable_yat_ratio
 
 BACKEND = keras.backend.backend()
 
@@ -249,6 +252,65 @@ def test_tied_kernel_bank_functional_save_load_preserves_sharing_and_optimizer(t
     )
 
 
+def test_tied_kernel_bank_creation_is_atomic_across_threads():
+    YatConv1D._KERNEL_BANKS.clear()
+    start = threading.Barrier(2)
+    common = dict(
+        filters=2,
+        kernel_size=1,
+        tie_kernel_bank=True,
+        kernel_bank_size=2,
+        kernel_bank_id="threaded-first-creation",
+        use_bias=False,
+        use_alpha=False,
+        kernel_initializer="ones",
+    )
+    layers = [YatConv1D(**common), YatConv1D(**common)]
+
+    def build(layer):
+        start.wait(timeout=5)
+        layer.build((None, 4, 1))
+        return layer.kernel
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        kernels = list(executor.map(build, layers))
+
+    assert kernels[0] is kernels[1]
+    assert layers[0]._kernel_bank_ref is layers[1]._kernel_bank_ref
+    assert all(len(layer.trainable_weights) == 1 for layer in layers)
+
+
+@pytest.mark.parametrize("dtype", ["float16", "mixed_float16"])
+def test_tied_kernel_banks_are_separated_by_effective_dtype_policy(dtype):
+    YatConv1D._KERNEL_BANKS.clear()
+    common = dict(
+        filters=1,
+        kernel_size=1,
+        tie_kernel_bank=True,
+        kernel_bank_size=1,
+        kernel_bank_id=f"dtype-policy-{dtype}",
+        use_bias=False,
+        use_alpha=False,
+        kernel_initializer="ones",
+    )
+    float32_layer = YatConv1D(dtype="float32", **common)
+    low_precision_layer = YatConv1D(dtype=dtype, **common)
+
+    float32_output = float32_layer(tensor([[[0.25]]], "float32"))
+    low_precision_output = low_precision_layer(tensor([[[0.25]]], "float16"))
+
+    assert float32_layer.kernel is not low_precision_layer.kernel
+    assert float32_layer._kernel_bank_ref is not low_precision_layer._kernel_bank_ref
+    assert keras.backend.standardize_dtype(float32_output.dtype) == "float32"
+    assert keras.backend.standardize_dtype(low_precision_output.dtype) == "float16"
+    assert keras.backend.standardize_dtype(float32_layer.kernel.dtype) == "float32"
+    expected_variable_dtype = "float32" if dtype == "mixed_float16" else "float16"
+    assert (
+        keras.backend.standardize_dtype(low_precision_layer.kernel.dtype)
+        == expected_variable_dtype
+    )
+
+
 @pytest.mark.parametrize(
     "layer_cls",
     [
@@ -320,6 +382,72 @@ def test_low_precision_embedding_exact_match_preserves_policy_and_gradients(dtyp
     assert np.all(np.isfinite(np.asarray(output)))
     assert np.all(np.asarray(output) >= 0)
     assert np.all(np.isfinite(np.asarray(gradient)))
+
+
+@pytest.mark.skipif(BACKEND != "jax", reason="JAX cotangent regression")
+@pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
+def test_embed_shaped_exact_collision_reduces_epsilon_gradient_before_clipping(dtype):
+    import jax
+    import jax.numpy as jnp
+
+    dot = jnp.full((2, 3), 0.5, dtype=getattr(jnp, dtype))
+    distance = jnp.zeros_like(dot)
+    # YatEmbed passes its configured epsilon as a scalar into this helper.
+    epsilon = jnp.asarray(1e-5, dtype=getattr(jnp, dtype))
+
+    gradient = jax.grad(lambda eps: jnp.sum(stable_yat_ratio(dot, distance, eps)))(
+        epsilon
+    )
+    gradient32 = np.asarray(gradient, dtype=np.float32)
+
+    assert gradient.shape == epsilon.shape
+    assert np.all(np.isfinite(gradient32))
+    assert np.all(gradient32 < 0)
+    if dtype == "float16":
+        np.testing.assert_array_equal(gradient32, np.asarray(-65504.0))
+    else:
+        epsilon32 = np.asarray(epsilon, dtype=np.float32)
+        expected = -dot.size * 0.25 / np.square(epsilon32)
+        np.testing.assert_allclose(gradient32, expected, rtol=2e-2)
+
+
+@pytest.mark.skipif(BACKEND != "jax", reason="JAX cotangent regression")
+@pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
+def test_conv_exact_collision_has_finite_learnable_epsilon_gradient(dtype):
+    import jax
+    import jax.numpy as jnp
+
+    value = jnp.full((1, 4, 1), 0.5, dtype=getattr(jnp, dtype))
+    layer = YatConv1D(
+        1,
+        1,
+        use_bias=False,
+        use_alpha=False,
+        epsilon=1e-5,
+        learnable_epsilon=True,
+        kernel_initializer="zeros",
+        dtype=dtype,
+    )
+    layer(value)
+    layer.kernel.assign(jnp.full(layer.kernel.shape, 0.5, dtype=getattr(jnp, dtype)))
+    trainable_values = [variable.value for variable in layer.trainable_variables]
+    epsilon_index = next(
+        index
+        for index, variable in enumerate(layer.trainable_variables)
+        if variable is layer.epsilon_param
+    )
+
+    def loss(epsilon_param):
+        values = list(trainable_values)
+        values[epsilon_index] = epsilon_param
+        output, _ = layer.stateless_call(values, layer.non_trainable_variables, value)
+        return jnp.sum(output)
+
+    gradient = jax.grad(loss)(trainable_values[epsilon_index])
+
+    assert gradient.shape == layer.epsilon_param.shape
+    assert np.all(np.isfinite(np.asarray(gradient, dtype=np.float32)))
+    assert np.all(np.asarray(gradient, dtype=np.float32) < 0)
 
 
 @pytest.mark.parametrize(
