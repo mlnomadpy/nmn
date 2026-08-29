@@ -1,18 +1,98 @@
 """YAT convolution layers for Keras/TensorFlow."""
 
-import logging
+import math
 import threading
 
 from keras.src import activations, constraints, initializers, regularizers
+from keras.src import ops
 from keras.src.api_export import keras_export
+from keras.src.backend.common.backend_utils import compute_conv_transpose_output_shape
 from keras.src.layers.input_spec import InputSpec
 from keras.src.layers.layer import Layer
-from keras.src import ops
-import math
+from keras.src.ops.operation_utils import compute_conv_output_shape
 
 from ._yat_core import yat_score
 
-logger = logging.getLogger(__name__)
+
+def _reject_kernel_bank_expansion(bank_id, existing_filters, requested_filters):
+    """Reject fixed-shape Keras variable expansion before mutating a bank."""
+    raise ValueError(
+        f"Kernel bank '{bank_id}' has {existing_filters} filters and cannot be "
+        f"expanded in place to {requested_filters}. Keras variables have fixed "
+        "shapes; create the first consumer with a sufficiently large "
+        "kernel_bank_size. The existing bank was not modified."
+    )
+
+
+def _conv_output_shape(layer, input_shape):
+    return compute_conv_output_shape(
+        input_shape,
+        layer.filters,
+        tuple(layer.kernel_size),
+        strides=tuple(layer.strides),
+        padding=layer.padding,
+        data_format=layer.data_format or "channels_last",
+        dilation_rate=tuple(layer.dilation_rate),
+    )
+
+
+def _conv_transpose_output_shape(layer, input_shape):
+    return tuple(
+        compute_conv_transpose_output_shape(
+            input_shape,
+            tuple(layer.kernel_size),
+            layer.filters,
+            strides=tuple(layer.strides),
+            padding=layer.padding,
+            data_format=layer.data_format or "channels_last",
+            dilation_rate=tuple(layer.dilation_rate),
+        )
+    )
+
+
+def _build_transpose_kernel(layer, input_dim):
+    """Create or attach a fixed-capacity transpose-convolution kernel bank."""
+    if not layer.tie_kernel_bank:
+        layer.kernel = layer.add_weight(
+            name="kernel",
+            shape=tuple(layer.kernel_size) + (layer.filters, input_dim),
+            initializer=layer.kernel_initializer,
+            regularizer=layer.kernel_regularizer,
+            constraint=layer.kernel_constraint,
+            trainable=True,
+        )
+        return
+
+    bank_filters = layer.kernel_bank_size or layer.filters
+    bank_kernel_shape = tuple(layer.kernel_size) + (bank_filters, input_dim)
+    bank_key = (
+        layer.kernel_bank_id,
+        tuple(layer.kernel_size),
+        input_dim,
+        "transpose",
+    )
+    with type(layer)._KERNEL_BANKS_LOCK:
+        shared_kernel = type(layer)._KERNEL_BANKS.get(bank_key)
+        if shared_kernel is None:
+            layer.kernel = layer.add_weight(
+                name="kernel",
+                shape=bank_kernel_shape,
+                initializer=layer.kernel_initializer,
+                regularizer=layer.kernel_regularizer,
+                constraint=layer.kernel_constraint,
+                trainable=True,
+            )
+            type(layer)._KERNEL_BANKS[bank_key] = layer.kernel
+        else:
+            filter_axis = len(layer.kernel_size)
+            existing_filters = shared_kernel.shape[filter_axis]
+            if bank_filters > existing_filters:
+                _reject_kernel_bank_expansion(
+                    layer.kernel_bank_id, existing_filters, bank_filters
+                )
+            layer.kernel = shared_kernel
+            layer._track_variable(shared_kernel)
+    layer._kernel_slice = slice(0, layer.filters)
 
 
 @keras_export("keras.layers.YatConv1D")
@@ -117,6 +197,12 @@ class YatConv1D(Layer):
         self.padding = padding.lower()
         self.data_format = data_format
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate,)
+        if any(stride != 1 for stride in self.strides) and any(
+            dilation != 1 for dilation in self.dilation_rate
+        ):
+            raise ValueError(
+                "`strides > 1` is incompatible with `dilation_rate > 1`."
+            )
         self.groups = groups
         self.use_alpha = use_alpha
         if epsilon <= 0:
@@ -200,20 +286,11 @@ class YatConv1D(Layer):
                 else:
                     existing_filters = shared_kernel.shape[-1]
                     if bank_filters > existing_filters:
-                        logger.info(
-                            "Auto-expanding Keras kernel bank '%s': %d -> %d filters",
-                            self.kernel_bank_id, existing_filters, bank_filters,
+                        _reject_kernel_bank_expansion(
+                            self.kernel_bank_id, existing_filters, bank_filters
                         )
-                        # Expand the shared kernel by sampling new tail filters
-                        new_kernel_val = self.kernel_initializer(bank_kernel_shape, dtype=shared_kernel.dtype)
-                        old_val = shared_kernel.numpy() if hasattr(shared_kernel, "numpy") else ops.convert_to_numpy(shared_kernel)
-                        new_kernel_val = ops.convert_to_tensor(new_kernel_val)
-                        # Splice old values into the front
-                        import numpy as _np
-                        new_arr = _np.array(new_kernel_val)
-                        new_arr[..., :existing_filters] = _np.array(old_val)
-                        shared_kernel.assign(ops.convert_to_tensor(new_arr))
                     self.kernel = shared_kernel
+                    self._track_variable(shared_kernel)
             self._kernel_slice = slice(0, self.filters)
         else:
             kernel_shape = tuple(self.kernel_size) + (input_dim // self.groups, self.filters)
@@ -295,39 +372,57 @@ class YatConv1D(Layer):
                 ops.sqrt(ops.sum(ops.square(kernel), axis=reduce_axes, keepdims=True)) + 1e-8
             )
 
+        # Keras' low-level conv op only accepts valid/same.  Causal Conv1D is
+        # left padded by the effective dilated kernel size, then evaluated as
+        # valid for both the dot product and patch norm.
+        conv_inputs = inputs
+        conv_padding = self.padding
+        if self.padding == "causal":
+            left_pad = self.dilation_rate[0] * (self.kernel_size[0] - 1)
+            if self.data_format == "channels_first":
+                pad_width = ((0, 0), (0, 0), (left_pad, 0))
+            else:
+                pad_width = ((0, 0), (left_pad, 0), (0, 0))
+            conv_inputs = ops.pad(inputs, pad_width)
+            conv_padding = "valid"
+
         # Compute standard convolution (dot product)
         dot_prod_map = ops.conv(
-            inputs,
+            conv_inputs,
             kernel,
             strides=self.strides,
-            padding=self.padding,
+            padding=conv_padding,
             data_format=self.data_format,
             dilation_rate=self.dilation_rate,
         )
 
         # Compute squared input patches using convolution with ones
-        inputs_squared = inputs * inputs
+        inputs_squared = conv_inputs * conv_inputs
 
         # Create ones kernel for computing patch squared sums
         input_channels_per_group = kernel.shape[-2]
-        ones_kernel_shape = tuple(self.kernel_size) + (input_channels_per_group, 1)
+        ones_kernel_shape = tuple(self.kernel_size) + (
+            input_channels_per_group,
+            self.groups,
+        )
         ones_kernel = ops.ones(ones_kernel_shape, dtype=kernel.dtype)
 
         patch_sq_sum_map_raw = ops.conv(
             inputs_squared,
             ones_kernel,
             strides=self.strides,
-            padding=self.padding,
+            padding=conv_padding,
             data_format=self.data_format,
             dilation_rate=self.dilation_rate,
         )
 
         # Handle grouped convolution
         channel_axis = 1 if self.data_format == "channels_first" else -1
-        if self.groups > 1:
-            patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters // self.groups, axis=channel_axis)
-        else:
-            patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=channel_axis)
+        patch_sq_sum_map = ops.repeat(
+            patch_sq_sum_map_raw,
+            self.filters // self.groups,
+            axis=channel_axis,
+        )
 
         # Compute kernel squared sum per filter (1.0 if normalized)
         if self.weight_normalized:
@@ -348,24 +443,7 @@ class YatConv1D(Layer):
         return yat_score(self, dot_prod_map, distance_sq_map)
 
     def compute_output_shape(self, input_shape):
-        if self.data_format == "channels_first":
-            length = input_shape[2]
-            if length is not None:
-                if self.padding == "valid":
-                    length = length - self.kernel_size[0] + 1
-                elif self.padding == "causal":
-                    length = length
-                length = (length + self.strides[0] - 1) // self.strides[0]
-            return (input_shape[0], self.filters, length)
-        else:
-            length = input_shape[1]
-            if length is not None:
-                if self.padding == "valid":
-                    length = length - self.kernel_size[0] + 1
-                elif self.padding == "causal":
-                    length = length
-                length = (length + self.strides[0] - 1) // self.strides[0]
-            return (input_shape[0], length, self.filters)
+        return _conv_output_shape(self, input_shape)
 
     def get_config(self):
         config = super().get_config()
@@ -592,17 +670,11 @@ class YatConv2D(Layer):
                 else:
                     existing_filters = shared_kernel.shape[-1]
                     if bank_filters > existing_filters:
-                        logger.info(
-                            "Auto-expanding Keras kernel bank '%s': %d -> %d filters",
-                            self.kernel_bank_id, existing_filters, bank_filters,
+                        _reject_kernel_bank_expansion(
+                            self.kernel_bank_id, existing_filters, bank_filters
                         )
-                        new_kernel_val = self.kernel_initializer(bank_kernel_shape, dtype=shared_kernel.dtype)
-                        import numpy as _np
-                        old_arr = _np.array(shared_kernel)
-                        new_arr = _np.array(new_kernel_val)
-                        new_arr[..., :existing_filters] = old_arr
-                        shared_kernel.assign(ops.convert_to_tensor(new_arr))
                     self.kernel = shared_kernel
+                    self._track_variable(shared_kernel)
             self._kernel_slice = slice(0, self.filters)
         else:
             kernel_shape = tuple(self.kernel_size) + (input_dim // self.groups, self.filters)
@@ -699,7 +771,10 @@ class YatConv2D(Layer):
 
         # Create ones kernel for computing patch squared sums
         input_channels_per_group = kernel.shape[-2]
-        ones_kernel_shape = tuple(self.kernel_size) + (input_channels_per_group, 1)
+        ones_kernel_shape = tuple(self.kernel_size) + (
+            input_channels_per_group,
+            self.groups,
+        )
         ones_kernel = ops.ones(ones_kernel_shape, dtype=kernel.dtype)
 
         patch_sq_sum_map_raw = ops.conv(
@@ -713,10 +788,11 @@ class YatConv2D(Layer):
 
         # Handle grouped convolution
         channel_axis = 1 if self.data_format == "channels_first" else -1
-        if self.groups > 1:
-            patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters // self.groups, axis=channel_axis)
-        else:
-            patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=channel_axis)
+        patch_sq_sum_map = ops.repeat(
+            patch_sq_sum_map_raw,
+            self.filters // self.groups,
+            axis=channel_axis,
+        )
 
         # Compute kernel squared sum per filter (1.0 if normalized)
         if self.weight_normalized:
@@ -737,27 +813,7 @@ class YatConv2D(Layer):
         return yat_score(self, dot_prod_map, distance_sq_map)
 
     def compute_output_shape(self, input_shape):
-        if self.data_format == "channels_first":
-            rows = input_shape[2]
-            cols = input_shape[3]
-        else:
-            rows = input_shape[1]
-            cols = input_shape[2]
-
-        if rows is not None:
-            if self.padding == "valid":
-                rows = rows - self.kernel_size[0] + 1
-            rows = (rows + self.strides[0] - 1) // self.strides[0]
-        
-        if cols is not None:
-            if self.padding == "valid":
-                cols = cols - self.kernel_size[1] + 1
-            cols = (cols + self.strides[1] - 1) // self.strides[1]
-
-        if self.data_format == "channels_first":
-            return (input_shape[0], self.filters, rows, cols)
-        else:
-            return (input_shape[0], rows, cols, self.filters)
+        return _conv_output_shape(self, input_shape)
 
     def get_config(self):
         config = super().get_config()
@@ -951,17 +1007,11 @@ class YatConv3D(Layer):
                 else:
                     existing_filters = shared_kernel.shape[-1]
                     if bank_filters > existing_filters:
-                        logger.info(
-                            "Auto-expanding Keras kernel bank '%s': %d -> %d filters",
-                            self.kernel_bank_id, existing_filters, bank_filters,
+                        _reject_kernel_bank_expansion(
+                            self.kernel_bank_id, existing_filters, bank_filters
                         )
-                        new_kernel_val = self.kernel_initializer(bank_kernel_shape, dtype=shared_kernel.dtype)
-                        import numpy as _np
-                        old_arr = _np.array(shared_kernel)
-                        new_arr = _np.array(new_kernel_val)
-                        new_arr[..., :existing_filters] = old_arr
-                        shared_kernel.assign(ops.convert_to_tensor(new_arr))
                     self.kernel = shared_kernel
+                    self._track_variable(shared_kernel)
             self._kernel_slice = slice(0, self.filters)
         else:
             kernel_shape = tuple(self.kernel_size) + (input_dim // self.groups, self.filters)
@@ -1058,7 +1108,10 @@ class YatConv3D(Layer):
 
         # Create ones kernel for computing patch squared sums
         input_channels_per_group = kernel.shape[-2]
-        ones_kernel_shape = tuple(self.kernel_size) + (input_channels_per_group, 1)
+        ones_kernel_shape = tuple(self.kernel_size) + (
+            input_channels_per_group,
+            self.groups,
+        )
         ones_kernel = ops.ones(ones_kernel_shape, dtype=kernel.dtype)
 
         patch_sq_sum_map_raw = ops.conv(
@@ -1072,10 +1125,11 @@ class YatConv3D(Layer):
 
         # Handle grouped convolution
         channel_axis = 1 if self.data_format == "channels_first" else -1
-        if self.groups > 1:
-            patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters // self.groups, axis=channel_axis)
-        else:
-            patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=channel_axis)
+        patch_sq_sum_map = ops.repeat(
+            patch_sq_sum_map_raw,
+            self.filters // self.groups,
+            axis=channel_axis,
+        )
 
         # Compute kernel squared sum per filter (1.0 if normalized)
         if self.weight_normalized:
@@ -1096,23 +1150,7 @@ class YatConv3D(Layer):
         return yat_score(self, dot_prod_map, distance_sq_map)
 
     def compute_output_shape(self, input_shape):
-        if self.data_format == "channels_first":
-            dims = [input_shape[2], input_shape[3], input_shape[4]]
-        else:
-            dims = [input_shape[1], input_shape[2], input_shape[3]]
-
-        new_dims = []
-        for i, dim in enumerate(dims):
-            if dim is not None:
-                if self.padding == "valid":
-                    dim = dim - self.kernel_size[i] + 1
-                dim = (dim + self.strides[i] - 1) // self.strides[i]
-            new_dims.append(dim)
-
-        if self.data_format == "channels_first":
-            return (input_shape[0], self.filters) + tuple(new_dims)
-        else:
-            return (input_shape[0],) + tuple(new_dims) + (self.filters,)
+        return _conv_output_shape(self, input_shape)
 
     def get_config(self):
         config = super().get_config()
@@ -1256,58 +1294,7 @@ class YatConvTranspose1D(Layer):
 
         input_dim = int(input_shape[channel_axis])
 
-        # Kernel: standalone or from a shared bank
-        # Transpose conv shape: (*kernel_size, filters, input_dim) — filter axis = len(kernel_size)
-        if self.tie_kernel_bank:
-            bank_filters = self.kernel_bank_size or self.filters
-            bank_kernel_shape = tuple(self.kernel_size) + (bank_filters, input_dim)
-            bank_key = (
-                self.kernel_bank_id,
-                tuple(self.kernel_size),
-                input_dim,
-                "transpose",
-            )
-            with type(self)._KERNEL_BANKS_LOCK:
-                shared_kernel = type(self)._KERNEL_BANKS.get(bank_key)
-                if shared_kernel is None:
-                    self.kernel = self.add_weight(
-                        name="kernel",
-                        shape=bank_kernel_shape,
-                        initializer=self.kernel_initializer,
-                        regularizer=self.kernel_regularizer,
-                        constraint=self.kernel_constraint,
-                        trainable=True,
-                    )
-                    type(self)._KERNEL_BANKS[bank_key] = self.kernel
-                else:
-                    filter_axis = len(self.kernel_size)
-                    existing_filters = shared_kernel.shape[filter_axis]
-                    if bank_filters > existing_filters:
-                        logger.info(
-                            "Auto-expanding Keras kernel bank '%s': %d -> %d filters",
-                            self.kernel_bank_id, existing_filters, bank_filters,
-                        )
-                        new_kernel_val = self.kernel_initializer(bank_kernel_shape, dtype=shared_kernel.dtype)
-                        import numpy as _np
-                        old_arr = _np.array(shared_kernel)
-                        new_arr = _np.array(new_kernel_val)
-                        # Splice along the filter axis
-                        slicer = [slice(None)] * new_arr.ndim
-                        slicer[filter_axis] = slice(0, existing_filters)
-                        new_arr[tuple(slicer)] = old_arr
-                        shared_kernel.assign(ops.convert_to_tensor(new_arr))
-                    self.kernel = shared_kernel
-            self._kernel_slice = slice(0, self.filters)
-        else:
-            kernel_shape = tuple(self.kernel_size) + (self.filters, input_dim)
-            self.kernel = self.add_weight(
-                name="kernel",
-                shape=kernel_shape,
-                initializer=self.kernel_initializer,
-                regularizer=self.kernel_regularizer,
-                constraint=self.kernel_constraint,
-                trainable=True,
-            )
+        _build_transpose_kernel(self, input_dim)
 
         # Bias: learnable parameter, or None if constant_bias is set / use_bias=False
         if self.use_bias and self._constant_bias_value is None:
@@ -1433,21 +1420,7 @@ class YatConvTranspose1D(Layer):
         return yat_score(self, dot_prod_map, distance_sq_map)
 
     def compute_output_shape(self, input_shape):
-        if self.data_format == "channels_first":
-            length = input_shape[2]
-        else:
-            length = input_shape[1]
-        
-        if length is not None:
-            if self.padding == "same":
-                length = length * self.strides[0]
-            else:
-                length = length * self.strides[0] + max(self.kernel_size[0] - self.strides[0], 0)
-        
-        if self.data_format == "channels_first":
-            return (input_shape[0], self.filters, length)
-        else:
-            return (input_shape[0], length, self.filters)
+        return _conv_transpose_output_shape(self, input_shape)
 
     def get_config(self):
         config = super().get_config()
@@ -1590,17 +1563,7 @@ class YatConvTranspose2D(Layer):
 
         input_dim = int(input_shape[channel_axis])
 
-        # Kernel shape for transpose conv: (*kernel_size, filters, input_dim)
-        kernel_shape = tuple(self.kernel_size) + (self.filters, input_dim)
-
-        self.kernel = self.add_weight(
-            name="kernel",
-            shape=kernel_shape,
-            initializer=self.kernel_initializer,
-            regularizer=self.kernel_regularizer,
-            constraint=self.kernel_constraint,
-            trainable=True,
-        )
+        _build_transpose_kernel(self, input_dim)
 
         # Bias: learnable parameter, or None if constant_bias is set / use_bias=False
         if self.use_bias and self._constant_bias_value is None:
@@ -1726,29 +1689,7 @@ class YatConvTranspose2D(Layer):
         return yat_score(self, dot_prod_map, distance_sq_map)
 
     def compute_output_shape(self, input_shape):
-        if self.data_format == "channels_first":
-            rows = input_shape[2]
-            cols = input_shape[3]
-        else:
-            rows = input_shape[1]
-            cols = input_shape[2]
-
-        if rows is not None:
-            if self.padding == "same":
-                rows = rows * self.strides[0]
-            else:
-                rows = rows * self.strides[0] + max(self.kernel_size[0] - self.strides[0], 0)
-        
-        if cols is not None:
-            if self.padding == "same":
-                cols = cols * self.strides[1]
-            else:
-                cols = cols * self.strides[1] + max(self.kernel_size[1] - self.strides[1], 0)
-
-        if self.data_format == "channels_first":
-            return (input_shape[0], self.filters, rows, cols)
-        else:
-            return (input_shape[0], rows, cols, self.filters)
+        return _conv_transpose_output_shape(self, input_shape)
 
     def get_config(self):
         config = super().get_config()
@@ -1891,17 +1832,7 @@ class YatConvTranspose3D(Layer):
 
         input_dim = int(input_shape[channel_axis])
 
-        # Kernel shape for transpose conv: (*kernel_size, filters, input_dim)
-        kernel_shape = tuple(self.kernel_size) + (self.filters, input_dim)
-
-        self.kernel = self.add_weight(
-            name="kernel",
-            shape=kernel_shape,
-            initializer=self.kernel_initializer,
-            regularizer=self.kernel_regularizer,
-            constraint=self.kernel_constraint,
-            trainable=True,
-        )
+        _build_transpose_kernel(self, input_dim)
 
         # Bias: learnable parameter, or None if constant_bias is set / use_bias=False
         if self.use_bias and self._constant_bias_value is None:
@@ -2026,24 +1957,7 @@ class YatConvTranspose3D(Layer):
         return yat_score(self, dot_prod_map, distance_sq_map)
 
     def compute_output_shape(self, input_shape):
-        if self.data_format == "channels_first":
-            dims = [input_shape[2], input_shape[3], input_shape[4]]
-        else:
-            dims = [input_shape[1], input_shape[2], input_shape[3]]
-
-        new_dims = []
-        for i, dim in enumerate(dims):
-            if dim is not None:
-                if self.padding == "same":
-                    dim = dim * self.strides[i]
-                else:
-                    dim = dim * self.strides[i] + max(self.kernel_size[i] - self.strides[i], 0)
-            new_dims.append(dim)
-
-        if self.data_format == "channels_first":
-            return (input_shape[0], self.filters) + tuple(new_dims)
-        else:
-            return (input_shape[0],) + tuple(new_dims) + (self.filters,)
+        return _conv_transpose_output_shape(self, input_shape)
 
     def get_config(self):
         config = super().get_config()

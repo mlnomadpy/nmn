@@ -11,12 +11,16 @@ from typing import Optional, Union
 
 from keras.src import initializers, ops
 from keras.src.layers.layer import Layer
+from keras.src.saving.object_registration import register_keras_serializable
+
+from ._yat_core import stable_yat_ratio
 
 __all__ = ["YatEmbed"]
 
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
 
 
+@register_keras_serializable(package="nmn", name="YatEmbed")
 class YatEmbed(Layer):
     """Embedding with YAT attend method (Keras Layer).
 
@@ -132,7 +136,7 @@ class YatEmbed(Layer):
             )
             distances = query_sq + embed_sq - 2.0 * y
 
-        y = ops.square(y) / (distances + self.epsilon)
+        y = stable_yat_ratio(y, distances, self.epsilon)
 
         if self._constant_alpha_value is not None:
             y = y * self._constant_alpha_value

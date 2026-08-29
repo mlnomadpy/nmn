@@ -8,7 +8,7 @@ or:
 Set KERAS_BACKEND={jax,tensorflow,torch} before importing keras to choose backend.
 
 Requires:
-    pip install "nmn[keras]" keras tensorflow      # or jax / torch
+    pip install "nmn[keras]" jax      # or tensorflow / torch
 """
 from __future__ import annotations
 

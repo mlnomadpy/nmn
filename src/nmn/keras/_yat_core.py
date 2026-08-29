@@ -13,9 +13,31 @@ tail block) and avoids long parameter lists.
 from __future__ import annotations
 
 from keras import ops
+from keras.src.backend import standardize_dtype
 
 
-__all__ = ["yat_score"]
+__all__ = ["stable_yat_ratio", "yat_score"]
+
+
+def stable_yat_ratio(dot_product, distance_sq, epsilon):
+    """Evaluate the YAT ratio without low-precision overflow/cancellation."""
+    distance_sq = ops.maximum(distance_sq, ops.cast(0.0, distance_sq.dtype))
+    source_dtype = standardize_dtype(dot_product.dtype)
+    if source_dtype in {"float16", "bfloat16"}:
+        # The exact-match score 1 / epsilon can exceed float16's finite range.
+        # Returning the fp32 compute result follows mixed-precision practice and
+        # also keeps gradients finite instead of overflowing before a cast.
+        dot_product = ops.cast(dot_product, "float32")
+        distance_sq = ops.cast(distance_sq, "float32")
+        epsilon = ops.cast(epsilon, "float32")
+    ratio = ops.square(dot_product) / (distance_sq + epsilon)
+    if source_dtype == "float16":
+        # Saturate scores that cannot be represented by the source policy.
+        # Besides preventing an eventual inf cast, the flat saturated branch
+        # prevents its otherwise unrepresentable input gradient from becoming
+        # inf/nan at exact query/kernel collisions.
+        ratio = ops.minimum(ratio, ops.cast(65504.0, ratio.dtype))
+    return ratio
 
 
 def yat_score(layer, dot_prod_map, distance_sq_map):
@@ -51,8 +73,13 @@ def yat_score(layer, dot_prod_map, distance_sq_map):
     else:
         eps = layer.epsilon
 
+    # Squared distances assembled from norms and dot products are susceptible
+    # to cancellation in float16/bfloat16.  A squared distance is
+    # mathematically non-negative, so clamp before adding epsilon.  Keeping the
+    # clamp here guarantees identical behaviour for all forward and transpose
+    # convolution variants.
     # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps).
-    outputs = dot_prod_map ** 2 / (distance_sq_map + eps)
+    outputs = stable_yat_ratio(dot_prod_map, distance_sq_map, eps)
 
     # Optional alpha (constant via _constant_alpha_value is folded into
     # `layer.alpha` at __init__ time; here we only need `use_alpha` + alpha).
