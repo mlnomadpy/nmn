@@ -23,21 +23,54 @@ def stable_yat_ratio(dot_product, distance_sq, epsilon):
     """Evaluate the YAT ratio without low-precision overflow/cancellation."""
     distance_sq = ops.maximum(distance_sq, ops.cast(0.0, distance_sq.dtype))
     source_dtype = standardize_dtype(dot_product.dtype)
-    if source_dtype in {"float16", "bfloat16"}:
-        # The exact-match score 1 / epsilon can exceed float16's finite range.
-        # Returning the fp32 compute result follows mixed-precision practice and
-        # also keeps gradients finite instead of overflowing before a cast.
-        dot_product = ops.cast(dot_product, "float32")
-        distance_sq = ops.cast(distance_sq, "float32")
-        epsilon = ops.cast(epsilon, "float32")
-    ratio = ops.square(dot_product) / (distance_sq + epsilon)
-    if source_dtype == "float16":
-        # Saturate scores that cannot be represented by the source policy.
-        # Besides preventing an eventual inf cast, the flat saturated branch
-        # prevents its otherwise unrepresentable input gradient from becoming
-        # inf/nan at exact query/kernel collisions.
-        ratio = ops.minimum(ratio, ops.cast(65504.0, ratio.dtype))
-    return ratio
+    if source_dtype not in {"float16", "bfloat16"}:
+        return ops.square(dot_product) / (distance_sq + epsilon)
+
+    epsilon = ops.cast(epsilon, source_dtype)
+
+    @ops.custom_gradient
+    def low_precision_ratio(dot, distance, eps):
+        dot32 = ops.cast(dot, "float32")
+        distance32 = ops.cast(distance, "float32")
+        eps32 = ops.cast(eps, "float32")
+        denominator = distance32 + eps32
+        raw_ratio = ops.square(dot32) / denominator
+        max_value = 65504.0 if source_dtype == "float16" else 3.38953139e38
+        active = raw_ratio < max_value
+        result = ops.cast(ops.minimum(raw_ratio, max_value), source_dtype)
+
+        def grad(*args, upstream=None):
+            if upstream is None:
+                (upstream,) = args
+            upstream32 = ops.cast(upstream, "float32")
+            active32 = ops.cast(active, "float32")
+            dot_grad = upstream32 * (2.0 * dot32 / denominator) * active32
+            denominator_grad = (
+                upstream32
+                * (-ops.square(dot32) / ops.square(denominator))
+                * active32
+            )
+            distance_grad = ops.where(
+                distance32 > 0.0, denominator_grad, ops.zeros_like(denominator_grad)
+            )
+            if source_dtype == "float16":
+                dot_grad = ops.clip(dot_grad, -65504.0, 65504.0)
+                distance_grad = ops.clip(distance_grad, -65504.0, 65504.0)
+                denominator_grad = ops.clip(
+                    denominator_grad, -65504.0, 65504.0
+                )
+            epsilon_grad = ops.reshape(
+                ops.sum(denominator_grad), ops.shape(eps)
+            )
+            return (
+                ops.cast(dot_grad, source_dtype),
+                ops.cast(distance_grad, source_dtype),
+                ops.cast(epsilon_grad, source_dtype),
+            )
+
+        return result, grad
+
+    return low_precision_ratio(dot_product, distance_sq, epsilon)
 
 
 def yat_score(layer, dot_prod_map, distance_sq_map):

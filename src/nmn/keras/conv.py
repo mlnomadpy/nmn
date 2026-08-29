@@ -2,14 +2,18 @@
 
 import math
 import threading
+import weakref
 
 from keras.src import activations, constraints, initializers, regularizers
 from keras.src import ops
 from keras.src.api_export import keras_export
+from keras.src.backend import standardize_dtype
 from keras.src.backend.common.backend_utils import compute_conv_transpose_output_shape
 from keras.src.layers.input_spec import InputSpec
 from keras.src.layers.layer import Layer
 from keras.src.ops.operation_utils import compute_conv_output_shape
+from keras.src.saving.object_registration import register_keras_serializable
+from keras.src.saving.serialization_lib import deserialize_keras_object
 
 from ._yat_core import yat_score
 
@@ -22,6 +26,99 @@ def _reject_kernel_bank_expansion(bank_id, existing_filters, requested_filters):
         "shapes; create the first consumer with a sufficiently large "
         "kernel_bank_size. The existing bank was not modified."
     )
+
+
+@register_keras_serializable(package="nmn", name="YatKernelBank")
+class _KernelBankRef:
+    """Serializable identity for a shared kernel without owning its Variable.
+
+    Keras' object-sharing scope preserves one ref object when a Functional model
+    containing multiple consumers is cloned or loaded.  Each consumer tracks the
+    shared Variable exactly once; the process-local weak registry is only used
+    to connect layers constructed directly by users.
+    """
+
+    def __init__(self, bank_id, signature, capacity):
+        self.bank_id = bank_id
+        self.signature = _freeze_signature(signature)
+        self.capacity = int(capacity)
+        self.variable = None
+
+    def get_config(self):
+        return {
+            "bank_id": self.bank_id,
+            "signature": self.signature,
+            "capacity": self.capacity,
+        }
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
+
+class _KernelBankSerializationMixin:
+    @classmethod
+    def from_config(cls, config):
+        config = dict(config)
+        bank = config.get("kernel_bank")
+        if isinstance(bank, dict):
+            config["kernel_bank"] = deserialize_keras_object(bank)
+        return cls(**config)
+
+
+def _freeze_signature(value):
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_signature(item) for item in value)
+    return value
+
+
+def _safe_kernel_initializer(initializer):
+    """Initialize low-precision kernels through fp32 for JAX LAPACK safety."""
+
+    def initialize(shape, dtype=None):
+        dtype_name = standardize_dtype(dtype)
+        if dtype_name in {"float16", "bfloat16"}:
+            return ops.cast(initializer(shape, dtype="float32"), dtype_name)
+        return initializer(shape, dtype=dtype)
+
+    return initialize
+
+
+def _validate_kernel_bank_config(layer):
+    if (
+        layer.tie_kernel_bank
+        and layer.kernel_bank_size is not None
+        and layer.kernel_bank_size < layer.filters
+    ):
+        raise ValueError(
+            f"kernel_bank_size ({layer.kernel_bank_size}) must be greater than "
+            f"or equal to filters ({layer.filters})."
+        )
+
+
+def _get_bank_ref(layer, signature, capacity):
+    supplied = layer._kernel_bank_ref
+    if supplied is not None:
+        if supplied.signature != _freeze_signature(signature):
+            raise ValueError("Serialized kernel bank signature is incompatible.")
+        if supplied.capacity < layer.filters:
+            _reject_kernel_bank_expansion(
+                supplied.bank_id, supplied.capacity, layer.filters
+            )
+        return supplied
+
+    key = (layer.kernel_bank_id, tuple(signature))
+    with type(layer)._KERNEL_BANKS_LOCK:
+        bank = type(layer)._KERNEL_BANKS.get(key)
+        if bank is None:
+            bank = _KernelBankRef(layer.kernel_bank_id, signature, capacity)
+            type(layer)._KERNEL_BANKS[key] = bank
+        elif capacity > bank.capacity:
+            _reject_kernel_bank_expansion(
+                layer.kernel_bank_id, bank.capacity, capacity
+            )
+    layer._kernel_bank_ref = bank
+    return bank
 
 
 def _conv_output_shape(layer, input_shape):
@@ -50,55 +147,80 @@ def _conv_transpose_output_shape(layer, input_shape):
     )
 
 
-def _build_transpose_kernel(layer, input_dim):
-    """Create or attach a fixed-capacity transpose-convolution kernel bank."""
+def _build_forward_kernel(layer, input_dim):
     if not layer.tie_kernel_bank:
         layer.kernel = layer.add_weight(
             name="kernel",
-            shape=tuple(layer.kernel_size) + (layer.filters, input_dim),
-            initializer=layer.kernel_initializer,
+            shape=tuple(layer.kernel_size)
+            + (input_dim // layer.groups, layer.filters),
+            initializer=_safe_kernel_initializer(layer.kernel_initializer),
             regularizer=layer.kernel_regularizer,
             constraint=layer.kernel_constraint,
             trainable=True,
         )
         return
 
-    bank_filters = layer.kernel_bank_size or layer.filters
-    bank_kernel_shape = tuple(layer.kernel_size) + (bank_filters, input_dim)
-    bank_key = (
-        layer.kernel_bank_id,
+    capacity = layer.kernel_bank_size or layer.filters
+    signature = (
+        "forward",
         tuple(layer.kernel_size),
-        input_dim,
-        "transpose",
+        input_dim // layer.groups,
+        layer.groups,
     )
-    with type(layer)._KERNEL_BANKS_LOCK:
-        shared_kernel = type(layer)._KERNEL_BANKS.get(bank_key)
-        if shared_kernel is None:
-            layer.kernel = layer.add_weight(
-                name="kernel",
-                shape=bank_kernel_shape,
-                initializer=layer.kernel_initializer,
-                regularizer=layer.kernel_regularizer,
-                constraint=layer.kernel_constraint,
-                trainable=True,
-            )
-            type(layer)._KERNEL_BANKS[bank_key] = layer.kernel
-        else:
-            filter_axis = len(layer.kernel_size)
-            existing_filters = shared_kernel.shape[filter_axis]
-            if bank_filters > existing_filters:
-                _reject_kernel_bank_expansion(
-                    layer.kernel_bank_id, existing_filters, bank_filters
-                )
-            layer.kernel = shared_kernel
-            layer._track_variable(shared_kernel)
+    bank = _get_bank_ref(layer, signature, capacity)
+    if bank.variable is None:
+        bank.variable = layer.add_weight(
+            name="kernel",
+            shape=tuple(layer.kernel_size)
+            + (input_dim // layer.groups, bank.capacity),
+            initializer=_safe_kernel_initializer(layer.kernel_initializer),
+            regularizer=layer.kernel_regularizer,
+            constraint=layer.kernel_constraint,
+            trainable=True,
+        )
+    else:
+        layer.kernel = bank.variable
+    if not hasattr(layer, "kernel"):
+        layer.kernel = bank.variable
+    layer._kernel_slice = slice(0, layer.filters)
+
+
+def _build_transpose_kernel(layer, input_dim):
+    """Create or attach a fixed-capacity transpose-convolution kernel bank."""
+    if not layer.tie_kernel_bank:
+        layer.kernel = layer.add_weight(
+            name="kernel",
+            shape=tuple(layer.kernel_size) + (layer.filters, input_dim),
+            initializer=_safe_kernel_initializer(layer.kernel_initializer),
+            regularizer=layer.kernel_regularizer,
+            constraint=layer.kernel_constraint,
+            trainable=True,
+        )
+        return
+
+    capacity = layer.kernel_bank_size or layer.filters
+    signature = ("transpose", tuple(layer.kernel_size), input_dim)
+    bank = _get_bank_ref(layer, signature, capacity)
+    if bank.variable is None:
+        bank.variable = layer.add_weight(
+            name="kernel",
+            shape=tuple(layer.kernel_size) + (bank.capacity, input_dim),
+            initializer=_safe_kernel_initializer(layer.kernel_initializer),
+            regularizer=layer.kernel_regularizer,
+            constraint=layer.kernel_constraint,
+            trainable=True,
+        )
+    else:
+        layer.kernel = bank.variable
+    if not hasattr(layer, "kernel"):
+        layer.kernel = bank.variable
     layer._kernel_slice = slice(0, layer.filters)
 
 
 @keras_export("keras.layers.YatConv1D")
-class YatConv1D(Layer):
+class YatConv1D(_KernelBankSerializationMixin, Layer):
     # Class-level shared kernel banks (guarded by a lock for thread safety)
-    _KERNEL_BANKS = {}
+    _KERNEL_BANKS = weakref.WeakValueDictionary()
     _KERNEL_BANKS_LOCK = threading.Lock()
 
     """1D YAT convolution layer (e.g. temporal convolution).
@@ -181,6 +303,7 @@ class YatConv1D(Layer):
         tie_kernel_bank=False,
         kernel_bank_size=None,
         kernel_bank_id="default",
+        kernel_bank=None,
         kernel_initializer="orthogonal",
         bias_initializer="zeros",
         kernel_regularizer=None,
@@ -216,6 +339,8 @@ class YatConv1D(Layer):
         self.kernel_bank_size = kernel_bank_size
         self.kernel_bank_id = kernel_bank_id
         self._kernel_slice = slice(None)
+        self._kernel_bank_ref = kernel_bank
+        _validate_kernel_bank_config(self)
 
         # Bias configuration: learnable, constant, or none
         self._constant_bias_value = None
@@ -261,47 +386,7 @@ class YatConv1D(Layer):
                 f"divisible by the number of groups ({self.groups})."
             )
 
-        # Kernel: standalone or from a shared bank
-        if self.tie_kernel_bank:
-            bank_filters = self.kernel_bank_size or self.filters
-            bank_kernel_shape = tuple(self.kernel_size) + (input_dim // self.groups, bank_filters)
-            bank_key = (
-                self.kernel_bank_id,
-                tuple(self.kernel_size),
-                input_dim // self.groups,
-                self.groups,
-            )
-            with type(self)._KERNEL_BANKS_LOCK:
-                shared_kernel = type(self)._KERNEL_BANKS.get(bank_key)
-                if shared_kernel is None:
-                    self.kernel = self.add_weight(
-                        name="kernel",
-                        shape=bank_kernel_shape,
-                        initializer=self.kernel_initializer,
-                        regularizer=self.kernel_regularizer,
-                        constraint=self.kernel_constraint,
-                        trainable=True,
-                    )
-                    type(self)._KERNEL_BANKS[bank_key] = self.kernel
-                else:
-                    existing_filters = shared_kernel.shape[-1]
-                    if bank_filters > existing_filters:
-                        _reject_kernel_bank_expansion(
-                            self.kernel_bank_id, existing_filters, bank_filters
-                        )
-                    self.kernel = shared_kernel
-                    self._track_variable(shared_kernel)
-            self._kernel_slice = slice(0, self.filters)
-        else:
-            kernel_shape = tuple(self.kernel_size) + (input_dim // self.groups, self.filters)
-            self.kernel = self.add_weight(
-                name="kernel",
-                shape=kernel_shape,
-                initializer=self.kernel_initializer,
-                regularizer=self.kernel_regularizer,
-                constraint=self.kernel_constraint,
-                trainable=True,
-            )
+        _build_forward_kernel(self, input_dim)
 
         # Bias: learnable parameter, or None if constant_bias is set / use_bias=False
         if self.use_bias and self._constant_bias_value is None:
@@ -466,6 +551,7 @@ class YatConv1D(Layer):
             "tie_kernel_bank": self.tie_kernel_bank,
             "kernel_bank_size": self.kernel_bank_size,
             "kernel_bank_id": self.kernel_bank_id,
+            "kernel_bank": self._kernel_bank_ref if self.tie_kernel_bank else None,
             "kernel_initializer": initializers.serialize(self.kernel_initializer),
             "bias_initializer": initializers.serialize(self.bias_initializer),
             "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
@@ -478,9 +564,9 @@ class YatConv1D(Layer):
 
 
 @keras_export("keras.layers.YatConv2D")
-class YatConv2D(Layer):
+class YatConv2D(_KernelBankSerializationMixin, Layer):
     # Class-level shared kernel banks (guarded by a lock for thread safety)
-    _KERNEL_BANKS = {}
+    _KERNEL_BANKS = weakref.WeakValueDictionary()
     _KERNEL_BANKS_LOCK = threading.Lock()
 
     """2D YAT convolution layer (e.g. spatial convolution over images).
@@ -571,6 +657,7 @@ class YatConv2D(Layer):
         tie_kernel_bank=False,
         kernel_bank_size=None,
         kernel_bank_id="default",
+        kernel_bank=None,
         kernel_initializer="orthogonal",
         bias_initializer="zeros",
         kernel_regularizer=None,
@@ -600,6 +687,8 @@ class YatConv2D(Layer):
         self.kernel_bank_size = kernel_bank_size
         self.kernel_bank_id = kernel_bank_id
         self._kernel_slice = slice(None)
+        self._kernel_bank_ref = kernel_bank
+        _validate_kernel_bank_config(self)
 
         # Bias configuration: learnable, constant, or none
         self._constant_bias_value = None
@@ -645,47 +734,7 @@ class YatConv2D(Layer):
                 f"divisible by the number of groups ({self.groups})."
             )
 
-        # Kernel: standalone or from a shared bank
-        if self.tie_kernel_bank:
-            bank_filters = self.kernel_bank_size or self.filters
-            bank_kernel_shape = tuple(self.kernel_size) + (input_dim // self.groups, bank_filters)
-            bank_key = (
-                self.kernel_bank_id,
-                tuple(self.kernel_size),
-                input_dim // self.groups,
-                self.groups,
-            )
-            with type(self)._KERNEL_BANKS_LOCK:
-                shared_kernel = type(self)._KERNEL_BANKS.get(bank_key)
-                if shared_kernel is None:
-                    self.kernel = self.add_weight(
-                        name="kernel",
-                        shape=bank_kernel_shape,
-                        initializer=self.kernel_initializer,
-                        regularizer=self.kernel_regularizer,
-                        constraint=self.kernel_constraint,
-                        trainable=True,
-                    )
-                    type(self)._KERNEL_BANKS[bank_key] = self.kernel
-                else:
-                    existing_filters = shared_kernel.shape[-1]
-                    if bank_filters > existing_filters:
-                        _reject_kernel_bank_expansion(
-                            self.kernel_bank_id, existing_filters, bank_filters
-                        )
-                    self.kernel = shared_kernel
-                    self._track_variable(shared_kernel)
-            self._kernel_slice = slice(0, self.filters)
-        else:
-            kernel_shape = tuple(self.kernel_size) + (input_dim // self.groups, self.filters)
-            self.kernel = self.add_weight(
-                name="kernel",
-                shape=kernel_shape,
-                initializer=self.kernel_initializer,
-                regularizer=self.kernel_regularizer,
-                constraint=self.kernel_constraint,
-                trainable=True,
-            )
+        _build_forward_kernel(self, input_dim)
 
         # Bias: learnable parameter, or None if constant_bias is set / use_bias=False
         if self.use_bias and self._constant_bias_value is None:
@@ -836,6 +885,7 @@ class YatConv2D(Layer):
             "tie_kernel_bank": self.tie_kernel_bank,
             "kernel_bank_size": self.kernel_bank_size,
             "kernel_bank_id": self.kernel_bank_id,
+            "kernel_bank": self._kernel_bank_ref if self.tie_kernel_bank else None,
             "kernel_initializer": initializers.serialize(self.kernel_initializer),
             "bias_initializer": initializers.serialize(self.bias_initializer),
             "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
@@ -848,9 +898,9 @@ class YatConv2D(Layer):
 
 
 @keras_export("keras.layers.YatConv3D")
-class YatConv3D(Layer):
+class YatConv3D(_KernelBankSerializationMixin, Layer):
     # Class-level shared kernel banks (guarded by a lock for thread safety)
-    _KERNEL_BANKS = {}
+    _KERNEL_BANKS = weakref.WeakValueDictionary()
     _KERNEL_BANKS_LOCK = threading.Lock()
 
     """3D YAT convolution layer (e.g. spatial convolution over volumes).
@@ -908,6 +958,7 @@ class YatConv3D(Layer):
         tie_kernel_bank=False,
         kernel_bank_size=None,
         kernel_bank_id="default",
+        kernel_bank=None,
         kernel_initializer="orthogonal",
         bias_initializer="zeros",
         kernel_regularizer=None,
@@ -937,6 +988,8 @@ class YatConv3D(Layer):
         self.kernel_bank_size = kernel_bank_size
         self.kernel_bank_id = kernel_bank_id
         self._kernel_slice = slice(None)
+        self._kernel_bank_ref = kernel_bank
+        _validate_kernel_bank_config(self)
 
         # Bias configuration: learnable, constant, or none
         self._constant_bias_value = None
@@ -982,47 +1035,7 @@ class YatConv3D(Layer):
                 f"divisible by the number of groups ({self.groups})."
             )
 
-        # Kernel: standalone or from a shared bank
-        if self.tie_kernel_bank:
-            bank_filters = self.kernel_bank_size or self.filters
-            bank_kernel_shape = tuple(self.kernel_size) + (input_dim // self.groups, bank_filters)
-            bank_key = (
-                self.kernel_bank_id,
-                tuple(self.kernel_size),
-                input_dim // self.groups,
-                self.groups,
-            )
-            with type(self)._KERNEL_BANKS_LOCK:
-                shared_kernel = type(self)._KERNEL_BANKS.get(bank_key)
-                if shared_kernel is None:
-                    self.kernel = self.add_weight(
-                        name="kernel",
-                        shape=bank_kernel_shape,
-                        initializer=self.kernel_initializer,
-                        regularizer=self.kernel_regularizer,
-                        constraint=self.kernel_constraint,
-                        trainable=True,
-                    )
-                    type(self)._KERNEL_BANKS[bank_key] = self.kernel
-                else:
-                    existing_filters = shared_kernel.shape[-1]
-                    if bank_filters > existing_filters:
-                        _reject_kernel_bank_expansion(
-                            self.kernel_bank_id, existing_filters, bank_filters
-                        )
-                    self.kernel = shared_kernel
-                    self._track_variable(shared_kernel)
-            self._kernel_slice = slice(0, self.filters)
-        else:
-            kernel_shape = tuple(self.kernel_size) + (input_dim // self.groups, self.filters)
-            self.kernel = self.add_weight(
-                name="kernel",
-                shape=kernel_shape,
-                initializer=self.kernel_initializer,
-                regularizer=self.kernel_regularizer,
-                constraint=self.kernel_constraint,
-                trainable=True,
-            )
+        _build_forward_kernel(self, input_dim)
 
         # Bias: learnable parameter, or None if constant_bias is set / use_bias=False
         if self.use_bias and self._constant_bias_value is None:
@@ -1173,6 +1186,7 @@ class YatConv3D(Layer):
             "tie_kernel_bank": self.tie_kernel_bank,
             "kernel_bank_size": self.kernel_bank_size,
             "kernel_bank_id": self.kernel_bank_id,
+            "kernel_bank": self._kernel_bank_ref if self.tie_kernel_bank else None,
             "kernel_initializer": initializers.serialize(self.kernel_initializer),
             "bias_initializer": initializers.serialize(self.bias_initializer),
             "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
@@ -1185,9 +1199,9 @@ class YatConv3D(Layer):
 
 
 @keras_export("keras.layers.YatConvTranspose1D")
-class YatConvTranspose1D(Layer):
+class YatConvTranspose1D(_KernelBankSerializationMixin, Layer):
     # Class-level shared kernel banks (guarded by a lock for thread safety)
-    _KERNEL_BANKS = {}
+    _KERNEL_BANKS = weakref.WeakValueDictionary()
     _KERNEL_BANKS_LOCK = threading.Lock()
 
     """1D YAT transposed convolution layer (deconvolution).
@@ -1233,6 +1247,7 @@ class YatConvTranspose1D(Layer):
         tie_kernel_bank=False,
         kernel_bank_size=None,
         kernel_bank_id="default",
+        kernel_bank=None,
         kernel_initializer="orthogonal",
         bias_initializer="zeros",
         kernel_regularizer=None,
@@ -1261,6 +1276,8 @@ class YatConvTranspose1D(Layer):
         self.kernel_bank_size = kernel_bank_size
         self.kernel_bank_id = kernel_bank_id
         self._kernel_slice = slice(None)
+        self._kernel_bank_ref = kernel_bank
+        _validate_kernel_bank_config(self)
 
         # Bias configuration: learnable, constant, or none
         self._constant_bias_value = None
@@ -1442,6 +1459,7 @@ class YatConvTranspose1D(Layer):
             "tie_kernel_bank": self.tie_kernel_bank,
             "kernel_bank_size": self.kernel_bank_size,
             "kernel_bank_id": self.kernel_bank_id,
+            "kernel_bank": self._kernel_bank_ref if self.tie_kernel_bank else None,
             "kernel_initializer": initializers.serialize(self.kernel_initializer),
             "bias_initializer": initializers.serialize(self.bias_initializer),
             "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
@@ -1454,9 +1472,9 @@ class YatConvTranspose1D(Layer):
 
 
 @keras_export("keras.layers.YatConvTranspose2D")
-class YatConvTranspose2D(Layer):
+class YatConvTranspose2D(_KernelBankSerializationMixin, Layer):
     # Class-level shared kernel banks (guarded by a lock for thread safety)
-    _KERNEL_BANKS = {}
+    _KERNEL_BANKS = weakref.WeakValueDictionary()
     _KERNEL_BANKS_LOCK = threading.Lock()
 
     """2D YAT transposed convolution layer (deconvolution).
@@ -1502,6 +1520,7 @@ class YatConvTranspose2D(Layer):
         tie_kernel_bank=False,
         kernel_bank_size=None,
         kernel_bank_id="default",
+        kernel_bank=None,
         kernel_initializer="orthogonal",
         bias_initializer="zeros",
         kernel_regularizer=None,
@@ -1530,6 +1549,8 @@ class YatConvTranspose2D(Layer):
         self.kernel_bank_size = kernel_bank_size
         self.kernel_bank_id = kernel_bank_id
         self._kernel_slice = slice(None)
+        self._kernel_bank_ref = kernel_bank
+        _validate_kernel_bank_config(self)
 
         # Bias configuration: learnable, constant, or none
         self._constant_bias_value = None
@@ -1711,6 +1732,7 @@ class YatConvTranspose2D(Layer):
             "tie_kernel_bank": self.tie_kernel_bank,
             "kernel_bank_size": self.kernel_bank_size,
             "kernel_bank_id": self.kernel_bank_id,
+            "kernel_bank": self._kernel_bank_ref if self.tie_kernel_bank else None,
             "kernel_initializer": initializers.serialize(self.kernel_initializer),
             "bias_initializer": initializers.serialize(self.bias_initializer),
             "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
@@ -1723,9 +1745,9 @@ class YatConvTranspose2D(Layer):
 
 
 @keras_export("keras.layers.YatConvTranspose3D")
-class YatConvTranspose3D(Layer):
+class YatConvTranspose3D(_KernelBankSerializationMixin, Layer):
     # Class-level shared kernel banks (guarded by a lock for thread safety)
-    _KERNEL_BANKS = {}
+    _KERNEL_BANKS = weakref.WeakValueDictionary()
     _KERNEL_BANKS_LOCK = threading.Lock()
 
     """3D YAT transposed convolution layer (deconvolution).
@@ -1771,6 +1793,7 @@ class YatConvTranspose3D(Layer):
         tie_kernel_bank=False,
         kernel_bank_size=None,
         kernel_bank_id="default",
+        kernel_bank=None,
         kernel_initializer="orthogonal",
         bias_initializer="zeros",
         kernel_regularizer=None,
@@ -1799,6 +1822,8 @@ class YatConvTranspose3D(Layer):
         self.kernel_bank_size = kernel_bank_size
         self.kernel_bank_id = kernel_bank_id
         self._kernel_slice = slice(None)
+        self._kernel_bank_ref = kernel_bank
+        _validate_kernel_bank_config(self)
 
         # Bias configuration: learnable, constant, or none
         self._constant_bias_value = None
@@ -1979,6 +2004,7 @@ class YatConvTranspose3D(Layer):
             "tie_kernel_bank": self.tie_kernel_bank,
             "kernel_bank_size": self.kernel_bank_size,
             "kernel_bank_id": self.kernel_bank_id,
+            "kernel_bank": self._kernel_bank_ref if self.tie_kernel_bank else None,
             "kernel_initializer": initializers.serialize(self.kernel_initializer),
             "bias_initializer": initializers.serialize(self.bias_initializer),
             "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),

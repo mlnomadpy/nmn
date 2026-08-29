@@ -5,8 +5,6 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
-import jax
-import jax.numpy as jnp
 import keras
 import numpy as np
 import pytest
@@ -22,6 +20,27 @@ from nmn.keras import (
     YatEmbed,
 )
 
+BACKEND = keras.backend.backend()
+
+
+def tensor(value, dtype="float32"):
+    return keras.ops.convert_to_tensor(np.asarray(value), dtype=dtype)
+
+
+def input_gradient(layer, value):
+    if BACKEND == "jax":
+        import jax
+        import jax.numpy as jnp
+
+        return jax.grad(lambda x: jnp.sum(layer(x)))(value)
+    if BACKEND == "tensorflow":
+        tf = pytest.importorskip("tensorflow")
+        with tf.GradientTape() as tape:
+            tape.watch(value)
+            loss = tf.reduce_sum(layer(value))
+        return tape.gradient(loss, value)
+    pytest.skip("gradient assertion is implemented for JAX and TensorFlow backends")
+
 
 @pytest.mark.parametrize(
     ("layer_cls", "input_shape"),
@@ -34,11 +53,11 @@ from nmn.keras import (
 def test_grouped_convolutions_have_per_group_patch_norms_and_gradients(
     layer_cls, input_shape
 ):
-    x = jax.random.normal(jax.random.key(len(input_shape)), input_shape)
+    x = keras.random.normal(input_shape, seed=len(input_shape))
     layer = layer_cls(4, 3, groups=2, padding="same", use_bias=False)
 
     y = layer(x)
-    dx = jax.grad(lambda value: jnp.sum(layer(value)))(x)
+    dx = input_gradient(layer, x)
 
     assert y.shape[:-1] == x.shape[:-1]
     assert y.shape[-1] == 4
@@ -56,8 +75,11 @@ def test_causal_conv1d_is_causal_and_uses_effective_dilated_padding():
         use_alpha=False,
         kernel_initializer="ones",
     )
-    x = jnp.arange(1, 9, dtype=jnp.float32).reshape(1, 8, 1)
-    changed_future = x.at[:, 5:, :].set(10_000.0)
+    x_array = np.arange(1, 9, dtype=np.float32).reshape(1, 8, 1)
+    changed_array = x_array.copy()
+    changed_array[:, 5:, :] = 10_000.0
+    x = tensor(x_array)
+    changed_future = tensor(changed_array)
 
     y = layer(x)
     changed_y = layer(changed_future)
@@ -99,7 +121,7 @@ def test_dilation_aware_output_shape_matches_runtime(
         dilation_rate=(dilation_value,) * rank,
         use_bias=False,
     )
-    x = jnp.ones(input_shape, dtype=jnp.float32)
+    x = keras.ops.ones(input_shape, dtype="float32")
 
     assert tuple(layer(x).shape) == tuple(layer.compute_output_shape(input_shape))
 
@@ -131,41 +153,144 @@ def test_kernel_bank_expansion_is_rejected_without_mutation(layer_cls, input_sha
         kernel_initializer="ones",
     )
     first = layer_cls(**kwargs)
-    first(jnp.ones(input_shape))
+    first(keras.ops.ones(input_shape))
     before = np.asarray(first.kernel)
 
     compatible = layer_cls(**{**kwargs, "filters": 1})
-    compatible(jnp.ones(input_shape))
+    compatible(keras.ops.ones(input_shape))
     assert compatible.kernel is first.kernel
     assert any(variable is first.kernel for variable in compatible.trainable_weights)
 
     too_large = layer_cls(**{**kwargs, "filters": 4, "kernel_bank_size": 4})
     with pytest.raises(ValueError, match="cannot be expanded in place"):
-        too_large(jnp.ones(input_shape))
+        too_large(keras.ops.ones(input_shape))
 
     np.testing.assert_array_equal(np.asarray(first.kernel), before)
     assert first.kernel.shape == before.shape
 
 
+@pytest.mark.parametrize(
+    "layer_cls",
+    [
+        YatConv1D,
+        YatConv2D,
+        YatConv3D,
+        YatConvTranspose1D,
+        YatConvTranspose2D,
+        YatConvTranspose3D,
+    ],
+)
+def test_kernel_bank_capacity_smaller_than_filters_is_rejected_before_state(layer_cls):
+    layer_cls._KERNEL_BANKS.clear()
+    rank = 1 if "1D" in layer_cls.__name__ else 2 if "2D" in layer_cls.__name__ else 3
+
+    with pytest.raises(ValueError, match="must be greater than or equal to filters"):
+        layer_cls(
+            3,
+            (1,) * rank,
+            tie_kernel_bank=True,
+            kernel_bank_size=2,
+            kernel_bank_id="invalid-capacity",
+        )
+
+    assert not layer_cls._KERNEL_BANKS
+
+
+def test_tied_kernel_bank_functional_save_load_preserves_sharing_and_optimizer(tmp_path):
+    YatConv1D._KERNEL_BANKS.clear()
+    inputs = keras.Input((5, 1))
+    common = dict(
+        kernel_size=1,
+        tie_kernel_bank=True,
+        kernel_bank_size=3,
+        kernel_bank_id="functional-round-trip",
+        use_bias=False,
+        use_alpha=False,
+        kernel_initializer="ones",
+    )
+    first_layer = YatConv1D(2, name="bank_first", **common)
+    second_layer = YatConv1D(1, name="bank_second", **common)
+    outputs = keras.layers.Concatenate()([first_layer(inputs), second_layer(inputs)])
+    model = keras.Model(inputs, outputs)
+    model.compile(optimizer=keras.optimizers.SGD(0.01), loss="mse")
+    sample = tensor(np.arange(5, dtype=np.float32).reshape(1, 5, 1))
+    target = keras.ops.zeros((1, 5, 3))
+    model.train_on_batch(sample, target)
+    reference = np.asarray(model(sample))
+
+    assert first_layer.kernel is second_layer.kernel
+    assert len(first_layer.trainable_weights) == 1
+    assert len(second_layer.trainable_weights) == 1
+    assert len(model.trainable_variables) == 1
+    iterations = int(np.asarray(model.optimizer.iterations))
+
+    clone = keras.models.clone_model(model)
+    clone.set_weights(model.get_weights())
+    assert (
+        clone.get_layer("bank_first").kernel
+        is clone.get_layer("bank_second").kernel
+    )
+    np.testing.assert_allclose(np.asarray(clone(sample)), reference, rtol=1e-6)
+
+    path = tmp_path / "tied-bank.keras"
+    model.save(path)
+    restored = keras.models.load_model(path)
+    restored_first = restored.get_layer("bank_first")
+    restored_second = restored.get_layer("bank_second")
+
+    assert restored_first.kernel is restored_second.kernel
+    assert len(restored_first.trainable_weights) == 1
+    assert len(restored_second.trainable_weights) == 1
+    assert len(restored.trainable_variables) == 1
+    assert int(np.asarray(restored.optimizer.iterations)) == iterations
+    np.testing.assert_allclose(np.asarray(restored(sample)), reference, rtol=1e-6)
+    np.testing.assert_allclose(
+        np.asarray(restored_first.kernel), np.asarray(first_layer.kernel), rtol=1e-6
+    )
+
+
+@pytest.mark.parametrize(
+    "layer_cls",
+    [
+        YatConv1D,
+        YatConv2D,
+        YatConv3D,
+        YatConvTranspose1D,
+        YatConvTranspose2D,
+        YatConvTranspose3D,
+    ],
+)
 @pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
-def test_low_precision_exact_matches_are_finite_with_finite_gradients(dtype):
-    numeric_dtype = getattr(jnp, dtype)
-    query = jnp.asarray([[[0.5], [-0.25], [0.75]]], dtype=numeric_dtype)
-    kernel = jnp.reshape(query, (3, 1, 1))
-    conv = YatConv1D(
+def test_low_precision_exact_matches_are_finite_for_every_conv_family(
+    layer_cls, dtype
+):
+    rank = 1 if "1D" in layer_cls.__name__ else 2 if "2D" in layer_cls.__name__ else 3
+    input_shape = (1,) + (1,) * rank + (1,)
+    value = tensor(np.full(input_shape, 0.5), dtype)
+    layer = layer_cls(
         1,
-        3,
+        (1,) * rank,
         use_bias=False,
         use_alpha=False,
         dtype=dtype,
-        kernel_initializer="zeros",
     )
-    conv(query)
-    conv.kernel.assign(kernel)
 
-    conv_output = conv(query)
-    conv_grad = jax.grad(lambda value: jnp.sum(conv(value)))(query)
+    # The default orthogonal initializer must build on JAX low-precision
+    # policies without dispatching unsupported float16/bfloat16 LAPACK.
+    layer(value)
+    layer.kernel.assign(tensor(np.full(layer.kernel.shape, 0.5), dtype))
+    output = layer(value)
+    gradient = input_gradient(layer, value)
 
+    assert keras.backend.standardize_dtype(output.dtype) == dtype
+    assert np.all(np.isfinite(np.asarray(output)))
+    assert np.all(np.asarray(output) >= 0)
+    assert np.all(np.isfinite(np.asarray(gradient)))
+
+
+@pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
+def test_low_precision_embedding_exact_match_preserves_policy_and_gradients(dtype):
+    query = tensor([[0.5, -0.25, 0.75]], dtype)
     embed = YatEmbed(
         1,
         3,
@@ -173,31 +298,58 @@ def test_low_precision_exact_matches_are_finite_with_finite_gradients(dtype):
         dtype=dtype,
         embedding_initializer="zeros",
     )
-    embed(jnp.array([0]))
-    embed.embedding.assign(jnp.reshape(query, (1, 3)))
-    embed_query = jnp.reshape(query, (1, 3))
-    embed_output = embed.attend(embed_query)
-    embed_grad = jax.grad(lambda value: jnp.sum(embed.attend(value)))(embed_query)
+    embed(keras.ops.convert_to_tensor([0], dtype="int32"))
+    embed.embedding.assign(query)
+    output = embed.attend(query)
 
-    for value in (conv_output, conv_grad, embed_output, embed_grad):
-        array = np.asarray(value)
-        assert np.all(np.isfinite(array))
-    assert np.all(np.asarray(conv_output) >= 0)
-    assert np.all(np.asarray(embed_output) >= 0)
+    if BACKEND == "jax":
+        import jax
+        import jax.numpy as jnp
+
+        gradient = jax.grad(lambda x: jnp.sum(embed.attend(x)))(query)
+    elif BACKEND == "tensorflow":
+        tf = pytest.importorskip("tensorflow")
+        with tf.GradientTape() as tape:
+            tape.watch(query)
+            loss = tf.reduce_sum(embed.attend(query))
+        gradient = tape.gradient(loss, query)
+    else:
+        pytest.skip("gradient assertion is implemented for JAX and TensorFlow")
+
+    assert keras.backend.standardize_dtype(output.dtype) == dtype
+    assert np.all(np.isfinite(np.asarray(output)))
+    assert np.all(np.asarray(output) >= 0)
+    assert np.all(np.isfinite(np.asarray(gradient)))
 
 
 @pytest.mark.parametrize(
     ("dtype", "rtol", "atol"),
     [("float16", 3e-2, 3e-2), ("bfloat16", 8e-2, 8e-2)],
 )
-def test_low_precision_conv_and_embedding_track_fp32_off_collision(dtype, rtol, atol):
-    x32 = jnp.asarray([[[0.2], [-0.3], [0.4], [0.1]]], dtype=jnp.float32)
-    kernel32 = jnp.asarray([[[0.35]], [[-0.1]]], dtype=jnp.float32)
+@pytest.mark.parametrize(
+    "layer_cls",
+    [
+        YatConv1D,
+        YatConv2D,
+        YatConv3D,
+        YatConvTranspose1D,
+        YatConvTranspose2D,
+        YatConvTranspose3D,
+    ],
+)
+def test_low_precision_conv_families_track_fp32_off_collision(
+    layer_cls, dtype, rtol, atol
+):
+    rank = 1 if "1D" in layer_cls.__name__ else 2 if "2D" in layer_cls.__name__ else 3
+    input_shape = (1,) + (2,) * rank + (1,)
+    x32 = tensor(np.full(input_shape, 0.2))
+    kernel_shape = (1,) * rank + (1, 1)
+    kernel32 = tensor(np.full(kernel_shape, 0.35))
 
     def make_conv(policy):
-        layer = YatConv1D(
+        layer = layer_cls(
             1,
-            2,
+            (1,) * rank,
             use_bias=False,
             use_alpha=False,
             dtype=policy,
@@ -216,8 +368,14 @@ def test_low_precision_conv_and_embedding_track_fp32_off_collision(dtype, rtol, 
         atol=atol,
     )
 
-    embedding32 = jnp.asarray([[0.2, -0.1, 0.3], [-0.4, 0.25, 0.1]])
-    query32 = jnp.asarray([[0.15, 0.35, -0.2]])
+
+@pytest.mark.parametrize(
+    ("dtype", "rtol", "atol"),
+    [("float16", 3e-2, 3e-2), ("bfloat16", 8e-2, 8e-2)],
+)
+def test_low_precision_embedding_tracks_fp32_off_collision(dtype, rtol, atol):
+    embedding32 = tensor([[0.2, -0.1, 0.3], [-0.4, 0.25, 0.1]])
+    query32 = tensor([[0.15, 0.35, -0.2]])
 
     def make_embed(policy):
         layer = YatEmbed(
@@ -227,7 +385,7 @@ def test_low_precision_conv_and_embedding_track_fp32_off_collision(dtype, rtol, 
             dtype=policy,
             embedding_initializer="zeros",
         )
-        layer(jnp.array([0]))
+        layer(keras.ops.convert_to_tensor([0], dtype="int32"))
         layer.embedding.assign(ops_cast(embedding32, policy))
         return layer
 
@@ -242,8 +400,7 @@ def test_low_precision_conv_and_embedding_track_fp32_off_collision(dtype, rtol, 
 
 
 def ops_cast(value, dtype):
-    """Cast through JAX without importing backend-specific Keras internals."""
-    return jnp.asarray(value, dtype=getattr(jnp, dtype))
+    return keras.ops.cast(value, dtype)
 
 
 @pytest.mark.parametrize("layer", [YatEmbed(8, 4), MultiHeadYatAttention(4, 2)])
@@ -273,7 +430,7 @@ def test_registered_layers_clone_and_full_model_round_trip(tmp_path):
         name="yat_attention",
     )(embedded)
     model = keras.Model(inputs, outputs)
-    sample = jnp.asarray([[0, 1, 2]], dtype=jnp.int32)
+    sample = keras.ops.convert_to_tensor([[0, 1, 2]], dtype="int32")
     reference = np.asarray(model(sample))
 
     clone = keras.models.clone_model(model)
