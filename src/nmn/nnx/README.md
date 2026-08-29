@@ -752,21 +752,41 @@ _ = compiled_forward(model, x_example)  # Triggers compilation
 logits = compiled_forward(model, x_real)
 ```
 
-### 4. **Use BFloat16 for TPUs**
+### 4. **Choose a YatNMN Precision Mode for TPUs**
 
 ```python
-# Define model with bfloat16 computation
-model = OptimizedYATNet(
-    num_classes=10,
-    rngs=rngs
+# Reference behavior: full FP32 YAT-score evaluation.
+reference = YatNMN(128, 64, compute_mode="fp32", rngs=rngs)
+
+# Recommended TPU path: BF16 operands, FP32 dot/reduction accumulation.
+mixed = YatNMN(
+    128, 64,
+    dtype=jnp.bfloat16,
+    param_dtype=jnp.bfloat16,
+    compute_mode="mixed",
+    rngs=rngs,
 )
 
-# Cast inputs to bfloat16
-x_bf16 = x.astype(jnp.bfloat16)
+# Experimental strict-BF16 path. The distance floor protects near-collisions.
+strict = YatNMN(
+    128, 64,
+    dtype=jnp.bfloat16,
+    param_dtype=jnp.bfloat16,
+    compute_mode="bf16",
+    distance_floor=1e-3,
+    rngs=rngs,
+)
 
-# Forward pass uses bfloat16 internally
-logits = model(x_bf16, deterministic=True)
+logits = mixed(x.astype(jnp.bfloat16), deterministic=True)
 ```
+
+`mixed` avoids explicit full-array FP32 operand casts and uses
+`preferred_element_type=jnp.float32`; numerical-parity tests cover both FP16
+and BF16 operands. `bf16` uses a dimension-scaled form to keep intermediate
+values near unit scale. All modes support `fused=True` with matching forward
+and backward semantics; the unchanged default FP32 path keeps its optimized
+analytical VJP. Benchmark lowered HLO and step time on the actual TPU before
+choosing a deployment mode.
 
 ## Performance Tips
 
@@ -848,6 +868,8 @@ YatConv(
     dtype: Optional[Dtype] = None,
     param_dtype: Dtype = jnp.float32,
     precision: PrecisionLike = None,
+    compute_mode: str = 'fp32',
+    distance_floor: float = 0.0,
     epsilon: float = 1e-5,
     learnable_epsilon: bool = False,
     drop_rate: float = 0.0,

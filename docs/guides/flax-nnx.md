@@ -305,7 +305,57 @@ See the TPU ResNet example for a worked pattern.
 
 ---
 
-## 10. Lazy training (freeze kernel)
+## 10. YatNMN precision modes
+
+`YatNMN` keeps its established FP32 score computation by default, even when
+the layer output is BF16. TPU workloads can opt into two reduced-precision
+modes explicitly:
+
+```python
+import jax.numpy as jnp
+from flax import nnx
+from nmn.nnx import YatNMN
+
+reference = YatNMN(128, 64, compute_mode="fp32", rngs=nnx.Rngs(0))
+
+# BF16 operands with FP32 dot/reduction accumulation (recommended TPU mode).
+mixed = YatNMN(
+    128, 64,
+    dtype=jnp.bfloat16,
+    param_dtype=jnp.bfloat16,
+    compute_mode="mixed",
+    rngs=nnx.Rngs(0),
+)
+
+# Experimental strict-BF16, dimension-scaled score evaluation.
+strict = YatNMN(
+    128, 64,
+    dtype=jnp.bfloat16,
+    param_dtype=jnp.bfloat16,
+    compute_mode="bf16",
+    distance_floor=1e-3,
+    rngs=nnx.Rngs(0),
+)
+```
+
+`distance_floor` clamps the squared distance before adding `epsilon`; it is
+useful when BF16 rounding makes nearby inputs and kernels indistinguishable.
+The default is `0.0`, so `compute_mode="fp32"` remains backward compatible.
+All three modes work with `fused=True`. Reduced-precision or clamped execution
+recomputes the same mode-specific expression in the fused backward, including
+the clamp, to preserve standard/fused forward and gradient parity. The unchanged
+default FP32 path retains its optimized analytical VJP.
+
+`mixed` requests FP32 accumulation via JAX's `preferred_element_type` without
+materializing full FP32 copies of low-precision inputs and kernels. Both
+`jnp.float16` and `jnp.bfloat16` operands are covered by numerical-parity tests;
+BF16 is the recommended TPU storage/operand dtype. Confirm the final lowered
+HLO and performance on the target TPU, since CPU/GPU execution is not a
+substitute for a TPU profile.
+
+---
+
+## 11. Lazy training (freeze kernel)
 
 Pass `lazy=True` (alias: `freeze_kernel=True`) to freeze **only** the kernel.
 In NNX the kernel is then stored under a `FrozenParam` (a non-`nnx.Param`
@@ -338,11 +388,12 @@ only the scale/shift/`epsilon` adapt.
 
 ---
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 | Symptom                                  | Likely cause                                            | Fix                                                                |
 | ---------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------ |
 | `NaN` after first JIT compile            | `epsilon` too small relative to input scale             | `YatNMN(..., epsilon=1e-3)`                                        |
+| `NaN`/`Inf` in strict BF16 near `x ≈ W`   | Rounded distance is too close to zero                   | Set `distance_floor`, e.g. `YatNMN(..., compute_mode="bf16", distance_floor=1e-3)` |
 | `XlaRuntimeError` on TPU                 | Pallas kernel ran on a CPU/GPU runtime                  | Use standard `MultiHeadAttention` on CPU; pallas only on TPU/GPU   |
 | Slow first step, fast after              | Normal — JIT compile cost                               | Reuse the JIT-compiled function across steps                       |
 | Output range collapses to zero           | Inputs and weights nearly identical → numerator ≈ 0     | Add input normalization *before* first Yat layer                   |
@@ -350,7 +401,7 @@ only the scale/shift/`epsilon` adapt.
 
 ---
 
-## 12. Next steps
+## 13. Next steps
 
 - [Architecture & theory](../architecture.md)
 - [Flax Linen guide](flax-linen.md) — for legacy Linen codebases

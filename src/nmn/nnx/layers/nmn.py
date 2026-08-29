@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import math
 import threading
 import typing as tp
 
@@ -93,6 +94,13 @@ class YatNMN(Module):
     param_dtype: the dtype passed to parameter initializers (default: float32).
     precision: numerical precision of the computation see ``jax.lax.Precision``
       for details.
+    compute_mode: numerical mode for the YAT score. ``"fp32"`` preserves the
+      reference implementation, ``"mixed"`` keeps operands in ``dtype`` while
+      accumulating dot products and reductions in float32, and ``"bf16"`` uses
+      a dimension-scaled strict-BF16 formulation (default: ``"fp32"``).
+    distance_floor: non-negative lower bound applied to the squared distance
+      before epsilon is added. This is especially useful for near-collisions in
+      ``"bf16"`` mode (default: 0.0).
     kernel_init: initializer function for the weight matrix.
     bias_init: initializer function for the bias.
     alpha_init: initializer function for the learnable alpha (only used if constant_alpha is None).
@@ -140,6 +148,8 @@ class YatNMN(Module):
     dtype: tp.Optional[Dtype] = None,
     param_dtype: Dtype = jnp.float32,
     precision: PrecisionLike = None,
+    compute_mode: str = 'fp32',
+    distance_floor: float = 0.0,
     kernel_init: Initializer = default_kernel_init,
     bias_init: Initializer = default_bias_init,
     alpha_init: Initializer = default_alpha_init,
@@ -292,6 +302,18 @@ class YatNMN(Module):
     self.dtype = dtype
     self.param_dtype = param_dtype
     self.precision = precision
+    if compute_mode not in ('fp32', 'mixed', 'bf16'):
+      raise ValueError(
+        "compute_mode must be one of 'fp32', 'mixed', or 'bf16', "
+        f"got {compute_mode!r}"
+      )
+    distance_floor = float(distance_floor)
+    if not math.isfinite(distance_floor) or distance_floor < 0:
+      raise ValueError(
+        f"distance_floor must be finite and non-negative, got {distance_floor}"
+      )
+    self.compute_mode = compute_mode
+    self.distance_floor = distance_floor
     self.kernel_init = kernel_init
     self.bias_init = bias_init
     self.dot_general = dot_general
@@ -303,8 +325,12 @@ class YatNMN(Module):
     self.epsilon_param: nnx.Param[jax.Array] | None
     if learnable_epsilon:
       # Initialize so that softplus(raw) ≈ epsilon: raw = log(exp(eps) - 1)
-      raw_eps = jnp.log(jnp.exp(jnp.array(epsilon, dtype=param_dtype)) - 1.0)
-      self.epsilon_param = nnx.Param(raw_eps.reshape((1,)))
+      # Compute this in Python float precision before casting. Evaluating the
+      # inverse in bf16/fp16 rounds exp(1e-5) to 1 and produces ``-inf``.
+      raw_eps = epsilon + math.log(-math.expm1(-epsilon))
+      self.epsilon_param = nnx.Param(
+        jnp.asarray([raw_eps], dtype=param_dtype)
+      )
     else:
       self.epsilon_param = None
     self.spherical = spherical
@@ -383,62 +409,174 @@ class YatNMN(Module):
     else:
       eps = self.epsilon
 
-    # ── Fused path: custom_vjp saves only (x, W, dot, dist, bias, eps) ──
+    # ── Fused path: optimized/reference or exact mode-aware custom VJP ──
     if self.fused and not self.spherical:
       return _fused_yat_call(
         inputs, kernel, alpha, bias, eps,
         self._constant_alpha_value,
+        self.compute_mode, self.distance_floor, self.precision,
+        self.weight_normalized,
       )
 
     # ── Standard path ──────────────────────────────────────────────────
-    # Upcast to float32 for YAT score computation.
-    # YAT scores grow as O(dot²) — squaring causes overflow in bf16.
-    inputs_f32 = inputs.astype(jnp.float32)
-    kernel_f32 = kernel.astype(jnp.float32)
+    if self._constant_alpha_value is not None:
+      alpha_value = jnp.asarray(self._constant_alpha_value)
+    elif alpha is not None:
+      alpha_value = alpha
+    else:
+      alpha_value = jnp.ones((), dtype=inputs.dtype)
+    if bias is None:
+      bias_value = jnp.zeros((1,), dtype=inputs.dtype)
+    else:
+      bias_value = bias
+    eps_value = jnp.asarray(eps)
 
-    # Compute dot product: x · W (in f32)
-    y = self.dot_general(
-      inputs_f32,
-      kernel_f32,
-      (((inputs.ndim - 1,), (0,)), ((), ())),
-      precision=self.precision,
+    return _yat_value(
+      inputs,
+      kernel,
+      alpha_value,
+      bias_value,
+      eps_value,
+      bias is not None,
+      self.compute_mode,
+      self.distance_floor,
+      self.precision,
+      self.spherical,
+      self.weight_normalized,
+      self.dot_general,
     )
 
-    if self.spherical:
-      distances = jnp.maximum(2 - 2 * y, 0.0)
+
+def _yat_value(
+  x,
+  kernel,
+  alpha,
+  bias,
+  eps,
+  has_bias,
+  compute_mode,
+  distance_floor,
+  precision,
+  spherical=False,
+  weight_normalized=False,
+  dot_general=lax.dot_general,
+):
+  """Evaluate a YAT score using the requested numerical mode."""
+  output_dtype = x.dtype
+  dimension_numbers = (((x.ndim - 1,), (0,)), ((), ()))
+
+  if compute_mode == 'fp32':
+    x_compute = x.astype(jnp.float32)
+    kernel_compute = kernel.astype(jnp.float32)
+    accumulation_dtype = jnp.float32
+    dot = dot_general(
+      x_compute,
+      kernel_compute,
+      dimension_numbers,
+      precision=precision,
+    )
+  elif compute_mode == 'mixed':
+    x_compute = x
+    kernel_compute = kernel
+    accumulation_dtype = jnp.float32
+    dot = dot_general(
+      x_compute,
+      kernel_compute,
+      dimension_numbers,
+      precision=precision,
+      preferred_element_type=jnp.float32,
+    )
+  else:
+    # The strict-BF16 mode intentionally rounds products and reductions to BF16.
+    x_compute = x.astype(jnp.bfloat16)
+    kernel_compute = kernel.astype(jnp.bfloat16)
+    accumulation_dtype = jnp.bfloat16
+    dot = dot_general(
+      x_compute,
+      kernel_compute,
+      dimension_numbers,
+      precision=precision,
+    )
+
+  alpha_compute = alpha.astype(accumulation_dtype)
+  eps_compute = eps.astype(accumulation_dtype)
+  floor = jnp.asarray(distance_floor, dtype=accumulation_dtype)
+  bias_shape = (1,) * (dot.ndim - 1) + (-1,)
+  bias_compute = jnp.reshape(bias.astype(accumulation_dtype), bias_shape)
+
+  if spherical:
+    distances = jnp.maximum(
+      jnp.asarray(2, accumulation_dtype) - 2 * dot,
+      floor,
+    )
+    numerator = dot + bias_compute if has_bias else dot
+    result = alpha_compute * numerator ** 2 / (distances + eps_compute)
+  elif compute_mode == 'bf16':
+    # Dividing all reductions by d keeps BF16 intermediates near unit scale:
+    # d * (mean(xw) + b/d)^2 / (mean((x-w)^2) + epsilon/d).
+    width = jnp.asarray(x.shape[-1], dtype=accumulation_dtype)
+    mean_dot = dot / width
+    input_mean_square = jnp.sum(
+      x_compute * x_compute,
+      axis=-1,
+      keepdims=True,
+      dtype=accumulation_dtype,
+    ) / width
+    if weight_normalized:
+      kernel_mean_square = jnp.ones(
+        (1, kernel_compute.shape[-1]), dtype=accumulation_dtype
+      ) / width
     else:
-      inputs_squared_sum = jnp.sum(inputs_f32**2, axis=-1, keepdims=True)
+      kernel_mean_square = jnp.sum(
+        kernel_compute * kernel_compute,
+        axis=0,
+        keepdims=True,
+        dtype=accumulation_dtype,
+      ) / width
+    mean_distances = jnp.maximum(
+      input_mean_square + kernel_mean_square - 2 * mean_dot,
+      floor / width,
+    )
+    numerator = mean_dot + bias_compute / width if has_bias else mean_dot
+    result = (
+      alpha_compute * width * numerator ** 2
+      / (mean_distances + eps_compute / width)
+    )
+  else:
+    input_squared_sum = jnp.sum(
+      x_compute * x_compute,
+      axis=-1,
+      keepdims=True,
+      dtype=accumulation_dtype,
+    )
+    if weight_normalized:
+      kernel_squared_sum = jnp.ones(
+        (1, kernel_compute.shape[-1]), dtype=accumulation_dtype
+      )
+    else:
+      kernel_squared_sum = jnp.sum(
+        kernel_compute * kernel_compute,
+        axis=0,
+        keepdims=True,
+        dtype=accumulation_dtype,
+      )
+    distances = jnp.maximum(
+      input_squared_sum + kernel_squared_sum - 2 * dot,
+      floor,
+    )
+    numerator = dot + bias_compute if has_bias else dot
+    result = alpha_compute * numerator ** 2 / (distances + eps_compute)
 
-      if self.weight_normalized:
-        kernel_squared_sum = jnp.ones((1, kernel_f32.shape[-1]), dtype=jnp.float32)
-      else:
-        kernel_squared_sum = jnp.sum(kernel_f32**2, axis=0, keepdims=True)
-
-      distances = jnp.maximum(inputs_squared_sum + kernel_squared_sum - 2 * y, 0.0)
-
-    # Add bias (in f32)
-    if bias is not None:
-      y += jnp.reshape(bias.astype(jnp.float32), (1,) * (y.ndim - 1) + (-1,))
-
-    # YAT operation: (x · W)² / (||x - W||² + ε) — safe in f32
-    y = y ** 2 / (distances + eps)
-
-    # Apply alpha scaling
-    if self._constant_alpha_value is not None:
-      y = y * self._constant_alpha_value
-    elif alpha is not None:
-      y = y * alpha.astype(jnp.float32)
-
-    # Cast back to caller's dtype
-    return y.astype(inputs.dtype)
+  return result.astype(output_dtype)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Fused YatNMN kernel — unified custom_vjp for reduced activation memory
 #
-# Standard autodiff saves 5+ intermediates (dot, dot_sq, x_sq, w_sq, dist, out).
-# The fused version saves only (x, kernel, alpha, bias, eps, dot, dist) and
-# recomputes dot_sq, x_sq, w_sq during backward.
+# Standard autodiff saves the score intermediates. The fused version saves only
+# its five array operands and recomputes the exact mode-specific forward graph in
+# backward. This keeps the clamp derivative and BF16 rounding identical to the
+# standard implementation.
 #
 # Supports all combinations of: bias / no-bias, learnable / constant epsilon,
 # learnable / constant / no alpha.  Boolean flags via nondiff_argnums let JAX
@@ -446,7 +584,18 @@ class YatNMN(Module):
 # ══════════════════════════════════════════════════════════════════════════════
 
 
-def _fused_yat_call(inputs, kernel, alpha, bias, eps, constant_alpha_value):
+def _fused_yat_call(
+  inputs,
+  kernel,
+  alpha,
+  bias,
+  eps,
+  constant_alpha_value,
+  compute_mode,
+  distance_floor,
+  precision,
+  weight_normalized,
+):
   """Dispatch to unified fused forward."""
   # Alpha array + grad flag
   if constant_alpha_value is not None:
@@ -475,119 +624,212 @@ def _fused_yat_call(inputs, kernel, alpha, bias, eps, constant_alpha_value):
     e = jnp.array(eps, dtype=jnp.float32)
     has_eps_grad = False
 
-  return _fused_yat(inputs, kernel, a, b, e, has_alpha_grad, has_bias, has_eps_grad)
+  # Preserve the existing optimized analytical VJP for the default/reference
+  # configuration. Mode-aware or clamped execution uses the exact recomputing
+  # VJP below so its BF16 rounding and clamp derivative match standard autodiff.
+  if compute_mode == 'fp32' and distance_floor == 0.0:
+    return _fused_yat_fp32(
+      inputs, kernel, a, b, e, has_alpha_grad, has_bias, has_eps_grad
+    )
+
+  return _fused_yat(
+    inputs,
+    kernel,
+    a,
+    b,
+    e,
+    has_alpha_grad,
+    has_bias,
+    has_eps_grad,
+    compute_mode,
+    distance_floor,
+    precision,
+    weight_normalized,
+  )
 
 
 # ── Unified custom_vjp ──
 
 @functools.partial(jax.custom_vjp, nondiff_argnums=(5, 6, 7))
-def _fused_yat(x, kernel, alpha, bias, eps, has_alpha_grad, has_bias, has_eps_grad):
+def _fused_yat_fp32(
+  x, kernel, alpha, bias, eps, has_alpha_grad, has_bias, has_eps_grad
+):
   x_f32 = x.astype(jnp.float32)
-  w_f32 = kernel.astype(jnp.float32)
-  a_f32 = alpha.astype(jnp.float32)
-  dot = x_f32 @ w_f32
-  x_sq = jnp.sum(x_f32 ** 2, axis=-1, keepdims=True)
-  w_sq = jnp.sum(w_f32 ** 2, axis=0, keepdims=True)
-  dist = jnp.maximum(x_sq + w_sq - 2 * dot, 0.0) + eps.astype(jnp.float32)
-  num = dot + bias.astype(jnp.float32) if has_bias else dot
-  return (a_f32 * num ** 2 / dist).astype(x.dtype)
+  kernel_f32 = kernel.astype(jnp.float32)
+  alpha_f32 = alpha.astype(jnp.float32)
+  dot = x_f32 @ kernel_f32
+  input_squared_sum = jnp.sum(x_f32 ** 2, axis=-1, keepdims=True)
+  kernel_squared_sum = jnp.sum(kernel_f32 ** 2, axis=0, keepdims=True)
+  distance = jnp.maximum(
+    input_squared_sum + kernel_squared_sum - 2 * dot, 0.0
+  ) + eps.astype(jnp.float32)
+  numerator = dot + bias.astype(jnp.float32) if has_bias else dot
+  return (alpha_f32 * numerator ** 2 / distance).astype(x.dtype)
 
 
-def _fused_yat_fwd(x, kernel, alpha, bias, eps, has_alpha_grad, has_bias, has_eps_grad):
+def _fused_yat_fp32_fwd(
+  x, kernel, alpha, bias, eps, has_alpha_grad, has_bias, has_eps_grad
+):
   x_f32 = x.astype(jnp.float32)
-  w_f32 = kernel.astype(jnp.float32)
-  a_f32 = alpha.astype(jnp.float32)
-  e_f32 = eps.astype(jnp.float32)
-  dot = x_f32 @ w_f32
-  x_sq = jnp.sum(x_f32 ** 2, axis=-1, keepdims=True)
-  w_sq = jnp.sum(w_f32 ** 2, axis=0, keepdims=True)
-  dist = jnp.maximum(x_sq + w_sq - 2 * dot, 0.0) + e_f32
-  num = dot + bias.astype(jnp.float32) if has_bias else dot
-  out = (a_f32 * num ** 2 / dist).astype(x.dtype)
-  return out, (x, kernel, alpha, bias, eps, dot, dist)
+  kernel_f32 = kernel.astype(jnp.float32)
+  alpha_f32 = alpha.astype(jnp.float32)
+  eps_f32 = eps.astype(jnp.float32)
+  dot = x_f32 @ kernel_f32
+  input_squared_sum = jnp.sum(x_f32 ** 2, axis=-1, keepdims=True)
+  kernel_squared_sum = jnp.sum(kernel_f32 ** 2, axis=0, keepdims=True)
+  raw_distance = input_squared_sum + kernel_squared_sum - 2 * dot
+  distance = jnp.maximum(raw_distance, 0.0) + eps_f32
+  numerator = dot + bias.astype(jnp.float32) if has_bias else dot
+  out = (alpha_f32 * numerator ** 2 / distance).astype(x.dtype)
+  return out, (x, kernel, alpha, bias, eps, dot, raw_distance, distance)
 
 
-def _fused_yat_bwd(has_alpha_grad, has_bias, has_eps_grad, res, g):
-  x, kernel, alpha, bias, eps, dot, dist = res
-  a_f32 = alpha.astype(jnp.float32)
+def _fused_yat_fp32_bwd(has_alpha_grad, has_bias, has_eps_grad, res, g):
+  x, kernel, alpha, bias, eps, dot, raw_distance, distance = res
+  alpha_f32 = alpha.astype(jnp.float32)
   g_f32 = g.astype(jnp.float32)
+  numerator = dot + bias.astype(jnp.float32) if has_bias else dot
 
-  num = dot + bias.astype(jnp.float32) if has_bias else dot
+  # Match jnp.maximum(raw_distance, 0)'s subgradient exactly: zero below
+  # the floor, one above it, and one half at equality.
+  distance_clamp_grad = jnp.where(
+    raw_distance > 0.0,
+    1.0,
+    jnp.where(raw_distance < 0.0, 0.0, 0.5),
+  )
 
-  g_x, g_w = _fused_yat_grad_xw(x, kernel, num, dist, g, alpha_val=a_f32)
+  g_x, g_kernel = _fused_yat_fp32_grad_xw(
+    x, kernel, numerator, distance, distance_clamp_grad, g, alpha_f32
+  )
 
-  # Alpha grad
   if has_alpha_grad:
-    raw_yat = num ** 2 / dist
+    raw_yat = numerator ** 2 / distance
     g_alpha = jnp.sum(g_f32 * raw_yat).reshape(alpha.shape).astype(alpha.dtype)
   else:
     g_alpha = jnp.zeros_like(alpha)
 
-  # Bias grad
   if has_bias:
-    inv_dist = 1.0 / dist
-    g_bias = jnp.sum(g_f32 * a_f32 * 2 * num * inv_dist,
-                     axis=tuple(range(g.ndim - 1)))
+    g_bias = jnp.sum(
+      g_f32 * alpha_f32 * 2 * numerator / distance,
+      axis=tuple(range(g.ndim - 1)),
+    )
     if bias.shape != g_bias.shape:
       g_bias = jnp.sum(g_bias, keepdims=True)
     g_bias = g_bias.astype(bias.dtype)
   else:
     g_bias = jnp.zeros_like(bias)
 
-  # Epsilon grad
   if has_eps_grad:
-    inv_dist_sq = 1.0 / (dist ** 2)
-    g_eps = jnp.sum(g_f32 * (-a_f32 * num ** 2 * inv_dist_sq))
+    g_eps = jnp.sum(
+      g_f32 * (-alpha_f32 * numerator ** 2 / distance ** 2)
+    )
     g_eps = g_eps.reshape(eps.shape).astype(eps.dtype)
   else:
     g_eps = jnp.zeros_like(eps)
 
-  return g_x, g_w, g_alpha, g_bias, g_eps
+  return g_x, g_kernel, g_alpha, g_bias, g_eps
+
+
+def _fused_yat_fp32_grad_xw(
+  x, kernel, numerator, distance, distance_clamp_grad, g, alpha
+):
+  """Compute the optimized reference-mode input and kernel gradients."""
+  g_f32 = g.astype(jnp.float32)
+  x_f32 = x.astype(jnp.float32)
+  kernel_f32 = kernel.astype(jnp.float32)
+  inverse_distance = 1.0 / distance
+  g_numerator = g_f32 * alpha * 2 * numerator * inverse_distance
+  g_distance = (
+    g_f32 * -alpha * numerator ** 2 * inverse_distance ** 2
+  )
+  g_distance = g_distance * distance_clamp_grad
+  g_dot = g_numerator - 2 * g_distance
+  g_distance_sum = jnp.sum(g_distance, axis=-1, keepdims=True)
+  g_x = g_dot @ kernel_f32.T + 2 * x_f32 * g_distance_sum
+
+  x_flat = x_f32.reshape(-1, x_f32.shape[-1])
+  g_dot_flat = g_dot.reshape(-1, g_dot.shape[-1])
+  g_distance_flat = g_distance.reshape(-1, g_distance.shape[-1])
+  g_kernel = x_flat.T @ g_dot_flat
+  g_kernel += 2 * kernel_f32 * jnp.sum(
+    g_distance_flat, axis=0, keepdims=True
+  )
+  return g_x.astype(x.dtype), g_kernel.astype(kernel.dtype)
+
+
+_fused_yat_fp32.defvjp(_fused_yat_fp32_fwd, _fused_yat_fp32_bwd)
+
+
+@functools.partial(jax.custom_vjp, nondiff_argnums=(5, 6, 7, 8, 9, 10, 11))
+def _fused_yat(
+  x,
+  kernel,
+  alpha,
+  bias,
+  eps,
+  has_alpha_grad,
+  has_bias,
+  has_eps_grad,
+  compute_mode,
+  distance_floor,
+  precision,
+  weight_normalized,
+):
+  return _yat_value(
+    x, kernel, alpha, bias, eps, has_bias, compute_mode, distance_floor,
+    precision, False, weight_normalized,
+  )
+
+
+def _fused_yat_fwd(
+  x,
+  kernel,
+  alpha,
+  bias,
+  eps,
+  has_alpha_grad,
+  has_bias,
+  has_eps_grad,
+  compute_mode,
+  distance_floor,
+  precision,
+  weight_normalized,
+):
+  out = _yat_value(
+    x, kernel, alpha, bias, eps, has_bias, compute_mode, distance_floor,
+    precision, False, weight_normalized,
+  )
+  return out, (x, kernel, alpha, bias, eps)
+
+
+def _fused_yat_bwd(
+  has_alpha_grad,
+  has_bias,
+  has_eps_grad,
+  compute_mode,
+  distance_floor,
+  precision,
+  weight_normalized,
+  res,
+  g,
+):
+  x, kernel, alpha, bias, eps = res
+
+  def forward(x, kernel, alpha, bias, eps):
+    return _yat_value(
+      x, kernel, alpha, bias, eps, has_bias, compute_mode, distance_floor,
+      precision, False, weight_normalized,
+    )
+
+  _, pullback = jax.vjp(forward, x, kernel, alpha, bias, eps)
+  g_x, g_kernel, g_alpha, g_bias, g_eps = pullback(g)
+  if not has_alpha_grad:
+    g_alpha = jnp.zeros_like(alpha)
+  if not has_bias:
+    g_bias = jnp.zeros_like(bias)
+  if not has_eps_grad:
+    g_eps = jnp.zeros_like(eps)
+  return g_x, g_kernel, g_alpha, g_bias, g_eps
 
 
 _fused_yat.defvjp(_fused_yat_fwd, _fused_yat_bwd)
-
-
-# ── Shared gradient computation ──
-
-def _fused_yat_grad_xw(x, kernel, num, dist, g, alpha_val):
-  """Compute gradients for x and kernel.
-
-  out = alpha * num^2 / dist,  where num = dot + bias (or just dot)
-  dist = ||x||^2 + ||W||^2 - 2*(x@W) + eps
-
-  Partials (holding other intermediates constant):
-    d_out/d_num  = alpha * 2*num / dist
-    d_out/d_dist = -alpha * num^2 / dist^2
-
-  The dist→dot path (-2) is handled separately in the gradient assembly.
-  """
-  g_f32 = g.astype(jnp.float32)
-  x_f32 = x.astype(jnp.float32)
-  w_f32 = kernel.astype(jnp.float32)
-
-  num_sq = num ** 2
-  inv_dist = 1.0 / dist
-  inv_dist_sq = inv_dist ** 2
-
-  d_out_d_num = alpha_val * 2 * num * inv_dist
-  d_out_d_dist = -alpha_val * num_sq * inv_dist_sq
-
-  g_num = g_f32 * d_out_d_num
-  g_dist = g_f32 * d_out_d_dist
-
-  # Total dot gradient = through numerator (d_num/d_dot=1) + through dist (d_dist/d_dot=-2)
-  g_dot_total = g_num + g_dist * (-2)
-
-  # Grad x: through dot + through x_sq in dist
-  g_dist_summed = jnp.sum(g_dist, axis=-1, keepdims=True)
-  g_x = g_dot_total @ w_f32.T + g_dist_summed * (2 * x_f32)
-
-  # Grad kernel: through dot + through w_sq in dist
-  x_flat = x_f32.reshape(-1, x_f32.shape[-1])
-  g_dot_flat = g_dot_total.reshape(-1, g_dot_total.shape[-1])
-  g_dist_flat = g_dist.reshape(-1, g_dist.shape[-1])
-  g_w = x_flat.T @ g_dot_flat
-  g_w += 2 * w_f32 * jnp.sum(g_dist_flat, axis=0, keepdims=True)
-
-  return g_x.astype(x.dtype), g_w.astype(kernel.dtype)
