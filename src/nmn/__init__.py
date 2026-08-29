@@ -24,8 +24,9 @@ def doctor():
     """
     from nmn import cli
 
-    print(cli._render_doctor())
-    return cli._doctor_report()
+    report = cli._doctor_report()
+    print(cli._render_doctor(report))
+    return report
 
 
 __all__ = [

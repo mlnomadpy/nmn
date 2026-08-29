@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import importlib
+import json
+import os
+import signal
+import subprocess
 import sys
 
 import pytest
@@ -259,6 +263,125 @@ def test_doctor_lists_all_backends(capsys):
     assert "Python" in out
 
 
+# ---------------------------------------------------------------------------
+# Doctor isolation: optional backends cannot crash or hang the caller.
+# ---------------------------------------------------------------------------
+
+def _probe_result(*, returncode=0, stdout="", stderr=""):
+    return subprocess.CompletedProcess(
+        args=[sys.executable],
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+
+def test_doctor_probe_success_ignores_backend_output(monkeypatch):
+    marker = cli._DOCTOR_PROBE_MARKER
+    completed = _probe_result(
+        stdout=f"backend initialization message\n{marker}{json.dumps('2.4.1')}\n"
+    )
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return completed
+
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    assert cli._probe_backend(["first", "second.core"]) == "2.4.1"
+    command, kwargs = calls[0]
+    assert command[:3] == [sys.executable, "-c", cli._DOCTOR_PROBE_SCRIPT]
+    assert json.loads(command[3]) == ["first", "second.core"]
+    assert kwargs["timeout"] == cli._DOCTOR_PROBE_TIMEOUT_SECONDS
+    assert kwargs["capture_output"] is True
+    assert kwargs["check"] is False
+
+
+def test_doctor_probe_missing_import_is_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        cli.subprocess,
+        "run",
+        lambda *args, **kwargs: _probe_result(
+            returncode=1,
+            stderr="ModuleNotFoundError: No module named 'optional_backend'",
+        ),
+    )
+    assert cli._probe_backend(["optional_backend"]) is None
+
+
+def test_doctor_probe_python_exception_is_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        cli.subprocess,
+        "run",
+        lambda *args, **kwargs: _probe_result(
+            returncode=1, stderr="RuntimeError: backend initialization failed"
+        ),
+    )
+    assert cli._probe_backend(["broken_backend"]) is None
+
+
+def test_doctor_probe_timeout_is_unavailable(monkeypatch):
+    def time_out(*args, **kwargs):
+        raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])
+
+    monkeypatch.setattr(cli.subprocess, "run", time_out)
+    assert cli._probe_backend(["hanging_backend"]) is None
+
+
+def test_doctor_probe_nonzero_exit_is_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        cli.subprocess,
+        "run",
+        lambda *args, **kwargs: _probe_result(returncode=23),
+    )
+    assert cli._probe_backend(["exiting_backend"]) is None
+
+
+def test_doctor_probe_native_abort_is_unavailable(monkeypatch):
+    # On POSIX, a negative return code identifies the terminating signal.  A
+    # native extension abort therefore remains data in the parent pytest
+    # process rather than aborting pytest itself.
+    monkeypatch.setattr(
+        cli.subprocess,
+        "run",
+        lambda *args, **kwargs: _probe_result(returncode=-signal.SIGABRT),
+    )
+    assert cli._probe_backend(["aborting_backend"]) is None
+
+
+def test_doctor_probe_really_isolates_signal_termination(tmp_path, monkeypatch):
+    probe = tmp_path / "signal_backend.py"
+    probe.write_text(
+        "import os\nimport signal\nos.kill(os.getpid(), signal.SIGTERM)\n",
+        encoding="utf-8",
+    )
+    existing = os.environ.get("PYTHONPATH")
+    pythonpath = str(tmp_path)
+    if existing:
+        pythonpath += os.pathsep + existing
+    monkeypatch.setenv("PYTHONPATH", pythonpath)
+
+    assert cli._probe_backend(["signal_backend"]) is None
+
+
+def test_doctor_report_preserves_public_shape(monkeypatch):
+    versions = iter(["1", "2", "4", None, "6"])
+    monkeypatch.setattr(cli, "_probe_backend", lambda probes: next(versions))
+
+    report = cli._doctor_report()
+
+    assert list(report) == ["torch", "nnx", "linen", "keras", "tf", "mlx"]
+    assert report == {
+        "torch": "1",
+        "nnx": "2",
+        "linen": "2",
+        "keras": "4",
+        "tf": None,
+        "mlx": "6",
+    }
+
+
 def test_examples_points_to_examples_md(capsys):
     assert cli.main(["examples"]) == 0
     out = capsys.readouterr().out
@@ -288,3 +411,36 @@ def test_nmn_doctor_returns_dict(capsys):
     # values are either a version string or None; never raises on missing.
     for value in report.values():
         assert value is None or isinstance(value, str)
+
+
+def test_nmn_doctor_probes_once_and_renders_same_report(monkeypatch, capsys):
+    import nmn
+
+    # ``test_cli_import_is_light`` deliberately reloads this module, so patch
+    # the currently registered instance used by ``nmn.doctor``.
+    active_cli = nmn.cli
+
+    expected = {
+        "torch": "2.0",
+        "nnx": None,
+        "linen": None,
+        "keras": None,
+        "tf": None,
+        "mlx": None,
+    }
+    calls = 0
+
+    def fake_report():
+        nonlocal calls
+        calls += 1
+        return expected
+
+    monkeypatch.setattr(active_cli, "_doctor_report", fake_report)
+
+    assert nmn.doctor() is expected
+    output = capsys.readouterr().out
+    assert calls == 1
+    assert "torch  PyTorch" in output
+    assert "OK       version 2.0" in output
+    assert "nnx    Flax NNX" in output
+    assert "MISSING" in output

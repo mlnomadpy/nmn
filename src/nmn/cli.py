@@ -2,8 +2,9 @@
 
 This module is deliberately *import-light*: importing ``nmn.cli`` must NOT
 import any heavy framework (torch / jax / flax / tensorflow / keras / mlx).
-Only the :func:`doctor` command attempts framework imports, each guarded in a
-``try``/``except`` so a missing backend never raises.
+Only the :func:`doctor` command attempts framework imports.  Each backend is
+probed in a bounded child process so a missing, hanging, or natively crashing
+backend cannot take down the CLI.
 
 Entry points::
 
@@ -17,10 +18,11 @@ terminal and greppable by coding agents.
 from __future__ import annotations
 
 import argparse
-import importlib
+import json
 import platform
+import subprocess
 import sys
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 
 # ---------------------------------------------------------------------------
 # Static metadata (kept here so the CLI needs no heavy imports)
@@ -97,6 +99,24 @@ _ALIASES = {
     "tensorflow": "tf",
     "mlx": "mlx",
 }
+
+# Backend imports are deliberately performed in a fresh interpreter.  Some
+# optional runtimes initialise native accelerators at import time and can abort
+# the process before Python gets a chance to raise an exception.  The marker
+# lets us ignore any informational output emitted by a backend during import.
+_DOCTOR_PROBE_MARKER = "__NMN_DOCTOR_RESULT__="
+_DOCTOR_PROBE_TIMEOUT_SECONDS = 15.0
+_DOCTOR_PROBE_SCRIPT = f"""\
+import importlib
+import json
+import sys
+
+version = None
+for module_name in json.loads(sys.argv[1]):
+    module = importlib.import_module(module_name)
+    version = getattr(module, "__version__", "unknown")
+print({_DOCTOR_PROBE_MARKER!r} + json.dumps(str(version)))
+"""
 
 
 def _version() -> str:
@@ -312,26 +332,57 @@ Lazy YatNMN (freeze ONLY the kernel; bias / alpha / epsilon stay trainable):
 """
 
 
+def _probe_backend(probes: Sequence[str]) -> Optional[str]:
+    """Return a backend version from an isolated import probe.
+
+    ``None`` covers every unavailable state: a normal import error, another
+    Python exception, a non-zero child exit, a signal/native abort, malformed
+    probe output, or an import that exceeds the timeout.  Diagnostics should
+    never make the parent process less reliable than the package it diagnoses.
+    """
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-c", _DOCTOR_PROBE_SCRIPT, json.dumps(list(probes))],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=_DOCTOR_PROBE_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    if completed.returncode != 0:
+        return None
+
+    for line in reversed(completed.stdout.splitlines()):
+        if not line.startswith(_DOCTOR_PROBE_MARKER):
+            continue
+        try:
+            version = json.loads(line[len(_DOCTOR_PROBE_MARKER) :])
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None
+        return version if isinstance(version, str) else None
+    return None
+
+
 def _doctor_report() -> Dict[str, Optional[str]]:
     """Probe each backend; return {framework: version_or_None}. Never raises."""
     result: Dict[str, Optional[str]] = {}
+    # NNX and Linen intentionally share the same JAX/Flax dependency probe.
+    # Reuse identical results so diagnostics do not initialise the same heavy
+    # runtime in two separate processes.
+    cache: Dict[tuple[str, ...], Optional[str]] = {}
     for key, meta in FRAMEWORKS.items():
-        version: Optional[str] = None
-        ok = True
-        for mod_name in meta["probes"]:
-            try:
-                mod = importlib.import_module(mod_name)
-                version = getattr(mod, "__version__", "unknown")
-            except Exception:
-                ok = False
-                version = None
-                break
-        result[key] = version if ok else None
+        probes = tuple(meta["probes"])
+        if probes not in cache:
+            cache[probes] = _probe_backend(probes)
+        result[key] = cache[probes]
     return result
 
 
-def _render_doctor() -> str:
-    report = _doctor_report()
+def _render_doctor(report: Optional[Dict[str, Optional[str]]] = None) -> str:
+    if report is None:
+        report = _doctor_report()
     lines: List[str] = []
     lines.append(f"nmn {_version()}")
     lines.append(f"Python {platform.python_version()} ({sys.executable})")
