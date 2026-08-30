@@ -13,13 +13,15 @@ from nmn.keras.attention import (
     MultiHeadYatAttention,
 )
 
+to_numpy = keras.ops.convert_to_numpy
+
 
 class TestAttentionFunctions:
     def test_normalize_qk(self):
         q = np.random.randn(2, 5, 4, 8).astype(np.float32)
         k = np.random.randn(2, 5, 4, 8).astype(np.float32)
         q_n, k_n = normalize_qk(q, k)
-        q_norms = np.sqrt(np.sum(np.array(q_n) ** 2, axis=-1))
+        q_norms = np.sqrt(np.sum(to_numpy(q_n) ** 2, axis=-1))
         np.testing.assert_allclose(q_norms, np.ones_like(q_norms), atol=1e-5)
 
     def test_attention_weights_shape(self):
@@ -31,7 +33,7 @@ class TestAttentionFunctions:
     def test_attention_weights_sum_to_one(self):
         q = np.random.randn(2, 5, 4, 8).astype(np.float32)
         k = np.random.randn(2, 7, 4, 8).astype(np.float32)
-        weights = np.array(yat_attention_weights(q, k))
+        weights = to_numpy(yat_attention_weights(q, k))
         sums = weights.sum(axis=-1)
         np.testing.assert_allclose(sums, np.ones_like(sums), atol=1e-5)
 
@@ -46,7 +48,7 @@ class TestAttentionFunctions:
         q = np.random.randn(2, 5, 4, 8).astype(np.float32)
         k = np.random.randn(2, 7, 4, 8).astype(np.float32)
         v = np.random.randn(2, 7, 4, 8).astype(np.float32)
-        out = np.array(yat_attention(q, k, v))
+        out = to_numpy(yat_attention(q, k, v))
         assert not np.any(np.isnan(out))
 
     def test_attention_normalized_shape(self):
@@ -60,7 +62,7 @@ class TestAttentionFunctions:
         q = np.random.randn(2, 5, 4, 8).astype(np.float32)
         k = np.random.randn(2, 7, 4, 8).astype(np.float32)
         v = np.random.randn(2, 7, 4, 8).astype(np.float32)
-        out = np.array(yat_attention(q, k, v, spherical=True))
+        out = to_numpy(yat_attention(q, k, v, spherical=True))
         assert not np.any(np.isnan(out))
 
 
@@ -81,25 +83,25 @@ class TestMultiHeadYatAttention:
     def test_no_nan(self):
         attn = MultiHeadYatAttention(embed_dim=32, num_heads=4)
         x = np.random.randn(2, 10, 32).astype(np.float32)
-        out = np.array(attn(x))
+        out = to_numpy(attn(x))
         assert not np.any(np.isnan(out))
 
     def test_constant_alpha(self):
         attn = MultiHeadYatAttention(embed_dim=32, num_heads=4, constant_alpha=True)
         x = np.random.randn(2, 10, 32).astype(np.float32)
-        out = np.array(attn(x))
+        out = to_numpy(attn(x))
         assert not np.any(np.isnan(out))
 
     def test_no_alpha(self):
         attn = MultiHeadYatAttention(embed_dim=32, num_heads=4, use_alpha=False)
         x = np.random.randn(2, 10, 32).astype(np.float32)
-        out = np.array(attn(x))
+        out = to_numpy(attn(x))
         assert not np.any(np.isnan(out))
 
     def test_no_bias(self):
         attn = MultiHeadYatAttention(embed_dim=32, num_heads=4, use_bias=False)
         x = np.random.randn(2, 10, 32).astype(np.float32)
-        out = np.array(attn(x))
+        out = to_numpy(attn(x))
         assert not np.any(np.isnan(out))
 
     def test_invalid_embed_dim(self):

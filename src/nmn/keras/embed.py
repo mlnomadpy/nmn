@@ -13,7 +13,11 @@ from keras.src import initializers, ops
 from keras.src.layers.layer import Layer
 from keras.src.saving.object_registration import register_keras_serializable
 
-from ._yat_core import stable_yat_ratio
+from ._yat_core import (
+    reduction_safe_upcast,
+    saturating_downcast,
+    stable_yat_ratio,
+)
 
 __all__ = ["YatEmbed"]
 
@@ -115,7 +119,9 @@ class YatEmbed(Layer):
         if not self.built:
             self.build()
 
-        embedding = self.embedding
+        output_dtype = query.dtype
+        query = reduction_safe_upcast(query)
+        embedding = reduction_safe_upcast(self.embedding)
 
         if self.spherical:
             query = query / (
@@ -136,14 +142,14 @@ class YatEmbed(Layer):
             )
             distances = query_sq + embed_sq - 2.0 * y
 
-        y = stable_yat_ratio(y, distances, self.epsilon)
+        y = stable_yat_ratio(y, distances, self.epsilon, output_dtype="float32")
 
         if self._constant_alpha_value is not None:
             y = y * self._constant_alpha_value
         elif self.alpha is not None:
-            y = y * self.alpha
+            y = y * reduction_safe_upcast(self.alpha)
 
-        return y
+        return saturating_downcast(y, output_dtype)
 
     def compute_output_shape(self, input_shape):
         return input_shape + (self.features,)

@@ -30,6 +30,11 @@ def tensor(value, dtype="float32"):
     return keras.ops.convert_to_tensor(np.asarray(value), dtype=dtype)
 
 
+def to_numpy(value, dtype=None):
+    array = keras.ops.convert_to_numpy(value)
+    return np.asarray(array, dtype=dtype) if dtype is not None else array
+
+
 def input_gradient(layer, value):
     if BACKEND == "jax":
         import jax
@@ -64,8 +69,8 @@ def test_grouped_convolutions_have_per_group_patch_norms_and_gradients(
 
     assert y.shape[:-1] == x.shape[:-1]
     assert y.shape[-1] == 4
-    assert np.all(np.isfinite(np.asarray(y)))
-    assert np.all(np.isfinite(np.asarray(dx)))
+    assert np.all(np.isfinite(to_numpy(y)))
+    assert np.all(np.isfinite(to_numpy(dx)))
 
 
 def test_causal_conv1d_is_causal_and_uses_effective_dilated_padding():
@@ -88,7 +93,7 @@ def test_causal_conv1d_is_causal_and_uses_effective_dilated_padding():
     changed_y = layer(changed_future)
 
     assert y.shape == (1, 8, 1)
-    np.testing.assert_allclose(np.asarray(y[:, :5]), np.asarray(changed_y[:, :5]))
+    np.testing.assert_allclose(to_numpy(y[:, :5]), to_numpy(changed_y[:, :5]))
     assert layer.compute_output_shape((None, None, 1)) == (None, None, 1)
 
 
@@ -157,7 +162,7 @@ def test_kernel_bank_expansion_is_rejected_without_mutation(layer_cls, input_sha
     )
     first = layer_cls(**kwargs)
     first(keras.ops.ones(input_shape))
-    before = np.asarray(first.kernel)
+    before = to_numpy(first.kernel)
 
     compatible = layer_cls(**{**kwargs, "filters": 1})
     compatible(keras.ops.ones(input_shape))
@@ -168,7 +173,7 @@ def test_kernel_bank_expansion_is_rejected_without_mutation(layer_cls, input_sha
     with pytest.raises(ValueError, match="cannot be expanded in place"):
         too_large(keras.ops.ones(input_shape))
 
-    np.testing.assert_array_equal(np.asarray(first.kernel), before)
+    np.testing.assert_array_equal(to_numpy(first.kernel), before)
     assert first.kernel.shape == before.shape
 
 
@@ -219,13 +224,13 @@ def test_tied_kernel_bank_functional_save_load_preserves_sharing_and_optimizer(t
     sample = tensor(np.arange(5, dtype=np.float32).reshape(1, 5, 1))
     target = keras.ops.zeros((1, 5, 3))
     model.train_on_batch(sample, target)
-    reference = np.asarray(model(sample))
+    reference = to_numpy(model(sample))
 
     assert first_layer.kernel is second_layer.kernel
     assert len(first_layer.trainable_weights) == 1
     assert len(second_layer.trainable_weights) == 1
     assert len(model.trainable_variables) == 1
-    iterations = int(np.asarray(model.optimizer.iterations))
+    iterations = int(to_numpy(model.optimizer.iterations))
 
     clone = keras.models.clone_model(model)
     clone.set_weights(model.get_weights())
@@ -233,7 +238,7 @@ def test_tied_kernel_bank_functional_save_load_preserves_sharing_and_optimizer(t
         clone.get_layer("bank_first").kernel
         is clone.get_layer("bank_second").kernel
     )
-    np.testing.assert_allclose(np.asarray(clone(sample)), reference, rtol=1e-6)
+    np.testing.assert_allclose(to_numpy(clone(sample)), reference, rtol=1e-6)
 
     path = tmp_path / "tied-bank.keras"
     model.save(path)
@@ -245,10 +250,10 @@ def test_tied_kernel_bank_functional_save_load_preserves_sharing_and_optimizer(t
     assert len(restored_first.trainable_weights) == 1
     assert len(restored_second.trainable_weights) == 1
     assert len(restored.trainable_variables) == 1
-    assert int(np.asarray(restored.optimizer.iterations)) == iterations
-    np.testing.assert_allclose(np.asarray(restored(sample)), reference, rtol=1e-6)
+    assert int(to_numpy(restored.optimizer.iterations)) == iterations
+    np.testing.assert_allclose(to_numpy(restored(sample)), reference, rtol=1e-6)
     np.testing.assert_allclose(
-        np.asarray(restored_first.kernel), np.asarray(first_layer.kernel), rtol=1e-6
+        to_numpy(restored_first.kernel), to_numpy(first_layer.kernel), rtol=1e-6
     )
 
 
@@ -345,9 +350,9 @@ def test_low_precision_exact_matches_are_finite_for_every_conv_family(
     gradient = input_gradient(layer, value)
 
     assert keras.backend.standardize_dtype(output.dtype) == dtype
-    assert np.all(np.isfinite(np.asarray(output)))
-    assert np.all(np.asarray(output) >= 0)
-    assert np.all(np.isfinite(np.asarray(gradient)))
+    assert np.all(np.isfinite(to_numpy(output)))
+    assert np.all(to_numpy(output) >= 0)
+    assert np.all(np.isfinite(to_numpy(gradient)))
 
 
 @pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
@@ -379,9 +384,9 @@ def test_low_precision_embedding_exact_match_preserves_policy_and_gradients(dtyp
         pytest.skip("gradient assertion is implemented for JAX and TensorFlow")
 
     assert keras.backend.standardize_dtype(output.dtype) == dtype
-    assert np.all(np.isfinite(np.asarray(output)))
-    assert np.all(np.asarray(output) >= 0)
-    assert np.all(np.isfinite(np.asarray(gradient)))
+    assert np.all(np.isfinite(to_numpy(output)))
+    assert np.all(to_numpy(output) >= 0)
+    assert np.all(np.isfinite(to_numpy(gradient)))
 
 
 @pytest.mark.skipif(BACKEND != "jax", reason="JAX cotangent regression")
@@ -398,7 +403,7 @@ def test_embed_shaped_exact_collision_reduces_epsilon_gradient_before_clipping(d
     gradient = jax.grad(lambda eps: jnp.sum(stable_yat_ratio(dot, distance, eps)))(
         epsilon
     )
-    gradient32 = np.asarray(gradient, dtype=np.float32)
+    gradient32 = to_numpy(gradient, dtype=np.float32)
 
     assert gradient.shape == epsilon.shape
     assert np.all(np.isfinite(gradient32))
@@ -406,7 +411,7 @@ def test_embed_shaped_exact_collision_reduces_epsilon_gradient_before_clipping(d
     if dtype == "float16":
         np.testing.assert_array_equal(gradient32, np.asarray(-65504.0))
     else:
-        epsilon32 = np.asarray(epsilon, dtype=np.float32)
+        epsilon32 = to_numpy(epsilon, dtype=np.float32)
         expected = -dot.size * 0.25 / np.square(epsilon32)
         np.testing.assert_allclose(gradient32, expected, rtol=2e-2)
 
@@ -446,8 +451,8 @@ def test_conv_exact_collision_has_finite_learnable_epsilon_gradient(dtype):
     gradient = jax.grad(loss)(trainable_values[epsilon_index])
 
     assert gradient.shape == layer.epsilon_param.shape
-    assert np.all(np.isfinite(np.asarray(gradient, dtype=np.float32)))
-    assert np.all(np.asarray(gradient, dtype=np.float32) < 0)
+    assert np.all(np.isfinite(to_numpy(gradient, dtype=np.float32)))
+    assert np.all(to_numpy(gradient, dtype=np.float32) < 0)
 
 
 @pytest.mark.parametrize(
@@ -490,8 +495,8 @@ def test_low_precision_conv_families_track_fp32_off_collision(
     conv32 = make_conv("float32")
     conv_low = make_conv(dtype)
     np.testing.assert_allclose(
-        np.asarray(conv_low(ops_cast(x32, dtype))),
-        np.asarray(conv32(x32)),
+        to_numpy(conv_low(ops_cast(x32, dtype))),
+        to_numpy(conv32(x32)),
         rtol=rtol,
         atol=atol,
     )
@@ -520,8 +525,8 @@ def test_low_precision_embedding_tracks_fp32_off_collision(dtype, rtol, atol):
     embed32 = make_embed("float32")
     embed_low = make_embed(dtype)
     np.testing.assert_allclose(
-        np.asarray(embed_low.attend(ops_cast(query32, dtype))),
-        np.asarray(embed32.attend(query32)),
+        to_numpy(embed_low.attend(ops_cast(query32, dtype))),
+        to_numpy(embed32.attend(query32)),
         rtol=rtol,
         atol=atol,
     )
@@ -559,16 +564,16 @@ def test_registered_layers_clone_and_full_model_round_trip(tmp_path):
     )(embedded)
     model = keras.Model(inputs, outputs)
     sample = keras.ops.convert_to_tensor([[0, 1, 2]], dtype="int32")
-    reference = np.asarray(model(sample))
+    reference = to_numpy(model(sample))
 
     clone = keras.models.clone_model(model)
     clone.set_weights(model.get_weights())
-    np.testing.assert_allclose(np.asarray(clone(sample)), reference, rtol=1e-6)
+    np.testing.assert_allclose(to_numpy(clone(sample)), reference, rtol=1e-6)
 
     path = tmp_path / "registered.keras"
     model.save(path)
     restored = keras.models.load_model(path)
-    np.testing.assert_allclose(np.asarray(restored(sample)), reference, rtol=1e-6)
+    np.testing.assert_allclose(to_numpy(restored(sample)), reference, rtol=1e-6)
     assert restored.get_layer("yat_embed").constant_alpha is True
     assert restored.get_layer("yat_embed").dtype_policy.name == "float32"
     assert restored.get_layer("yat_attention").constant_alpha == 1.25

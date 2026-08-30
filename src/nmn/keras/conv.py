@@ -15,7 +15,7 @@ from keras.src.ops.operation_utils import compute_conv_output_shape
 from keras.src.saving.object_registration import register_keras_serializable
 from keras.src.saving.serialization_lib import deserialize_keras_object
 
-from ._yat_core import yat_score
+from ._yat_core import reduction_safe_upcast, yat_score
 
 
 def _reject_kernel_bank_expansion(bank_id, existing_filters, requested_filters):
@@ -449,6 +449,9 @@ class YatConv1D(_KernelBankSerializationMixin, Layer):
         if self.tie_kernel_bank:
             kernel = kernel[..., self._kernel_slice]
 
+        inputs = reduction_safe_upcast(inputs)
+        kernel = reduction_safe_upcast(kernel)
+
         # DropConnect: random kernel mask during training
         if self.use_dropconnect and training and self.drop_rate > 0.0:
             keep_prob = 1.0 - self.drop_rate
@@ -797,6 +800,9 @@ class YatConv2D(_KernelBankSerializationMixin, Layer):
         if self.tie_kernel_bank:
             kernel = kernel[..., self._kernel_slice]
 
+        inputs = reduction_safe_upcast(inputs)
+        kernel = reduction_safe_upcast(kernel)
+
         # DropConnect: random kernel mask during training
         if self.use_dropconnect and training and self.drop_rate > 0.0:
             keep_prob = 1.0 - self.drop_rate
@@ -1098,6 +1104,9 @@ class YatConv3D(_KernelBankSerializationMixin, Layer):
         if self.tie_kernel_bank:
             kernel = kernel[..., self._kernel_slice]
 
+        inputs = reduction_safe_upcast(inputs)
+        kernel = reduction_safe_upcast(kernel)
+
         # DropConnect: random kernel mask during training
         if self.use_dropconnect and training and self.drop_rate > 0.0:
             keep_prob = 1.0 - self.drop_rate
@@ -1379,6 +1388,9 @@ class YatConvTranspose1D(_KernelBankSerializationMixin, Layer):
             slicer[filter_axis] = self._kernel_slice
             kernel = kernel[tuple(slicer)]
 
+        inputs = reduction_safe_upcast(inputs)
+        kernel = reduction_safe_upcast(kernel)
+
         # DropConnect: random kernel mask during training
         if self.use_dropconnect and training and self.drop_rate > 0.0:
             keep_prob = 1.0 - self.drop_rate
@@ -1652,6 +1664,9 @@ class YatConvTranspose2D(_KernelBankSerializationMixin, Layer):
             slicer[filter_axis] = self._kernel_slice
             kernel = kernel[tuple(slicer)]
 
+        inputs = reduction_safe_upcast(inputs)
+        kernel = reduction_safe_upcast(kernel)
+
         # DropConnect: random kernel mask during training
         if self.use_dropconnect and training and self.drop_rate > 0.0:
             keep_prob = 1.0 - self.drop_rate
@@ -1924,6 +1939,9 @@ class YatConvTranspose3D(_KernelBankSerializationMixin, Layer):
             slicer = [slice(None)] * kernel.ndim
             slicer[filter_axis] = self._kernel_slice
             kernel = kernel[tuple(slicer)]
+
+        inputs = reduction_safe_upcast(inputs)
+        kernel = reduction_safe_upcast(kernel)
 
         # DropConnect: random kernel mask during training
         if self.use_dropconnect and training and self.drop_rate > 0.0:
