@@ -27,12 +27,28 @@ from ._yat_core import reduction_safe_upcast, yat_score
 def _epsilon_weight_dtype(layer):
     dtype = epsilon_parameter_dtype(layer.variable_dtype)
     validate_epsilon_for_dtype(layer.epsilon, dtype)
+    if backend() == "jax" and dtype == "float64":
+        import jax
+
+        if not jax.config.x64_enabled:
+            raise ValueError(
+                "float64 learnable epsilon requires jax_enable_x64=True; "
+                "the JAX backend would otherwise store it as float32"
+            )
     return dtype
 
 
 def _epsilon_initializer(value):
     def initialize(shape, dtype=None):
-        return ops.full(shape, value, dtype=dtype)
+        initialized = ops.full(shape, value, dtype=dtype)
+        actual_dtype = standardize_dtype(initialized.dtype)
+        expected_dtype = standardize_dtype(dtype)
+        if actual_dtype != expected_dtype:
+            raise ValueError(
+                f"learnable epsilon requested {expected_dtype} storage but "
+                f"the backend created {actual_dtype}"
+            )
+        return initialized
 
     return initialize
 

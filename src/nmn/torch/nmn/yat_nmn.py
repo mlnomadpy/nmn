@@ -440,7 +440,11 @@ class YatNMN(nn.Module):
                 "device/dtype migration is unsupported for tied kernel-bank "
                 "consumers; construct them with the target device and dtype"
             )
-        return super()._apply(fn, recurse=recurse)
+        from ..layers._yat_conv_core import apply_preserving_epsilon_dtype
+
+        return apply_preserving_epsilon_dtype(
+            self, fn, super()._apply, recurse=recurse
+        )
 
     def extra_repr(self) -> str:
         """

@@ -3,6 +3,7 @@ from keras.src.api_export import keras_export
 from keras.src.layers.input_spec import InputSpec
 from keras.src.layers.layer import Layer
 from keras.src import ops
+from keras.src.backend import backend, standardize_dtype
 import math
 import numpy as np
 
@@ -19,9 +20,31 @@ DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
 
 def _epsilon_initializer(value):
     def initialize(shape, dtype=None):
-        return ops.full(shape, value, dtype=dtype)
+        initialized = ops.full(shape, value, dtype=dtype)
+        actual_dtype = standardize_dtype(initialized.dtype)
+        expected_dtype = standardize_dtype(dtype)
+        if actual_dtype != expected_dtype:
+            raise ValueError(
+                f"learnable epsilon requested {expected_dtype} storage but "
+                f"the backend created {actual_dtype}"
+            )
+        return initialized
 
     return initialize
+
+
+def _epsilon_weight_dtype(layer):
+    dtype = epsilon_parameter_dtype(layer.variable_dtype)
+    validate_epsilon_for_dtype(layer.epsilon, dtype)
+    if backend() == "jax" and dtype == "float64":
+        import jax
+
+        if not jax.config.x64_enabled:
+            raise ValueError(
+                "float64 learnable epsilon requires jax_enable_x64=True; "
+                "the JAX backend would otherwise store it as float32"
+            )
+    return dtype
 
 @keras_export("keras.layers.YatNMN")
 class YatNMN(Layer):
@@ -169,8 +192,7 @@ class YatNMN(Layer):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            epsilon_dtype = epsilon_parameter_dtype(self.variable_dtype)
-            validate_epsilon_for_dtype(self.epsilon, epsilon_dtype)
+            epsilon_dtype = _epsilon_weight_dtype(self)
             raw_eps = inverse_softplus(self.epsilon)
             self.epsilon_param = self.add_weight(
                 name="epsilon_param",

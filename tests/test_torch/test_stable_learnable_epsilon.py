@@ -143,3 +143,48 @@ def test_float64_extreme_epsilon_is_effective_and_differentiable(
 def test_float64_rejects_softplus_underflow(layer_cls, args, _):
     with pytest.raises(ValueError, match="not representable"):
         _make(layer_cls, args, 5e-324, torch.float64)
+
+
+@pytest.mark.parametrize("layer_cls,args,input_shape", FAMILIES[:2])
+@pytest.mark.parametrize("epsilon", [1e-20, 1e5])
+@pytest.mark.parametrize(
+    "migration,target_dtype",
+    [
+        ("half", torch.float16),
+        ("bfloat16", torch.bfloat16),
+        ("to", torch.float16),
+    ],
+)
+def test_module_dtype_migration_preserves_epsilon_storage_identity_and_gradient(
+    layer_cls, args, input_shape, epsilon, migration, target_dtype
+):
+    layer = _make(layer_cls, args, epsilon)
+    epsilon_param = layer.epsilon_param
+    if migration == "to":
+        layer.to(dtype=target_dtype)
+    else:
+        getattr(layer, migration)()
+
+    assert layer.epsilon_param is epsilon_param
+    assert layer.epsilon_param.dtype == torch.float32
+    assert layer.weight.dtype == target_dtype
+    assert layer.state_dict()["epsilon_param"].dtype == torch.float32
+
+    with torch.no_grad():
+        layer.weight.fill_(0.3)
+    inputs = torch.full(input_shape, 0.2, dtype=target_dtype)
+    output = layer(inputs)
+    (epsilon_grad,) = torch.autograd.grad(
+        output.float().sum(), (layer.epsilon_param,)
+    )
+    assert output.isfinite().all()
+    assert epsilon_grad.isfinite().all() and epsilon_grad.abs().max() > 0
+
+    restored = _make(layer_cls, args, epsilon)
+    if migration == "to":
+        restored.to(dtype=target_dtype)
+    else:
+        getattr(restored, migration)()
+    restored.load_state_dict(layer.state_dict())
+    assert restored.epsilon_param.dtype == torch.float32
+    torch.testing.assert_close(restored.epsilon_param, layer.epsilon_param)

@@ -12,7 +12,11 @@ from torch.nn.modules.utils import _triple
 
 from torch.nn import ConvTranspose3d
 
-from ._yat_conv_core import setup_yat_attrs, yat_conv_transpose_forward
+from ._yat_conv_core import (
+    apply_preserving_epsilon_dtype,
+    setup_yat_attrs,
+    yat_conv_transpose_forward,
+)
 
 __all__ = ["YatConvTranspose3D"]
 
@@ -103,4 +107,9 @@ class YatConvTranspose3D(ConvTranspose3d):
         return yat_conv_transpose_forward(
             self, input, F.conv_transpose3d, output_padding,
             deterministic=deterministic,
+        )
+
+    def _apply(self, fn, recurse=True):
+        return apply_preserving_epsilon_dtype(
+            self, fn, super()._apply, recurse=recurse
         )

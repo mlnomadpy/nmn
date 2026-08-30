@@ -35,6 +35,7 @@ from .._precision import saturating_upcast
 
 __all__ = [
     "DEFAULT_CONSTANT_ALPHA",
+    "apply_preserving_epsilon_dtype",
     "promote_to_compute_dtype",
     "setup_yat_attrs",
     "yat_conv_forward",
@@ -44,6 +45,29 @@ __all__ = [
 
 # Default constant alpha value (sqrt(2)).
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
+
+
+def apply_preserving_epsilon_dtype(layer, fn, super_apply, *, recurse=True):
+    """Apply migration while retaining epsilon's protected storage dtype."""
+    epsilon_param = layer._parameters.get("epsilon_param")
+    if epsilon_param is None:
+        return super_apply(fn, recurse=recurse)
+
+    # Keep the same Parameter object out of Module._apply's dtype conversion.
+    layer._parameters["epsilon_param"] = None
+    try:
+        result = super_apply(fn, recurse=recurse)
+    finally:
+        layer._parameters["epsilon_param"] = epsilon_param
+
+    # Probe only the destination device.  Applying ``fn`` to the raw inverse
+    # softplus value could overflow/underflow before converting it back.
+    probe = fn(torch.empty(0, device=epsilon_param.device, dtype=epsilon_param.dtype))
+    with torch.no_grad():
+        epsilon_param.data = epsilon_param.data.to(device=probe.device)
+        if epsilon_param.grad is not None:
+            epsilon_param.grad.data = epsilon_param.grad.data.to(device=probe.device)
+    return result
 
 
 def setup_yat_attrs(

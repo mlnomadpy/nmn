@@ -225,3 +225,21 @@ def test_float64_rejects_softplus_underflow(
     layer = _make(layer_cls, kernel_size, 5e-324, "float64")
     with pytest.raises(ValueError, match="not representable"):
         layer(ops.ones(input_shape, dtype="float64"))
+
+
+@pytest.mark.parametrize("layer_cls,kernel_size,input_shape", FAMILIES)
+def test_jax_float64_requires_x64_backing_storage(
+    layer_cls, kernel_size, input_shape
+):
+    if BACKEND != "jax":
+        pytest.skip("JAX-specific backing dtype guard")
+    import jax
+
+    previous_x64 = jax.config.x64_enabled
+    jax.config.update("jax_enable_x64", False)
+    try:
+        layer = _make(layer_cls, kernel_size, 1e150, "float64")
+        with pytest.raises(ValueError, match="jax_enable_x64=True"):
+            layer(ops.ones(input_shape, dtype="float32"))
+    finally:
+        jax.config.update("jax_enable_x64", previous_x64)
