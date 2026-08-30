@@ -420,7 +420,13 @@ def test_untied_yat_nmn_supports_constructor_device_and_later_migration():
     layer = YatNMN(4, 2, learnable_epsilon=True, device="cpu")
     migrated = layer.to(dtype=torch.float64)
     assert migrated is layer
-    assert all(value.dtype == torch.float64 for value in layer.state_dict().values())
+    state = layer.state_dict()
+    assert state["epsilon_param"].dtype == torch.float32
+    assert all(
+        value.dtype == torch.float64
+        for name, value in state.items()
+        if name != "epsilon_param"
+    )
 
 
 def test_attention_compute_and_parameter_dtypes_round_trip():

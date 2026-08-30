@@ -3,11 +3,48 @@ from keras.src.api_export import keras_export
 from keras.src.layers.input_spec import InputSpec
 from keras.src.layers.layer import Layer
 from keras.src import ops
+from keras.src.backend import backend, standardize_dtype
 import math
 import numpy as np
 
+from nmn._epsilon import (
+    epsilon_parameter_dtype,
+    inverse_softplus,
+    validate_epsilon,
+    validate_epsilon_for_dtype,
+)
+
 # Default constant alpha value (sqrt(2))
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
+
+
+def _epsilon_initializer(value):
+    def initialize(shape, dtype=None):
+        initialized = ops.full(shape, value, dtype=dtype)
+        actual_dtype = standardize_dtype(initialized.dtype)
+        expected_dtype = standardize_dtype(dtype)
+        if actual_dtype != expected_dtype:
+            raise ValueError(
+                f"learnable epsilon requested {expected_dtype} storage but "
+                f"the backend created {actual_dtype}"
+            )
+        return initialized
+
+    return initialize
+
+
+def _epsilon_weight_dtype(layer):
+    dtype = epsilon_parameter_dtype(layer.variable_dtype)
+    validate_epsilon_for_dtype(layer.epsilon, dtype)
+    if backend() == "jax" and dtype == "float64":
+        import jax
+
+        if not jax.config.x64_enabled:
+            raise ValueError(
+                "float64 learnable epsilon requires jax_enable_x64=True; "
+                "the JAX backend would otherwise store it as float32"
+            )
+    return dtype
 
 @keras_export("keras.layers.YatNMN")
 class YatNMN(Layer):
@@ -71,9 +108,7 @@ class YatNMN(Layer):
     ):
         super().__init__(activity_regularizer=activity_regularizer, **kwargs)
         self.units = units
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
-        self.epsilon = epsilon
+        self.epsilon = validate_epsilon(epsilon)
         self.learnable_epsilon = learnable_epsilon
         self.positive_init = positive_init
         self.spherical = spherical
@@ -157,11 +192,13 @@ class YatNMN(Layer):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            epsilon_dtype = _epsilon_weight_dtype(self)
+            raw_eps = inverse_softplus(self.epsilon)
             self.epsilon_param = self.add_weight(
                 name="epsilon_param",
                 shape=(1,),
-                initializer=initializers.Constant(raw_eps),
+                initializer=_epsilon_initializer(raw_eps),
+                dtype=epsilon_dtype,
                 trainable=True,
             )
         else:
@@ -220,6 +257,9 @@ class YatNMN(Layer):
         # Resolve effective epsilon (learnable via softplus, or constant)
         if self.learnable_epsilon and self.epsilon_param is not None:
             eps = ops.softplus(self.epsilon_param)
+            score_dtype = self.epsilon_param.dtype
+            dot_product = ops.cast(dot_product, score_dtype)
+            distances = ops.cast(distances, score_dtype)
         else:
             eps = self.epsilon
 
@@ -233,7 +273,7 @@ class YatNMN(Layer):
             # Simple learnable alpha scaling
             outputs = outputs * self.alpha
 
-        return outputs
+        return ops.cast(outputs, self.compute_dtype)
 
     def compute_output_shape(self, input_shape):
         output_shape = list(input_shape)

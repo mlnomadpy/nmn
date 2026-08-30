@@ -1,6 +1,5 @@
 """YAT convolution layers for Keras/TensorFlow."""
 
-import math
 import threading
 import weakref
 
@@ -15,7 +14,43 @@ from keras.src.ops.operation_utils import compute_conv_output_shape
 from keras.src.saving.object_registration import register_keras_serializable
 from keras.src.saving.serialization_lib import deserialize_keras_object
 
+from nmn._epsilon import (
+    epsilon_parameter_dtype,
+    inverse_softplus,
+    validate_epsilon,
+    validate_epsilon_for_dtype,
+)
+
 from ._yat_core import reduction_safe_upcast, yat_score
+
+
+def _epsilon_weight_dtype(layer):
+    dtype = epsilon_parameter_dtype(layer.variable_dtype)
+    validate_epsilon_for_dtype(layer.epsilon, dtype)
+    if backend() == "jax" and dtype == "float64":
+        import jax
+
+        if not jax.config.x64_enabled:
+            raise ValueError(
+                "float64 learnable epsilon requires jax_enable_x64=True; "
+                "the JAX backend would otherwise store it as float32"
+            )
+    return dtype
+
+
+def _epsilon_initializer(value):
+    def initialize(shape, dtype=None):
+        initialized = ops.full(shape, value, dtype=dtype)
+        actual_dtype = standardize_dtype(initialized.dtype)
+        expected_dtype = standardize_dtype(dtype)
+        if actual_dtype != expected_dtype:
+            raise ValueError(
+                f"learnable epsilon requested {expected_dtype} storage but "
+                f"the backend created {actual_dtype}"
+            )
+        return initialized
+
+    return initialize
 
 
 def _reject_kernel_bank_expansion(bank_id, existing_filters, requested_filters):
@@ -374,9 +409,7 @@ class YatConv1D(_KernelBankSerializationMixin, Layer):
             )
         self.groups = groups
         self.use_alpha = use_alpha
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
-        self.epsilon = epsilon
+        self.epsilon = validate_epsilon(epsilon)
         self.learnable_epsilon = learnable_epsilon
         self.weight_normalized = weight_normalized
         self.use_dropconnect = use_dropconnect
@@ -459,11 +492,12 @@ class YatConv1D(_KernelBankSerializationMixin, Layer):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            raw_eps = inverse_softplus(self.epsilon)
             self.epsilon_param = self.add_weight(
                 name="epsilon_param",
                 shape=(1,),
-                initializer=initializers.Constant(raw_eps),
+                initializer=_epsilon_initializer(raw_eps),
+                dtype=_epsilon_weight_dtype(self),
                 trainable=True,
             )
         else:
@@ -721,9 +755,7 @@ class YatConv2D(_KernelBankSerializationMixin, Layer):
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate)
         self.groups = groups
         self.use_alpha = use_alpha
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
-        self.epsilon = epsilon
+        self.epsilon = validate_epsilon(epsilon)
         self.learnable_epsilon = learnable_epsilon
         self.weight_normalized = weight_normalized
         self.use_dropconnect = use_dropconnect
@@ -806,11 +838,12 @@ class YatConv2D(_KernelBankSerializationMixin, Layer):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            raw_eps = inverse_softplus(self.epsilon)
             self.epsilon_param = self.add_weight(
                 name="epsilon_param",
                 shape=(1,),
-                initializer=initializers.Constant(raw_eps),
+                initializer=_epsilon_initializer(raw_eps),
+                dtype=_epsilon_weight_dtype(self),
                 trainable=True,
             )
         else:
@@ -1024,9 +1057,7 @@ class YatConv3D(_KernelBankSerializationMixin, Layer):
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate, dilation_rate)
         self.groups = groups
         self.use_alpha = use_alpha
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
-        self.epsilon = epsilon
+        self.epsilon = validate_epsilon(epsilon)
         self.learnable_epsilon = learnable_epsilon
         self.weight_normalized = weight_normalized
         self.use_dropconnect = use_dropconnect
@@ -1109,11 +1140,12 @@ class YatConv3D(_KernelBankSerializationMixin, Layer):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            raw_eps = inverse_softplus(self.epsilon)
             self.epsilon_param = self.add_weight(
                 name="epsilon_param",
                 shape=(1,),
-                initializer=initializers.Constant(raw_eps),
+                initializer=_epsilon_initializer(raw_eps),
+                dtype=_epsilon_weight_dtype(self),
                 trainable=True,
             )
         else:
@@ -1318,9 +1350,7 @@ class YatConvTranspose1D(_KernelBankSerializationMixin, Layer):
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate,)
         self.output_padding = _standardize_output_padding(output_padding, 1)
         self.use_alpha = use_alpha
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
-        self.epsilon = epsilon
+        self.epsilon = validate_epsilon(epsilon)
         self.learnable_epsilon = learnable_epsilon
         self.weight_normalized = weight_normalized
         self.use_dropconnect = use_dropconnect
@@ -1391,11 +1421,12 @@ class YatConvTranspose1D(_KernelBankSerializationMixin, Layer):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            raw_eps = inverse_softplus(self.epsilon)
             self.epsilon_param = self.add_weight(
                 name="epsilon_param",
                 shape=(1,),
-                initializer=initializers.Constant(raw_eps),
+                initializer=_epsilon_initializer(raw_eps),
+                dtype=_epsilon_weight_dtype(self),
                 trainable=True,
             )
         else:
@@ -1600,9 +1631,7 @@ class YatConvTranspose2D(_KernelBankSerializationMixin, Layer):
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate)
         self.output_padding = _standardize_output_padding(output_padding, 2)
         self.use_alpha = use_alpha
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
-        self.epsilon = epsilon
+        self.epsilon = validate_epsilon(epsilon)
         self.learnable_epsilon = learnable_epsilon
         self.weight_normalized = weight_normalized
         self.use_dropconnect = use_dropconnect
@@ -1673,11 +1702,12 @@ class YatConvTranspose2D(_KernelBankSerializationMixin, Layer):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            raw_eps = inverse_softplus(self.epsilon)
             self.epsilon_param = self.add_weight(
                 name="epsilon_param",
                 shape=(1,),
-                initializer=initializers.Constant(raw_eps),
+                initializer=_epsilon_initializer(raw_eps),
+                dtype=_epsilon_weight_dtype(self),
                 trainable=True,
             )
         else:
@@ -1882,9 +1912,7 @@ class YatConvTranspose3D(_KernelBankSerializationMixin, Layer):
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate, dilation_rate)
         self.output_padding = _standardize_output_padding(output_padding, 3)
         self.use_alpha = use_alpha
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
-        self.epsilon = epsilon
+        self.epsilon = validate_epsilon(epsilon)
         self.learnable_epsilon = learnable_epsilon
         self.weight_normalized = weight_normalized
         self.use_dropconnect = use_dropconnect
@@ -1955,11 +1983,12 @@ class YatConvTranspose3D(_KernelBankSerializationMixin, Layer):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            raw_eps = inverse_softplus(self.epsilon)
             self.epsilon_param = self.add_weight(
                 name="epsilon_param",
                 shape=(1,),
-                initializer=initializers.Constant(raw_eps),
+                initializer=_epsilon_initializer(raw_eps),
+                dtype=_epsilon_weight_dtype(self),
                 trainable=True,
             )
         else:

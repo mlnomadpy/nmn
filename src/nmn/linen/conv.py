@@ -1,7 +1,5 @@
 """YAT convolution layers for Flax Linen."""
 
-import math
-
 import jax
 import jax.numpy as jnp
 import jax.lax as lax
@@ -11,7 +9,23 @@ from flax.linen.dtypes import promote_dtype
 from flax.linen.initializers import zeros_init
 from typing import Any, Optional, Sequence, Union, Tuple
 
+from nmn._epsilon import (
+    epsilon_parameter_dtype,
+    inverse_softplus,
+    validate_epsilon,
+    validate_epsilon_for_dtype,
+)
+
 from ._yat_core import yat_score
+
+
+def _epsilon_dtype(param_dtype, epsilon):
+    name = epsilon_parameter_dtype(param_dtype)
+    if name == "float64" and not jax.config.x64_enabled:
+        raise ValueError("float64 learnable epsilon requires jax_enable_x64")
+    dtype = getattr(jnp, name)
+    validate_epsilon_for_dtype(epsilon, dtype)
+    return dtype
 
 
 def _validate_feature_groups(
@@ -32,7 +46,15 @@ def _validate_feature_groups(
         )
 
 
-class YatConv1D(Module):
+class _EpsilonValidatedModule(Module):
+    """Linen module base that validates static epsilon at construction."""
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        validate_epsilon(self.epsilon)
+
+
+class YatConv1D(_EpsilonValidatedModule):
     """1D YAT convolution layer for Flax Linen.
     
     This layer implements 1D convolution using the YAT algorithm,
@@ -106,12 +128,13 @@ class YatConv1D(Module):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps_init = math.log(math.exp(self.epsilon) - 1.0)
+            epsilon_dtype = _epsilon_dtype(self.param_dtype, self.epsilon)
+            raw_eps_init = inverse_softplus(self.epsilon)
             epsilon_param = self.param(
                 'epsilon_param',
                 lambda key, shape, dtype: jnp.full(shape, raw_eps_init, dtype=dtype),
                 (1,),
-                self.param_dtype,
+                epsilon_dtype,
             )
         else:
             epsilon_param = None
@@ -172,7 +195,7 @@ class YatConv1D(Module):
         )
 
 
-class YatConv2D(Module):
+class YatConv2D(_EpsilonValidatedModule):
     """2D YAT convolution layer for Flax Linen.
     
     This layer implements 2D convolution using the YAT algorithm.
@@ -245,12 +268,13 @@ class YatConv2D(Module):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps_init = math.log(math.exp(self.epsilon) - 1.0)
+            epsilon_dtype = _epsilon_dtype(self.param_dtype, self.epsilon)
+            raw_eps_init = inverse_softplus(self.epsilon)
             epsilon_param = self.param(
                 'epsilon_param',
                 lambda key, shape, dtype: jnp.full(shape, raw_eps_init, dtype=dtype),
                 (1,),
-                self.param_dtype,
+                epsilon_dtype,
             )
         else:
             epsilon_param = None
@@ -308,7 +332,7 @@ class YatConv2D(Module):
         )
 
 
-class YatConv3D(Module):
+class YatConv3D(_EpsilonValidatedModule):
     """3D YAT convolution layer for Flax Linen.
     
     This layer implements 3D convolution using the YAT algorithm.
@@ -381,12 +405,13 @@ class YatConv3D(Module):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps_init = math.log(math.exp(self.epsilon) - 1.0)
+            epsilon_dtype = _epsilon_dtype(self.param_dtype, self.epsilon)
+            raw_eps_init = inverse_softplus(self.epsilon)
             epsilon_param = self.param(
                 'epsilon_param',
                 lambda key, shape, dtype: jnp.full(shape, raw_eps_init, dtype=dtype),
                 (1,),
-                self.param_dtype,
+                epsilon_dtype,
             )
         else:
             epsilon_param = None
@@ -444,7 +469,7 @@ class YatConv3D(Module):
         )
 
 
-class YatConvTranspose1D(Module):
+class YatConvTranspose1D(_EpsilonValidatedModule):
     """1D YAT transposed convolution layer for Flax Linen.
 
     This layer implements 1D transposed convolution using the YAT algorithm.
@@ -508,12 +533,13 @@ class YatConvTranspose1D(Module):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps_init = math.log(math.exp(self.epsilon) - 1.0)
+            epsilon_dtype = _epsilon_dtype(self.param_dtype, self.epsilon)
+            raw_eps_init = inverse_softplus(self.epsilon)
             epsilon_param = self.param(
                 'epsilon_param',
                 lambda key, shape, dtype: jnp.full(shape, raw_eps_init, dtype=dtype),
                 (1,),
-                self.param_dtype,
+                epsilon_dtype,
             )
         else:
             epsilon_param = None
@@ -559,7 +585,7 @@ class YatConvTranspose1D(Module):
         )
 
 
-class YatConvTranspose2D(Module):
+class YatConvTranspose2D(_EpsilonValidatedModule):
     """2D YAT transposed convolution layer for Flax Linen.
 
     This layer implements 2D transposed convolution using the YAT algorithm.
@@ -623,12 +649,13 @@ class YatConvTranspose2D(Module):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps_init = math.log(math.exp(self.epsilon) - 1.0)
+            epsilon_dtype = _epsilon_dtype(self.param_dtype, self.epsilon)
+            raw_eps_init = inverse_softplus(self.epsilon)
             epsilon_param = self.param(
                 'epsilon_param',
                 lambda key, shape, dtype: jnp.full(shape, raw_eps_init, dtype=dtype),
                 (1,),
-                self.param_dtype,
+                epsilon_dtype,
             )
         else:
             epsilon_param = None
@@ -674,7 +701,7 @@ class YatConvTranspose2D(Module):
         )
 
 
-class YatConvTranspose3D(Module):
+class YatConvTranspose3D(_EpsilonValidatedModule):
     """3D YAT transposed convolution layer for Flax Linen.
 
     This layer implements 3D transposed convolution using the YAT algorithm.
@@ -738,12 +765,13 @@ class YatConvTranspose3D(Module):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps_init = math.log(math.exp(self.epsilon) - 1.0)
+            epsilon_dtype = _epsilon_dtype(self.param_dtype, self.epsilon)
+            raw_eps_init = inverse_softplus(self.epsilon)
             epsilon_param = self.param(
                 'epsilon_param',
                 lambda key, shape, dtype: jnp.full(shape, raw_eps_init, dtype=dtype),
                 (1,),
-                self.param_dtype,
+                epsilon_dtype,
             )
         else:
             epsilon_param = None
@@ -800,5 +828,3 @@ YatConv3d = YatConv3D
 YatConvTranspose1d = YatConvTranspose1D
 YatConvTranspose2d = YatConvTranspose2D
 YatConvTranspose3d = YatConvTranspose3D
-
-

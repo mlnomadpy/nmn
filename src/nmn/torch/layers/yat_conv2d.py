@@ -11,7 +11,11 @@ from torch.nn.common_types import _size_2_t
 from torch.nn.parameter import Parameter
 from torch.nn import Conv2d
 
-from ._yat_conv_core import setup_yat_attrs, yat_conv_forward
+from ._yat_conv_core import (
+    apply_preserving_epsilon_dtype,
+    setup_yat_attrs,
+    yat_conv_forward,
+)
 
 __all__ = ["YatConv2D"]
 
@@ -210,4 +214,6 @@ class YatConv2D(Conv2d):
                 "device/dtype migration is unsupported for tied kernel-bank "
                 "consumers; construct them with the target device and dtype"
             )
-        return super()._apply(fn, recurse=recurse)
+        return apply_preserving_epsilon_dtype(
+            self, fn, super()._apply, recurse=recurse
+        )

@@ -24,11 +24,18 @@ from torch.nn import functional as F
 from torch.nn.modules.utils import _single
 from torch.nn.parameter import Parameter
 
+from nmn._epsilon import (
+    inverse_softplus,
+    validate_epsilon,
+    validate_epsilon_for_dtype,
+)
+
 from .._precision import saturating_upcast
 
 
 __all__ = [
     "DEFAULT_CONSTANT_ALPHA",
+    "apply_preserving_epsilon_dtype",
     "promote_to_compute_dtype",
     "setup_yat_attrs",
     "yat_conv_forward",
@@ -38,6 +45,29 @@ __all__ = [
 
 # Default constant alpha value (sqrt(2)).
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
+
+
+def apply_preserving_epsilon_dtype(layer, fn, super_apply, *, recurse=True):
+    """Apply migration while retaining epsilon's protected storage dtype."""
+    epsilon_param = layer._parameters.get("epsilon_param")
+    if epsilon_param is None:
+        return super_apply(fn, recurse=recurse)
+
+    # Keep the same Parameter object out of Module._apply's dtype conversion.
+    layer._parameters["epsilon_param"] = None
+    try:
+        result = super_apply(fn, recurse=recurse)
+    finally:
+        layer._parameters["epsilon_param"] = epsilon_param
+
+    # Probe only the destination device.  Applying ``fn`` to the raw inverse
+    # softplus value could overflow/underflow before converting it back.
+    probe = fn(torch.empty(0, device=epsilon_param.device, dtype=epsilon_param.dtype))
+    with torch.no_grad():
+        epsilon_param.data = epsilon_param.data.to(device=probe.device)
+        if epsilon_param.grad is not None:
+            epsilon_param.grad.data = epsilon_param.grad.data.to(device=probe.device)
+    return result
 
 
 def setup_yat_attrs(
@@ -87,16 +117,18 @@ def setup_yat_attrs(
     layer.param_dtype = storage_dtype
     layer.use_dropconnect = use_dropconnect
 
-    if epsilon <= 0:
-        raise ValueError(f"epsilon must be positive, got {epsilon}")
-    layer.epsilon = epsilon
+    layer.epsilon = validate_epsilon(epsilon)
     layer.learnable_epsilon = learnable_epsilon
     if learnable_epsilon:
-        raw_eps = math.log(math.exp(epsilon) - 1.0)
+        epsilon_dtype = storage_dtype or torch.float32
+        if epsilon_dtype in (torch.float16, torch.bfloat16):
+            epsilon_dtype = torch.float32
+        validate_epsilon_for_dtype(layer.epsilon, epsilon_dtype)
+        raw_eps = inverse_softplus(layer.epsilon)
         layer.epsilon_param = nn.Parameter(
             torch.full(
                 (1,), raw_eps,
-                dtype=storage_dtype if storage_dtype else torch.float32,
+                dtype=epsilon_dtype,
                 device=device,
             )
         )
@@ -170,13 +202,8 @@ def _resolve_alpha(layer, input: Tensor) -> Optional[Tensor]:
 def _resolve_eps(layer, dtype: torch.dtype):
     if layer.learnable_epsilon and layer.epsilon_param is not None:
         epsilon_param = layer.epsilon_param
-        if dtype != epsilon_param.dtype and epsilon_param.dtype in (
-            torch.float16,
-            torch.bfloat16,
-        ):
-            epsilon_param = saturating_upcast(epsilon_param).to(dtype)
-        else:
-            epsilon_param = epsilon_param.to(dtype)
+        dtype = torch.promote_types(dtype, epsilon_param.dtype)
+        epsilon_param = epsilon_param.to(dtype)
         return F.softplus(epsilon_param)
     return layer.epsilon
 
@@ -188,6 +215,9 @@ def _yat_score(layer, dot_prod_map: Tensor, distance_sq_map: Tensor,
     if bias_val is not None:
         dot_prod_map = dot_prod_map + bias_val.view(*view_shape)
     eps = _resolve_eps(layer, distance_sq_map.dtype)
+    if isinstance(eps, Tensor):
+        dot_prod_map = dot_prod_map.to(eps.dtype)
+        distance_sq_map = distance_sq_map.to(eps.dtype)
     y = dot_prod_map ** 2 / (distance_sq_map + eps)
     if layer._constant_alpha_value is not None:
         y = y * layer._constant_alpha_value

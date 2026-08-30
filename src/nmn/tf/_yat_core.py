@@ -37,8 +37,11 @@ def yat_score(layer, dot_prod_map, distance_sq_map):
             dot_prod_map = dot_prod_map + layer.bias
 
     # Resolve effective epsilon (learnable via softplus, or constant).
+    output_dtype = dot_prod_map.dtype
     if layer.learnable_epsilon and layer.epsilon_param is not None:
         eps = tf.nn.softplus(layer.epsilon_param)
+        dot_prod_map = tf.cast(dot_prod_map, eps.dtype)
+        distance_sq_map = tf.cast(distance_sq_map, eps.dtype)
     else:
         eps = layer.epsilon
 
@@ -47,6 +50,6 @@ def yat_score(layer, dot_prod_map, distance_sq_map):
 
     # Optional alpha (learnable; constant_alpha is folded into layer.alpha).
     if layer.use_alpha and layer.alpha is not None:
-        y = y * layer.alpha
+        y = y * tf.cast(layer.alpha, y.dtype)
 
-    return y
+    return tf.cast(y, output_dtype)

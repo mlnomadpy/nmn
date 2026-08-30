@@ -41,8 +41,12 @@ def yat_score(
         bias_broadcast_shape = (1,) * (dot_prod_map.ndim - 1) + (-1,)
         dot_prod_map = dot_prod_map + bias.reshape(bias_broadcast_shape)
 
+    output_dtype = dot_prod_map.dtype
     if epsilon_param is not None:
-        eps = jax.nn.softplus(epsilon_param.astype(dot_prod_map.dtype))
+        score_dtype = jnp.promote_types(dot_prod_map.dtype, epsilon_param.dtype)
+        eps = jax.nn.softplus(epsilon_param.astype(score_dtype))
+        dot_prod_map = dot_prod_map.astype(score_dtype)
+        distance_sq = distance_sq.astype(score_dtype)
     else:
         eps = epsilon
 
@@ -51,4 +55,4 @@ def yat_score(
     if alpha is not None:
         y = y * alpha
 
-    return y
+    return y.astype(output_dtype)
