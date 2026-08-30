@@ -24,6 +24,8 @@ from torch.nn import functional as F
 from torch.nn.modules.utils import _single
 from torch.nn.parameter import Parameter
 
+from nmn._epsilon import inverse_softplus, validate_epsilon
+
 from .._precision import saturating_upcast
 
 
@@ -87,12 +89,10 @@ def setup_yat_attrs(
     layer.param_dtype = storage_dtype
     layer.use_dropconnect = use_dropconnect
 
-    if epsilon <= 0:
-        raise ValueError(f"epsilon must be positive, got {epsilon}")
-    layer.epsilon = epsilon
+    layer.epsilon = validate_epsilon(epsilon)
     layer.learnable_epsilon = learnable_epsilon
     if learnable_epsilon:
-        raw_eps = math.log(math.exp(epsilon) - 1.0)
+        raw_eps = inverse_softplus(layer.epsilon)
         layer.epsilon_param = nn.Parameter(
             torch.full(
                 (1,), raw_eps,

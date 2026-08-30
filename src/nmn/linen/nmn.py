@@ -13,6 +13,8 @@ from flax import linen as nn
 from flax.linen.initializers import zeros_init
 from typing import Any, Optional
 
+from nmn._epsilon import inverse_softplus, validate_epsilon
+
 # Default constant alpha value (sqrt(2))
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
 
@@ -103,6 +105,10 @@ class YatNMN(Module):
     dot_general_cls: Any = None
     return_weights: bool = False
 
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        validate_epsilon(self.epsilon)
+
     @compact
     def __call__(self, inputs: Any) -> Any:
         """Applies a transformation to the inputs along the last dimension using squared Euclidean distance.
@@ -113,9 +119,6 @@ class YatNMN(Module):
         Returns:
           The transformed input.
         """
-        if self.epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {self.epsilon}")
-
         kernel = self.param(
             'kernel',
             self.kernel_init,
@@ -167,7 +170,7 @@ class YatNMN(Module):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps_init = math.log(math.exp(self.epsilon) - 1.0)
+            raw_eps_init = inverse_softplus(self.epsilon)
             epsilon_param = self.param(
                 'epsilon_param',
                 lambda key, shape, dtype: jnp.full(shape, raw_eps_init, dtype=dtype),

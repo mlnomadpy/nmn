@@ -1,8 +1,9 @@
 """YAT convolution layers for TensorFlow."""
 
 import tensorflow as tf
-import math
 from typing import Optional, Any, Tuple, Union, List, Callable
+
+from nmn._epsilon import inverse_softplus, validate_epsilon
 
 from ._yat_core import yat_score
 from .saved_model import SingleInputSavedModelMixin
@@ -91,9 +92,7 @@ class YatConv1D(SingleInputSavedModelMixin, tf.Module):
         _validate_groups(filters, groups)
         self.groups = groups
         self.use_alpha = use_alpha
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
-        self.epsilon = epsilon
+        self.epsilon = validate_epsilon(epsilon)
         self.learnable_epsilon = learnable_epsilon
         self.dtype = dtype
 
@@ -165,7 +164,7 @@ class YatConv1D(SingleInputSavedModelMixin, tf.Module):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            raw_eps = inverse_softplus(self.epsilon)
             self.epsilon_param = tf.Variable(
                 tf.constant(raw_eps, shape=[1], dtype=self.dtype),
                 trainable=True,
@@ -287,9 +286,7 @@ class YatConv2D(SingleInputSavedModelMixin, tf.Module):
         _validate_groups(filters, groups)
         self.groups = groups
         self.use_alpha = use_alpha
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
-        self.epsilon = epsilon
+        self.epsilon = validate_epsilon(epsilon)
         self.learnable_epsilon = learnable_epsilon
         self.dtype = dtype
 
@@ -361,7 +358,7 @@ class YatConv2D(SingleInputSavedModelMixin, tf.Module):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            raw_eps = inverse_softplus(self.epsilon)
             self.epsilon_param = tf.Variable(
                 tf.constant(raw_eps, shape=[1], dtype=self.dtype),
                 trainable=True,
@@ -483,9 +480,7 @@ class YatConv3D(SingleInputSavedModelMixin, tf.Module):
         _validate_groups(filters, groups)
         self.groups = groups
         self.use_alpha = use_alpha
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
-        self.epsilon = epsilon
+        self.epsilon = validate_epsilon(epsilon)
         self.learnable_epsilon = learnable_epsilon
         self.dtype = dtype
 
@@ -558,7 +553,7 @@ class YatConv3D(SingleInputSavedModelMixin, tf.Module):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            raw_eps = inverse_softplus(self.epsilon)
             self.epsilon_param = tf.Variable(
                 tf.constant(raw_eps, shape=[1], dtype=self.dtype),
                 trainable=True,
@@ -669,9 +664,7 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
         self.strides = strides
         self.padding = padding.upper()
         self.use_alpha = use_alpha
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
-        self.epsilon = epsilon
+        self.epsilon = validate_epsilon(epsilon)
         self.learnable_epsilon = learnable_epsilon
         self.dtype = dtype
 
@@ -726,7 +719,7 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            raw_eps = inverse_softplus(self.epsilon)
             self.epsilon_param = tf.Variable(
                 tf.constant(raw_eps, shape=[1], dtype=self.dtype),
                 trainable=True,
@@ -850,9 +843,7 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
         self.strides = strides if isinstance(strides, (list, tuple)) else (strides, strides)
         self.padding = padding.upper()
         self.use_alpha = use_alpha
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
-        self.epsilon = epsilon
+        self.epsilon = validate_epsilon(epsilon)
         self.learnable_epsilon = learnable_epsilon
         self.dtype = dtype
 
@@ -908,7 +899,7 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            raw_eps = inverse_softplus(self.epsilon)
             self.epsilon_param = tf.Variable(
                 tf.constant(raw_eps, shape=[1], dtype=self.dtype),
                 trainable=True,
@@ -1020,9 +1011,7 @@ class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
         self.strides = strides if isinstance(strides, (list, tuple)) else (strides, strides, strides)
         self.padding = padding.upper()
         self.use_alpha = use_alpha
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
-        self.epsilon = epsilon
+        self.epsilon = validate_epsilon(epsilon)
         self.learnable_epsilon = learnable_epsilon
         self.dtype = dtype
 
@@ -1079,7 +1068,7 @@ class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            raw_eps = inverse_softplus(self.epsilon)
             self.epsilon_param = tf.Variable(
                 tf.constant(raw_eps, shape=[1], dtype=self.dtype),
                 trainable=True,

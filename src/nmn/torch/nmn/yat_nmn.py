@@ -8,6 +8,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from nmn._epsilon import inverse_softplus, validate_epsilon
+
 __all__ = ["YatNMN"]
 
 
@@ -105,13 +107,11 @@ class YatNMN(nn.Module):
         self.out_features = out_features
         self.dtype = dtype
         self.param_dtype = param_dtype
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
-        self.epsilon = epsilon
+        self.epsilon = validate_epsilon(epsilon)
         self.learnable_epsilon = learnable_epsilon
         if learnable_epsilon:
             # Initialize so that softplus(raw) ≈ epsilon: raw = log(exp(eps) - 1)
-            raw_eps = math.log(math.exp(epsilon) - 1.0)
+            raw_eps = inverse_softplus(self.epsilon)
             self.epsilon_param = nn.Parameter(
                 torch.full((1,), raw_eps, dtype=param_dtype, device=device)
             )

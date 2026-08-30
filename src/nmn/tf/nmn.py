@@ -4,6 +4,8 @@ import tensorflow as tf
 import math
 from typing import Optional, Tuple, Union, List
 
+from nmn._epsilon import inverse_softplus, validate_epsilon
+
 from .saved_model import SingleInputSavedModelMixin
 
 # Default constant alpha value (sqrt(2))
@@ -86,9 +88,7 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
         super().__init__(name=name)
         self.features = features
         self.dtype = dtype
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
-        self.epsilon = epsilon
+        self.epsilon = validate_epsilon(epsilon)
         self.learnable_epsilon = learnable_epsilon
         # Lazy mode: freeze ONLY the kernel (bias/alpha/epsilon stay trainable).
         self.lazy = bool(lazy or freeze_kernel)
@@ -174,7 +174,7 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            raw_eps = inverse_softplus(self.epsilon)
             self.epsilon_param = tf.Variable(
                 tf.constant(raw_eps, shape=[1], dtype=self.dtype),
                 trainable=True,

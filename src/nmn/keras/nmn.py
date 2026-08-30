@@ -6,6 +6,8 @@ from keras.src import ops
 import math
 import numpy as np
 
+from nmn._epsilon import inverse_softplus, validate_epsilon
+
 # Default constant alpha value (sqrt(2))
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
 
@@ -71,9 +73,7 @@ class YatNMN(Layer):
     ):
         super().__init__(activity_regularizer=activity_regularizer, **kwargs)
         self.units = units
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
-        self.epsilon = epsilon
+        self.epsilon = validate_epsilon(epsilon)
         self.learnable_epsilon = learnable_epsilon
         self.positive_init = positive_init
         self.spherical = spherical
@@ -157,7 +157,7 @@ class YatNMN(Layer):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
-            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
+            raw_eps = inverse_softplus(self.epsilon)
             self.epsilon_param = self.add_weight(
                 name="epsilon_param",
                 shape=(1,),
