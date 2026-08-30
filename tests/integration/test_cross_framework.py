@@ -8,6 +8,8 @@ across all frameworks (PyTorch, TensorFlow, Keras, Linen, NNX).
 import pytest
 import numpy as np
 
+from tests._isolated_backend import mlx_is_usable
+
 
 # ============================================================================
 # Framework Availability Checks
@@ -50,11 +52,8 @@ def get_available_frameworks():
     except ImportError:
         pass
 
-    try:
-        import mlx.core  # noqa: F401
+    if mlx_is_usable():
         frameworks.append('mlx')
-    except ImportError:
-        pass
 
     return frameworks
 
@@ -145,6 +144,7 @@ def get_tf_output(inputs_np, weights_np, bias_np=None, alpha_np=None, epsilon=1e
     layer = YatNMN(
         features=out_features,  # TF YatNMN uses 'features' not 'in_features'
         use_bias=(bias_np is not None),
+        use_alpha=(alpha_np is not None),
         epsilon=epsilon
     )
     
@@ -319,6 +319,12 @@ class TestCrossFrameworkConsistency:
         if 'nnx' in AVAILABLE_FRAMEWORKS:
             outputs['nnx'] = get_nnx_output(inputs, weights, epsilon=epsilon)
 
+        if 'tensorflow' in AVAILABLE_FRAMEWORKS:
+            outputs['tensorflow'] = get_tf_output(inputs, weights, epsilon=epsilon)
+
+        if 'keras' in AVAILABLE_FRAMEWORKS:
+            outputs['keras'] = get_keras_output(inputs, weights, epsilon=epsilon)
+
         if 'mlx' in AVAILABLE_FRAMEWORKS:
             outputs['mlx'] = get_mlx_output(inputs, weights, epsilon=epsilon)
 
@@ -350,6 +356,12 @@ class TestCrossFrameworkConsistency:
         if 'nnx' in AVAILABLE_FRAMEWORKS:
             outputs['nnx'] = get_nnx_output(inputs, weights, bias_np=bias, epsilon=epsilon)
 
+        if 'tensorflow' in AVAILABLE_FRAMEWORKS:
+            outputs['tensorflow'] = get_tf_output(inputs, weights, bias_np=bias, epsilon=epsilon)
+
+        if 'keras' in AVAILABLE_FRAMEWORKS:
+            outputs['keras'] = get_keras_output(inputs, weights, bias_np=bias, epsilon=epsilon)
+
         if 'mlx' in AVAILABLE_FRAMEWORKS:
             outputs['mlx'] = get_mlx_output(inputs, weights, bias_np=bias, epsilon=epsilon)
 
@@ -380,6 +392,12 @@ class TestCrossFrameworkConsistency:
         if 'nnx' in AVAILABLE_FRAMEWORKS:
             outputs['nnx'] = get_nnx_output(inputs, weights, alpha_np=alpha, epsilon=epsilon)
 
+        if 'tensorflow' in AVAILABLE_FRAMEWORKS:
+            outputs['tensorflow'] = get_tf_output(inputs, weights, alpha_np=alpha, epsilon=epsilon)
+
+        if 'keras' in AVAILABLE_FRAMEWORKS:
+            outputs['keras'] = get_keras_output(inputs, weights, alpha_np=alpha, epsilon=epsilon)
+
         if 'mlx' in AVAILABLE_FRAMEWORKS:
             outputs['mlx'] = get_mlx_output(inputs, weights, alpha_np=alpha, epsilon=epsilon)
 
@@ -406,6 +424,14 @@ class TestCrossFrameworkConsistency:
         if 'nnx' in AVAILABLE_FRAMEWORKS:
             output = get_nnx_output(inputs, weights, epsilon=epsilon)
             assert np.all(output >= 0), "NNX produced negative values"
+
+        if 'tensorflow' in AVAILABLE_FRAMEWORKS:
+            output = get_tf_output(inputs, weights, epsilon=epsilon)
+            assert np.all(output >= 0), "TensorFlow produced negative values"
+
+        if 'keras' in AVAILABLE_FRAMEWORKS:
+            output = get_keras_output(inputs, weights, epsilon=epsilon)
+            assert np.all(output >= 0), "Keras produced negative values"
 
         if 'mlx' in AVAILABLE_FRAMEWORKS:
             output = get_mlx_output(inputs, weights, epsilon=epsilon)
@@ -502,6 +528,21 @@ class TestNumericalStabilityAllFrameworks:
             assert not np.isnan(output).any(), "Linen NaN with large values"
             assert not np.isinf(output).any(), "Linen Inf with large values"
 
+        if 'nnx' in AVAILABLE_FRAMEWORKS:
+            output = get_nnx_output(inputs, weights)
+            assert not np.isnan(output).any(), "NNX NaN with large values"
+            assert not np.isinf(output).any(), "NNX Inf with large values"
+
+        if 'tensorflow' in AVAILABLE_FRAMEWORKS:
+            output = get_tf_output(inputs, weights)
+            assert not np.isnan(output).any(), "TensorFlow NaN with large values"
+            assert not np.isinf(output).any(), "TensorFlow Inf with large values"
+
+        if 'keras' in AVAILABLE_FRAMEWORKS:
+            output = get_keras_output(inputs, weights)
+            assert not np.isnan(output).any(), "Keras NaN with large values"
+            assert not np.isinf(output).any(), "Keras Inf with large values"
+
         if 'mlx' in AVAILABLE_FRAMEWORKS:
             output = get_mlx_output(inputs, weights)
             assert not np.isnan(output).any(), "MLX NaN with large values"
@@ -521,6 +562,18 @@ class TestNumericalStabilityAllFrameworks:
             output = get_linen_output(inputs, weights)
             assert not np.isnan(output).any(), "Linen NaN with small values"
 
+        if 'nnx' in AVAILABLE_FRAMEWORKS:
+            output = get_nnx_output(inputs, weights)
+            assert not np.isnan(output).any(), "NNX NaN with small values"
+
+        if 'tensorflow' in AVAILABLE_FRAMEWORKS:
+            output = get_tf_output(inputs, weights)
+            assert not np.isnan(output).any(), "TensorFlow NaN with small values"
+
+        if 'keras' in AVAILABLE_FRAMEWORKS:
+            output = get_keras_output(inputs, weights)
+            assert not np.isnan(output).any(), "Keras NaN with small values"
+
         if 'mlx' in AVAILABLE_FRAMEWORKS:
             output = get_mlx_output(inputs, weights)
             assert not np.isnan(output).any(), "MLX NaN with small values"
@@ -539,6 +592,18 @@ class TestNumericalStabilityAllFrameworks:
         if 'linen' in AVAILABLE_FRAMEWORKS:
             output = get_linen_output(inputs, weights)
             assert not np.isnan(output).any(), "Linen NaN with matching vectors"
+
+        if 'nnx' in AVAILABLE_FRAMEWORKS:
+            output = get_nnx_output(inputs, weights)
+            assert not np.isnan(output).any(), "NNX NaN with matching vectors"
+
+        if 'tensorflow' in AVAILABLE_FRAMEWORKS:
+            output = get_tf_output(inputs, weights)
+            assert not np.isnan(output).any(), "TensorFlow NaN with matching vectors"
+
+        if 'keras' in AVAILABLE_FRAMEWORKS:
+            output = get_keras_output(inputs, weights)
+            assert not np.isnan(output).any(), "Keras NaN with matching vectors"
 
         if 'mlx' in AVAILABLE_FRAMEWORKS:
             output = get_mlx_output(inputs, weights)

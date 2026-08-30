@@ -12,6 +12,7 @@ import sys
 import pytest
 
 from nmn import cli
+from tests import _isolated_backend
 
 
 # ---------------------------------------------------------------------------
@@ -206,14 +207,13 @@ def test_torch_guide_snippets_construct(capsys):
     )
 
 
-@pytest.mark.parametrize("fw", ["nnx", "linen", "mlx"])
+@pytest.mark.parametrize("fw", ["nnx", "linen"])
 def test_guide_attention_ctor_constructs_for_importable(fw, capsys):
     """Construct the attention object from each importable backend's guide
     using the exact kwargs the guide emits."""
     backends = {
         "nnx": ["jax", "flax"],
         "linen": ["jax", "flax"],
-        "mlx": ["mlx.core"],
     }
     try:
         for m in backends[fw]:
@@ -236,11 +236,29 @@ def test_guide_attention_ctor_constructs_for_importable(fw, capsys):
         line = _extract_lines(text, "MultiHeadAttention(num_heads=")[0]
         expr = line.split("=", 1)[1].strip()
         eval(expr, {"MultiHeadAttention": MultiHeadAttention})
-    elif fw == "mlx":
-        from nmn.mlx import MultiHeadYatAttention
-        line = _extract_lines(text, "MultiHeadYatAttention(embed_dim=")[0]
-        expr = line.split("=", 1)[1].strip()
-        eval(expr, {"MultiHeadYatAttention": MultiHeadYatAttention})
+
+
+def test_mlx_guide_attention_ctor_constructs_in_isolated_process(capsys):
+    """Never initialize the optional native MLX runtime in the pytest process."""
+    if not _isolated_backend.mlx_is_usable():
+        pytest.skip("MLX runtime is not usable in an isolated probe")
+
+    assert cli.main(["guide", "mlx"]) == 0
+    text = capsys.readouterr().out
+    line = _extract_lines(text, "MultiHeadYatAttention(embed_dim=")[0]
+    expr = line.split("=", 1)[1].strip()
+    script = (
+        "from nmn.mlx import MultiHeadYatAttention\n"
+        f"{expr}\n"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=30,
+    )
+    assert completed.returncode == 0, completed.stderr
 
 
 def test_features_mentions_may_ray_and_lazy(capsys):
@@ -273,6 +291,93 @@ def _probe_result(*, returncode=0, stdout="", stderr=""):
         returncode=returncode,
         stdout=stdout,
         stderr=stderr,
+    )
+
+
+def test_optional_backend_probe_success(monkeypatch):
+    completed = _probe_result(stdout=_isolated_backend._PROBE_MARKER + "\n")
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return completed
+
+    monkeypatch.setattr(_isolated_backend.subprocess, "run", fake_run)
+
+    assert _isolated_backend.isolated_import_succeeds(
+        ["mlx.core"], readiness="mlx"
+    )
+    command, kwargs = calls[0]
+    assert command[:3] == [sys.executable, "-c", _isolated_backend._PROBE_SCRIPT]
+    assert json.loads(command[3]) == {
+        "modules": ["mlx.core"],
+        "readiness": "mlx",
+    }
+    assert kwargs["check"] is False
+    assert kwargs["timeout"] == _isolated_backend._PROBE_TIMEOUT_SECONDS
+
+
+def test_optional_backend_probe_python_failure_is_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        _isolated_backend.subprocess,
+        "run",
+        lambda *args, **kwargs: _probe_result(
+            returncode=1, stderr="RuntimeError: backend initialization failed"
+        ),
+    )
+    assert not _isolated_backend.mlx_is_usable()
+
+
+@pytest.mark.parametrize("returncode", [-signal.SIGABRT, 128 + signal.SIGABRT])
+def test_optional_backend_probe_native_failure_is_unavailable(
+    monkeypatch, returncode
+):
+    monkeypatch.setattr(
+        _isolated_backend.subprocess,
+        "run",
+        lambda *args, **kwargs: _probe_result(returncode=returncode),
+    )
+    assert not _isolated_backend.mlx_is_usable()
+
+
+def _prepend_pythonpath(monkeypatch, directory):
+    existing = os.environ.get("PYTHONPATH")
+    value = str(directory)
+    if existing:
+        value += os.pathsep + existing
+    monkeypatch.setenv("PYTHONPATH", value)
+
+
+def test_optional_backend_probe_really_imports_in_child(tmp_path, monkeypatch):
+    (tmp_path / "healthy_backend.py").write_text("VALUE = 1\n", encoding="utf-8")
+    _prepend_pythonpath(monkeypatch, tmp_path)
+
+    assert _isolated_backend.isolated_import_succeeds(["healthy_backend"])
+
+
+def test_optional_backend_probe_really_contains_python_failure(
+    tmp_path, monkeypatch
+):
+    (tmp_path / "python_failure_backend.py").write_text(
+        "raise RuntimeError('initialization failed')\n", encoding="utf-8"
+    )
+    _prepend_pythonpath(monkeypatch, tmp_path)
+
+    assert not _isolated_backend.isolated_import_succeeds(
+        ["python_failure_backend"]
+    )
+
+
+def test_optional_backend_probe_really_contains_native_abort(
+    tmp_path, monkeypatch
+):
+    (tmp_path / "native_abort_backend.py").write_text(
+        "import os\nos.abort()\n", encoding="utf-8"
+    )
+    _prepend_pythonpath(monkeypatch, tmp_path)
+
+    assert not _isolated_backend.isolated_import_succeeds(
+        ["native_abort_backend"]
     )
 
 
