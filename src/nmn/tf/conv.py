@@ -28,9 +28,10 @@ def _grouped_convolution(inputs, kernel, groups, convolution):
 
     TensorFlow's implicit grouped-convolution support differs by dimension and
     device (notably, grouped CPU gradients and grouped ``conv3d`` are not
-    universally available). Explicit splitting uses ordinary convolution ops
-    on every supported backend while preserving the usual contiguous group
-    ordering.
+    universally available). Explicit splitting removes those grouped-kernel
+    limitations while preserving the usual contiguous group ordering. Device
+    restrictions of the underlying ordinary convolution (for example some
+    CPU dilated-convolution gradients) still apply.
     """
     if groups == 1:
         return convolution(inputs, kernel)
