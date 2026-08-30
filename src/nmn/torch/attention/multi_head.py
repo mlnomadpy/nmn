@@ -157,6 +157,13 @@ class MultiHeadYatAttention(nn.Module):
             t.to(target) if t is not None else None for t in tensors
         )
 
+    def _linear(self, input: Tensor, projection: nn.Linear) -> Tensor:
+        """Run a projection in compute dtype while retaining stored parameters."""
+        input, weight, bias = self._promote_dtype(
+            input, projection.weight, projection.bias
+        )
+        return F.linear(input, weight, bias)
+
     def forward(
         self,
         query: Tensor,
@@ -191,9 +198,9 @@ class MultiHeadYatAttention(nn.Module):
         kv_len = key.shape[1]
 
         # Project Q, K, V
-        q = self.q_proj(query)
-        k = self.k_proj(key)
-        v = self.v_proj(value)
+        q = self._linear(query, self.q_proj)
+        k = self._linear(key, self.k_proj)
+        v = self._linear(value, self.v_proj)
 
         # Reshape to multi-head: (B, L, E) → (B, L, H, D)
         q = q.reshape(batch_size, q_len, self.num_heads, self.head_dim)
@@ -236,6 +243,6 @@ class MultiHeadYatAttention(nn.Module):
 
         # Output projection
         if self.out_proj is not None:
-            x = self.out_proj(x)
+            x = self._linear(x, self.out_proj)
 
         return x

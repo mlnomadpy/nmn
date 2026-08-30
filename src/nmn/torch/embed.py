@@ -14,6 +14,8 @@ import torch.nn as nn
 from torch import Tensor
 from torch.nn.parameter import Parameter
 
+from ._precision import saturating_upcast
+
 __all__ = ["YatEmbed"]
 
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
@@ -122,7 +124,11 @@ class YatEmbed(nn.Module):
             Tensor of shape (*query.shape[:-1], num_embeddings) with
             YAT similarity scores.
         """
+        output_dtype = query.dtype
         embedding = self.embedding
+        if output_dtype in (torch.float16, torch.bfloat16):
+            query = saturating_upcast(query)
+            embedding = saturating_upcast(embedding)
 
         # Spherical normalization
         if self.spherical:
@@ -134,11 +140,11 @@ class YatEmbed(nn.Module):
 
         # Squared distances
         if self.spherical:
-            distances = 2.0 - 2.0 * y
+            distances = (2.0 - 2.0 * y).clamp(min=0.0)
         else:
             query_sq = torch.sum(query ** 2, dim=-1, keepdim=True)
             embed_sq = torch.sum(embedding ** 2, dim=1, keepdim=True).t()
-            distances = query_sq + embed_sq - 2.0 * y
+            distances = (query_sq + embed_sq - 2.0 * y).clamp(min=0.0)
 
         # YAT: (dot)^2 / (dist + eps)
         y = y ** 2 / (distances + self.epsilon)
@@ -149,4 +155,6 @@ class YatEmbed(nn.Module):
         elif self.alpha is not None:
             y = y * self.alpha
 
-        return y
+        if output_dtype in (torch.float16, torch.bfloat16):
+            y = y.clamp(max=torch.finfo(output_dtype).max)
+        return y.to(output_dtype)

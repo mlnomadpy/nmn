@@ -24,6 +24,8 @@ from torch.nn import functional as F
 from torch.nn.modules.utils import _single
 from torch.nn.parameter import Parameter
 
+from .._precision import saturating_upcast
+
 
 __all__ = [
     "DEFAULT_CONSTANT_ALPHA",
@@ -95,6 +97,7 @@ def setup_yat_attrs(
             torch.full(
                 (1,), raw_eps,
                 dtype=storage_dtype if storage_dtype else torch.float32,
+                device=device,
             )
         )
     else:
@@ -132,7 +135,16 @@ def promote_to_compute_dtype(layer, *tensors: Optional[Tensor]):
                 break
         if target is None:
             target = torch.float32
-    return tuple(t.to(target) if t is not None else None for t in tensors)
+    return tuple(
+        (
+            saturating_upcast(t).to(target)
+            if t is not None
+            and t.dtype in (torch.float16, torch.bfloat16)
+            and target != t.dtype
+            else t.to(target) if t is not None else None
+        )
+        for t in tensors
+    )
 
 
 def _resolve_bias_val(layer, weight: Tensor, out_channels: int) -> Optional[Tensor]:
@@ -157,7 +169,15 @@ def _resolve_alpha(layer, input: Tensor) -> Optional[Tensor]:
 
 def _resolve_eps(layer, dtype: torch.dtype):
     if layer.learnable_epsilon and layer.epsilon_param is not None:
-        return F.softplus(layer.epsilon_param.to(dtype))
+        epsilon_param = layer.epsilon_param
+        if dtype != epsilon_param.dtype and epsilon_param.dtype in (
+            torch.float16,
+            torch.bfloat16,
+        ):
+            epsilon_param = saturating_upcast(epsilon_param).to(dtype)
+        else:
+            epsilon_param = epsilon_param.to(dtype)
+        return F.softplus(epsilon_param)
     return layer.epsilon
 
 
@@ -188,6 +208,7 @@ def yat_conv_forward(
     *,
     out_channels: int,
     deterministic: bool = False,
+    weight_override: Optional[Tensor] = None,
 ) -> Tensor:
     """Shared forward body for YatConv{1,2,3}D.
 
@@ -198,13 +219,22 @@ def yat_conv_forward(
     use_dropconnect, drop_rate, training, mask, weight_normalized,
     learnable_epsilon, epsilon_param, epsilon).
     """
-    weight = layer.weight
+    weight = layer.weight if weight_override is None else weight_override
     bias_val = _resolve_bias_val(layer, weight, out_channels)
     alpha = _resolve_alpha(layer, input)
 
     input, weight, bias_val, alpha = promote_to_compute_dtype(
         layer, input, weight, bias_val, alpha
     )
+    output_dtype = input.dtype
+    if output_dtype in (torch.float16, torch.bfloat16):
+        # The distance subtraction and reciprocal backward are particularly
+        # cancellation-prone in low precision. Accumulate YAT math in fp32,
+        # while preserving parameter storage and the public output dtype.
+        input, weight, bias_val, alpha = tuple(
+            saturating_upcast(tensor) if tensor is not None else None
+            for tensor in (input, weight, bias_val, alpha)
+        )
 
     # DropConnect (inverted-dropout pattern).
     if layer.use_dropconnect and not deterministic and layer.drop_rate > 0.0 and layer.training:
@@ -255,9 +285,14 @@ def yat_conv_forward(
         kernel_sq_sum = torch.sum(weight ** 2, dim=reduce_dims)
 
     view_shape = (1, -1) + (1,) * (dot_prod_map.dim() - 2)
-    distance_sq = patch_sq_sum + kernel_sq_sum.view(*view_shape) - 2 * dot_prod_map
+    distance_sq = (
+        patch_sq_sum + kernel_sq_sum.view(*view_shape) - 2 * dot_prod_map
+    ).clamp(min=0.0)
 
-    return _yat_score(layer, dot_prod_map, distance_sq, bias_val, alpha)
+    output = _yat_score(layer, dot_prod_map, distance_sq, bias_val, alpha)
+    if output_dtype in (torch.float16, torch.bfloat16):
+        output = output.clamp(max=torch.finfo(output_dtype).max)
+    return output.to(output_dtype)
 
 
 # ----------------------------------------------------------------------
@@ -285,6 +320,12 @@ def yat_conv_transpose_forward(
     input, weight, bias_val, alpha = promote_to_compute_dtype(
         layer, input, weight, bias_val, alpha
     )
+    output_dtype = input.dtype
+    if output_dtype in (torch.float16, torch.bfloat16):
+        input, weight, bias_val, alpha = tuple(
+            saturating_upcast(tensor) if tensor is not None else None
+            for tensor in (input, weight, bias_val, alpha)
+        )
 
     if layer.use_dropconnect and not deterministic and layer.drop_rate > 0.0 and layer.training:
         keep_prob = 1.0 - layer.drop_rate
@@ -322,6 +363,11 @@ def yat_conv_transpose_forward(
     kernel_sq_sum = (w_grouped ** 2).sum(dim=reduce_dims).reshape(-1)
 
     view_shape = (1, -1) + (1,) * (dot_prod_map.dim() - 2)
-    distance_sq = patch_sq_sum + kernel_sq_sum.view(*view_shape) - 2 * dot_prod_map
+    distance_sq = (
+        patch_sq_sum + kernel_sq_sum.view(*view_shape) - 2 * dot_prod_map
+    ).clamp(min=0.0)
 
-    return _yat_score(layer, dot_prod_map, distance_sq, bias_val, alpha)
+    output = _yat_score(layer, dot_prod_map, distance_sq, bias_val, alpha)
+    if output_dtype in (torch.float16, torch.bfloat16):
+        output = output.clamp(max=torch.finfo(output_dtype).max)
+    return output.to(output_dtype)

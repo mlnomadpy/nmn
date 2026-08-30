@@ -190,7 +190,9 @@ Share kernel parameters across multiple layers to **reduce model size** and **en
 
 **Key concepts:**
 - **Kernel Bank**: A shared parameter store for multiple layers
-- **Auto-expansion**: Automatically grows when a larger layer needs more features
+- **Construction-time auto-expansion**: Grows when a larger layer is constructed,
+  until the first tied consumer executes. The first forward freezes capacity so
+  live gradients and optimizer state can never be invalidated.
 - **First-k slicing**: Layers extract the first k filters they need
 
 ```python
@@ -206,7 +208,7 @@ layer1 = YatConv2D(
 )
 
 layer2 = YatConv2D(
-    in_channels=32,
+    in_channels=3,
     out_channels=64,  # Automatically expands bank to 64
     kernel_size=3,
     tie_kernel_bank=True,
@@ -214,7 +216,7 @@ layer2 = YatConv2D(
 )
 
 layer3 = YatConv2D(
-    in_channels=64,
+    in_channels=3,
     out_channels=128,  # Automatically expands bank to 128
     kernel_size=3,
     tie_kernel_bank=True,
@@ -223,6 +225,17 @@ layer3 = YatConv2D(
 
 # All three layers share kernels, bank auto-expanded: 32 -> 64 -> 128
 ```
+
+Build every tied consumer before running any of them, or set
+`kernel_bank_size` on the first consumer to the maximum required capacity.
+Requesting a larger capacity after the first forward raises `ValueError`.
+
+Because PyTorch applies `.to()`, `.float()`, `.double()`, and similar operations
+one module at a time, they cannot safely migrate a class-level shared bank.
+Tied consumers therefore reject post-construction device/dtype migration with
+`RuntimeError`; construct every tied layer with its target `device`, `dtype`, or
+`param_dtype`. `YatNMN` and all tied convolution layers accept `device=` for
+this purpose. Non-tied layers retain normal migration behavior.
 
 **Output:**
 ```
@@ -642,6 +655,7 @@ YatNMN(
     tie_kernel_bank: bool = False,
     kernel_bank_size: Optional[int] = None,
     kernel_bank_id: str = 'default',
+    device=None,
 )
 ```
 

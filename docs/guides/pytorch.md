@@ -243,6 +243,7 @@ but still want the scale (`alpha`), shift (`bias`), and `epsilon` to adapt.
 | Symptom                                       | Likely cause                                             | Fix                                                                          |
 | --------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `NaN` loss within first ~100 steps            | `epsilon` too small for input/weight scale               | Use `YatNMN(..., epsilon=1e-3)` or `1e-2` for fp16/bf16                      |
+| fp16/bf16 gradient overflows after accumulation | The true sum exceeds the storage dtype's finite range  | Keep parameters/gradient accumulation in fp32; use autocast and loss scaling |
 | Loss plateaus very early                      | α uninitialized / fixed at 1.0                           | `YatNMN(..., use_alpha=True)`, or `constant_alpha=True` (fixes α = √2)       |
 | Output range very small                       | Weights too small at init                                | Default init usually works; if not, increase init scale or use `use_alpha`    |
 | Gradient explodes in late training            | Unnormalized inputs reaching a Yat layer                 | Add `LayerNorm` *before* the first Yat layer (not between Yat layers)        |

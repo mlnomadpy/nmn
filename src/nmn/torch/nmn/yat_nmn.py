@@ -1,16 +1,12 @@
 # mypy: allow-untyped-defs
 """YatNMN - Yet Another Transformation Neural Matter Network."""
-import logging
 import math
 import threading
 from typing import Optional, Union
 
-logger = logging.getLogger(__name__)
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 
 __all__ = ["YatNMN"]
 
@@ -42,6 +38,9 @@ class YatNMN(nn.Module):
             If None (default), use learnable alpha when alpha=True.
         dtype (torch.dtype): Data type for computation (default: infer from input and params).
         param_dtype (torch.dtype): Data type for parameter initialization (default: float32).
+        device: Device for parameter initialization. Tied consumers must be
+            constructed on their final device because post-construction
+            migration is intentionally rejected.
         epsilon (float): Small constant to avoid division by zero
         learnable_epsilon (bool): If True, epsilon becomes a learnable parameter passed
             through softplus to guarantee strict positivity (default: False).
@@ -57,7 +56,8 @@ class YatNMN(nn.Module):
             (fully backward compatible). Alias: ``freeze_kernel``.
         freeze_kernel (bool): Alias for ``lazy`` (logical OR with ``lazy``).
         tie_kernel_bank (bool): If True, reuse shared kernels across compatible layers.
-        kernel_bank_size (int): Optional explicit size for shared bank (auto-expands if needed).
+        kernel_bank_size (int): Optional explicit size for the shared bank. Banks
+            auto-expand only during construction, before any consumer executes.
         kernel_bank_id (str): Namespace for shared banks (allows multiple independent banks).
         kernel_init (callable): Initializer for the weight matrix
         bias_init (callable): Initializer for the bias
@@ -68,6 +68,7 @@ class YatNMN(nn.Module):
     DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
     # Class-level shared kernel banks (guarded by a lock for thread safety)
     _KERNEL_BANKS = {}
+    _KERNEL_BANK_USED = {}
     _KERNEL_BANKS_LOCK = threading.Lock()
 
     def __init__(
@@ -94,7 +95,8 @@ class YatNMN(nn.Module):
         kernel_bank_id: str = 'default',
         kernel_init: callable = None,
         bias_init: callable = None,
-        alpha_init: callable = None
+        alpha_init: callable = None,
+        device=None,
     ):
         super().__init__()
 
@@ -111,7 +113,7 @@ class YatNMN(nn.Module):
             # Initialize so that softplus(raw) ≈ epsilon: raw = log(exp(eps) - 1)
             raw_eps = math.log(math.exp(epsilon) - 1.0)
             self.epsilon_param = nn.Parameter(
-                torch.full((1,), raw_eps, dtype=param_dtype)
+                torch.full((1,), raw_eps, dtype=param_dtype, device=device)
             )
         else:
             self.register_parameter('epsilon_param', None)
@@ -124,6 +126,7 @@ class YatNMN(nn.Module):
         self.kernel_bank_size = kernel_bank_size
         self.kernel_bank_id = kernel_bank_id
         self._kernel_slice = slice(None)
+        initialize_kernel = True
 
         # Weight initialization
         if kernel_init is None:
@@ -133,7 +136,16 @@ class YatNMN(nn.Module):
         if tie_kernel_bank:
             # Auto-calculate bank size
             bank_out_features = kernel_bank_size or out_features
-            bank_key = (kernel_bank_id, in_features, param_dtype, id(kernel_init), positive_init)
+            if bank_out_features < out_features:
+                raise ValueError(
+                    f"kernel_bank_size ({bank_out_features}) must be at least "
+                    f"out_features ({out_features})"
+                )
+            bank_device = torch.empty((), dtype=param_dtype, device=device).device
+            bank_key = (
+                kernel_bank_id, in_features, param_dtype, bank_device,
+                id(kernel_init), positive_init,
+            )
 
             with YatNMN._KERNEL_BANKS_LOCK:
                 shared_weight = YatNMN._KERNEL_BANKS.get(bank_key)
@@ -141,37 +153,51 @@ class YatNMN(nn.Module):
                     # First layer: create bank
                     self.weight = nn.Parameter(torch.empty(
                         (bank_out_features, in_features),
-                        dtype=param_dtype
+                        dtype=param_dtype,
+                        device=bank_device,
                     ))
                     YatNMN._KERNEL_BANKS[bank_key] = self.weight
+                    YatNMN._KERNEL_BANK_USED[bank_key] = False
                 else:
-                    # Bank exists: auto-expand if needed
+                    if (shared_weight.device != bank_device
+                            or shared_weight.dtype != param_dtype):
+                        raise RuntimeError("shared kernel bank device/dtype registry is stale")
+                    if shared_weight.requires_grad != (not self.lazy):
+                        raise ValueError(
+                            "tied YatNMN consumers must use the same lazy/freeze_kernel "
+                            "setting because they share one Parameter"
+                        )
+                    initialize_kernel = False
                     existing_size = shared_weight.shape[0]
                     if bank_out_features > existing_size:
-                        # Auto-expand: pad with new random initialization
-                        logger.info("Auto-expanding kernel bank '%s': %d -> %d neurons",
-                                    kernel_bank_id, existing_size, bank_out_features)
+                        if YatNMN._KERNEL_BANK_USED.get(bank_key, False):
+                            raise ValueError(
+                                f"kernel bank '{kernel_bank_id}' capacity is frozen "
+                                f"at {existing_size} after first use; requested "
+                                f"{bank_out_features}"
+                            )
                         old_weight = shared_weight.data
                         new_weight = torch.empty(
                             (bank_out_features, in_features),
                             dtype=param_dtype,
-                            device=old_weight.device
+                            device=old_weight.device,
                         )
                         kernel_init(new_weight)
                         if positive_init:
                             new_weight.abs_()
-                        # Copy old weights
                         new_weight[:existing_size].copy_(old_weight)
                         shared_weight.data = new_weight
-                        YatNMN._KERNEL_BANKS[bank_key] = shared_weight
                     self.weight = shared_weight
+
+            self._kernel_bank_key = bank_key
 
             self._kernel_slice = slice(0, out_features)
         else:
             # Create weight parameter (non-shared)
             self.weight = nn.Parameter(torch.empty(
                 (out_features, in_features),
-                dtype=param_dtype
+                dtype=param_dtype,
+                device=device,
             ))
 
         # Handle alpha configuration
@@ -194,7 +220,8 @@ class YatNMN(nn.Module):
         elif alpha:
             self.alpha = nn.Parameter(torch.ones(
                 (1,),
-                dtype=param_dtype
+                dtype=param_dtype,
+                device=device,
             ))
         else:
             self.register_parameter('alpha', None)
@@ -211,7 +238,8 @@ class YatNMN(nn.Module):
             bias_shape = (1,) if scalar_bias else (out_features,)
             self.bias = nn.Parameter(torch.empty(
                 bias_shape,
-                dtype=param_dtype
+                dtype=param_dtype,
+                device=device,
             ))
         else:
             self.register_parameter('bias', None)
@@ -221,10 +249,13 @@ class YatNMN(nn.Module):
         self.scalar_bias = scalar_bias and self.bias is not None
 
         # Initialize parameters
-        self.reset_parameters(kernel_init, bias_init, alpha_init)
+        self.reset_parameters(
+            kernel_init, bias_init, alpha_init,
+            initialize_kernel=initialize_kernel,
+        )
 
         # Normalize kernel if requested: normalize each neuron (column) to have norm 1
-        if self.weight_normalized:
+        if self.weight_normalized and initialize_kernel:
             weight_norm = torch.sqrt(torch.sum(self.weight**2, dim=-1, keepdim=True))
             self.weight.data = self.weight.data / (weight_norm + 1e-8)
 
@@ -238,7 +269,9 @@ class YatNMN(nn.Module):
         self,
         kernel_init: callable = None,
         bias_init: callable = None,
-        alpha_init: callable = None
+        alpha_init: callable = None,
+        *,
+        initialize_kernel: bool = True,
     ):
         """
         Initialize network parameters with specified or default initializers.
@@ -246,8 +279,9 @@ class YatNMN(nn.Module):
         # Kernel (weight) initialization
         if kernel_init is None:
             kernel_init = nn.init.xavier_normal_
-        kernel_init(self.weight)
-        if self.positive_init:
+        if initialize_kernel:
+            kernel_init(self.weight)
+        if initialize_kernel and self.positive_init:
             with torch.no_grad():
                 self.weight.abs_()
 
@@ -309,6 +343,8 @@ class YatNMN(nn.Module):
         kernel = self.weight
         # Slice shared kernel if tying is enabled
         if self.tie_kernel_bank:
+            with YatNMN._KERNEL_BANKS_LOCK:
+                YatNMN._KERNEL_BANK_USED[self._kernel_bank_key] = True
             kernel = kernel[self._kernel_slice]
 
         # Resolve bias (learnable or constant)
@@ -383,6 +419,14 @@ class YatNMN(nn.Module):
             y = y * alpha_param
 
         return y
+
+    def _apply(self, fn, recurse=True):
+        if getattr(self, "tie_kernel_bank", False):
+            raise RuntimeError(
+                "device/dtype migration is unsupported for tied kernel-bank "
+                "consumers; construct them with the target device and dtype"
+            )
+        return super()._apply(fn, recurse=recurse)
 
     def extra_repr(self) -> str:
         """
