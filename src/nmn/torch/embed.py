@@ -14,7 +14,7 @@ import torch.nn as nn
 from torch import Tensor
 from torch.nn.parameter import Parameter
 
-from ._precision import saturating_upcast
+from ._precision import saturating_downcast, saturating_upcast
 
 __all__ = ["YatEmbed"]
 
@@ -157,4 +157,4 @@ class YatEmbed(nn.Module):
 
         if output_dtype in (torch.float16, torch.bfloat16):
             y = y.clamp(max=torch.finfo(output_dtype).max)
-        return y.to(output_dtype)
+        return saturating_downcast(y, output_dtype)

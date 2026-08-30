@@ -4,7 +4,8 @@ import numpy as np
 import pytest
 import torch
 
-from nmn.torch import YatNMN
+from nmn.torch import YatConv1D, YatConvTranspose1D, YatNMN
+from nmn.torch._precision import saturating_upcast
 from nmn.torch.attention import yat_attention
 
 
@@ -130,3 +131,38 @@ def test_low_precision_dense_and_attention_preserve_genuine_nan():
         training=False,
     )
     assert torch.isnan(weights).all()
+
+
+@pytest.mark.parametrize("kind", ["dense", "conv", "transpose"])
+def test_fp16_negative_large_outputs_saturate_finitely(kind):
+    if kind == "dense":
+        layer = YatNMN(
+            1, 1, bias=False, alpha=True, epsilon=1.0,
+            dtype=torch.float16, param_dtype=torch.float16,
+        )
+        inputs = torch.full((1, 1), 100.0, dtype=torch.float16)
+    else:
+        layer_cls = YatConv1D if kind == "conv" else YatConvTranspose1D
+        layer = layer_cls(
+            1, 1, 1, bias=False, use_alpha=True, epsilon=1.0,
+            dtype=torch.float16, param_dtype=torch.float16,
+        )
+        inputs = torch.full((1, 1, 1), 100.0, dtype=torch.float16)
+    with torch.no_grad():
+        layer.weight.fill_(100.0)
+        layer.alpha.fill_(-1.0)
+    output = layer(inputs)
+    assert torch.isfinite(output).all()
+    assert torch.all(output == torch.finfo(torch.float16).min)
+
+
+def test_reused_fp16_leaf_requires_fp32_gradient_storage():
+    lowp = torch.ones(1, dtype=torch.float16, requires_grad=True)
+    loss = (saturating_upcast(lowp) * 40000.0).sum()
+    loss = loss + (saturating_upcast(lowp) * 40000.0).sum()
+    loss.backward()
+    assert torch.isinf(lowp.grad).all()
+
+    fp32 = torch.ones(1, dtype=torch.float32, requires_grad=True)
+    ((fp32 * 40000.0).sum() + (fp32 * 40000.0).sum()).backward()
+    torch.testing.assert_close(fp32.grad, torch.tensor([80000.0]))

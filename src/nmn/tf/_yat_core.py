@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import tensorflow as tf
 
-from ._precision import reduction_safe_upcast
+from ._precision import reduction_safe_upcast, saturating_downcast
 
 
 __all__ = ["yat_score"]
@@ -54,4 +54,4 @@ def yat_score(layer, dot_prod_map, distance_sq_map):
     if layer.use_alpha and layer.alpha is not None:
         y = y * reduction_safe_upcast(layer.alpha)
 
-    return tf.cast(y, output_dtype)
+    return saturating_downcast(y, layer.dtype)

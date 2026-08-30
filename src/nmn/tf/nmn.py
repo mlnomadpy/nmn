@@ -12,7 +12,7 @@ from nmn._epsilon import (
 )
 
 from .saved_model import SingleInputSavedModelMixin
-from ._precision import reduction_safe_upcast
+from ._precision import reduction_safe_upcast, saturating_downcast
 
 # Default constant alpha value (sqrt(2))
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
@@ -291,7 +291,7 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
         elif self.alpha is not None:
             # Simple learnable alpha scaling
             y = y * reduction_safe_upcast(self.alpha)
-        y = tf.cast(y, output_dtype)
+        y = saturating_downcast(y, output_dtype)
 
         if self.return_weights:
             return y, self.kernel

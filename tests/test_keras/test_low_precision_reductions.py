@@ -18,7 +18,7 @@ from nmn.keras import (
     YatNMN,
     yat_attention,
 )
-from nmn.keras._yat_core import stable_yat_ratio
+from nmn.keras._yat_core import reduction_safe_upcast, stable_yat_ratio
 
 
 BACKEND = keras.backend.backend()
@@ -492,3 +492,35 @@ def test_dense_and_attention_preserve_genuine_nan():
     key = ops.full((1, 2, 1, 2), 100.0, dtype="float16")
     value = ops.ones((1, 2, 1, 1), dtype="float16")
     assert np.isnan(to_numpy(yat_attention(query, key, value))).all()
+
+
+def test_low_precision_attention_accepts_python_scalar_alpha():
+    query = ops.full((1, 1, 1, 2), 100.0, dtype="float16")
+    key = ops.full((1, 2, 1, 2), 99.0, dtype="float16")
+    value = ops.convert_to_tensor([[[[0.0]], [[1.0]]]], dtype="float16")
+    output = yat_attention(
+        query, key, value, alpha=1.0, training=False, epsilon=1.0
+    )
+    assert np.isfinite(to_numpy(output)).all()
+
+
+@pytest.mark.skipif(
+    BACKEND not in {"torch", "tensorflow"},
+    reason="documents lowp leaf accumulation on eager variable backends",
+)
+def test_reused_fp16_leaf_requires_fp32_gradient_storage():
+    if BACKEND == "torch":
+        torch = pytest.importorskip("torch")
+        lowp = torch.ones(1, dtype=torch.float16, requires_grad=True)
+        first = ops.sum(reduction_safe_upcast(lowp) * 40000.0)
+        second = ops.sum(reduction_safe_upcast(lowp) * 40000.0)
+        (gradient,) = torch.autograd.grad(first + second, (lowp,))
+    else:
+        tf = pytest.importorskip("tensorflow")
+        lowp = tf.Variable([1.0], dtype=tf.float16)
+        with tf.GradientTape() as tape:
+            first = ops.sum(reduction_safe_upcast(lowp) * 40000.0)
+            second = ops.sum(reduction_safe_upcast(lowp) * 40000.0)
+            total = first + second
+        gradient = tape.gradient(total, lowp)
+    assert np.isinf(to_numpy(gradient)).all()

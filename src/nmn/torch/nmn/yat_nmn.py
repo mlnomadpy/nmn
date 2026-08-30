@@ -14,7 +14,7 @@ from nmn._epsilon import (
     validate_epsilon_for_dtype,
 )
 
-from .._precision import saturating_upcast
+from .._precision import saturating_downcast, saturating_upcast
 
 __all__ = ["YatNMN"]
 
@@ -447,7 +447,7 @@ class YatNMN(nn.Module):
             # Simple learnable alpha scaling
             y = y * alpha_param
 
-        return y.to(output_dtype)
+        return saturating_downcast(y, output_dtype)
 
     def _apply(self, fn, recurse=True):
         if getattr(self, "tie_kernel_bank", False):

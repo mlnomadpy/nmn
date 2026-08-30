@@ -66,7 +66,7 @@ def yat_attention_weights(
     output_dtype = query.dtype
     query = reduction_safe_upcast(query)
     key = reduction_safe_upcast(key)
-    if alpha is not None:
+    if alpha is not None and hasattr(alpha, "dtype"):
         alpha = reduction_safe_upcast(alpha)
 
     # Scale by 1/√head_dim to match standard attention's score growth profile.

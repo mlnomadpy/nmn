@@ -176,3 +176,42 @@ def test_low_precision_core_preserves_genuine_nan():
     with tf.GradientTape() as tape:
         loss = tf.reduce_sum(reduction_safe_upcast(variable) * np.nan)
     assert np.isnan(tape.gradient(loss, variable).numpy()).all()
+
+
+@pytest.mark.parametrize("kind", ["dense", "conv", "transpose"])
+def test_fp16_negative_large_outputs_saturate_finitely(kind):
+    if kind == "dense":
+        layer = YatNMN(
+            features=1, use_bias=False, use_alpha=True, epsilon=1.0,
+            dtype=tf.float16,
+        )
+        inputs = tf.fill((1, 1), tf.constant(100.0, tf.float16))
+    else:
+        layer_cls = YatConv1D if kind == "conv" else YatConvTranspose1D
+        layer = layer_cls(
+            filters=1, kernel_size=1, use_bias=False, use_alpha=True,
+            epsilon=1.0, dtype=tf.float16,
+        )
+        inputs = tf.fill((1, 1, 1), tf.constant(100.0, tf.float16))
+    layer(inputs)
+    layer.kernel.assign(tf.fill(layer.kernel.shape, tf.constant(100.0, tf.float16)))
+    layer.alpha.assign(tf.constant([-1.0], tf.float16))
+    output = layer(inputs)
+    assert np.isfinite(output.numpy()).all()
+    assert np.all(output.numpy() == np.finfo(np.float16).min)
+
+
+@pytest.mark.parametrize("compiled", [False, True])
+def test_reused_fp16_leaf_requires_fp32_gradient_storage(compiled):
+    def evaluate(variable):
+        with tf.GradientTape() as tape:
+            first = tf.reduce_sum(reduction_safe_upcast(variable) * 40000.0)
+            second = tf.reduce_sum(reduction_safe_upcast(variable) * 40000.0)
+            total = first + second
+        return tape.gradient(total, variable)
+
+    gradient_fn = tf.function(evaluate) if compiled else evaluate
+    lowp_grad = gradient_fn(tf.Variable([1.0], dtype=tf.float16))
+    assert np.isinf(lowp_grad.numpy()).all()
+    fp32_grad = gradient_fn(tf.Variable([1.0], dtype=tf.float32))
+    np.testing.assert_array_equal(fp32_grad.numpy(), np.array([80000.0]))

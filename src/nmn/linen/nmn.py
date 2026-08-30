@@ -29,7 +29,7 @@ def _epsilon_dtype(param_dtype, epsilon):
     validate_epsilon_for_dtype(epsilon, dtype)
     return dtype
 
-from ._yat_core import reduction_safe_upcast
+from ._yat_core import reduction_safe_upcast, saturating_downcast
 
 # Default constant alpha value (sqrt(2))
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
@@ -274,7 +274,7 @@ class YatNMN(Module):
             # Simple learnable alpha scaling
             y = y * alpha
 
-        y = y.astype(output_dtype)
+        y = saturating_downcast(y, output_dtype)
         if self.return_weights:
            return y, return_kernel
         return y

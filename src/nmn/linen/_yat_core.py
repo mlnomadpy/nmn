@@ -15,42 +15,63 @@ from typing import Optional
 
 import jax
 import jax.numpy as jnp
+from jax.custom_transpose import custom_transpose
 from jax import Array
 
 
 __all__ = [
     "reduction_safe_upcast",
     "safe_kernel_init",
+    "saturating_downcast",
     "upcast_yat_operands",
     "yat_score",
 ]
 
 
-@jax.custom_vjp
+@jax.custom_jvp
 def _reduction_safe_upcast(value):
     return value.astype(jnp.float32)
 
 
-def _reduction_safe_upcast_fwd(value):
-    return value.astype(jnp.float32), jnp.zeros((), dtype=value.dtype)
+@_reduction_safe_upcast.defjvp
+def _reduction_safe_upcast_jvp(primals, tangents):
+    (value,), (tangent,) = primals, tangents
+    output = _reduction_safe_upcast(value)
 
+    @custom_transpose
+    def tangent_cast(dtype_anchor, tangent_value):
+        del dtype_anchor
+        return tangent_value.astype(jnp.float32)
 
-def _reduction_safe_upcast_bwd(dtype_anchor, cotangent):
-    limits = jnp.finfo(dtype_anchor.dtype)
-    cotangent = jnp.clip(cotangent, limits.min, limits.max)
-    return (cotangent.astype(dtype_anchor.dtype),)
+    @tangent_cast.def_transpose
+    def tangent_cast_transpose(dtype_anchor, cotangent):
+        limits = jnp.finfo(dtype_anchor.dtype)
+        cotangent = jnp.clip(cotangent, limits.min, limits.max)
+        return (cotangent.astype(dtype_anchor.dtype),)
 
-
-_reduction_safe_upcast.defvjp(
-    _reduction_safe_upcast_fwd, _reduction_safe_upcast_bwd
-)
+    tangent_output_type = jax.typeof(output).to_tangent_aval()
+    tangent_output = tangent_cast(tangent_output_type, value, tangent)
+    return output, tangent_output
 
 
 def reduction_safe_upcast(value):
-    """Upcast lowp values after aggregating and saturating their cotangent."""
+    """Upcast lowp arithmetic with JVP and operator-local VJP saturation.
+
+    The custom transpose clips a single returning aggregate cotangent while
+    leaving forward-mode tangents unchanged. Separate paths may still be added
+    later at a shared low-precision leaf and overflow; use fp32 storage there.
+    """
     if value.dtype in (jnp.float16, jnp.bfloat16):
         return _reduction_safe_upcast(value)
     return value
+
+
+def saturating_downcast(value, dtype):
+    """Two-sided finite cast to a low-precision public output dtype."""
+    if dtype in (jnp.float16, jnp.bfloat16):
+        limits = jnp.finfo(dtype)
+        value = jnp.clip(value, limits.min, limits.max)
+    return value.astype(dtype)
 
 
 def safe_kernel_init(initializer):
@@ -117,4 +138,4 @@ def yat_score(
     if alpha is not None:
         y = y * alpha
 
-    return y.astype(output_dtype)
+    return saturating_downcast(y, output_dtype) if output_dtype is not None else y

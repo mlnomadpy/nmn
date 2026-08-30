@@ -6,7 +6,12 @@ import tensorflow as tf
 
 
 def reduction_safe_upcast(value: tf.Tensor) -> tf.Tensor:
-    """Upcast lowp values and saturate their aggregated return cotangent."""
+    """Upcast lowp values and saturate one returning cotangent.
+
+    TensorFlow may subsequently add multiple finite cotangents at a reused
+    low-precision leaf.  An out-of-range final sum is inherently
+    unrepresentable; use fp32 variable/gradient storage when that is possible.
+    """
     value = tf.convert_to_tensor(value)
     if value.dtype not in (tf.float16, tf.bfloat16):
         return value
@@ -25,3 +30,11 @@ def reduction_safe_upcast(value: tf.Tensor) -> tf.Tensor:
         return result, grad
 
     return upcast(value)
+
+
+def saturating_downcast(value: tf.Tensor, dtype: tf.DType) -> tf.Tensor:
+    """Two-sided finite cast to a low-precision public output dtype."""
+    if dtype in (tf.float16, tf.bfloat16):
+        limits = 65504.0 if dtype == tf.float16 else 3.38953139e38
+        value = tf.clip_by_value(value, -limits, limits)
+    return tf.cast(value, dtype)

@@ -66,6 +66,15 @@ Same identity, applied per patch. `YatConv1D`, `YatConv2D`, `YatConv3D`, and the
 | Very high-magnitude inputs      | scale-aware: `epsilon = c·var(x)` | Keeps the relative contribution of `ε` constant.                                           |
 | Embeddings (large vocab)        | `1e-3` to `1e-5`                 | Tune via validation loss; embeddings often cluster near zero early in training.            |
 
+Low-precision score arithmetic is accumulated in fp32 and final fp16/bf16
+outputs are saturated to the destination dtype's finite range. This prevents
+avoidable intermediate overflow, but it cannot make an out-of-range gradient
+representable at a low-precision leaf. In particular, separate finite
+cotangents can be added by autodiff after they leave a layer and overflow the
+shared fp16 variable. Keep trainable parameters and gradient accumulation in
+fp32 (with low-precision compute/autocast) when large reductions or reused
+leaves can produce gradients outside the fp16 range.
+
 If you see `NaN` in early training steps, **increase `epsilon` first** before changing learning rate or normalization. This is the most common failure mode.
 
 ### The `alpha` knob
