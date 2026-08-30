@@ -15,6 +15,14 @@ from nmn.tf.attention import (
 
 
 class TestAttentionFunctions:
+    def test_negative_scale_cannot_make_masked_key_win_softmax(self):
+        q = tf.ones((1, 1, 1, 4))
+        k = tf.ones((1, 2, 1, 4))
+        weights = yat_attention_weights(
+            q, k, mask=tf.constant([True, False]), scale=-1.0
+        )
+        np.testing.assert_array_equal(weights.numpy(), [[[[1.0, 0.0]]]])
+
     @pytest.mark.parametrize("dtype", [tf.float32, tf.float16])
     @pytest.mark.parametrize("spherical", [False, True])
     def test_fully_masked_rows_are_zero_with_finite_tf_function_gradients(
@@ -112,15 +120,19 @@ class TestAttentionFunctions:
 
 
 class TestMultiHeadYatAttention:
+    @pytest.mark.parametrize("mask_rank", [2, 4])
     @pytest.mark.parametrize("cross_attention", [False, True])
-    def test_fully_masked_rows_stay_zero_after_biased_projection(self, cross_attention):
+    def test_fully_masked_rows_stay_zero_after_biased_projection(
+        self, cross_attention, mask_rank
+    ):
         attn = MultiHeadYatAttention(embed_dim=8, num_heads=2)
         query = tf.Variable(tf.random.normal((1, 2, 8), seed=73))
         context = tf.Variable(tf.random.normal((1, 3, 8), seed=74))
         _ = attn(query)
         attn.out_bias.assign(tf.fill(attn.out_bias.shape, 3.0))
         kv_length = 3 if cross_attention else 2
-        mask_array = np.ones((1, 1, 2, kv_length), dtype=bool)
+        shape = (2, kv_length) if mask_rank == 2 else (1, 1, 2, kv_length)
+        mask_array = np.ones(shape, dtype=bool)
         mask_array[..., 0, :] = False
         mask = tf.constant(mask_array)
 

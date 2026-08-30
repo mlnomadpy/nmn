@@ -100,6 +100,16 @@ def test_yat_attention_spherical_shape():
     assert out.shape == (B, Q, H, D)
 
 
+def test_negative_scale_cannot_make_masked_key_win_softmax():
+    q = mx.ones((1, 1, 1, 4))
+    k = mx.ones((1, 2, 1, 4))
+    weights = yat_attention_weights(
+        q, k, mask=mx.array([True, False]), scale=-1.0
+    )
+    mx.eval(weights)
+    np.testing.assert_array_equal(np.asarray(weights), [[[[1.0, 0.0]]]])
+
+
 @pytest.mark.parametrize("dtype", [mx.float32, mx.float16])
 @pytest.mark.parametrize("spherical", [False, True])
 def test_fully_masked_rows_are_zero_with_finite_gradients(spherical, dtype):
@@ -138,15 +148,19 @@ def test_mha_cross_attn_shape():
     assert mha(q, ctx, ctx).shape == (2, 5, 16)
 
 
+@pytest.mark.parametrize("mask_rank", [2, 4])
 @pytest.mark.parametrize("cross_attention", [False, True])
-def test_mha_fully_masked_rows_stay_zero_after_biased_projection(cross_attention):
+def test_mha_fully_masked_rows_stay_zero_after_biased_projection(
+    cross_attention, mask_rank
+):
     mha = MultiHeadYatAttention(embed_dim=8, num_heads=2)
     query = mx.random.normal(shape=(1, 2, 8))
     context = mx.random.normal(shape=(1, 3, 8))
     _ = mha(query)
     mha.out_bias = mx.full(mha.out_bias.shape, 3.0)
     kv_length = 3 if cross_attention else 2
-    mask_np = np.ones((1, 1, 2, kv_length), dtype=bool)
+    shape = (2, kv_length) if mask_rank == 2 else (1, 1, 2, kv_length)
+    mask_np = np.ones(shape, dtype=bool)
     mask_np[..., 0, :] = False
     mask = mx.array(mask_np)
     output = mha(query, context, context, mask=mask) if cross_attention else mha(query, mask=mask)

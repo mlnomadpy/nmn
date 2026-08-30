@@ -138,7 +138,9 @@ def yat_attention_weights(
 
     # Apply mask
     if mask is not None:
-        mask = mask.to(dtype=torch.bool)
+        mask = torch.broadcast_to(
+            mask.to(dtype=torch.bool), attn_weights.shape
+        )
         row_has_key = mask.any(dim=-1, keepdim=True)
         attn_weights = attn_weights.masked_fill(~mask, float("-inf"))
         # Softmax(all -inf) is NaN.  Replace only fully masked rows with a
@@ -264,7 +266,9 @@ def yat_attention_normalized(
 
     # Mask
     if mask is not None:
-        mask = mask.to(dtype=torch.bool)
+        mask = torch.broadcast_to(
+            mask.to(dtype=torch.bool), attn_weights.shape
+        )
         row_has_key = mask.any(dim=-1, keepdim=True)
         attn_weights = attn_weights.masked_fill(~mask, float("-inf"))
         attn_weights = torch.where(

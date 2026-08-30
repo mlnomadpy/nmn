@@ -14,6 +14,14 @@ from nmn.torch.attention.multi_head import MultiHeadYatAttention
 
 
 class TestAttentionFunctions:
+    def test_negative_scale_cannot_make_masked_key_win_softmax(self):
+        q = torch.ones(1, 1, 1, 4)
+        k = torch.ones(1, 2, 1, 4)
+        weights = yat_attention_weights(
+            q, k, mask=torch.tensor([True, False]), scale=-1.0
+        )
+        assert torch.equal(weights, torch.tensor([[[[1.0, 0.0]]]]))
+
     @pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
     @pytest.mark.parametrize("spherical", [False, True])
     def test_fully_masked_rows_are_zero_with_finite_compiled_gradients(
@@ -120,9 +128,10 @@ class TestAttentionFunctions:
 
 
 class TestMultiHeadYatAttention:
+    @pytest.mark.parametrize("mask_rank", [2, 4])
     @pytest.mark.parametrize("cross_attention", [False, True])
     def test_fully_masked_rows_stay_zero_after_biased_output_projection(
-        self, cross_attention
+        self, cross_attention, mask_rank
     ):
         attn = MultiHeadYatAttention(embed_dim=8, num_heads=2)
         with torch.no_grad():
@@ -130,12 +139,18 @@ class TestMultiHeadYatAttention:
         query = torch.randn(1, 2, 8, requires_grad=True)
         context = torch.randn(1, 3, 8, requires_grad=True)
         kv_length = 3 if cross_attention else 2
-        mask = torch.ones(1, 1, 2, kv_length, dtype=torch.bool)
-        mask[..., 0, :] = False
+        if mask_rank == 2:
+            mask = torch.ones(2, kv_length, dtype=torch.bool)
+            mask[0, :] = False
+        else:
+            mask = torch.ones(1, 1, 2, kv_length, dtype=torch.bool)
+            mask[..., 0, :] = False
         output = (
-            attn(query, key=context, value=context, mask=mask)
+            torch.compile(attn, backend="eager")(
+                query, key=context, value=context, mask=mask
+            )
             if cross_attention
-            else attn(query, mask=mask)
+            else torch.compile(attn, backend="eager")(query, mask=mask)
         )
         assert torch.equal(output[:, 0], torch.zeros_like(output[:, 0]))
         assert torch.isfinite(output).all()

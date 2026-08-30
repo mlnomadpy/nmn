@@ -25,6 +25,23 @@ def _inputs():
     return q, k, v, mask
 
 
+def _broadcast_mask(rank, batch, heads, q_length, kv_length):
+    if rank == 1:
+        mask = jnp.zeros((kv_length,), dtype=jnp.bool_)
+    elif rank == 2:
+        mask = jnp.ones((q_length, kv_length), dtype=jnp.bool_)
+        mask = mask.at[0, :].set(False)
+    elif rank == 3:
+        mask = jnp.ones((heads, q_length, kv_length), dtype=jnp.bool_)
+        mask = mask.at[:, 0, :].set(False)
+    else:
+        mask = jnp.ones((batch, heads, q_length, kv_length), dtype=jnp.bool_)
+        mask = mask.at[0, :, 0, :].set(False)
+        mask = mask.at[1, :, 1, :].set(False)
+    effective = jnp.broadcast_to(mask, (batch, heads, q_length, kv_length))
+    return mask, jnp.any(effective, axis=(1, 3))
+
+
 @pytest.mark.parametrize("normalization", ["softmax", "l1", "softermax"])
 def test_boolean_mask_zero_policy_is_jitted_differentiable_and_exact(normalization):
     q, k, v, mask = _inputs()
@@ -114,6 +131,16 @@ def test_low_precision_fully_masked_softmax_is_finite(dtype):
         assert np.all(np.isfinite(np.asarray(grad, dtype=np.float32)))
 
 
+def test_negative_scale_cannot_make_a_masked_key_win_softmax():
+    q = jnp.ones((1, 1, 1, 4), dtype=jnp.float32)
+    k = jnp.ones((1, 2, 1, 4), dtype=jnp.float32)
+    mask = jnp.array([True, False])
+    weights = yat_attention_weights(
+        q, k, mask=mask, alpha=jnp.array(-1.0), deterministic=True
+    )
+    np.testing.assert_array_equal(np.asarray(weights), [[[[1.0, 0.0]]]])
+
+
 def test_fully_masked_output_and_gradient_parity_with_torch():
     torch = pytest.importorskip("torch")
     from nmn.torch.attention import (
@@ -148,18 +175,21 @@ def test_fully_masked_output_and_gradient_parity_with_torch():
         )
 
 
+@pytest.mark.parametrize("mask_rank", [1, 2, 3, 4])
 @pytest.mark.parametrize("cross_attention", [False, True])
-def test_multi_head_module_zeroes_fully_masked_rows_after_projection(cross_attention):
+def test_multi_head_module_zeroes_fully_masked_rows_after_projection(
+    cross_attention, mask_rank
+):
     module = MultiHeadAttention(
         num_heads=2,
         in_features=8,
         out_bias_init=nnx.initializers.constant(3.0),
         rngs=nnx.Rngs(70),
     )
-    query = jax.random.normal(jax.random.key(73), (1, 2, 8))
-    context = jax.random.normal(jax.random.key(74), (1, 3, 8))
+    query = jax.random.normal(jax.random.key(73), (2, 2, 8))
+    context = jax.random.normal(jax.random.key(74), (2, 3, 8))
     kv_length = 3 if cross_attention else 2
-    mask = jnp.ones((1, 1, 2, kv_length), dtype=jnp.bool_).at[..., 0, :].set(False)
+    mask, expected_valid = _broadcast_mask(mask_rank, 2, 2, 2, kv_length)
 
     @nnx.jit
     def apply(module, query, context, mask):
@@ -168,7 +198,9 @@ def test_multi_head_module_zeroes_fully_masked_rows_after_projection(cross_atten
         return module(query, mask=mask, deterministic=True)
 
     output = apply(module, query, context, mask)
-    np.testing.assert_array_equal(np.asarray(output[:, 0]), 0.0)
+    np.testing.assert_array_equal(
+        np.asarray(output)[~np.asarray(expected_valid)], 0.0
+    )
     assert np.all(np.isfinite(np.asarray(output)))
     if cross_attention:
         grads = jax.grad(
@@ -182,8 +214,11 @@ def test_multi_head_module_zeroes_fully_masked_rows_after_projection(cross_atten
     assert all(np.all(np.isfinite(np.asarray(grad))) for grad in grads)
 
 
+@pytest.mark.parametrize("mask_rank", [1, 2, 3, 4])
 @pytest.mark.parametrize("normalization", ["softmax", "l1", "softermax"])
-def test_rotary_module_zeroes_fully_masked_rows_for_every_normalization(normalization):
+def test_rotary_module_zeroes_fully_masked_rows_for_every_normalization(
+    normalization, mask_rank
+):
     module = RotaryYatAttention(
         embed_dim=8,
         num_heads=2,
@@ -194,10 +229,12 @@ def test_rotary_module_zeroes_fully_masked_rows_for_every_normalization(normaliz
     )
     # Make the projection-bias regression observable.
     module.o_proj.bias[...] = 2.0
-    x = jax.random.normal(jax.random.key(76), (1, 2, 8))
-    mask = jnp.ones((1, 1, 2, 2), dtype=jnp.bool_).at[..., 0, :].set(False)
+    x = jax.random.normal(jax.random.key(76), (2, 2, 8))
+    mask, expected_valid = _broadcast_mask(mask_rank, 2, 2, 2, 2)
     output = nnx.jit(lambda m, x, mask: m(x, mask=mask, deterministic=True))(
         module, x, mask
     )
-    np.testing.assert_array_equal(np.asarray(output[:, 0]), 0.0)
+    np.testing.assert_array_equal(
+        np.asarray(output)[~np.asarray(expected_valid)], 0.0
+    )
     assert np.all(np.isfinite(np.asarray(output)))

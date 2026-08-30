@@ -66,10 +66,11 @@ class TestAttentionFunctions:
 
 
 class TestMultiHeadAttention:
+    @pytest.mark.parametrize("mask_rank", [2, 4])
     @pytest.mark.parametrize("normalization", ["softmax", "l1"])
     @pytest.mark.parametrize("cross_attention", [False, True])
     def test_fully_masked_rows_stay_zero_after_biased_projection(
-        self, normalization, cross_attention
+        self, normalization, cross_attention, mask_rank
     ):
         model = MultiHeadAttention(
             num_heads=2,
@@ -79,7 +80,8 @@ class TestMultiHeadAttention:
         query = jax.random.normal(jax.random.key(73), (1, 2, 8))
         context = jax.random.normal(jax.random.key(74), (1, 3, 8))
         kv_length = 3 if cross_attention else 2
-        mask = jnp.ones((1, 1, 2, kv_length), dtype=jnp.bool_).at[..., 0, :].set(False)
+        shape = (2, kv_length) if mask_rank == 2 else (1, 1, 2, kv_length)
+        mask = jnp.ones(shape, dtype=jnp.bool_).at[..., 0, :].set(False)
         args = (query, context, context) if cross_attention else (query,)
         variables = model.init(jax.random.key(75), *args, mask=mask)
         output = jax.jit(lambda variables, *args: model.apply(variables, *args, mask=mask))(

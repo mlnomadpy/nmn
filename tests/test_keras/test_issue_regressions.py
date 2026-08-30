@@ -97,15 +97,27 @@ def test_fully_masked_attention_is_zero_differentiable_and_backend_stable(dtype)
     )
 
 
+def test_negative_scale_cannot_make_masked_key_win_softmax():
+    query = tensor(np.ones((1, 1, 1, 4), dtype=np.float32))
+    key = tensor(np.ones((1, 2, 1, 4), dtype=np.float32))
+    mask = tensor([True, False], dtype="bool")
+    weights = to_numpy(yat_attention_weights(query, key, mask=mask, scale=-1.0))
+    np.testing.assert_array_equal(weights, [[[[1.0, 0.0]]]])
+
+
+@pytest.mark.parametrize("mask_rank", [2, 4])
 @pytest.mark.parametrize("cross_attention", [False, True])
-def test_attention_layer_zeroes_fully_masked_rows_after_projection(cross_attention):
+def test_attention_layer_zeroes_fully_masked_rows_after_projection(
+    cross_attention, mask_rank
+):
     layer = MultiHeadYatAttention(embed_dim=8, num_heads=2)
     query = keras.random.normal((1, 2, 8), seed=73)
     context = keras.random.normal((1, 3, 8), seed=74)
     _ = layer(query)
     layer.out_bias.assign(np.full(layer.out_bias.shape, 3.0, dtype=np.float32))
     kv_length = 3 if cross_attention else 2
-    mask_np = np.ones((1, 1, 2, kv_length), dtype=bool)
+    shape = (2, kv_length) if mask_rank == 2 else (1, 1, 2, kv_length)
+    mask_np = np.ones(shape, dtype=bool)
     mask_np[..., 0, :] = False
     mask = tensor(mask_np, dtype="bool")
     output = (

@@ -284,10 +284,16 @@ class MultiHeadAttention(Module):
 
         q, k, v, alpha_val = promote_dtype(q, k, v, alpha_val, dtype=self.dtype)
 
+        effective_mask = None
+        if mask is not None:
+            effective_mask = jnp.broadcast_to(
+                mask, q.shape[:-3] + (q.shape[-2], q.shape[-3], k.shape[-3])
+            )
+
         # YAT attention (using NNX functions under the hood)
         x = _nnx_yat_attention(
             q, k, v,
-            mask=mask,
+            mask=effective_mask,
             dropout_rate=self.dropout_rate,
             deterministic=deterministic,
             epsilon=self.epsilon,
@@ -309,8 +315,8 @@ class MultiHeadAttention(Module):
             name="out",
         )(x)
 
-        if mask is not None:
-            query_has_key = jnp.any(mask, axis=(-3, -1))
+        if effective_mask is not None:
+            query_has_key = jnp.any(effective_mask, axis=(-3, -1))
             x = jnp.where(query_has_key[..., None], x, jnp.zeros_like(x))
 
         return x

@@ -460,8 +460,13 @@ class RotaryYatAttention(nn.Module):
             out = self._linear(out, self.out_kernel, getattr(self, "out_bias", None))
         effective_mask = full_mask if self.decode and L > 1 else mask
         if effective_mask is not None:
+            attention_k_len = cache_new if self.decode else K_len
+            effective_mask = mx.broadcast_to(
+                effective_mask.astype(mx.bool_),
+                (B, self.num_heads, L, attention_k_len),
+            )
             query_has_key = mx.any(
-                effective_mask.astype(mx.bool_), axis=(-3, -1)
+                effective_mask, axis=(-3, -1)
             )
             out = mx.where(query_has_key[..., None], out, mx.zeros_like(out))
         return out

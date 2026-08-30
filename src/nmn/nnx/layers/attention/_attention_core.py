@@ -109,6 +109,9 @@ def finalize_attention_weights(
         )
 
     if effective_mask is not None:
+        effective_mask = jnp.broadcast_to(effective_mask, attn_weights.shape)
+
+    if effective_mask is not None:
         if normalization == "l1" or use_softermax or normalization == "softermax":
             # L1/softermax operate on non-negative scores; zero is their mask
             # identity and naturally makes a fully masked row all-zero.
