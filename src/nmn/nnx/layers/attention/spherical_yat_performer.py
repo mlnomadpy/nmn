@@ -283,6 +283,7 @@ def yat_tp_attention(
     epsilon: float = 1e-5,
     precision: PrecisionLike = None,
     gradient_scaling: bool = True,
+    mask: Array | None = None,
 ) -> Array:
     """Compute YAT attention using anchor-based tensor product features.
 
@@ -303,6 +304,9 @@ def yat_tp_attention(
         epsilon: Numerical stability constant.
         precision: JAX precision.
         gradient_scaling: Unused, kept for API compatibility.
+        mask: Optional key-padding mask of shape
+            ``[..., heads, 1, kv_length]``. Query-dependent masks are not
+            compatible with the linear-attention reordering.
 
     Returns:
         Output [..., q_length, num_heads, v_dim].
@@ -316,6 +320,28 @@ def yat_tp_attention(
     # add epsilon for numerical safety
     q_feat = q_feat + epsilon
     k_feat = k_feat + epsilon
+
+    if mask is not None:
+        mask = jnp.asarray(mask, dtype=jnp.bool_)
+        if mask.ndim < 3 or mask.shape[-2] != 1:
+            raise ValueError(
+                "Linear YAT attention only supports key-padding masks with "
+                "shape [..., heads, 1, kv_length]; use causal=True for causal masks."
+            )
+        if mask.shape[-1] not in (1, k_feat.shape[-3]):
+            raise ValueError(
+                f"Mask key length {mask.shape[-1]} is incompatible with "
+                f"kv_length {k_feat.shape[-3]}."
+            )
+        key_mask = jnp.swapaxes(jnp.squeeze(mask, axis=-2), -1, -2)[..., None]
+        try:
+            key_mask = jnp.broadcast_to(key_mask, k_feat.shape[:-1] + (1,))
+        except ValueError as exc:
+            raise ValueError(
+                f"Mask shape {mask.shape} is not broadcastable to key shape "
+                f"{k_feat.shape}."
+            ) from exc
+        k_feat = jnp.where(key_mask, k_feat, 0.0)
 
     if causal:
         kv = jnp.einsum("...khm,...khd->...khmd", k_feat, value, precision=precision)

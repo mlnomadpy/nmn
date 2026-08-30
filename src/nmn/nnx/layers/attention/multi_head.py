@@ -27,7 +27,6 @@ from flax.nnx import rnglib
 from flax.nnx.module import Module, first_from
 from flax.nnx.nn import initializers
 from flax.nnx.nn.linear import LinearGeneral, default_kernel_init
-from flax.nnx.nn.normalization import LayerNorm
 from flax.typing import (
     Dtype,
     Shape,
@@ -42,6 +41,48 @@ from .masks import combine_masks
 
 # Default constant alpha value (sqrt(2)), same as NMN
 DEFAULT_CONSTANT_ALPHA = jnp.sqrt(2.0)
+_L2_NORMALIZE_EPSILON = 1e-12
+
+
+def _l2_normalize_per_head(x: Array) -> Array:
+    """Match ``torch.nn.functional.normalize(..., p=2, eps=1e-12)``."""
+    norm = jnp.linalg.norm(x, axis=-1, keepdims=True)
+    epsilon = jnp.asarray(_L2_NORMALIZE_EPSILON, dtype=norm.dtype)
+    return x / jnp.maximum(norm, epsilon)
+
+
+def _raise_cache_overflow(index: Array, max_length: int) -> None:
+    if int(index) >= max_length:
+        raise ValueError(f"Autoregressive cache is full at length {max_length}.")
+
+
+def _check_cache_capacity(index: Array, max_length: int) -> None:
+    """Fail before a cache write in eager mode and under ``nnx.jit``."""
+    if isinstance(index, jax.core.Tracer):
+        jax.debug.callback(
+            functools.partial(_raise_cache_overflow, max_length=max_length),
+            index,
+            ordered=True,
+        )
+    else:
+        _raise_cache_overflow(index, max_length)
+
+
+def _validate_decode_mask(mask: Array | None, expected_shape: tuple[int, ...]) -> None:
+    if mask is None:
+        return
+    try:
+        broadcast_shape = jnp.broadcast_shapes(tuple(mask.shape), expected_shape)
+    except ValueError as exc:
+        raise ValueError(
+            f"Decode mask shape {mask.shape} is not broadcastable to "
+            f"{expected_shape}."
+        ) from exc
+    if broadcast_shape != expected_shape:
+        raise ValueError(
+            f"Decode mask shape {mask.shape} would expand attention shape "
+            f"{expected_shape} to {broadcast_shape}."
+        )
 
 
 class MultiHeadAttention(Module):
@@ -65,7 +106,7 @@ class MultiHeadAttention(Module):
         num_heads: Number of attention heads.
         in_features: Input feature dimension.
         qkv_features: Dimension of Q, K, V projections.
-        out_features: Output dimension (same as qkv_features by default).
+        out_features: Output dimension (same as in_features by default).
         head_dim: Dimension per head (qkv_features // num_heads).
         epsilon: Numerical stability constant for YAT attention.
         use_softermax: Whether to use softermax instead of softmax.
@@ -160,7 +201,7 @@ class MultiHeadAttention(Module):
             use_bias: Whether to use bias in projections.
             attention_fn: Attention function to use (default: yat_attention).
             decode: Whether to use autoregressive decoding mode.
-            normalize_qk: Whether to apply layer norm to Q and K.
+            normalize_qk: Whether to L2-normalize Q and K per head.
             use_alpha: Whether to use alpha scaling for YAT attention. Ignored if
                 constant_alpha is set.
             constant_alpha: If True, use sqrt(2) as constant alpha. If a float,
@@ -195,7 +236,10 @@ class MultiHeadAttention(Module):
         self.out_bias_init = out_bias_init
         self.use_bias = use_bias
         self.attention_fn = attention_fn
-        self.decode = decode
+        # Ordinary calls are non-decoding unless explicitly requested.  This
+        # keeps ``decode`` optional as documented while preserving the call-time
+        # override used by autoregressive clients.
+        self.decode = False if decode is None else decode
         self.normalize_qk = normalize_qk
         self.qkv_dot_general = qkv_dot_general
         self.out_dot_general = out_dot_general
@@ -273,32 +317,31 @@ class MultiHeadAttention(Module):
         self.key = linear(rngs=rngs)
         self.value = linear(rngs=rngs)
 
-        # Optional QK normalization (ViT-22B style)
-        self.query_ln: LayerNorm | None
-        self.key_ln: LayerNorm | None
-        if self.normalize_qk:
-            self.query_ln = LayerNorm(
-                self.head_dim,
-                use_bias=False,
-                dtype=self.dtype,
-                param_dtype=self.param_dtype,
-                rngs=rngs,
-            )
-            self.key_ln = LayerNorm(
-                self.head_dim,
-                use_bias=False,
-                dtype=self.dtype,
-                param_dtype=self.param_dtype,
-                rngs=rngs,
-            )
-        else:
-            self.query_ln = None
-            self.key_ln = None
+        # Project the headed attention result back to the requested output
+        # dimension.  Keeping the head axes intact matches Flax's
+        # MultiHeadAttention parameter layout and avoids an unnecessary reshape.
+        self.out = LinearGeneral(
+            in_features=(self.num_heads, self.head_dim),
+            out_features=self.out_features,
+            axis=(-2, -1),
+            dtype=self.dtype,
+            param_dtype=self.param_dtype,
+            kernel_init=self.out_kernel_init or self.kernel_init,
+            bias_init=self.out_bias_init or self.bias_init,
+            use_bias=self.use_bias,
+            precision=self.precision,
+            rngs=rngs,
+        )
+
+        # normalize_qk has the same per-head L2 semantics as the other NMN
+        # backends.  Retain data placeholders for stable NNX graph structure.
+        self.query_ln = nnx.data(None)
+        self.key_ln = nnx.data(None)
 
         # Autoregressive decoding cache
-        self.cached_key: nnx.Cache[Array] | None = None
-        self.cached_value: nnx.Cache[Array] | None = None
-        self.cache_index: nnx.Cache[Array] | None = None
+        self.cached_key: nnx.Cache[Array] | None = nnx.data(None)
+        self.cached_value: nnx.Cache[Array] | None = nnx.data(None)
+        self.cache_index: nnx.Cache[Array] | None = nnx.data(None)
 
     def __call__(
         self,
@@ -331,7 +374,7 @@ class MultiHeadAttention(Module):
             decode: If True, use autoregressive decoding mode.
 
         Returns:
-            Output of shape [batch..., length, qkv_features].
+            Output of shape [batch..., length, out_features].
         """
         # Handle self-attention and cross-attention
         if inputs_k is None:
@@ -378,9 +421,8 @@ class MultiHeadAttention(Module):
 
         # Optional QK normalization (stabilizes training with higher LR)
         if self.normalize_qk:
-            assert self.query_ln is not None and self.key_ln is not None
-            query = self.query_ln(query)
-            key = self.key_ln(key)
+            query = _l2_normalize_per_head(query)
+            key = _l2_normalize_per_head(key)
 
         # Handle autoregressive decoding
         decode = first_from(
@@ -408,32 +450,46 @@ class MultiHeadAttention(Module):
                 depth_per_head,
             ) = self.cached_key[...].shape
 
-            # Validate query shape
             expected_shape = tuple(batch_dims) + (1, num_heads, depth_per_head)
-            if expected_shape != query.shape:
-                raise ValueError(
-                    f"Autoregressive cache shape error, "
-                    f"expected query shape {expected_shape} instead got {query.shape}."
-                )
+            for name, tensor in (
+                ("query", query),
+                ("key", key),
+                ("value", value),
+            ):
+                if expected_shape != tensor.shape:
+                    raise ValueError(
+                        f"Autoregressive cache shape error, expected {name} shape "
+                        f"{expected_shape} instead got {tensor.shape}."
+                    )
 
-            # Update cache
+            decode_mask_shape = tuple(batch_dims) + (
+                self.num_heads,
+                1,
+                max_length,
+            )
+            _validate_decode_mask(mask, decode_mask_shape)
+
+            # Build the next cache state locally.  It is committed only after
+            # attention and output projection complete successfully.
             cur_index = self.cache_index[...]
+            _check_cache_capacity(cur_index, max_length)
             zero = jnp.array(0, dtype=lax.dtype(cur_index.dtype))
             indices = (zero,) * len(batch_dims) + (cur_index, zero, zero)
-            key = lax.dynamic_update_slice(self.cached_key[...], key, indices)
-            value = lax.dynamic_update_slice(self.cached_value[...], value, indices)
-            self.cached_key.value = key
-            self.cached_value.value = value
-            self.cache_index.value += 1
-
-            # Causal mask for cached decoding
-            mask = combine_masks(
-                mask,
-                jnp.broadcast_to(
-                    jnp.arange(max_length) <= cur_index,
-                    tuple(batch_dims) + (1, 1, max_length),
-                ),
+            next_key = lax.dynamic_update_slice(self.cached_key[...], key, indices)
+            next_value = lax.dynamic_update_slice(
+                self.cached_value[...], value, indices
             )
+            key = next_key
+            value = next_value
+
+            causal_mask = jnp.broadcast_to(
+                jnp.arange(max_length) <= cur_index,
+                tuple(batch_dims) + (1, 1, max_length),
+            )
+            mask = combine_masks(mask, causal_mask)
+            pending_cache = (next_key, next_value, cur_index + 1)
+        else:
+            pending_cache = None
 
         # Get dropout RNG if needed
         dropout_rng = None
@@ -482,9 +538,18 @@ class MultiHeadAttention(Module):
         if self._constant_alpha_value is not None:
             x = x * self._constant_alpha_value
 
-        # Reshape back: [batch..., length, num_heads, head_dim] -> [batch..., length, qkv_features]
-        x = x.reshape(x.shape[:-2] + (self.qkv_features,))
-        return x
+        output = self.out(x)
+
+        if pending_cache is not None:
+            assert self.cached_key is not None
+            assert self.cached_value is not None
+            assert self.cache_index is not None
+            next_key, next_value, next_index = pending_cache
+            self.cached_key[...] = next_key
+            self.cached_value[...] = next_value
+            self.cache_index[...] = next_index
+
+        return output
 
     def init_cache(self, input_shape: Shape, dtype: Dtype = jnp.float32):
         """Initializes the cache for autoregressive decoding.
@@ -497,6 +562,3 @@ class MultiHeadAttention(Module):
         self.cached_key = nnx.Cache(jnp.zeros(cache_shape, dtype))
         self.cached_value = nnx.Cache(jnp.zeros(cache_shape, dtype))
         self.cache_index = nnx.Cache(jnp.array(0, dtype=jnp.int32))
-
-
-

@@ -85,10 +85,20 @@ def fused_yat_l1_attention(
 
 # ── Helpers to compute YAT scores from Q, K ────────────────────────────
 
+def _unbroadcast_to(gradient: Array, target: Array) -> Array:
+  """Sum a broadcasted gradient back to ``target.shape`` exactly."""
+  while gradient.ndim > target.ndim:
+    gradient = jnp.sum(gradient, axis=0)
+  for axis, size in enumerate(target.shape):
+    if size == 1 and gradient.shape[axis] != 1:
+      gradient = jnp.sum(gradient, axis=axis, keepdims=True)
+  return gradient.reshape(target.shape).astype(target.dtype)
+
 def _yat_scores(q_f32, k_f32, bias, epsilon, mask, has_bias, has_mask, scale):
   """Compute raw YAT scores and the L1 normalizer.
 
-  Returns (scores, L, dist) where L = sum(scores, axis=-1, keepdims=True).
+  Returns (scores, L, dist, dot, num, clamp_grad) where
+  L = sum(scores, axis=-1, keepdims=True).
   ``dist`` = squared_dist + eps (the denominator), kept for backward.
   """
   dot = jnp.einsum("...qhd,...khd->...hqk", q_f32, k_f32)
@@ -103,6 +113,11 @@ def _yat_scores(q_f32, k_f32, bias, epsilon, mask, has_bias, has_mask, scale):
   k_sq_t = jnp.swapaxes(k_sq_t, -2, -1)
 
   raw_dist = q_sq_t + k_sq_t - 2.0 * dot
+  # Match the subgradient chosen by jnp.maximum(raw_dist, 0): one on the
+  # positive branch, zero on the negative branch, and one half at the tie.
+  # The custom VJP must retain this information because ``dist`` alone cannot
+  # distinguish a clamped negative value from an exact zero.
+  clamp_grad = jnp.where(raw_dist > 0.0, 1.0, jnp.where(raw_dist < 0.0, 0.0, 0.5))
   dist = jnp.maximum(raw_dist, 0.0) + epsilon
 
   num = (dot + bias) if has_bias else dot
@@ -112,7 +127,7 @@ def _yat_scores(q_f32, k_f32, bias, epsilon, mask, has_bias, has_mask, scale):
     scores = jnp.where(mask, scores, 0.0)
 
   L = jnp.sum(scores, axis=-1, keepdims=True)
-  return scores, L, dist, dot, num
+  return scores, L, dist, dot, num, clamp_grad
 
 
 # ── custom_vjp implementation ──────────────────────────────────────────
@@ -123,7 +138,7 @@ def _fused_yat_l1_attn(query, key, value, bias, epsilon, mask,
   q_f32 = query.astype(jnp.float32)
   k_f32 = key.astype(jnp.float32)
 
-  scores, L, _, _, _ = _yat_scores(
+  scores, L, _, _, _, _ = _yat_scores(
       q_f32, k_f32, bias.astype(jnp.float32) if has_bias else bias,
       epsilon.astype(jnp.float32), mask, has_bias, has_mask, scale)
 
@@ -138,7 +153,7 @@ def _fused_yat_l1_attn_fwd(query, key, value, bias, epsilon, mask,
   q_f32 = query.astype(jnp.float32)
   k_f32 = key.astype(jnp.float32)
 
-  scores, L, _, _, _ = _yat_scores(
+  scores, L, _, _, _, _ = _yat_scores(
       q_f32, k_f32, bias.astype(jnp.float32) if has_bias else bias,
       epsilon.astype(jnp.float32), mask, has_bias, has_mask, scale)
 
@@ -159,7 +174,7 @@ def _fused_yat_l1_attn_bwd(has_bias, has_mask, has_eps_grad, scale, precision,
   e_f32 = epsilon.astype(jnp.float32)
   b_f32 = bias.astype(jnp.float32) if has_bias else bias
 
-  scores, _, dist, dot, num = _yat_scores(
+  scores, _, dist, dot, num, clamp_grad = _yat_scores(
       q_f32, k_f32, b_f32, e_f32, mask, has_bias, has_mask, scale)
 
   L_safe = L + 1e-12
@@ -197,10 +212,11 @@ def _fused_yat_l1_attn_bwd(has_bias, has_mask, has_eps_grad, scale, precision,
   d_scores_d_dist = -(num ** 2) * inv_dist_scale_sq
 
   g_num = dS * d_scores_d_num           # [..., H, Q, K]
-  g_dist = dS * d_scores_d_dist         # [..., H, Q, K]
+  g_dist = dS * d_scores_d_dist         # gradient wrt dist = clamp(raw) + eps
+  g_raw_dist = g_dist * clamp_grad       # gradient wrt reconstructed distance
 
   # Total dot gradient = numerator path (d_num/d_dot=1) + dist path (d_dist/d_dot=-2)
-  g_dot_total = g_num + g_dist * (-2.0)
+  g_dot_total = g_num + g_raw_dist * (-2.0)
 
   # ── g_dot_total -> dQ, dK through einsum ──────────────────────────
   # dot = einsum("...qhd,...khd->...hqk")
@@ -212,7 +228,7 @@ def _fused_yat_l1_attn_bwd(has_bias, has_mask, has_eps_grad, scale, precision,
   # g_dist shape: [..., H, Q, K], q shape: [..., Q, H, D]
   # q_sq_t shape: [..., H, Q, 1] -- was summed over K via broadcasting
   # So g_q_sq = sum(g_dist, axis=-1, keepdims=False)  -> [..., H, Q]
-  g_q_sq = jnp.sum(g_dist, axis=-1)              # [..., H, Q]
+  g_q_sq = jnp.sum(g_raw_dist, axis=-1)          # [..., H, Q]
   # Transpose back: [..., H, Q] -> [..., Q, H] -> [..., Q, H, 1]
   batch_dims = query.ndim - 3
   q_perm_back = tuple(range(batch_dims)) + (batch_dims + 1, batch_dims)
@@ -220,29 +236,22 @@ def _fused_yat_l1_attn_bwd(has_bias, has_mask, has_eps_grad, scale, precision,
   dQ += 2.0 * q_f32 * g_q_sq_t
 
   # Contribution from g_dist through k_sq path
-  g_k_sq = jnp.sum(g_dist, axis=-2)              # [..., H, K]
+  g_k_sq = jnp.sum(g_raw_dist, axis=-2)          # [..., H, K]
   k_perm_back = tuple(range(batch_dims)) + (batch_dims + 1, batch_dims)
   g_k_sq_t = g_k_sq.transpose(k_perm_back)[..., None]  # [..., K, H, 1]
   dK += 2.0 * k_f32 * g_k_sq_t
 
   # ── dBias: d(scores)/d(bias) = 2*num / (dist*scale) ──────────────
   if has_bias:
-    g_bias = jnp.sum(dS * 2 * num * inv_dist_scale,
-                     axis=tuple(range(batch_dims)))
-    # Reduce to match bias.shape via broadcasting rules
-    while g_bias.ndim > bias.ndim:
-      g_bias = jnp.sum(g_bias, axis=0)
-    for i in range(bias.ndim):
-      if bias.shape[i] == 1 and g_bias.shape[i] != 1:
-        g_bias = jnp.sum(g_bias, axis=i, keepdims=True)
-    g_bias = g_bias.astype(bias.dtype)
+    g_bias = _unbroadcast_to(dS * 2 * num * inv_dist_scale, bias)
   else:
     g_bias = jnp.zeros_like(bias)
 
   # ── dEpsilon: d(scores)/d(eps) = -num² / (dist² * scale) ─────────
   if has_eps_grad:
-    g_eps = jnp.sum(dS * (-(num ** 2) * inv_dist_scale_sq))
-    g_eps = g_eps.reshape(epsilon.shape).astype(epsilon.dtype)
+    g_eps = _unbroadcast_to(
+        dS * (-(num ** 2) * inv_dist_scale_sq), epsilon
+    )
   else:
     g_eps = jnp.zeros_like(epsilon)
 
@@ -337,7 +346,7 @@ def _yat_self_scores(x_f32, bias, epsilon, has_bias, scale):
   """Compute raw YAT scores with zero diagonal, and the L1 normalizer that
   includes the diagonal.
 
-  Returns (scores_off_diag, L, dist, dot, num) where:
+  Returns (scores_off_diag, L, dist, dot, num, clamp_grad) where:
     - scores_off_diag has zero diagonal
     - L = sum(scores_full, axis=-1, keepdims=True)   # includes diagonal
   """
@@ -352,6 +361,7 @@ def _yat_self_scores(x_f32, bias, epsilon, has_bias, scale):
   x_sq_k = jnp.swapaxes(x_sq_t, -2, -1)                # [..., heads, 1, seq]
 
   raw_dist = x_sq_t + x_sq_k - 2.0 * dot
+  clamp_grad = jnp.where(raw_dist > 0.0, 1.0, jnp.where(raw_dist < 0.0, 0.0, 0.5))
   dist = jnp.maximum(raw_dist, 0.0) + epsilon
 
   num = (dot + bias) if has_bias else dot
@@ -365,7 +375,7 @@ def _yat_self_scores(x_f32, bias, epsilon, has_bias, scale):
   eye = jnp.eye(seq_len, dtype=jnp.bool_)
   scores_off_diag = jnp.where(eye, 0.0, scores)
 
-  return scores_off_diag, L, dist, dot, num
+  return scores_off_diag, L, dist, dot, num, clamp_grad
 
 
 @functools.partial(jax.custom_vjp, nondiff_argnums=(4, 5, 6, 7))
@@ -373,7 +383,7 @@ def _fused_yat_l1_self_attn(x, value, bias, epsilon,
                              has_bias, has_eps_grad, scale, precision):
   x_f32 = x.astype(jnp.float32)
 
-  scores_off, L, _, _, _ = _yat_self_scores(
+  scores_off, L, _, _, _, _ = _yat_self_scores(
       x_f32, bias.astype(jnp.float32) if has_bias else bias,
       epsilon.astype(jnp.float32), has_bias, scale)
 
@@ -386,7 +396,7 @@ def _fused_yat_l1_self_attn_fwd(x, value, bias, epsilon,
                                  has_bias, has_eps_grad, scale, precision):
   x_f32 = x.astype(jnp.float32)
 
-  scores_off, L, _, _, _ = _yat_self_scores(
+  scores_off, L, _, _, _, _ = _yat_self_scores(
       x_f32, bias.astype(jnp.float32) if has_bias else bias,
       epsilon.astype(jnp.float32), has_bias, scale)
 
@@ -403,7 +413,7 @@ def _fused_yat_l1_self_attn_bwd(has_bias, has_eps_grad, scale, precision, res, g
   e_f32 = epsilon.astype(jnp.float32)
   b_f32 = bias.astype(jnp.float32) if has_bias else bias
 
-  scores_off, _, dist, dot, num = _yat_self_scores(
+  scores_off, _, dist, dot, num, clamp_grad = _yat_self_scores(
       x_f32, b_f32, e_f32, has_bias, scale)
 
   seq_len = scores_off.shape[-1]
@@ -450,10 +460,11 @@ def _fused_yat_l1_self_attn_bwd(has_bias, has_eps_grad, scale, precision, res, g
 
   g_num = dS * d_scores_d_num
   g_dist = dS * d_scores_d_dist
+  g_raw_dist = g_dist * clamp_grad
 
   # dot = x @ x^T:  d(dot_ij)/d(x_i) = x_j,  d(dot_ij)/d(x_j) = x_i
   # Both contribute to dx. Use symmetric accumulation.
-  g_dot_total = g_num + g_dist * (-2.0)
+  g_dot_total = g_num + g_raw_dist * (-2.0)
 
   # dx through dot path (both roles of x — as q and as k)
   dx_from_dot_q = jnp.einsum("...hqk,...khd->...qhd", g_dot_total, x_f32, precision=precision)
@@ -464,31 +475,25 @@ def _fused_yat_l1_self_attn_bwd(has_bias, has_eps_grad, scale, precision, res, g
   batch_dims = x.ndim - 3
   q_perm_back = tuple(range(batch_dims)) + (batch_dims + 1, batch_dims)
 
-  g_q_sq = jnp.sum(g_dist, axis=-1)                     # [..., H, S]
+  g_q_sq = jnp.sum(g_raw_dist, axis=-1)                 # [..., H, S]
   g_q_sq_t = g_q_sq.transpose(q_perm_back)[..., None]   # [..., S, H, 1]
   dx = dx + 2.0 * x_f32 * g_q_sq_t
 
-  g_k_sq = jnp.sum(g_dist, axis=-2)                     # [..., H, S]
+  g_k_sq = jnp.sum(g_raw_dist, axis=-2)                 # [..., H, S]
   g_k_sq_t = g_k_sq.transpose(q_perm_back)[..., None]
   dx = dx + 2.0 * x_f32 * g_k_sq_t
 
   # dBias
   if has_bias:
-    g_bias = jnp.sum(dS * 2 * num * inv_dist_scale,
-                     axis=tuple(range(batch_dims)))
-    while g_bias.ndim > bias.ndim:
-      g_bias = jnp.sum(g_bias, axis=0)
-    for i in range(bias.ndim):
-      if bias.shape[i] == 1 and g_bias.shape[i] != 1:
-        g_bias = jnp.sum(g_bias, axis=i, keepdims=True)
-    g_bias = g_bias.astype(bias.dtype)
+    g_bias = _unbroadcast_to(dS * 2 * num * inv_dist_scale, bias)
   else:
     g_bias = jnp.zeros_like(bias)
 
   # dEpsilon
   if has_eps_grad:
-    g_eps = jnp.sum(dS * (-(num ** 2) * inv_dist_scale_sq))
-    g_eps = g_eps.reshape(epsilon.shape).astype(epsilon.dtype)
+    g_eps = _unbroadcast_to(
+        dS * (-(num ** 2) * inv_dist_scale_sq), epsilon
+    )
   else:
     g_eps = jnp.zeros_like(epsilon)
 

@@ -192,6 +192,7 @@ def radial_yat_attention(
     epsilon: float = 1e-6,
     precision: PrecisionLike = None,
     gradient_scaling: bool = True,
+    mask: Array | None = None,
 ) -> Array:
     """Compute spherical Yat attention using RAY (radial) features.
 
@@ -204,6 +205,9 @@ def radial_yat_attention(
         epsilon: Denominator stability constant (added to the denominator only).
         precision: JAX precision.
         gradient_scaling: Unused, kept for API compatibility with SLAY.
+        mask: Optional key-padding mask of shape
+            ``[..., heads, 1, kv_length]``. General query-dependent masks are
+            rejected because they cannot be represented by linear reordering.
 
     Returns:
         Output ``[..., q_length, num_heads, v_dim]``.
@@ -213,4 +217,4 @@ def radial_yat_attention(
     q_feat = radial_features(query, params, normalize=True)
     k_feat = radial_features(key, params, normalize=True)
 
-    return _linear_readout(q_feat, k_feat, value, causal, epsilon, precision)
+    return _linear_readout(q_feat, k_feat, value, causal, epsilon, precision, mask)
