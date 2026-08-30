@@ -138,10 +138,23 @@ def yat_attention_weights(
 
     # Apply mask
     if mask is not None:
+        mask = mask.to(dtype=torch.bool)
+        row_has_key = mask.any(dim=-1, keepdim=True)
         attn_weights = attn_weights.masked_fill(~mask, float("-inf"))
+        # Softmax(all -inf) is NaN.  Replace only fully masked rows with a
+        # finite constant before normalization, then zero every masked entry
+        # afterwards.  This keeps both the forward pass and its Jacobian
+        # finite while preserving ordinary masked-softmax semantics.
+        attn_weights = torch.where(
+            row_has_key, attn_weights, torch.zeros_like(attn_weights)
+        )
 
     # Softmax normalization
     attn_weights = F.softmax(attn_weights, dim=-1)
+    if mask is not None:
+        attn_weights = torch.where(
+            mask, attn_weights, torch.zeros_like(attn_weights)
+        )
 
     # Dropout
     if dropout_p > 0.0 and training:
@@ -251,10 +264,19 @@ def yat_attention_normalized(
 
     # Mask
     if mask is not None:
+        mask = mask.to(dtype=torch.bool)
+        row_has_key = mask.any(dim=-1, keepdim=True)
         attn_weights = attn_weights.masked_fill(~mask, float("-inf"))
+        attn_weights = torch.where(
+            row_has_key, attn_weights, torch.zeros_like(attn_weights)
+        )
 
     # Softmax
     attn_weights = F.softmax(attn_weights, dim=-1)
+    if mask is not None:
+        attn_weights = torch.where(
+            mask, attn_weights, torch.zeros_like(attn_weights)
+        )
 
     # Dropout
     if dropout_p > 0.0 and training:

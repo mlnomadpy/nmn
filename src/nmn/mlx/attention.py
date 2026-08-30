@@ -31,7 +31,7 @@ __all__ = [
 
 
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
-_MASK_FILL = -1e9
+_MASK_FILL = -1e4  # finite in float16; exp(-1e4) underflows to exact zero
 
 
 def normalize_qk(
@@ -86,13 +86,18 @@ def yat_attention_weights(
         attn = attn * scale
 
     if mask is not None:
+        mask = mask.astype(mx.bool_)
+        row_has_key = mx.any(mask, axis=-1, keepdims=True)
         attn = mx.where(
             mask,
             attn,
             mx.array(_MASK_FILL, dtype=attn.dtype),
         )
+        attn = mx.where(row_has_key, attn, mx.zeros_like(attn))
 
     attn = mx.softmax(attn, axis=-1)
+    if mask is not None:
+        attn = mx.where(mask, attn, mx.zeros_like(attn))
 
     if dropout_rate > 0.0 and training:
         keep = 1.0 - dropout_rate
@@ -321,4 +326,7 @@ class MultiHeadYatAttention(nn.Module):
 
         if self.use_out_proj and getattr(self, "out_kernel", None) is not None:
             x = self._linear(x, self.out_kernel, getattr(self, "out_bias", None))
+        if mask is not None:
+            query_has_key = mx.any(mask.astype(mx.bool_), axis=(-3, -1))
+            x = mx.where(query_has_key[..., None], x, mx.zeros_like(x))
         return x

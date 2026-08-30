@@ -309,4 +309,8 @@ class MultiHeadAttention(Module):
             name="out",
         )(x)
 
+        if mask is not None:
+            query_has_key = jnp.any(mask, axis=(-3, -1))
+            x = jnp.where(query_has_key[..., None], x, jnp.zeros_like(x))
+
         return x

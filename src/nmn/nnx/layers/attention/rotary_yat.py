@@ -967,6 +967,12 @@ class RotaryYatAttention(Module):
         if self.o_proj is not None:
             output = self.o_proj(output)
 
+        if mask is not None:
+            query_has_key = jnp.any(mask, axis=(-3, -1))
+            output = jnp.where(
+                query_has_key[..., None], output, jnp.zeros_like(output)
+            )
+
         if pending_cache is not None:
             assert self.cached_key is not None
             assert self.cached_value is not None

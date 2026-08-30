@@ -196,6 +196,19 @@ def test_module_no_out_proj():
     assert "out_kernel" not in mha.parameters()
 
 
+def test_module_fully_masked_row_stays_zero_after_biased_projection():
+    mha = RotaryYatAttention(embed_dim=8, num_heads=2, max_seq_len=8)
+    x = mx.random.normal(shape=(1, 2, 8))
+    _ = mha(x)
+    mha.out_bias = mx.full(mha.out_bias.shape, 3.0)
+    mask_np = np.ones((1, 1, 2, 2), dtype=bool)
+    mask_np[..., 0, :] = False
+    output = mha(x, mask=mx.array(mask_np))
+    mx.eval(output)
+    np.testing.assert_array_equal(np.asarray(output[:, 0]), 0.0)
+    assert np.all(np.isfinite(np.asarray(output)))
+
+
 def test_module_gradient_reduces_loss():
     def loss_fn(model, x, y):
         return mx.mean((model(x) - y) ** 2)

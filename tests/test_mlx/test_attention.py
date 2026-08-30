@@ -100,6 +100,26 @@ def test_yat_attention_spherical_shape():
     assert out.shape == (B, Q, H, D)
 
 
+@pytest.mark.parametrize("dtype", [mx.float32, mx.float16])
+@pytest.mark.parametrize("spherical", [False, True])
+def test_fully_masked_rows_are_zero_with_finite_gradients(spherical, dtype):
+    q = mx.random.normal(shape=(1, 2, 2, 4)).astype(dtype)
+    k = mx.random.normal(shape=(1, 3, 2, 4)).astype(dtype)
+    v = mx.random.normal(shape=(1, 3, 2, 5)).astype(dtype)
+    mask = mx.array([[[[False, False, False], [True, False, True]]]])
+
+    def loss(q, k, v):
+        return mx.sum(yat_attention(q, k, v, mask=mask, spherical=spherical))
+
+    output = yat_attention(q, k, v, mask=mask, spherical=spherical)
+    weights = yat_attention_weights(q, k, mask=mask, spherical=spherical)
+    grads = mx.value_and_grad(loss, argnums=(0, 1, 2))(q, k, v)[1]
+    mx.eval(output, weights, *grads)
+    np.testing.assert_array_equal(np.asarray(output[:, 0]), 0.0)
+    np.testing.assert_array_equal(np.asarray(weights[..., 0, :]), 0.0)
+    assert all(np.all(np.isfinite(np.asarray(grad))) for grad in grads)
+
+
 # ---------------------------------------------------------------------------
 # MultiHeadYatAttention
 # ---------------------------------------------------------------------------
@@ -116,6 +136,31 @@ def test_mha_cross_attn_shape():
     q = mx.random.normal(shape=(2, 5, 16))
     ctx = mx.random.normal(shape=(2, 11, 16))
     assert mha(q, ctx, ctx).shape == (2, 5, 16)
+
+
+@pytest.mark.parametrize("cross_attention", [False, True])
+def test_mha_fully_masked_rows_stay_zero_after_biased_projection(cross_attention):
+    mha = MultiHeadYatAttention(embed_dim=8, num_heads=2)
+    query = mx.random.normal(shape=(1, 2, 8))
+    context = mx.random.normal(shape=(1, 3, 8))
+    _ = mha(query)
+    mha.out_bias = mx.full(mha.out_bias.shape, 3.0)
+    kv_length = 3 if cross_attention else 2
+    mask_np = np.ones((1, 1, 2, kv_length), dtype=bool)
+    mask_np[..., 0, :] = False
+    mask = mx.array(mask_np)
+    output = mha(query, context, context, mask=mask) if cross_attention else mha(query, mask=mask)
+    mx.eval(output)
+    np.testing.assert_array_equal(np.asarray(output[:, 0]), 0.0)
+    assert np.all(np.isfinite(np.asarray(output)))
+    if cross_attention:
+        grads = mx.grad(
+            lambda q, c: mx.sum(mha(q, c, c, mask=mask)), argnums=(0, 1)
+        )(query, context)
+    else:
+        grads = (mx.grad(lambda q: mx.sum(mha(q, mask=mask)))(query),)
+    mx.eval(*grads)
+    assert all(np.all(np.isfinite(np.asarray(grad))) for grad in grads)
 
 
 def test_mha_invalid_dim_rejected():

@@ -101,9 +101,18 @@ def yat_attention_weights(
         attn_weights = attn_weights * scale
 
     if mask is not None:
-        attn_weights = ops.where(mask, attn_weights, -1e9)
+        mask = ops.cast(mask, "bool")
+        row_has_key = ops.any(mask, axis=-1, keepdims=True)
+        # -1e4 is finite in float16 and exp(-1e4) underflows to zero for every
+        # supported floating dtype; the exact zero is enforced after softmax.
+        attn_weights = ops.where(mask, attn_weights, -1e4)
+        attn_weights = ops.where(
+            row_has_key, attn_weights, ops.zeros_like(attn_weights)
+        )
 
     attn_weights = ops.softmax(attn_weights, axis=-1)
+    if mask is not None:
+        attn_weights = ops.where(mask, attn_weights, ops.zeros_like(attn_weights))
 
     if dropout_rate > 0.0 and training:
         from keras.src import random
@@ -360,6 +369,12 @@ class MultiHeadYatAttention(Layer):
 
         if self.out_kernel is not None:
             x = self._linear(x, self.out_kernel, self.out_bias)
+
+        if mask is not None:
+            query_has_key = ops.any(ops.cast(mask, "bool"), axis=(-3, -1))
+            x = ops.where(
+                ops.expand_dims(query_has_key, -1), x, ops.zeros_like(x)
+            )
 
         return x
 

@@ -110,10 +110,22 @@ def yat_attention_weights(
 
     # Mask
     if mask is not None:
-        attn_weights = tf.where(mask, attn_weights, tf.constant(-1e9, dtype=attn_weights.dtype))
+        mask = tf.cast(mask, tf.bool)
+        row_has_key = tf.reduce_any(mask, axis=-1, keepdims=True)
+        attn_weights = tf.where(
+            mask,
+            attn_weights,
+            # Finite in float16 while still underflowing through softmax.
+            tf.constant(-1e4, dtype=attn_weights.dtype),
+        )
+        attn_weights = tf.where(
+            row_has_key, attn_weights, tf.zeros_like(attn_weights)
+        )
 
     # Softmax
     attn_weights = tf.nn.softmax(attn_weights, axis=-1)
+    if mask is not None:
+        attn_weights = tf.where(mask, attn_weights, tf.zeros_like(attn_weights))
 
     # Dropout
     if dropout_rate > 0.0 and training:
@@ -413,6 +425,14 @@ class MultiHeadYatAttention(tf.Module):
         # Output projection
         if self.out_kernel is not None:
             x = self._linear(x, self.out_kernel, self.out_bias)
+
+        if mask is not None:
+            query_has_key = tf.reduce_any(
+                tf.cast(mask, tf.bool), axis=(-3, -1)
+            )
+            x = tf.where(
+                tf.expand_dims(query_has_key, -1), x, tf.zeros_like(x)
+            )
 
         return x
 

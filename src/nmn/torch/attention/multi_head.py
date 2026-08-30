@@ -245,4 +245,10 @@ class MultiHeadYatAttention(nn.Module):
         if self.out_proj is not None:
             x = self._linear(x, self.out_proj)
 
+        # A projection bias must not reintroduce a value for a query whose
+        # every key is masked in every head.
+        if mask is not None:
+            query_has_key = mask.to(dtype=torch.bool).any(dim=(-3, -1))
+            x = torch.where(query_has_key.unsqueeze(-1), x, torch.zeros_like(x))
+
         return x

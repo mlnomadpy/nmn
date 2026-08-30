@@ -16,6 +16,25 @@ from nmn.linen.attention import (
 
 
 class TestAttentionFunctions:
+    @pytest.mark.parametrize("spherical", [False, True])
+    def test_fully_masked_rows_are_zero_with_finite_jit_gradients(self, spherical):
+        q = jax.random.normal(jax.random.key(70), (1, 2, 2, 4))
+        k = jax.random.normal(jax.random.key(71), (1, 3, 2, 4))
+        v = jax.random.normal(jax.random.key(72), (1, 3, 2, 5))
+        mask = jnp.array([[[[False, False, False], [True, False, True]]]])
+
+        def apply(q, k, v):
+            return yat_attention(q, k, v, mask=mask, spherical=spherical)
+
+        eager = apply(q, k, v)
+        compiled = jax.jit(apply)(q, k, v)
+        grads = jax.jit(jax.grad(lambda q, k, v: jnp.sum(apply(q, k, v)), (0, 1, 2)))(
+            q, k, v
+        )
+        np.testing.assert_array_equal(np.asarray(eager[:, 0]), 0.0)
+        np.testing.assert_allclose(compiled, eager, rtol=2e-7, atol=1e-7)
+        assert all(np.all(np.isfinite(np.asarray(grad))) for grad in grads)
+
     def test_normalize_qk(self):
         q = jax.random.normal(jax.random.PRNGKey(0), (2, 5, 4, 8))
         k = jax.random.normal(jax.random.PRNGKey(1), (2, 5, 4, 8))
@@ -47,6 +66,38 @@ class TestAttentionFunctions:
 
 
 class TestMultiHeadAttention:
+    @pytest.mark.parametrize("normalization", ["softmax", "l1"])
+    @pytest.mark.parametrize("cross_attention", [False, True])
+    def test_fully_masked_rows_stay_zero_after_biased_projection(
+        self, normalization, cross_attention
+    ):
+        model = MultiHeadAttention(
+            num_heads=2,
+            normalization=normalization,
+            bias_init=jax.nn.initializers.constant(3.0),
+        )
+        query = jax.random.normal(jax.random.key(73), (1, 2, 8))
+        context = jax.random.normal(jax.random.key(74), (1, 3, 8))
+        kv_length = 3 if cross_attention else 2
+        mask = jnp.ones((1, 1, 2, kv_length), dtype=jnp.bool_).at[..., 0, :].set(False)
+        args = (query, context, context) if cross_attention else (query,)
+        variables = model.init(jax.random.key(75), *args, mask=mask)
+        output = jax.jit(lambda variables, *args: model.apply(variables, *args, mask=mask))(
+            variables, *args
+        )
+        np.testing.assert_array_equal(np.asarray(output[:, 0]), 0.0)
+        assert np.all(np.isfinite(np.asarray(output)))
+        if cross_attention:
+            grads = jax.grad(
+                lambda q, c: jnp.sum(model.apply(variables, q, c, c, mask=mask)),
+                (0, 1),
+            )(query, context)
+        else:
+            grads = (jax.grad(
+                lambda q: jnp.sum(model.apply(variables, q, mask=mask))
+            )(query),)
+        assert all(np.all(np.isfinite(np.asarray(grad))) for grad in grads)
+
     def test_self_attention(self):
         model = MultiHeadAttention(num_heads=4)
         x = jax.random.normal(jax.random.PRNGKey(1), (2, 10, 32))

@@ -25,6 +25,10 @@ masked positions are zeroed (not set to -inf) and the final divide is
 normalization mode today; the other two callers always pass
 ``"softmax"`` (and the ``use_softermax`` shortcut for backward
 compatibility).
+
+Boolean masks and negative-infinity additive-bias entries follow one policy:
+masked weights are exact zero, and a query row with no eligible keys has zero
+weights and a zero readout with finite gradients.
 """
 
 from __future__ import annotations
@@ -88,16 +92,32 @@ def finalize_attention_weights(
     if alpha is not None:
         attn_weights = attn_weights * alpha
 
+    additive_mask = None
     if bias is not None:
         attn_weights = attn_weights + bias
+        # Negative infinity is the standard additive-mask sentinel.  Treat it
+        # exactly like a False boolean mask so an entirely disabled row has a
+        # defined zero result instead of NaNs.
+        additive_mask = jnp.logical_not(jnp.isneginf(bias))
 
-    if mask is not None:
-        if normalization == "l1":
-            # L1: scores are non-negative; mask by zeroing masked positions.
-            attn_weights = jnp.where(mask, attn_weights, 0.0)
+    effective_mask = mask
+    if additive_mask is not None:
+        effective_mask = (
+            additive_mask
+            if effective_mask is None
+            else jnp.logical_and(effective_mask, additive_mask)
+        )
+
+    if effective_mask is not None:
+        if normalization == "l1" or use_softermax or normalization == "softermax":
+            # L1/softermax operate on non-negative scores; zero is their mask
+            # identity and naturally makes a fully masked row all-zero.
+            attn_weights = jnp.where(effective_mask, attn_weights, 0.0)
         else:
             big_neg = jnp.finfo(attn_weights.dtype).min
-            attn_weights = jnp.where(mask, attn_weights, big_neg)
+            row_has_key = jnp.any(effective_mask, axis=-1, keepdims=True)
+            attn_weights = jnp.where(effective_mask, attn_weights, big_neg)
+            attn_weights = jnp.where(row_has_key, attn_weights, 0.0)
 
     if normalization == "l1":
         attn_sum = jnp.sum(attn_weights, axis=-1, keepdims=True)
@@ -106,6 +126,14 @@ def finalize_attention_weights(
         attn_weights = softermax(attn_weights, n=power).astype(dtype)
     else:
         attn_weights = jax.nn.softmax(attn_weights).astype(dtype)
+
+    if effective_mask is not None:
+        # Exact zeros are important both for the readout and its value
+        # gradient.  This also turns the finite placeholder distribution used
+        # for a fully masked softmax row into the documented zero policy.
+        attn_weights = jnp.where(
+            effective_mask, attn_weights, jnp.zeros_like(attn_weights)
+        )
 
     if module is not None:
         module.sow(nnx.Intermediate, "attention_weights", attn_weights)
