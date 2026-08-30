@@ -5,9 +5,48 @@ import math
 from typing import Optional, Any, Tuple, Union, List, Callable
 
 from ._yat_core import yat_score
+from .saved_model import SingleInputSavedModelMixin
 
 
-class YatConv1D(tf.Module):
+def _validate_groups(filters: int, groups: int) -> None:
+    """Validate the statically known grouped-convolution configuration."""
+    if groups <= 0:
+        raise ValueError(f"groups must be a positive integer, got {groups}")
+    if filters % groups != 0:
+        raise ValueError(
+            f"Filters ({filters}) must be divisible by groups ({groups})"
+        )
+
+
+def _patch_norm_kernel(kernel_size, channels_per_group, groups, dtype):
+    """Return a grouped-convolution kernel producing one norm per group."""
+    return tf.ones(tuple(kernel_size) + (channels_per_group, groups), dtype=dtype)
+
+
+def _grouped_convolution(inputs, kernel, groups, convolution):
+    """Apply a convolution per channel group with portable gradients.
+
+    TensorFlow's implicit grouped-convolution support differs by dimension and
+    device (notably, grouped CPU gradients and grouped ``conv3d`` are not
+    universally available). Explicit splitting removes those grouped-kernel
+    limitations while preserving the usual contiguous group ordering. Device
+    restrictions of the underlying ordinary convolution (for example some
+    CPU dilated-convolution gradients) still apply.
+    """
+    if groups == 1:
+        return convolution(inputs, kernel)
+    input_groups = tf.split(inputs, groups, axis=-1)
+    kernel_groups = tf.split(kernel, groups, axis=-1)
+    return tf.concat(
+        [
+            convolution(group_inputs, group_kernel)
+            for group_inputs, group_kernel in zip(input_groups, kernel_groups)
+        ],
+        axis=-1,
+    )
+
+
+class YatConv1D(SingleInputSavedModelMixin, tf.Module):
     """1D YAT convolution module using TensorFlow operations.
     
     This module implements 1D convolution using the YAT  algorithm,
@@ -49,6 +88,7 @@ class YatConv1D(tf.Module):
         self.strides = strides
         self.padding = padding.upper()
         self.dilation_rate = dilation_rate
+        _validate_groups(filters, groups)
         self.groups = groups
         self.use_alpha = use_alpha
         if epsilon <= 0:
@@ -91,11 +131,6 @@ class YatConv1D(tf.Module):
                 f"Input channels ({input_channels}) must be divisible by groups ({self.groups})"
             )
         
-        if self.filters % self.groups != 0:
-            raise ValueError(
-                f"Filters ({self.filters}) must be divisible by groups ({self.groups})"
-            )
-
         # Kernel shape: [kernel_size, input_channels_per_group, filters]
         channels_per_group = input_channels // self.groups
         kernel_shape = (self.kernel_size, channels_per_group, self.filters)
@@ -158,34 +193,40 @@ class YatConv1D(tf.Module):
         self._maybe_build(inputs)
 
         # Compute dot product using standard convolution
-        dot_prod_map = tf.nn.conv1d(
-            inputs,
-            self.kernel,
+        convolution = lambda x, kernel: tf.nn.conv1d(
+            x,
+            kernel,
             stride=self.strides,
             padding=self.padding,
             dilations=self.dilation_rate,
+        )
+        dot_prod_map = _grouped_convolution(
+            inputs, self.kernel, self.groups, convolution
         )
 
         # Compute ||input_patches||^2 using convolution with ones kernel
         inputs_squared = inputs * inputs
         
         # Create ones kernel for computing patch squared sums
-        ones_kernel_shape = (self.kernel_size, self.input_channels // self.groups, 1)
-        ones_kernel = tf.ones(ones_kernel_shape, dtype=self.dtype)
+        ones_kernel = _patch_norm_kernel(
+            (self.kernel_size,),
+            self.input_channels // self.groups,
+            self.groups,
+            self.dtype,
+        )
         
-        patch_sq_sum_map_raw = tf.nn.conv1d(
+        patch_sq_sum_map_raw = _grouped_convolution(
             inputs_squared,
             ones_kernel,
-            stride=self.strides,
-            padding=self.padding,
-            dilations=self.dilation_rate,
+            self.groups,
+            convolution,
         )
 
-        # Handle grouped convolution
-        if self.groups > 1:
-            patch_sq_sum_map = tf.repeat(patch_sq_sum_map_raw, self.filters // self.groups, axis=-1)
-        else:
-            patch_sq_sum_map = tf.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
+        # The helper convolution emits one channel per group. Repeat each
+        # group's patch norm for that group's contiguous output-filter block.
+        patch_sq_sum_map = tf.repeat(
+            patch_sq_sum_map_raw, self.filters // self.groups, axis=-1
+        )
 
         # Compute ||kernel||^2 per filter
         kernel_sq_sum_per_filter = tf.reduce_sum(self.kernel**2, axis=[0, 1])  # Sum over spatial and input channel dims
@@ -198,7 +239,7 @@ class YatConv1D(tf.Module):
         return yat_score(self, dot_prod_map, distance_sq_map)
 
 
-class YatConv2D(tf.Module):
+class YatConv2D(SingleInputSavedModelMixin, tf.Module):
     """2D YAT convolution module using TensorFlow operations.
     
     This module implements 2D convolution using the YAT  algorithm,
@@ -243,6 +284,7 @@ class YatConv2D(tf.Module):
         self.strides = strides if isinstance(strides, (list, tuple)) else (strides, strides)
         self.padding = padding.upper()
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate)
+        _validate_groups(filters, groups)
         self.groups = groups
         self.use_alpha = use_alpha
         if epsilon <= 0:
@@ -285,11 +327,6 @@ class YatConv2D(tf.Module):
                 f"Input channels ({input_channels}) must be divisible by groups ({self.groups})"
             )
         
-        if self.filters % self.groups != 0:
-            raise ValueError(
-                f"Filters ({self.filters}) must be divisible by groups ({self.groups})"
-            )
-
         # Kernel shape: [kernel_height, kernel_width, input_channels_per_group, filters]
         channels_per_group = input_channels // self.groups
         kernel_shape = self.kernel_size + (channels_per_group, self.filters)
@@ -352,34 +389,40 @@ class YatConv2D(tf.Module):
         self._maybe_build(inputs)
 
         # Compute dot product using standard convolution
-        dot_prod_map = tf.nn.conv2d(
-            inputs,
-            self.kernel,
+        convolution = lambda x, kernel: tf.nn.conv2d(
+            x,
+            kernel,
             strides=[1] + list(self.strides) + [1],
             padding=self.padding,
             dilations=[1] + list(self.dilation_rate) + [1],
+        )
+        dot_prod_map = _grouped_convolution(
+            inputs, self.kernel, self.groups, convolution
         )
 
         # Compute ||input_patches||^2 using convolution with ones kernel
         inputs_squared = inputs * inputs
         
         # Create ones kernel for computing patch squared sums
-        ones_kernel_shape = self.kernel_size + (self.input_channels // self.groups, 1)
-        ones_kernel = tf.ones(ones_kernel_shape, dtype=self.dtype)
+        ones_kernel = _patch_norm_kernel(
+            self.kernel_size,
+            self.input_channels // self.groups,
+            self.groups,
+            self.dtype,
+        )
         
-        patch_sq_sum_map_raw = tf.nn.conv2d(
+        patch_sq_sum_map_raw = _grouped_convolution(
             inputs_squared,
             ones_kernel,
-            strides=[1] + list(self.strides) + [1],
-            padding=self.padding,
-            dilations=[1] + list(self.dilation_rate) + [1],
+            self.groups,
+            convolution,
         )
 
-        # Handle grouped convolution
-        if self.groups > 1:
-            patch_sq_sum_map = tf.repeat(patch_sq_sum_map_raw, self.filters // self.groups, axis=-1)
-        else:
-            patch_sq_sum_map = tf.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
+        # The helper convolution emits one channel per group. Repeat each
+        # group's patch norm for that group's contiguous output-filter block.
+        patch_sq_sum_map = tf.repeat(
+            patch_sq_sum_map_raw, self.filters // self.groups, axis=-1
+        )
 
         # Compute ||kernel||^2 per filter
         kernel_sq_sum_per_filter = tf.reduce_sum(self.kernel**2, axis=[0, 1, 2])  # Sum over spatial and input channel dims
@@ -392,7 +435,7 @@ class YatConv2D(tf.Module):
         return yat_score(self, dot_prod_map, distance_sq_map)
 
 
-class YatConv3D(tf.Module):
+class YatConv3D(SingleInputSavedModelMixin, tf.Module):
     """3D YAT convolution module using TensorFlow operations.
     
     This module implements 3D convolution using the YAT algorithm,
@@ -437,6 +480,7 @@ class YatConv3D(tf.Module):
         self.strides = strides if isinstance(strides, (list, tuple)) else (strides, strides, strides)
         self.padding = padding.upper()
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate, dilation_rate)
+        _validate_groups(filters, groups)
         self.groups = groups
         self.use_alpha = use_alpha
         if epsilon <= 0:
@@ -479,11 +523,6 @@ class YatConv3D(tf.Module):
                 f"Input channels ({input_channels}) must be divisible by groups ({self.groups})"
             )
         
-        if self.filters % self.groups != 0:
-            raise ValueError(
-                f"Filters ({self.filters}) must be divisible by groups ({self.groups})"
-            )
-
         # Kernel shape: [kernel_depth, kernel_height, kernel_width, input_channels_per_group, filters]
         channels_per_group = input_channels // self.groups
         kernel_shape = self.kernel_size + (channels_per_group, self.filters)
@@ -547,34 +586,40 @@ class YatConv3D(tf.Module):
         self._maybe_build(inputs)
 
         # Compute dot product using standard convolution
-        dot_prod_map = tf.nn.conv3d(
-            inputs,
-            self.kernel,
+        convolution = lambda x, kernel: tf.nn.conv3d(
+            x,
+            kernel,
             strides=[1] + list(self.strides) + [1],
             padding=self.padding,
             dilations=[1] + list(self.dilation_rate) + [1],
+        )
+        dot_prod_map = _grouped_convolution(
+            inputs, self.kernel, self.groups, convolution
         )
 
         # Compute ||input_patches||^2 using convolution with ones kernel
         inputs_squared = inputs * inputs
         
         # Create ones kernel for computing patch squared sums
-        ones_kernel_shape = self.kernel_size + (self.input_channels // self.groups, 1)
-        ones_kernel = tf.ones(ones_kernel_shape, dtype=self.dtype)
+        ones_kernel = _patch_norm_kernel(
+            self.kernel_size,
+            self.input_channels // self.groups,
+            self.groups,
+            self.dtype,
+        )
         
-        patch_sq_sum_map_raw = tf.nn.conv3d(
+        patch_sq_sum_map_raw = _grouped_convolution(
             inputs_squared,
             ones_kernel,
-            strides=[1] + list(self.strides) + [1],
-            padding=self.padding,
-            dilations=[1] + list(self.dilation_rate) + [1],
+            self.groups,
+            convolution,
         )
 
-        # Handle grouped convolution
-        if self.groups > 1:
-            patch_sq_sum_map = tf.repeat(patch_sq_sum_map_raw, self.filters // self.groups, axis=-1)
-        else:
-            patch_sq_sum_map = tf.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
+        # The helper convolution emits one channel per group. Repeat each
+        # group's patch norm for that group's contiguous output-filter block.
+        patch_sq_sum_map = tf.repeat(
+            patch_sq_sum_map_raw, self.filters // self.groups, axis=-1
+        )
 
         # Compute ||kernel||^2 per filter
         kernel_sq_sum_per_filter = tf.reduce_sum(self.kernel**2, axis=[0, 1, 2, 3])  # Sum over spatial and input channel dims
@@ -587,7 +632,7 @@ class YatConv3D(tf.Module):
         return yat_score(self, dot_prod_map, distance_sq_map)
 
 
-class YatConvTranspose1D(tf.Module):
+class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
     """1D YAT transposed convolution (deconvolution) module using TensorFlow operations.
     
     This module implements 1D transposed convolution using the YAT algorithm.
@@ -768,7 +813,7 @@ class YatConvTranspose1D(tf.Module):
         return yat_score(self, dot_prod_map, distance_sq_map)
 
 
-class YatConvTranspose2D(tf.Module):
+class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
     """2D YAT transposed convolution (deconvolution) module using TensorFlow operations.
     
     This module implements 2D transposed convolution using the YAT algorithm.
@@ -938,7 +983,7 @@ class YatConvTranspose2D(tf.Module):
         return yat_score(self, dot_prod_map, distance_sq_map)
 
 
-class YatConvTranspose3D(tf.Module):
+class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
     """3D YAT transposed convolution (deconvolution) module using TensorFlow operations.
     
     This module implements 3D transposed convolution using the YAT algorithm.

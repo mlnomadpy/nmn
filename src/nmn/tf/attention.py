@@ -13,6 +13,8 @@ from typing import Optional, Tuple, Union
 
 import tensorflow as tf
 
+from .saved_model import ExportPath, export_attention
+
 __all__ = [
     "normalize_qk",
     "yat_attention_weights",
@@ -406,3 +408,26 @@ class MultiHeadYatAttention(tf.Module):
             x = self._linear(x, self.out_kernel, self.out_bias)
 
         return x
+
+    def export(
+        self,
+        export_dir: ExportPath,
+        query_signature: tf.TensorSpec,
+        *,
+        key_signature: Optional[tf.TensorSpec] = None,
+        value_signature: Optional[tf.TensorSpec] = None,
+        mask_signature: Optional[tf.TensorSpec] = None,
+    ) -> None:
+        """Export a callable inference SavedModel signature.
+
+        Omitting both key and value exports self-attention. Providing both
+        exports cross-attention. ``training`` is fixed to ``False``.
+        """
+        export_attention(
+            self,
+            export_dir,
+            query_signature,
+            key_signature=key_signature,
+            value_signature=value_signature,
+            mask_signature=mask_signature,
+        )
