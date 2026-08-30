@@ -151,6 +151,13 @@ class Block(nn.Module):
 
 `nmn.linen.MultiHeadAttention` mirrors `flax.linen.MultiHeadDotProductAttention` but with Yat-scored attention.
 
+Alpha always scales the Yat scores before attention normalization. This is the
+same operation whether alpha is learnable (`use_alpha=True`) or fixed
+(`constant_alpha=True` for $\sqrt{2}$, or `constant_alpha=1.5` for a custom
+value); switching between them changes trainability, not attention semantics.
+The default normalization is `"softmax"`; pass `normalization="l1"` for direct
+normalization of the non-negative Yat scores.
+
 ---
 
 ## 6. Saving & loading

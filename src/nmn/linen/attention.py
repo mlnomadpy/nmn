@@ -158,6 +158,9 @@ class MultiHeadAttention(Module):
         constant_alpha: If True, use sqrt(2). If float, use that value.
         normalize_qk: Whether to L2-normalize Q and K (default: False).
         spherical: If True, use spherical YAT formula (default: False).
+        normalization: Score normalization, either ``"softmax"`` (default) or
+            ``"l1"``. Constant and learnable alpha both scale scores before
+            this normalization.
         epsilon: Numerical stability constant (default: 1e-5).
         dtype: Computation dtype.
         param_dtype: Parameter dtype (default: float32).
@@ -174,6 +177,7 @@ class MultiHeadAttention(Module):
     constant_alpha: Optional[Any] = None
     normalize_qk: bool = False
     spherical: bool = False
+    normalization: str = "softmax"
     epsilon: float = 1e-5
     dtype: Optional[Any] = None
     param_dtype: Any = jnp.float32
@@ -258,13 +262,17 @@ class MultiHeadAttention(Module):
             k = k / (jnp.linalg.norm(k, axis=-1, keepdims=True) + 1e-8)
 
         # Alpha
-        _constant_alpha_value = None
         alpha_val = None
         if self.constant_alpha is not None and self.constant_alpha is not False:
             if self.constant_alpha is True:
-                _constant_alpha_value = DEFAULT_CONSTANT_ALPHA
+                constant_alpha_value = DEFAULT_CONSTANT_ALPHA
             else:
-                _constant_alpha_value = float(self.constant_alpha)
+                constant_alpha_value = float(self.constant_alpha)
+            # Constant and learnable alpha have identical semantics: both scale
+            # the YAT logits before attention normalization.  Keeping the
+            # constant as an array also lets ``promote_dtype`` honour the
+            # requested compute dtype.
+            alpha_val = jnp.asarray(constant_alpha_value, dtype=self.param_dtype)
         elif self.use_alpha:
             alpha_val = self.param("alpha", self.alpha_init, (1,), self.param_dtype)
 
@@ -278,11 +286,8 @@ class MultiHeadAttention(Module):
             deterministic=deterministic,
             epsilon=self.epsilon,
             alpha=alpha_val,
+            normalization=self.normalization,
         )
-
-        # Apply constant alpha
-        if _constant_alpha_value is not None:
-            x = x * _constant_alpha_value
 
         # Reshape back: (B, Q, H, D) -> (B, Q, E)
         x = x.reshape(x.shape[:-2] + (qkv_features,))

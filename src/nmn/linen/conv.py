@@ -14,6 +14,24 @@ from typing import Any, Optional, Sequence, Union, Tuple
 from ._yat_core import yat_score
 
 
+def _validate_feature_groups(
+    input_channels: int, output_channels: int, feature_group_count: int
+) -> None:
+    """Validate grouped-convolution channel partitions with clear errors."""
+    if feature_group_count <= 0:
+        raise ValueError("feature_group_count must be a positive integer.")
+    if input_channels % feature_group_count != 0:
+        raise ValueError(
+            f"Input channels ({input_channels}) must be divisible by "
+            f"feature_group_count ({feature_group_count})."
+        )
+    if output_channels % feature_group_count != 0:
+        raise ValueError(
+            f"features ({output_channels}) must be divisible by "
+            f"feature_group_count ({feature_group_count})."
+        )
+
+
 class YatConv1D(Module):
     """1D YAT convolution layer for Flax Linen.
     
@@ -65,6 +83,9 @@ class YatConv1D(Module):
             Output tensor after YAT convolution.
         """
         input_channels = inputs.shape[-1]
+        _validate_feature_groups(
+            input_channels, self.features, self.feature_group_count
+        )
         
         # Kernel shape: [kernel_size, input_channels // groups, features]
         kernel_shape = tuple(self.kernel_size) + (input_channels // self.feature_group_count, self.features)
@@ -113,7 +134,14 @@ class YatConv1D(Module):
         
         # Compute ||input_patches||^2
         inputs_squared = inputs * inputs
-        ones_kernel_shape = tuple(self.kernel_size) + (input_channels // self.feature_group_count, 1)
+        # Grouped convolution needs one patch-norm output per input group.  A
+        # single output feature is invalid in XLA when feature_group_count > 1
+        # (rhs output features must be divisible by the group count), and would
+        # lose the mapping between each output filter and its input group.
+        ones_kernel_shape = tuple(self.kernel_size) + (
+            input_channels // self.feature_group_count,
+            self.feature_group_count,
+        )
         ones_kernel = jnp.ones(ones_kernel_shape, dtype=kernel.dtype)
         
         patch_sq_sum_raw = lax.conv_general_dilated(
@@ -194,6 +222,9 @@ class YatConv2D(Module):
             Output tensor after YAT convolution.
         """
         input_channels = inputs.shape[-1]
+        _validate_feature_groups(
+            input_channels, self.features, self.feature_group_count
+        )
         
         # Kernel shape: [height, width, input_channels // groups, features]
         kernel_shape = tuple(self.kernel_size) + (input_channels // self.feature_group_count, self.features)
@@ -242,7 +273,10 @@ class YatConv2D(Module):
         
         # Compute ||input_patches||^2
         inputs_squared = inputs * inputs
-        ones_kernel_shape = tuple(self.kernel_size) + (input_channels // self.feature_group_count, 1)
+        ones_kernel_shape = tuple(self.kernel_size) + (
+            input_channels // self.feature_group_count,
+            self.feature_group_count,
+        )
         ones_kernel = jnp.ones(ones_kernel_shape, dtype=kernel.dtype)
         
         patch_sq_sum_raw = lax.conv_general_dilated(
@@ -324,6 +358,9 @@ class YatConv3D(Module):
             Output tensor after YAT convolution.
         """
         input_channels = inputs.shape[-1]
+        _validate_feature_groups(
+            input_channels, self.features, self.feature_group_count
+        )
         
         # Kernel shape: [depth, height, width, input_channels // groups, features]
         kernel_shape = tuple(self.kernel_size) + (input_channels // self.feature_group_count, self.features)
@@ -372,7 +409,10 @@ class YatConv3D(Module):
         
         # Compute ||input_patches||^2
         inputs_squared = inputs * inputs
-        ones_kernel_shape = tuple(self.kernel_size) + (input_channels // self.feature_group_count, 1)
+        ones_kernel_shape = tuple(self.kernel_size) + (
+            input_channels // self.feature_group_count,
+            self.feature_group_count,
+        )
         ones_kernel = jnp.ones(ones_kernel_shape, dtype=kernel.dtype)
         
         patch_sq_sum_raw = lax.conv_general_dilated(
@@ -760,7 +800,5 @@ YatConv3d = YatConv3D
 YatConvTranspose1d = YatConvTranspose1D
 YatConvTranspose2d = YatConvTranspose2D
 YatConvTranspose3d = YatConvTranspose3D
-
-
 
 
