@@ -124,9 +124,9 @@ def _linear_general_with_kernel(
     return output
 
 
-def _dropconnect(kernel: Array, rng, rate: float) -> Array:
+def _dropconnect(kernel: Array, key: Array, rate: float) -> Array:
     keep_probability = 1.0 - rate
-    mask = jax.random.bernoulli(rng(), keep_probability, kernel.shape)
+    mask = jax.random.bernoulli(key, keep_probability, kernel.shape)
     return lax.select(mask, kernel / keep_probability, jnp.zeros_like(kernel))
 
 
@@ -461,20 +461,81 @@ class MultiHeadAttention(Module):
         else:
             is_deterministic = True
 
+        # Resolve and validate decoding before any stochastic projection.  A
+        # rejected call must not advance DropConnect streams or mutate caches.
+        decode = first_from(
+            decode,
+            self.decode,
+            error_msg=(
+                "No `decode` argument was provided to MultiHeadAttention "
+                "as either a __call__ argument, class attribute, or nnx.flag."
+            ),
+        )
+        decode_context = None
+        if decode:
+            if (
+                self.cached_key is None
+                or self.cached_value is None
+                or self.cache_index is None
+            ):
+                raise ValueError(
+                    "Autoregressive cache not initialized, call `init_cache` first."
+                )
+            (
+                *batch_dims,
+                max_length,
+                num_heads,
+                depth_per_head,
+            ) = self.cached_key[...].shape
+            expected_input_shape = tuple(batch_dims) + (1, self.in_features)
+            for name, tensor in (
+                ("query", inputs_q),
+                ("key", inputs_k),
+                ("value", inputs_v),
+            ):
+                if expected_input_shape != tensor.shape:
+                    raise ValueError(
+                        f"Autoregressive cache shape error, expected {name} input "
+                        f"shape {expected_input_shape} instead got {tensor.shape}."
+                    )
+            decode_mask_shape = tuple(batch_dims) + (
+                self.num_heads,
+                1,
+                max_length,
+            )
+            _validate_decode_mask(mask, decode_mask_shape)
+            cur_index = self.cache_index[...]
+            _check_cache_capacity(cur_index, max_length)
+            decode_context = (
+                tuple(batch_dims),
+                max_length,
+                num_heads,
+                depth_per_head,
+                cur_index,
+            )
+
         # Apply linear projections
         apply_dropconnect = (
             self.use_dropconnect
             and self.dropconnect_rate > 0.0
             and not is_deterministic
         )
+        pending_dropconnect_count = None
         if apply_dropconnect:
             assert self.dropconnect_rng is not None
+            base_key = self.dropconnect_rng.key[...]
+            count = self.dropconnect_rng.count[...]
+            dropconnect_keys = tuple(
+                jax.random.fold_in(base_key, count + offset)
+                for offset in range(4)
+            )
+            pending_dropconnect_count = count + 4
             query = _linear_general_with_kernel(
                 self.query,
                 inputs_q,
                 _dropconnect(
                     self.query.kernel[...],
-                    self.dropconnect_rng,
+                    dropconnect_keys[0],
                     self.dropconnect_rate,
                 ),
             )
@@ -483,7 +544,7 @@ class MultiHeadAttention(Module):
                 inputs_k,
                 _dropconnect(
                     self.key.kernel[...],
-                    self.dropconnect_rng,
+                    dropconnect_keys[1],
                     self.dropconnect_rate,
                 ),
             )
@@ -492,7 +553,7 @@ class MultiHeadAttention(Module):
                 inputs_v,
                 _dropconnect(
                     self.value.kernel[...],
-                    self.dropconnect_rng,
+                    dropconnect_keys[2],
                     self.dropconnect_rate,
                 ),
             )
@@ -511,33 +572,20 @@ class MultiHeadAttention(Module):
             query = _l2_normalize_per_head(query)
             key = _l2_normalize_per_head(key)
 
-        # Handle autoregressive decoding
-        decode = first_from(
-            decode,
-            self.decode,
-            error_msg=(
-                "No `decode` argument was provided to MultiHeadAttention "
-                "as either a __call__ argument, class attribute, or nnx.flag."
-            ),
-        )
-
         if decode:
-            if (
-                self.cached_key is None
-                or self.cached_value is None
-                or self.cache_index is None
-            ):
-                raise ValueError(
-                    "Autoregressive cache not initialized, call `init_cache` first."
-                )
+            assert decode_context is not None
             (
-                *batch_dims,
+                batch_dims,
                 max_length,
                 num_heads,
                 depth_per_head,
-            ) = self.cached_key[...].shape
+                cur_index,
+            ) = decode_context
+            assert self.cached_key is not None
+            assert self.cached_value is not None
+            assert self.cache_index is not None
 
-            expected_shape = tuple(batch_dims) + (1, num_heads, depth_per_head)
+            expected_shape = batch_dims + (1, num_heads, depth_per_head)
             for name, tensor in (
                 ("query", query),
                 ("key", key),
@@ -549,17 +597,8 @@ class MultiHeadAttention(Module):
                         f"{expected_shape} instead got {tensor.shape}."
                     )
 
-            decode_mask_shape = tuple(batch_dims) + (
-                self.num_heads,
-                1,
-                max_length,
-            )
-            _validate_decode_mask(mask, decode_mask_shape)
-
             # Build the next cache state locally.  It is committed only after
             # attention and output projection complete successfully.
-            cur_index = self.cache_index[...]
-            _check_cache_capacity(cur_index, max_length)
             zero = jnp.array(0, dtype=lax.dtype(cur_index.dtype))
             indices = (zero,) * len(batch_dims) + (cur_index, zero, zero)
             next_key = lax.dynamic_update_slice(self.cached_key[...], key, indices)
@@ -571,7 +610,7 @@ class MultiHeadAttention(Module):
 
             causal_mask = jnp.broadcast_to(
                 jnp.arange(max_length) <= cur_index,
-                tuple(batch_dims) + (1, 1, max_length),
+                batch_dims + (1, 1, max_length),
             )
             mask = combine_masks(mask, causal_mask)
             pending_cache = (next_key, next_value, cur_index + 1)
@@ -633,7 +672,7 @@ class MultiHeadAttention(Module):
                 x,
                 _dropconnect(
                     self.out.kernel[...],
-                    self.dropconnect_rng,
+                    dropconnect_keys[3],
                     self.dropconnect_rate,
                 ),
             )
@@ -648,6 +687,10 @@ class MultiHeadAttention(Module):
             self.cached_key[...] = next_key
             self.cached_value[...] = next_value
             self.cache_index[...] = next_index
+
+        if pending_dropconnect_count is not None:
+            assert self.dropconnect_rng is not None
+            self.dropconnect_rng.count[...] = pending_dropconnect_count
 
         return output
 

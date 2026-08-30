@@ -39,9 +39,8 @@ def _safe_fp32_upcast_fwd(value):
 
 def _safe_fp32_upcast_bwd(dtype_anchor, cotangent):
   info = jnp.finfo(dtype_anchor.dtype)
-  cotangent = jnp.nan_to_num(
-    cotangent, nan=0.0, posinf=info.max, neginf=info.min
-  )
+  cotangent = jnp.where(jnp.isposinf(cotangent), info.max, cotangent)
+  cotangent = jnp.where(jnp.isneginf(cotangent), info.min, cotangent)
   cotangent = jnp.clip(cotangent, info.min, info.max)
   return (cotangent.astype(dtype_anchor.dtype),)
 
@@ -49,10 +48,41 @@ def _safe_fp32_upcast_bwd(dtype_anchor, cotangent):
 _safe_fp32_upcast.defvjp(_safe_fp32_upcast_fwd, _safe_fp32_upcast_bwd)
 
 
+@jax.custom_vjp
+def _saturating_low_precision_cast(value, dtype_anchor):
+  return value.astype(dtype_anchor.dtype)
+
+
+def _saturating_low_precision_cast_fwd(value, dtype_anchor):
+  output = value.astype(dtype_anchor.dtype)
+  anchors = (jnp.zeros((), value.dtype), dtype_anchor)
+  return output, anchors
+
+
+def _saturating_low_precision_cast_bwd(anchors, cotangent):
+  input_anchor, output_anchor = anchors
+  info = jnp.finfo(output_anchor.dtype)
+  cotangent = jnp.where(jnp.isposinf(cotangent), info.max, cotangent)
+  cotangent = jnp.where(jnp.isneginf(cotangent), info.min, cotangent)
+  cotangent = jnp.clip(cotangent, info.min, info.max)
+  return (
+    cotangent.astype(input_anchor.dtype),
+    jnp.zeros_like(output_anchor),
+  )
+
+
+_saturating_low_precision_cast.defvjp(
+  _saturating_low_precision_cast_fwd,
+  _saturating_low_precision_cast_bwd,
+)
+
+
 def finite_cast(value, dtype):
   """Cast to a low-precision output dtype without creating infinities."""
   if dtype not in (jnp.float16, jnp.bfloat16):
     return value.astype(dtype)
   info = jnp.finfo(dtype)
-  value = jnp.nan_to_num(value, nan=0.0, posinf=info.max, neginf=info.min)
-  return jnp.clip(value, info.min, info.max).astype(dtype)
+  value = jnp.where(jnp.isposinf(value), info.max, value)
+  value = jnp.where(jnp.isneginf(value), info.min, value)
+  value = jnp.clip(value, info.min, info.max)
+  return _saturating_low_precision_cast(value, jnp.zeros((), dtype=dtype))

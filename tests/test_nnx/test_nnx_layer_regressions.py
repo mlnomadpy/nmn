@@ -80,6 +80,78 @@ def test_dropconnect_mutable_stream_works_under_nnx_jit(case):
     assert not np.array_equal(first, second)
 
 
+def test_decode_validation_does_not_advance_dropconnect_or_cache():
+    module = MultiHeadAttention(
+        2, 8, decode=True, deterministic=False, use_alpha=False,
+        use_dropconnect=True, dropconnect_rate=0.5,
+        rngs=nnx.Rngs(params=0, dropout=1),
+    )
+    module.init_cache((1, 3, 8))
+    rng_count = int(module.dropconnect_rng.count[...])
+    cache = (
+        np.asarray(module.cached_key[...]).copy(),
+        np.asarray(module.cached_value[...]).copy(),
+        int(module.cache_index[...]),
+    )
+
+    invalid_mask = jnp.ones((1, 1, 2, 3), dtype=jnp.bool_)
+    with pytest.raises(ValueError, match="[Mm]ask shape"):
+        module(
+            jnp.ones((1, 1, 8)),
+            mask=invalid_mask,
+            deterministic=False,
+        )
+
+    assert int(module.dropconnect_rng.count[...]) == rng_count
+    np.testing.assert_array_equal(module.cached_key[...], cache[0])
+    np.testing.assert_array_equal(module.cached_value[...], cache[1])
+    assert int(module.cache_index[...]) == cache[2]
+
+
+def test_attention_failure_does_not_commit_dropconnect_or_cache():
+    def failing_attention(*args, **kwargs):
+        raise RuntimeError("attention failed")
+
+    module = MultiHeadAttention(
+        2, 8, decode=True, deterministic=False, use_alpha=False,
+        use_dropconnect=True, dropconnect_rate=0.5,
+        attention_fn=failing_attention,
+        rngs=nnx.Rngs(params=0, dropout=1),
+    )
+    module.init_cache((1, 3, 8))
+    rng_count = int(module.dropconnect_rng.count[...])
+    cache = (
+        np.asarray(module.cached_key[...]).copy(),
+        np.asarray(module.cached_value[...]).copy(),
+        int(module.cache_index[...]),
+    )
+
+    with pytest.raises(RuntimeError, match="attention failed"):
+        module(jnp.ones((1, 1, 8)), deterministic=False)
+
+    assert int(module.dropconnect_rng.count[...]) == rng_count
+    np.testing.assert_array_equal(module.cached_key[...], cache[0])
+    np.testing.assert_array_equal(module.cached_value[...], cache[1])
+    assert int(module.cache_index[...]) == cache[2]
+
+
+@pytest.mark.parametrize("drop_rate", [-0.1, 1.0, np.nan, np.inf])
+@pytest.mark.parametrize("kind", ["dense", "conv", "transpose"])
+def test_invalid_dropconnect_rates_are_rejected(kind, drop_rate):
+    kwargs = dict(
+        use_dropconnect=True,
+        drop_rate=drop_rate,
+        rngs=nnx.Rngs(0),
+    )
+    with pytest.raises(ValueError, match="drop_rate"):
+        if kind == "dense":
+            YatNMN(2, 2, **kwargs)
+        elif kind == "conv":
+            YatConv(2, 2, 1, **kwargs)
+        else:
+            YatConvTranspose(2, 2, 1, **kwargs)
+
+
 def _epsilon_modules(dtype):
     kwargs = dict(
         epsilon=1e-5,
@@ -236,6 +308,32 @@ def test_fp16_embed_large_collision_saturates_with_finite_gradients():
     _, (grads, dq) = jax.value_and_grad(loss, argnums=(0, 1))(layer, query)
     assert output[0, 0] == jnp.finfo(jnp.float16).max
     assert all(jnp.isfinite(value).all() for value in (output, dq, grads.embedding[...]))
+
+
+@pytest.mark.parametrize("kind", ["conv", "transpose", "embed"])
+def test_low_precision_nan_forward_and_cotangent_are_preserved(kind):
+    if kind == "embed":
+        module = Embed(
+            2, 2, dtype=jnp.float16, param_dtype=jnp.float16,
+            use_alpha=False, rngs=nnx.Rngs(0),
+        )
+        call = lambda value: module.attend(value)
+        clean = jnp.ones((1, 2), dtype=jnp.float16)
+    else:
+        cls = YatConv if kind == "conv" else YatConvTranspose
+        module = cls(
+            2, 2, 1, dtype=jnp.float16, param_dtype=jnp.float16,
+            use_bias=False, use_alpha=False, rngs=nnx.Rngs(0),
+        )
+        call = lambda value: module(value)
+        clean = jnp.ones((1, 2, 2), dtype=jnp.float16)
+
+    with_nan = clean.at[(0,) * (clean.ndim - 1) + (0,)].set(jnp.nan)
+    assert jnp.isnan(call(with_nan)).any()
+
+    output, pullback = jax.vjp(call, clean)
+    (cotangent,) = pullback(jnp.full_like(output, jnp.nan))
+    assert jnp.isnan(cotangent).any()
 
 
 @pytest.mark.parametrize("dtype", [jnp.float16, jnp.bfloat16, jnp.float32])

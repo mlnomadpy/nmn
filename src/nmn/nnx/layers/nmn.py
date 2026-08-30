@@ -170,6 +170,12 @@ class YatNMN(Module):
     rngs: rnglib.Rngs,
   ):
 
+    if not 0.0 <= drop_rate < 1.0:
+      raise ValueError(
+        "drop_rate must be in the half-open interval [0, 1), "
+        f"got {drop_rate}"
+      )
+
     # ── Lazy mode (issue #37): freeze ONLY the kernel ───────────────────────
     # `freeze_kernel` is an alias for `lazy`. When enabled, the kernel is stored
     # under FrozenParam (a non-Param nnx.Variable) so it is excluded from

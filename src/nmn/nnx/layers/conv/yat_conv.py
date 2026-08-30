@@ -157,6 +157,11 @@ class YatConv(Module):
         kernel_bank_id: str = "default",
         rngs: rnglib.Rngs,
     ):
+        if not 0.0 <= drop_rate < 1.0:
+            raise ValueError(
+                "drop_rate must be in the half-open interval [0, 1), "
+                f"got {drop_rate}"
+            )
         if feature_group_count <= 0:
             raise ValueError("feature_group_count must be positive")
         if in_features % feature_group_count != 0:

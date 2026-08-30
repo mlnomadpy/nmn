@@ -135,6 +135,11 @@ class YatConvTranspose(Module):
         drop_rate: float = 0.0,
         rngs: rnglib.Rngs,
     ):
+        if not 0.0 <= drop_rate < 1.0:
+            raise ValueError(
+                "drop_rate must be in the half-open interval [0, 1), "
+                f"got {drop_rate}"
+            )
         if isinstance(kernel_size, int):
             kernel_size = (kernel_size,)
         else:
@@ -420,4 +425,3 @@ class YatConvTranspose(Module):
             y = jnp.reshape(y, output_shape)
 
         return y
-
