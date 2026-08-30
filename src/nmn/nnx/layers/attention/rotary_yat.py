@@ -56,6 +56,7 @@ from .spherical_yat_performer import (
     yat_tp_attention,
     create_yat_tp_projection,
 )
+from .._numerics import fp32_if_low_precision, inverse_softplus
 from .maclaurin_yat import (
     _validate_linear_attention_mask,
     create_maclaurin_projection,
@@ -520,8 +521,7 @@ class RotaryYatAttention(Module):
         self.learnable_epsilon = learnable_epsilon
         self.epsilon_param: nnx.Param[Array] | None
         if learnable_epsilon:
-            raw_eps = jnp.log(jnp.exp(jnp.array(epsilon, dtype=param_dtype)) - 1.0)
-            self.epsilon_param = nnx.Param(raw_eps.reshape((1,)))
+            self.epsilon_param = nnx.Param(inverse_softplus(epsilon, param_dtype))
         else:
             self.epsilon_param = None
         self.use_softermax = use_softermax
@@ -843,7 +843,8 @@ class RotaryYatAttention(Module):
 
         # Resolve effective epsilon (learnable via softplus, or constant)
         if self.learnable_epsilon and self.epsilon_param is not None:
-            effective_epsilon = jax.nn.softplus(self.epsilon_param[...].astype(jnp.float32))
+            (raw_epsilon,) = fp32_if_low_precision(self.epsilon_param[...])
+            effective_epsilon = jax.nn.softplus(raw_epsilon)
         else:
             effective_epsilon = self.epsilon
 

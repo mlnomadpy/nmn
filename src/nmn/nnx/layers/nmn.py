@@ -21,6 +21,8 @@ from flax.typing import (
   PromoteDtypeFn,
 )
 
+from ._numerics import fp32_if_low_precision, inverse_softplus
+
 Array = jax.Array
 Axis = int
 Size = int
@@ -167,6 +169,12 @@ class YatNMN(Module):
     freeze_kernel: tp.Optional[bool] = None,
     rngs: rnglib.Rngs,
   ):
+
+    if not 0.0 <= drop_rate < 1.0:
+      raise ValueError(
+        "drop_rate must be in the half-open interval [0, 1), "
+        f"got {drop_rate}"
+      )
 
     # ── Lazy mode (issue #37): freeze ONLY the kernel ───────────────────────
     # `freeze_kernel` is an alias for `lazy`. When enabled, the kernel is stored
@@ -327,10 +335,7 @@ class YatNMN(Module):
       # Initialize so that softplus(raw) ≈ epsilon: raw = log(exp(eps) - 1)
       # Compute this in Python float precision before casting. Evaluating the
       # inverse in bf16/fp16 rounds exp(1e-5) to 1 and produces ``-inf``.
-      raw_eps = epsilon + math.log(-math.expm1(-epsilon))
-      self.epsilon_param = nnx.Param(
-        jnp.asarray([raw_eps], dtype=param_dtype)
-      )
+      self.epsilon_param = nnx.Param(inverse_softplus(epsilon, param_dtype))
     else:
       self.epsilon_param = None
     self.spherical = spherical
@@ -348,7 +353,7 @@ class YatNMN(Module):
       self.kernel.value = kernel_val / (kernel_norm + 1e-8)
 
     if use_dropconnect:
-      self.dropconnect_key = rngs.params()
+      self.dropconnect_key = rngs.dropout.fork()
     else:
       self.dropconnect_key = None
 
@@ -388,7 +393,9 @@ class YatNMN(Module):
 
     if self.use_dropconnect and not deterministic and self.drop_rate > 0.0:
       keep_prob = 1.0 - self.drop_rate
-      mask = jax.random.bernoulli(self.dropconnect_key, p=keep_prob, shape=kernel.shape)
+      mask = jax.random.bernoulli(
+        self.dropconnect_key(), p=keep_prob, shape=kernel.shape
+      )
       kernel = (kernel * mask) / keep_prob
 
     # Normalize kernel if weight normalization is enabled
@@ -405,7 +412,8 @@ class YatNMN(Module):
 
     # Resolve effective epsilon (learnable via softplus, or constant)
     if self.learnable_epsilon and self.epsilon_param is not None:
-      eps = jax.nn.softplus(self.epsilon_param[...].astype(jnp.float32))
+      (raw_epsilon,) = fp32_if_low_precision(self.epsilon_param[...])
+      eps = jax.nn.softplus(raw_epsilon)
     else:
       eps = self.epsilon
 

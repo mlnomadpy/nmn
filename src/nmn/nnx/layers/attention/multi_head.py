@@ -38,6 +38,7 @@ from jax import Array
 
 from .yat_attention import yat_attention
 from .masks import combine_masks
+from .._numerics import fp32_if_low_precision, inverse_softplus
 
 # Default constant alpha value (sqrt(2)), same as NMN
 DEFAULT_CONSTANT_ALPHA = jnp.sqrt(2.0)
@@ -83,6 +84,50 @@ def _validate_decode_mask(mask: Array | None, expected_shape: tuple[int, ...]) -
             f"Decode mask shape {mask.shape} would expand attention shape "
             f"{expected_shape} to {broadcast_shape}."
         )
+
+
+def _linear_general_with_kernel(
+    layer: LinearGeneral, inputs: Array, kernel: Array
+) -> Array:
+    """Apply ``LinearGeneral`` with an ephemeral DropConnect kernel."""
+    ndim = inputs.ndim
+    axis = tuple(ax if ax >= 0 else ndim + ax for ax in layer.axis)
+    batch_axes = tuple(
+        ax if ax >= 0 else ndim + ax for ax in layer.batch_axis.keys()
+    )
+    n_batch_dims = len(batch_axes)
+    expanded_batch_shape = tuple(
+        inputs.shape[ax] if ax in batch_axes else 1
+        for ax in range(ndim)
+        if ax not in axis
+    )
+    bias = layer.bias[...] if layer.bias is not None else None
+    inputs, kernel, bias = layer.promote_dtype(
+        (inputs, kernel, bias), dtype=layer.dtype
+    )
+    dot_general = layer.dot_general or lax.dot_general
+    if layer.dot_general_cls is not None:
+        dot_general = layer.dot_general_cls()
+    dot_general_kwargs = {"out_sharding": None}
+    if layer.preferred_element_type is not None:
+        dot_general_kwargs["preferred_element_type"] = layer.preferred_element_type
+    output = dot_general(
+        inputs,
+        kernel,
+        ((axis, tuple(range(n_batch_dims, len(axis) + n_batch_dims))),
+         (batch_axes, tuple(range(n_batch_dims)))),
+        precision=layer.precision,
+        **dot_general_kwargs,
+    )
+    if bias is not None:
+        output += jnp.reshape(bias, (*expanded_batch_shape, *layer.out_features))
+    return output
+
+
+def _dropconnect(kernel: Array, key: Array, rate: float) -> Array:
+    keep_probability = 1.0 - rate
+    mask = jax.random.bernoulli(key, keep_probability, kernel.shape)
+    return lax.select(mask, kernel / keep_probability, jnp.zeros_like(kernel))
 
 
 class MultiHeadAttention(Module):
@@ -249,14 +294,21 @@ class MultiHeadAttention(Module):
         self.learnable_epsilon = learnable_epsilon
         self.epsilon_param: nnx.Param[Array] | None
         if learnable_epsilon:
-            raw_eps = jnp.log(jnp.exp(jnp.array(epsilon, dtype=param_dtype)) - 1.0)
-            self.epsilon_param = nnx.Param(raw_eps.reshape((1,)))
+            self.epsilon_param = nnx.Param(inverse_softplus(epsilon, param_dtype))
         else:
             self.epsilon_param = None
         self.use_softermax = use_softermax
         self.power = power
         self.use_dropconnect = use_dropconnect
         self.dropconnect_rate = dropconnect_rate
+        if not 0.0 <= dropconnect_rate < 1.0:
+            raise ValueError(
+                "dropconnect_rate must be in the half-open interval [0, 1), "
+                f"got {dropconnect_rate}"
+            )
+        self.dropconnect_rng = (
+            rngs.dropout.fork() if use_dropconnect else nnx.data(None)
+        )
 
         # Handle alpha configuration (same logic as YatNMN)
         # Priority: constant_alpha > use_alpha
@@ -409,22 +461,8 @@ class MultiHeadAttention(Module):
         else:
             is_deterministic = True
 
-        # Apply linear projections
-        query = self.query(inputs_q)
-        key = self.key(inputs_k)
-        value = self.value(inputs_v)
-
-        # Reshape to multi-head format: [batch..., length, num_heads, head_dim]
-        query = query.reshape(query.shape[:-1] + (self.num_heads, self.head_dim))
-        key = key.reshape(key.shape[:-1] + (self.num_heads, self.head_dim))
-        value = value.reshape(value.shape[:-1] + (self.num_heads, self.head_dim))
-
-        # Optional QK normalization (stabilizes training with higher LR)
-        if self.normalize_qk:
-            query = _l2_normalize_per_head(query)
-            key = _l2_normalize_per_head(key)
-
-        # Handle autoregressive decoding
+        # Resolve and validate decoding before any stochastic projection.  A
+        # rejected call must not advance DropConnect streams or mutate caches.
         decode = first_from(
             decode,
             self.decode,
@@ -433,7 +471,7 @@ class MultiHeadAttention(Module):
                 "as either a __call__ argument, class attribute, or nnx.flag."
             ),
         )
-
+        decode_context = None
         if decode:
             if (
                 self.cached_key is None
@@ -449,8 +487,105 @@ class MultiHeadAttention(Module):
                 num_heads,
                 depth_per_head,
             ) = self.cached_key[...].shape
+            expected_input_shape = tuple(batch_dims) + (1, self.in_features)
+            for name, tensor in (
+                ("query", inputs_q),
+                ("key", inputs_k),
+                ("value", inputs_v),
+            ):
+                if expected_input_shape != tensor.shape:
+                    raise ValueError(
+                        f"Autoregressive cache shape error, expected {name} input "
+                        f"shape {expected_input_shape} instead got {tensor.shape}."
+                    )
+            decode_mask_shape = tuple(batch_dims) + (
+                self.num_heads,
+                1,
+                max_length,
+            )
+            _validate_decode_mask(mask, decode_mask_shape)
+            cur_index = self.cache_index[...]
+            _check_cache_capacity(cur_index, max_length)
+            decode_context = (
+                tuple(batch_dims),
+                max_length,
+                num_heads,
+                depth_per_head,
+                cur_index,
+            )
 
-            expected_shape = tuple(batch_dims) + (1, num_heads, depth_per_head)
+        # Apply linear projections
+        apply_dropconnect = (
+            self.use_dropconnect
+            and self.dropconnect_rate > 0.0
+            and not is_deterministic
+        )
+        pending_dropconnect_count = None
+        if apply_dropconnect:
+            assert self.dropconnect_rng is not None
+            base_key = self.dropconnect_rng.key[...]
+            count = self.dropconnect_rng.count[...]
+            dropconnect_keys = tuple(
+                jax.random.fold_in(base_key, count + offset)
+                for offset in range(4)
+            )
+            pending_dropconnect_count = count + 4
+            query = _linear_general_with_kernel(
+                self.query,
+                inputs_q,
+                _dropconnect(
+                    self.query.kernel[...],
+                    dropconnect_keys[0],
+                    self.dropconnect_rate,
+                ),
+            )
+            key = _linear_general_with_kernel(
+                self.key,
+                inputs_k,
+                _dropconnect(
+                    self.key.kernel[...],
+                    dropconnect_keys[1],
+                    self.dropconnect_rate,
+                ),
+            )
+            value = _linear_general_with_kernel(
+                self.value,
+                inputs_v,
+                _dropconnect(
+                    self.value.kernel[...],
+                    dropconnect_keys[2],
+                    self.dropconnect_rate,
+                ),
+            )
+        else:
+            query = self.query(inputs_q)
+            key = self.key(inputs_k)
+            value = self.value(inputs_v)
+
+        # Reshape to multi-head format: [batch..., length, num_heads, head_dim]
+        query = query.reshape(query.shape[:-1] + (self.num_heads, self.head_dim))
+        key = key.reshape(key.shape[:-1] + (self.num_heads, self.head_dim))
+        value = value.reshape(value.shape[:-1] + (self.num_heads, self.head_dim))
+
+        # Optional QK normalization (stabilizes training with higher LR)
+        if self.normalize_qk:
+            query = _l2_normalize_per_head(query)
+            key = _l2_normalize_per_head(key)
+
+        if decode:
+            assert decode_context is not None
+            (
+                batch_dims,
+                max_length,
+                num_heads,
+                depth_per_head,
+                cur_index,
+            ) = decode_context
+            assert self.cached_key is not None
+            assert self.cached_value is not None
+            assert self.cache_index is not None
+
+            expected_shape = batch_dims + (1, num_heads, depth_per_head)
             for name, tensor in (
                 ("query", query),
                 ("key", key),
@@ -462,17 +597,8 @@ class MultiHeadAttention(Module):
                         f"{expected_shape} instead got {tensor.shape}."
                     )
 
-            decode_mask_shape = tuple(batch_dims) + (
-                self.num_heads,
-                1,
-                max_length,
-            )
-            _validate_decode_mask(mask, decode_mask_shape)
-
             # Build the next cache state locally.  It is committed only after
             # attention and output projection complete successfully.
-            cur_index = self.cache_index[...]
-            _check_cache_capacity(cur_index, max_length)
             zero = jnp.array(0, dtype=lax.dtype(cur_index.dtype))
             indices = (zero,) * len(batch_dims) + (cur_index, zero, zero)
             next_key = lax.dynamic_update_slice(self.cached_key[...], key, indices)
@@ -484,7 +610,7 @@ class MultiHeadAttention(Module):
 
             causal_mask = jnp.broadcast_to(
                 jnp.arange(max_length) <= cur_index,
-                tuple(batch_dims) + (1, 1, max_length),
+                batch_dims + (1, 1, max_length),
             )
             mask = combine_masks(mask, causal_mask)
             pending_cache = (next_key, next_value, cur_index + 1)
@@ -511,7 +637,8 @@ class MultiHeadAttention(Module):
 
         # Resolve effective epsilon (learnable via softplus, or constant)
         if self.learnable_epsilon and self.epsilon_param is not None:
-            effective_epsilon = jax.nn.softplus(self.epsilon_param[...].astype(jnp.float32))
+            (raw_epsilon,) = fp32_if_low_precision(self.epsilon_param[...])
+            effective_epsilon = jax.nn.softplus(raw_epsilon)
         else:
             effective_epsilon = self.epsilon
 
@@ -538,7 +665,19 @@ class MultiHeadAttention(Module):
         if self._constant_alpha_value is not None:
             x = x * self._constant_alpha_value
 
-        output = self.out(x)
+        if apply_dropconnect:
+            assert self.dropconnect_rng is not None
+            output = _linear_general_with_kernel(
+                self.out,
+                x,
+                _dropconnect(
+                    self.out.kernel[...],
+                    dropconnect_keys[3],
+                    self.dropconnect_rate,
+                ),
+            )
+        else:
+            output = self.out(x)
 
         if pending_cache is not None:
             assert self.cached_key is not None
@@ -548,6 +687,10 @@ class MultiHeadAttention(Module):
             self.cached_key[...] = next_key
             self.cached_value[...] = next_value
             self.cache_index[...] = next_index
+
+        if pending_dropconnect_count is not None:
+            assert self.dropconnect_rng is not None
+            self.dropconnect_rng.count[...] = pending_dropconnect_count
 
         return output
 

@@ -35,6 +35,7 @@ from .utils import (
     default_alpha_init,
     DEFAULT_CONSTANT_ALPHA,
 )
+from .._numerics import finite_cast, fp32_if_low_precision, inverse_softplus
 
 Array = jax.Array
 
@@ -134,6 +135,11 @@ class YatConvTranspose(Module):
         drop_rate: float = 0.0,
         rngs: rnglib.Rngs,
     ):
+        if not 0.0 <= drop_rate < 1.0:
+            raise ValueError(
+                "drop_rate must be in the half-open interval [0, 1), "
+                f"got {drop_rate}"
+            )
         if isinstance(kernel_size, int):
             kernel_size = (kernel_size,)
         else:
@@ -159,8 +165,7 @@ class YatConvTranspose(Module):
         self.learnable_epsilon = learnable_epsilon
         self.epsilon_param: nnx.Param | None
         if learnable_epsilon:
-            raw_eps = jnp.log(jnp.exp(jnp.array(epsilon, dtype=param_dtype)) - 1.0)
-            self.epsilon_param = nnx.Param(raw_eps.reshape((1,)))
+            self.epsilon_param = nnx.Param(inverse_softplus(epsilon, param_dtype))
         else:
             self.epsilon_param = None
         self.drop_rate = drop_rate
@@ -217,7 +222,7 @@ class YatConvTranspose(Module):
         self.constant_alpha = constant_alpha
 
         if use_dropconnect:
-            self.dropconnect_key = rngs.params()
+            self.dropconnect_key = rngs.dropout.fork()
         else:
             self.dropconnect_key = None
 
@@ -267,7 +272,7 @@ class YatConvTranspose(Module):
         if self.use_dropconnect and not deterministic and self.drop_rate > 0.0:
             keep_prob = 1.0 - self.drop_rate
             mask = jax.random.bernoulli(
-                self.dropconnect_key, p=keep_prob, shape=kernel_val.shape
+                self.dropconnect_key(), p=keep_prob, shape=kernel_val.shape
             )
             kernel_val = (kernel_val * mask) / keep_prob
 
@@ -305,6 +310,10 @@ class YatConvTranspose(Module):
         inputs_flat = inputs_promoted
         kernel_val = kernel_promoted
         bias_val = bias_promoted
+        output_dtype = inputs_flat.dtype
+        inputs_flat, kernel_val, bias_val, alpha = fp32_if_low_precision(
+            inputs_flat, kernel_val, bias_val, alpha
+        )
 
         # Compute transposed convolution (dot product)
         dot_prod_map = lax.conv_transpose(
@@ -320,11 +329,9 @@ class YatConvTranspose(Module):
         # Compute ||x||² for each patch via transposed convolution
         inputs_flat_squared = inputs_flat**2
         if self.transpose_kernel:
-            patch_kernel_in_features = self.out_features
+            kernel_for_patch_sq_sum_shape = self.kernel_size + (1, self.in_features)
         else:
-            patch_kernel_in_features = self.in_features
-
-        kernel_for_patch_sq_sum_shape = self.kernel_size + (patch_kernel_in_features, 1)
+            kernel_for_patch_sq_sum_shape = self.kernel_size + (self.in_features, 1)
         kernel_for_patch_sq_sum = jnp.ones(
             kernel_for_patch_sq_sum_shape, dtype=kernel_val.dtype
         )
@@ -362,12 +369,16 @@ class YatConvTranspose(Module):
 
         # Resolve effective epsilon (learnable via softplus, or constant)
         if self.learnable_epsilon and self.epsilon_param is not None:
-            eps = jax.nn.softplus(self.epsilon_param[...].astype(dot_prod_map.dtype))
+            (raw_epsilon,) = fp32_if_low_precision(self.epsilon_param[...])
+            eps = jax.nn.softplus(raw_epsilon)
         else:
             eps = self.epsilon
 
         # YAT formula: (x·W + b)² / (||x - W||² + ε)
-        distance_sq_map = patch_sq_sum_map + kernel_sq_sum_per_filter - 2 * dot_prod_map
+        distance_sq_map = jnp.maximum(
+            patch_sq_sum_map + kernel_sq_sum_per_filter - 2 * dot_prod_map,
+            0.0,
+        )
 
         # Add bias before squaring
         if self.use_bias and bias_val is not None:
@@ -382,6 +393,8 @@ class YatConvTranspose(Module):
         elif alpha is not None:
             # Simple learnable alpha scaling
             y = y * alpha
+
+        y = finite_cast(y, output_dtype)
 
         # Handle circular padding
         if self.padding == "CIRCULAR":
@@ -412,7 +425,3 @@ class YatConvTranspose(Module):
             y = jnp.reshape(y, output_shape)
 
         return y
-
-
-
-
