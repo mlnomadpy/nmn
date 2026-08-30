@@ -9,7 +9,7 @@ Attention functions are re-exported from NNX (both use JAX).
 from __future__ import annotations
 
 import math
-from typing import Any, Callable, Optional, Union
+from typing import Any, Optional
 
 import jax.numpy as jnp
 from jax import Array
@@ -23,7 +23,6 @@ from nmn.nnx.layers.attention.yat_attention import (
     normalize_qk,
     yat_attention_weights as _nnx_yat_attention_weights,
     yat_attention as _nnx_yat_attention,
-    yat_attention_normalized as _nnx_yat_attention_normalized,
 )
 
 __all__ = [
@@ -158,6 +157,9 @@ class MultiHeadAttention(Module):
         constant_alpha: If True, use sqrt(2). If float, use that value.
         normalize_qk: Whether to L2-normalize Q and K (default: False).
         spherical: If True, use spherical YAT formula (default: False).
+        normalization: Score normalization, either ``"softmax"`` (default) or
+            ``"l1"``. Constant and learnable alpha both scale scores before
+            this normalization.
         epsilon: Numerical stability constant (default: 1e-5).
         dtype: Computation dtype.
         param_dtype: Parameter dtype (default: float32).
@@ -180,6 +182,9 @@ class MultiHeadAttention(Module):
     kernel_init: Any = nn.initializers.xavier_normal()
     bias_init: Any = nn.initializers.zeros_init()
     alpha_init: Any = lambda key, shape, dtype: jnp.ones(shape, dtype)
+    # Appended after every pre-existing field to preserve the positional
+    # constructor ABI of Linen dataclass modules.
+    normalization: str = "softmax"
 
     @compact
     def __call__(
@@ -202,6 +207,11 @@ class MultiHeadAttention(Module):
         Returns:
             Output (batch, q_len, out_features).
         """
+        if self.normalization not in ("softmax", "l1"):
+            raise ValueError(
+                "normalization must be either 'softmax' or 'l1', got "
+                f"{self.normalization!r}"
+            )
         if inputs_k is None:
             inputs_k = inputs_q
         if inputs_v is None:
@@ -258,13 +268,17 @@ class MultiHeadAttention(Module):
             k = k / (jnp.linalg.norm(k, axis=-1, keepdims=True) + 1e-8)
 
         # Alpha
-        _constant_alpha_value = None
         alpha_val = None
         if self.constant_alpha is not None and self.constant_alpha is not False:
             if self.constant_alpha is True:
-                _constant_alpha_value = DEFAULT_CONSTANT_ALPHA
+                constant_alpha_value = DEFAULT_CONSTANT_ALPHA
             else:
-                _constant_alpha_value = float(self.constant_alpha)
+                constant_alpha_value = float(self.constant_alpha)
+            # Constant and learnable alpha have identical semantics: both scale
+            # the YAT logits before attention normalization.  Keeping the
+            # constant as an array also lets ``promote_dtype`` honour the
+            # requested compute dtype.
+            alpha_val = jnp.asarray(constant_alpha_value, dtype=self.param_dtype)
         elif self.use_alpha:
             alpha_val = self.param("alpha", self.alpha_init, (1,), self.param_dtype)
 
@@ -278,11 +292,8 @@ class MultiHeadAttention(Module):
             deterministic=deterministic,
             epsilon=self.epsilon,
             alpha=alpha_val,
+            normalization=self.normalization,
         )
-
-        # Apply constant alpha
-        if _constant_alpha_value is not None:
-            x = x * _constant_alpha_value
 
         # Reshape back: (B, Q, H, D) -> (B, Q, E)
         x = x.reshape(x.shape[:-2] + (qkv_features,))
