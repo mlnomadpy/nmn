@@ -17,6 +17,8 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 
+from tests._isolated_backend import mlx_is_usable
+
 
 # ============================================================================
 # Framework Availability
@@ -61,11 +63,7 @@ try:
 except ImportError:
     FRAMEWORKS['nnx'] = False
 
-try:
-    import mlx.core as mx
-    FRAMEWORKS['mlx'] = True
-except ImportError:
-    FRAMEWORKS['mlx'] = False
+FRAMEWORKS['mlx'] = mlx_is_usable()
 
 
 def get_available_frameworks() -> List[str]:
@@ -198,6 +196,56 @@ def run_nnx_dense(inputs: np.ndarray, weights: np.ndarray,
     return np.array(output)
 
 
+def run_tensorflow_dense(inputs: np.ndarray, weights: np.ndarray,
+                         bias: Optional[np.ndarray] = None,
+                         alpha: Optional[float] = None,
+                         epsilon: float = 1e-6) -> np.ndarray:
+    """Run YAT dense layer in TensorFlow."""
+    import tensorflow as tf
+    from nmn.tf import YatNMN
+
+    _, out_features = weights.shape
+    layer = YatNMN(
+        features=out_features,
+        use_bias=(bias is not None),
+        use_alpha=(alpha is not None),
+        epsilon=epsilon,
+    )
+    x = tf.constant(inputs, dtype=tf.float32)
+    layer(x)
+    layer.kernel.assign(weights.T)
+    if bias is not None:
+        layer.bias.assign(bias)
+    if alpha is not None:
+        layer.alpha.assign([alpha])
+    return layer(x).numpy()
+
+
+def run_keras_dense(inputs: np.ndarray, weights: np.ndarray,
+                    bias: Optional[np.ndarray] = None,
+                    alpha: Optional[float] = None,
+                    epsilon: float = 1e-6) -> np.ndarray:
+    """Run YAT dense layer in Keras with its TensorFlow backend."""
+    import keras
+    from nmn.keras import YatNMN
+
+    _, out_features = weights.shape
+    layer = YatNMN(
+        units=out_features,
+        use_bias=(bias is not None),
+        use_alpha=(alpha is not None),
+        epsilon=epsilon,
+    )
+    x = keras.ops.convert_to_tensor(inputs)
+    layer(x)
+    layer.kernel.assign(weights)
+    if bias is not None:
+        layer.bias.assign(bias)
+    if alpha is not None:
+        layer.alpha.assign([alpha])
+    return keras.ops.convert_to_numpy(layer(x))
+
+
 def run_mlx_dense(inputs: np.ndarray, weights: np.ndarray,
                   bias: Optional[np.ndarray] = None,
                   alpha: Optional[float] = None,
@@ -263,6 +311,49 @@ def run_numpy_yat(inputs: np.ndarray, weights: np.ndarray,
         y = y * alpha
 
     return y.astype(np.float32)
+
+
+def run_available_frameworks(
+    frameworks: Dict[str, bool],
+    inputs: np.ndarray,
+    weights: np.ndarray,
+    bias: Optional[np.ndarray] = None,
+    alpha: Optional[float] = None,
+    epsilon: float = 1e-6,
+) -> Dict[str, np.ndarray]:
+    """Execute every backend reported available, plus the NumPy reference.
+
+    Keeping detection and dispatch keyed by the same canonical names prevents a
+    backend from being counted for collection-time skip decisions but silently
+    omitted from the comparisons.
+    """
+    runners = {
+        'torch': ('PyTorch', run_torch_dense),
+        'tensorflow': ('TensorFlow', run_tensorflow_dense),
+        'keras': ('Keras', run_keras_dense),
+        'linen': ('Linen', run_linen_dense),
+        'nnx': ('NNX', run_nnx_dense),
+        'mlx': ('MLX', run_mlx_dense),
+    }
+    reported = {name for name, available in frameworks.items() if available}
+    if not reported:
+        raise ValueError("at least one framework must be available for comparison")
+    unsupported = reported.difference(runners)
+    if unsupported:
+        raise AssertionError(
+            "available frameworks have no consistency runner: "
+            + ", ".join(sorted(unsupported))
+        )
+
+    outputs = {
+        'NumPy (ref)': run_numpy_yat(inputs, weights, bias, alpha, epsilon),
+    }
+    for name in frameworks:
+        if name not in reported:
+            continue
+        label, runner = runners[name]
+        outputs[label] = runner(inputs, weights, bias, alpha, epsilon)
+    return outputs
 
 
 # ============================================================================
@@ -345,24 +436,9 @@ class TestCrossFrameworkYATConsistency:
                            alpha: Optional[float] = None,
                            epsilon: float = 1e-6) -> Dict[str, np.ndarray]:
         """Run YAT dense layer on all available frameworks."""
-        outputs = {}
-        
-        # Reference NumPy implementation
-        outputs['NumPy (ref)'] = run_numpy_yat(inputs, weights, bias, alpha, epsilon)
-        
-        if FRAMEWORKS.get('torch'):
-            outputs['PyTorch'] = run_torch_dense(inputs, weights, bias, alpha, epsilon)
-        
-        if FRAMEWORKS.get('linen'):
-            outputs['Linen'] = run_linen_dense(inputs, weights, bias, alpha, epsilon)
-        
-        if FRAMEWORKS.get('nnx'):
-            outputs['NNX'] = run_nnx_dense(inputs, weights, bias, alpha, epsilon)
-
-        if FRAMEWORKS.get('mlx'):
-            outputs['MLX'] = run_mlx_dense(inputs, weights, bias, alpha, epsilon)
-
-        return outputs
+        return run_available_frameworks(
+            FRAMEWORKS, inputs, weights, bias, alpha, epsilon
+        )
     
     def compare_all_pairs(self, outputs: Dict[str, np.ndarray],
                           rtol: float = 1e-4, atol: float = 1e-4) -> List[ComparisonResult]:
@@ -467,6 +543,7 @@ class TestCrossFrameworkYATConsistency:
             all_results.extend(results)
         
         # Summary
+        assert all_results, "no framework comparisons were produced"
         max_error = max(r.max_abs_error for r in all_results)
         mean_error = np.mean([r.mean_abs_error for r in all_results])
         print(f"\n=== Summary ===")
@@ -493,7 +570,7 @@ class TestCrossFrameworkYATConsistency:
         for name, inputs in edge_cases:
             outputs = self.run_all_frameworks(inputs, weights)
             results = self.compare_all_pairs(outputs)
-            
+            assert results, f"no framework comparisons were produced for {name}"
             max_err = max(r.max_abs_error for r in results)
             all_match = all(r.matching for r in results)
             status = "PASS" if all_match else "FAIL"
@@ -522,25 +599,10 @@ class TestYATGeometricProperties:
         print("  Positive Output Test (YAT = squared ratio >= 0)")
         print("="*60)
         
-        if FRAMEWORKS.get('torch'):
-            out = run_torch_dense(inputs, weights)
-            assert np.all(out >= 0), "PyTorch produced negative values"
-            print(f"PyTorch: min={out.min():.6f}, all positive [PASS]")
-        
-        if FRAMEWORKS.get('linen'):
-            out = run_linen_dense(inputs, weights)
-            assert np.all(out >= 0), "Linen produced negative values"
-            print(f"Linen: min={out.min():.6f}, all positive [PASS]")
-        
-        if FRAMEWORKS.get('nnx'):
-            out = run_nnx_dense(inputs, weights)
-            assert np.all(out >= 0), "NNX produced negative values"
-            print(f"NNX: min={out.min():.6f}, all positive [PASS]")
-
-        if FRAMEWORKS.get('mlx'):
-            out = run_mlx_dense(inputs, weights)
-            assert np.all(out >= 0), "MLX produced negative values"
-            print(f"MLX: min={out.min():.6f}, all positive [PASS]")
+        outputs = run_available_frameworks(FRAMEWORKS, inputs, weights)
+        for name, out in outputs.items():
+            assert np.all(out >= 0), f"{name} produced negative values"
+            print(f"{name}: min={out.min():.6f}, all positive [PASS]")
     
     def test_epsilon_effect(self):
         """Epsilon should only affect outputs where distance is near 0."""
@@ -555,15 +617,13 @@ class TestYATGeometricProperties:
         
         epsilons = [1e-3, 1e-5, 1e-7, 1e-9]
         
-        for fw_name, fw_func in [
-            ('PyTorch', run_torch_dense) if FRAMEWORKS.get('torch') else (None, None),
-            ('Linen', run_linen_dense) if FRAMEWORKS.get('linen') else (None, None),
-        ]:
-            if fw_name is None:
-                continue
-                
-            outputs = [fw_func(inputs, weights, epsilon=eps) for eps in epsilons]
-            
+        outputs_by_epsilon = [
+            run_available_frameworks(FRAMEWORKS, inputs, weights, epsilon=eps)
+            for eps in epsilons
+        ]
+        for fw_name in outputs_by_epsilon[0]:
+            outputs = [result[fw_name] for result in outputs_by_epsilon]
+
             print(f"\n{fw_name}:")
             for i in range(len(epsilons) - 1):
                 diff = np.max(np.abs(outputs[i] - outputs[i+1]))
@@ -592,24 +652,11 @@ class TestYATGeometricProperties:
         print("="*60)
         print(f"Expected first output: {expected_first:.6f}")
         
-        if FRAMEWORKS.get('torch'):
-            out = run_torch_dense(inputs, weights, epsilon=epsilon)
-            print(f"PyTorch first output: {out[0, 0]:.6f}")
-            np.testing.assert_allclose(out[0, 0], expected_first, rtol=1e-3)
-        
-        if FRAMEWORKS.get('linen'):
-            out = run_linen_dense(inputs, weights, epsilon=epsilon)
-            print(f"Linen first output: {out[0, 0]:.6f}")
-            np.testing.assert_allclose(out[0, 0], expected_first, rtol=1e-3)
-        
-        if FRAMEWORKS.get('nnx'):
-            out = run_nnx_dense(inputs, weights, epsilon=epsilon)
-            print(f"NNX first output: {out[0, 0]:.6f}")
-            np.testing.assert_allclose(out[0, 0], expected_first, rtol=1e-3)
-
-        if FRAMEWORKS.get('mlx'):
-            out = run_mlx_dense(inputs, weights, epsilon=epsilon)
-            print(f"MLX first output: {out[0, 0]:.6f}")
+        outputs = run_available_frameworks(
+            FRAMEWORKS, inputs, weights, epsilon=epsilon
+        )
+        for name, out in outputs.items():
+            print(f"{name} first output: {out[0, 0]:.6f}")
             np.testing.assert_allclose(out[0, 0], expected_first, rtol=1e-3)
 
 
@@ -633,18 +680,10 @@ def test_generate_consistency_report():
     weights = np.random.randn(32, 64).astype(np.float32)
     epsilon = 1e-6
     
-    # Collect outputs
-    outputs = {}
-    outputs['NumPy (ref)'] = run_numpy_yat(inputs, weights, epsilon=epsilon)
-    
-    if FRAMEWORKS.get('torch'):
-        outputs['PyTorch'] = run_torch_dense(inputs, weights, epsilon=epsilon)
-    if FRAMEWORKS.get('linen'):
-        outputs['Linen'] = run_linen_dense(inputs, weights, epsilon=epsilon)
-    if FRAMEWORKS.get('nnx'):
-        outputs['NNX'] = run_nnx_dense(inputs, weights, epsilon=epsilon)
-    if FRAMEWORKS.get('mlx'):
-        outputs['MLX'] = run_mlx_dense(inputs, weights, epsilon=epsilon)
+    # Collect outputs from exactly the set reported as available.
+    outputs = run_available_frameworks(
+        FRAMEWORKS, inputs, weights, epsilon=epsilon
+    )
 
     # Compare all pairs
     names = list(outputs.keys())
@@ -663,6 +702,7 @@ def test_generate_consistency_report():
             print(f"{names[i]} vs {names[j]:<20} {result.max_abs_error:>15.2e} {result.mean_abs_error:>15.2e}")
     
     # Summary statistics
+    assert all_errors, "no framework comparisons were produced"
     print("\n" + "-"*70)
     print("SUMMARY STATISTICS")
     print("-"*70)
@@ -686,3 +726,77 @@ def test_generate_consistency_report():
     
     # Final assertion
     assert max(all_errors) < 1e-3, f"Cross-framework error too high: {max(all_errors):.2e}"
+
+
+# ============================================================================
+# Harness Regression Tests
+# ============================================================================
+
+@pytest.mark.parametrize(
+    "frameworks, expected_labels",
+    [
+        (
+            {
+                'torch': True,
+                'tensorflow': False,
+                'keras': False,
+                'linen': True,
+                'nnx': True,
+                'mlx': False,
+            },
+            {'PyTorch', 'Linen', 'NNX'},
+        ),
+        (
+            {
+                'torch': False,
+                'tensorflow': True,
+                'keras': True,
+                'linen': False,
+                'nnx': False,
+                'mlx': False,
+            },
+            {'TensorFlow', 'Keras'},
+        ),
+    ],
+    ids=['torch-jax-only', 'tensorflow-keras-enabled'],
+)
+def test_available_framework_matrix_executes_every_reported_backend(
+    monkeypatch, frameworks, expected_labels
+):
+    calls = []
+
+    def fake_runner(name):
+        def run(inputs, weights, bias=None, alpha=None, epsilon=1e-6):
+            calls.append(name)
+            return np.zeros((inputs.shape[0], weights.shape[1]), dtype=np.float32)
+        return run
+
+    for key, function_name in {
+        'torch': 'run_torch_dense',
+        'tensorflow': 'run_tensorflow_dense',
+        'keras': 'run_keras_dense',
+        'linen': 'run_linen_dense',
+        'nnx': 'run_nnx_dense',
+        'mlx': 'run_mlx_dense',
+    }.items():
+        monkeypatch.setitem(globals(), function_name, fake_runner(key))
+
+    outputs = run_available_frameworks(
+        frameworks,
+        np.zeros((2, 3), dtype=np.float32),
+        np.zeros((3, 4), dtype=np.float32),
+    )
+
+    assert set(outputs) == {'NumPy (ref)', *expected_labels}
+    assert set(calls) == {
+        name for name, available in frameworks.items() if available
+    }
+
+
+def test_available_framework_matrix_rejects_empty_comparison():
+    with pytest.raises(ValueError, match="at least one framework"):
+        run_available_frameworks(
+            {name: False for name in FRAMEWORKS},
+            np.zeros((2, 3), dtype=np.float32),
+            np.zeros((3, 4), dtype=np.float32),
+        )

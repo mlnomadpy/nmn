@@ -10,12 +10,25 @@ from __future__ import annotations
 
 import pytest
 
-mlx_core = pytest.importorskip("mlx.core")
+from tests._isolated_backend import mlx_is_usable
+
+
+# A plain ``pytest.importorskip`` cannot catch a native abort.  Ignore the MLX
+# modules before collection unless a child process can both import MLX and
+# initialize its device runtime successfully.
+_MLX_USABLE = mlx_is_usable()
+collect_ignore_glob = [] if _MLX_USABLE else ["test_*.py"]
+
+if _MLX_USABLE:
+    import mlx.core as mlx_core
+else:
+    mlx_core = None
 
 
 @pytest.fixture(autouse=True)
 def _force_cpu():
     """Pin every MLX test to the CPU device for deterministic parity."""
+    assert mlx_core is not None
     prev = mlx_core.default_device()
     mlx_core.set_default_device(mlx_core.cpu)
     yield

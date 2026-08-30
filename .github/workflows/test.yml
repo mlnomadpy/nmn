@@ -136,6 +136,12 @@ jobs:
     - name: Run PyTorch tests
       run: pytest tests/test_torch/ -v --cov=nmn --cov-report=xml
 
+    - name: Verify Windows optional-backend probe cleanup
+      if: runner.os == 'Windows'
+      run: >-
+        python -m pytest tests/test_cli.py -v
+        -k "optional_backend_probe_windows_job_kills_descendants"
+
     - name: Upload coverage
       uses: codecov/codecov-action@v4
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'

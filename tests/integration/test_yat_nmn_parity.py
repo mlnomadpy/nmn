@@ -24,6 +24,8 @@ import math
 import numpy as np
 import pytest
 
+from tests._isolated_backend import mlx_is_usable
+
 
 # ── Logical inputs / parameters used by every framework ───────────────────
 
@@ -38,6 +40,7 @@ X = RNG.normal(size=(BATCH, IN_FEATURES)).astype(np.float32)
 W_LOGICAL = RNG.normal(size=(IN_FEATURES, OUT_FEATURES)).astype(np.float32)
 B = RNG.normal(size=(OUT_FEATURES,)).astype(np.float32)
 EPSILON = 1e-5
+MLX_USABLE = mlx_is_usable()
 
 
 def reference_yat(
@@ -241,7 +244,11 @@ def _run_tf(spherical, weight_normalized, learnable_epsilon, bias_mode):
 
 
 def _run_mlx(spherical, weight_normalized, learnable_epsilon, bias_mode):
-    mx = pytest.importorskip("mlx.core")
+    if not MLX_USABLE:
+        pytest.skip("MLX runtime is not usable in an isolated probe")
+    # The child probe above is the only conditional MLX import: an installed
+    # runtime that aborts while initializing Metal must never reach this line.
+    import mlx.core as mx
     # Pin to CPU: MLX's Metal matmul accumulates at lower precision than
     # numpy fp32, so the < 1e-4 rtol used here is only meaningful on CPU.
     prev_device = mx.default_device()

@@ -8,10 +8,12 @@ import os
 import signal
 import subprocess
 import sys
+import time
 
 import pytest
 
 from nmn import cli
+from tests import _isolated_backend
 
 
 # ---------------------------------------------------------------------------
@@ -206,14 +208,13 @@ def test_torch_guide_snippets_construct(capsys):
     )
 
 
-@pytest.mark.parametrize("fw", ["nnx", "linen", "mlx"])
+@pytest.mark.parametrize("fw", ["nnx", "linen"])
 def test_guide_attention_ctor_constructs_for_importable(fw, capsys):
     """Construct the attention object from each importable backend's guide
     using the exact kwargs the guide emits."""
     backends = {
         "nnx": ["jax", "flax"],
         "linen": ["jax", "flax"],
-        "mlx": ["mlx.core"],
     }
     try:
         for m in backends[fw]:
@@ -236,11 +237,29 @@ def test_guide_attention_ctor_constructs_for_importable(fw, capsys):
         line = _extract_lines(text, "MultiHeadAttention(num_heads=")[0]
         expr = line.split("=", 1)[1].strip()
         eval(expr, {"MultiHeadAttention": MultiHeadAttention})
-    elif fw == "mlx":
-        from nmn.mlx import MultiHeadYatAttention
-        line = _extract_lines(text, "MultiHeadYatAttention(embed_dim=")[0]
-        expr = line.split("=", 1)[1].strip()
-        eval(expr, {"MultiHeadYatAttention": MultiHeadYatAttention})
+
+
+def test_mlx_guide_attention_ctor_constructs_in_isolated_process(capsys):
+    """Never initialize the optional native MLX runtime in the pytest process."""
+    if not _isolated_backend.mlx_is_usable():
+        pytest.skip("MLX runtime is not usable in an isolated probe")
+
+    assert cli.main(["guide", "mlx"]) == 0
+    text = capsys.readouterr().out
+    line = _extract_lines(text, "MultiHeadYatAttention(embed_dim=")[0]
+    expr = line.split("=", 1)[1].strip()
+    script = (
+        "from nmn.mlx import MultiHeadYatAttention\n"
+        f"{expr}\n"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=30,
+    )
+    assert completed.returncode == 0, completed.stderr
 
 
 def test_features_mentions_may_ray_and_lazy(capsys):
@@ -274,6 +293,258 @@ def _probe_result(*, returncode=0, stdout="", stderr=""):
         stdout=stdout,
         stderr=stderr,
     )
+
+
+class _FakeProbeProcess:
+    def __init__(self, *, returncode=0, stdout=b"", stderr=b""):
+        self.pid = 999_999_999
+        self.returncode = returncode
+        self._stdout = stdout
+        self._stderr = stderr
+
+    def communicate(self, timeout=None):
+        del timeout
+        return self._stdout, self._stderr
+
+
+def _patch_fake_windows_job(monkeypatch):
+    if os.name == "nt":
+        monkeypatch.setattr(
+            _isolated_backend, "_assign_windows_kill_job", lambda process: None
+        )
+        monkeypatch.setattr(
+            _isolated_backend, "_close_windows_kill_job", lambda process: True
+        )
+
+
+def test_optional_backend_probe_success(monkeypatch):
+    _patch_fake_windows_job(monkeypatch)
+    process = _FakeProbeProcess(
+        stdout=_isolated_backend._PROBE_MARKER_BYTES + b"\n"
+    )
+    calls = []
+
+    def fake_popen(command, **kwargs):
+        calls.append((command, kwargs))
+        return process
+
+    monkeypatch.setattr(_isolated_backend.subprocess, "Popen", fake_popen)
+
+    assert _isolated_backend.isolated_import_succeeds(
+        ["mlx.core"], readiness="mlx"
+    )
+    command, kwargs = calls[0]
+    assert command[:3] == [sys.executable, "-c", _isolated_backend._PROBE_SCRIPT]
+    request = json.loads(command[3])
+    assert request["modules"] == ["mlx.core"]
+    assert request["readiness"] == "mlx"
+    assert ("gate" in request) == (os.name == "nt")
+    assert kwargs["stdout"] is subprocess.PIPE
+    assert kwargs["stderr"] is subprocess.PIPE
+    if os.name == "posix":
+        assert kwargs["start_new_session"] is True
+    else:
+        assert kwargs["creationflags"] == subprocess.CREATE_NEW_PROCESS_GROUP
+
+
+def test_optional_backend_probe_handles_none_and_malformed_output(monkeypatch):
+    _patch_fake_windows_job(monkeypatch)
+    processes = iter([
+        _FakeProbeProcess(stdout=None, stderr=None),
+        _FakeProbeProcess(stdout=_isolated_backend._PROBE_MARKER),
+        _FakeProbeProcess(
+            stdout=b"\xff\xfe\n" + _isolated_backend._PROBE_MARKER_BYTES + b"\n",
+            stderr=b"\x80",
+        ),
+    ])
+    monkeypatch.setattr(
+        _isolated_backend.subprocess, "Popen", lambda *args, **kwargs: next(processes)
+    )
+    monkeypatch.setattr(_isolated_backend, "_stop_process_tree", lambda process: None)
+
+    assert not _isolated_backend.isolated_import_succeeds(["unused"])
+    assert not _isolated_backend.isolated_import_succeeds(["unused"])
+    assert _isolated_backend.isolated_import_succeeds(["unused"])
+
+
+def test_optional_backend_probe_python_failure_is_unavailable(monkeypatch):
+    _patch_fake_windows_job(monkeypatch)
+    monkeypatch.setattr(
+        _isolated_backend.subprocess,
+        "Popen",
+        lambda *args, **kwargs: _FakeProbeProcess(
+            returncode=1, stderr=b"RuntimeError: backend initialization failed"
+        ),
+    )
+    monkeypatch.setattr(_isolated_backend, "_stop_process_tree", lambda process: None)
+    assert not _isolated_backend.mlx_is_usable()
+
+
+@pytest.mark.parametrize("returncode", [-signal.SIGABRT, 128 + signal.SIGABRT])
+def test_optional_backend_probe_native_failure_is_unavailable(
+    monkeypatch, returncode
+):
+    _patch_fake_windows_job(monkeypatch)
+    monkeypatch.setattr(
+        _isolated_backend.subprocess,
+        "Popen",
+        lambda *args, **kwargs: _FakeProbeProcess(returncode=returncode),
+    )
+    monkeypatch.setattr(_isolated_backend, "_stop_process_tree", lambda process: None)
+    assert not _isolated_backend.mlx_is_usable()
+
+
+def _prepend_pythonpath(monkeypatch, directory):
+    existing = os.environ.get("PYTHONPATH")
+    value = str(directory)
+    if existing:
+        value += os.pathsep + existing
+    monkeypatch.setenv("PYTHONPATH", value)
+
+
+def test_optional_backend_probe_really_imports_in_child(tmp_path, monkeypatch):
+    (tmp_path / "healthy_backend.py").write_text("VALUE = 1\n", encoding="utf-8")
+    _prepend_pythonpath(monkeypatch, tmp_path)
+
+    assert _isolated_backend.isolated_import_succeeds(["healthy_backend"])
+
+
+def test_optional_backend_probe_really_contains_python_failure(
+    tmp_path, monkeypatch
+):
+    (tmp_path / "python_failure_backend.py").write_text(
+        "raise RuntimeError('initialization failed')\n", encoding="utf-8"
+    )
+    _prepend_pythonpath(monkeypatch, tmp_path)
+
+    assert not _isolated_backend.isolated_import_succeeds(
+        ["python_failure_backend"]
+    )
+
+
+def test_optional_backend_probe_really_contains_native_abort(
+    tmp_path, monkeypatch
+):
+    (tmp_path / "native_abort_backend.py").write_text(
+        "import os\nos.abort()\n", encoding="utf-8"
+    )
+    _prepend_pythonpath(monkeypatch, tmp_path)
+
+    assert not _isolated_backend.isolated_import_succeeds(
+        ["native_abort_backend"]
+    )
+
+
+def test_optional_backend_probe_really_handles_invalid_bytes(
+    tmp_path, monkeypatch
+):
+    (tmp_path / "invalid_bytes_backend.py").write_text(
+        "import os\nos.write(1, b'\\xff\\xfe\\n')\n"
+        "os.write(2, b'\\x80\\n')\n",
+        encoding="utf-8",
+    )
+    _prepend_pythonpath(monkeypatch, tmp_path)
+
+    assert _isolated_backend.isolated_import_succeeds(
+        ["invalid_bytes_backend"]
+    )
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group assertion")
+def test_optional_backend_probe_timeout_kills_descendant_group(
+    tmp_path, monkeypatch
+):
+    pid_file = tmp_path / "descendant.pid"
+    (tmp_path / "descendant_backend.py").write_text(
+        "import pathlib, signal, subprocess, sys, time\n"
+        "child = subprocess.Popen([sys.executable, '-c', "
+        "'import time; time.sleep(60)'])\n"
+        f"pathlib.Path({str(pid_file)!r}).write_text(str(child.pid))\n"
+        "def stop(signum, frame):\n"
+        "    child.wait(timeout=2)\n"
+        "    raise SystemExit(128 + signum)\n"
+        "signal.signal(signal.SIGTERM, stop)\n"
+        "time.sleep(60)\n",
+        encoding="utf-8",
+    )
+    _prepend_pythonpath(monkeypatch, tmp_path)
+    monkeypatch.setattr(_isolated_backend, "_PROBE_TIMEOUT_SECONDS", 1.0)
+    monkeypatch.setattr(_isolated_backend, "_PROBE_REAP_SECONDS", 0.5)
+
+    assert not _isolated_backend.isolated_import_succeeds(
+        ["descendant_backend"]
+    )
+    descendant_pid = int(pid_file.read_text(encoding="utf-8"))
+
+    deadline = time.monotonic() + 3.0
+    while time.monotonic() < deadline:
+        try:
+            os.kill(descendant_pid, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.05)
+    else:
+        pytest.fail(f"probe descendant {descendant_pid} remained alive")
+
+
+def _windows_pid_is_running(pid):
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, wintypes.LPDWORD]
+    kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    handle = kernel32.OpenProcess(0x1000, False, pid)
+    if not handle:
+        return False
+    try:
+        exit_code = wintypes.DWORD()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+            return False
+        return exit_code.value == 259
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows Job Object assertion")
+@pytest.mark.parametrize("termination", ["timeout", "nonzero", "abort"])
+def test_optional_backend_probe_windows_job_kills_descendants(
+    tmp_path, monkeypatch, termination
+):
+    pid_file = tmp_path / f"windows-{termination}.pid"
+    ending = {
+        "timeout": "time.sleep(60)",
+        "nonzero": "raise SystemExit(23)",
+        "abort": "os.abort()",
+    }[termination]
+    (tmp_path / "windows_descendant_backend.py").write_text(
+        "import os, pathlib, subprocess, sys, time\n"
+        "child = subprocess.Popen([sys.executable, '-c', "
+        "'import time; time.sleep(60)'], stdout=subprocess.DEVNULL, "
+        "stderr=subprocess.DEVNULL)\n"
+        f"pathlib.Path({str(pid_file)!r}).write_text(str(child.pid))\n"
+        f"{ending}\n",
+        encoding="utf-8",
+    )
+    _prepend_pythonpath(monkeypatch, tmp_path)
+    monkeypatch.setattr(_isolated_backend, "_PROBE_TIMEOUT_SECONDS", 1.0)
+    monkeypatch.setattr(_isolated_backend, "_PROBE_REAP_SECONDS", 0.5)
+
+    assert not _isolated_backend.isolated_import_succeeds(
+        ["windows_descendant_backend"]
+    )
+    descendant_pid = int(pid_file.read_text(encoding="utf-8"))
+    deadline = time.monotonic() + 3.0
+    while time.monotonic() < deadline:
+        if not _windows_pid_is_running(descendant_pid):
+            break
+        time.sleep(0.05)
+    else:
+        pytest.fail(f"job descendant {descendant_pid} remained alive")
 
 
 def test_doctor_probe_success_ignores_backend_output(monkeypatch):
