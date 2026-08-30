@@ -4,11 +4,13 @@ import tensorflow as tf
 import math
 from typing import Optional, Tuple, Union, List
 
+from .saved_model import SingleInputSavedModelMixin
+
 # Default constant alpha value (sqrt(2))
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
 
 
-class YatNMN(tf.Module):
+class YatNMN(SingleInputSavedModelMixin, tf.Module):
     """Dense layer implementing the ⵟ-product (YAT) transformation.
 
     Computes ``y = (x·Wᵀ + b)² / (‖x − W‖² + ε)`` over the last dimension of

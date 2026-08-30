@@ -11,6 +11,8 @@ from typing import Optional, Union, List
 
 import tensorflow as tf
 
+from .saved_model import ExportPath, export_embedding
+
 __all__ = ["YatEmbed"]
 
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
@@ -138,3 +140,22 @@ class YatEmbed(tf.Module):
             y = y * self.alpha
 
         return y
+
+    def export(
+        self,
+        export_dir: ExportPath,
+        lookup_signature: tf.TensorSpec,
+        attend_signature: Optional[tf.TensorSpec] = None,
+    ) -> None:
+        """Export callable embedding lookup and ``attend`` signatures.
+
+        If ``attend_signature`` is omitted, a rank-2 floating-point query with
+        the configured feature dimension is exported.
+        """
+        if attend_signature is None:
+            attend_signature = tf.TensorSpec(
+                [None, self.features], self.dtype, name="query"
+            )
+        export_embedding(
+            self, export_dir, lookup_signature, attend_signature
+        )

@@ -146,10 +146,63 @@ ckpt.restore(tf.train.latest_checkpoint("/tmp"))
 
 ### SavedModel
 
+Native NMN TensorFlow modules expose an explicit `export` method. Pass a
+`tf.TensorSpec` with a known final feature/channel dimension; the exported
+`serving_default` signature is callable after loading and returns an
+`{"outputs": tensor}` mapping:
+
 ```python
-tf.saved_model.save(model, "yat_savedmodel")
+from nmn.tf import YatNMN
+
+layer = YatNMN(features=64)
+layer.export(
+    "yat_savedmodel",
+    tf.TensorSpec([None, 128], tf.float32),
+)
 
 restored = tf.saved_model.load("yat_savedmodel")
+outputs = restored.signatures["serving_default"](
+    inputs=tf.zeros([8, 128], tf.float32)
+)["outputs"]
+```
+
+`YatConv*` and `YatConvTranspose*` use the same
+`export(path, input_signature)` API. `YatEmbed.export` records both
+`serving_default` (lookup, argument name `inputs`) and `attend` (argument name
+`query`) signatures:
+
+```python
+from nmn.tf import YatEmbed
+
+embedding = YatEmbed(num_embeddings=32_000, features=256)
+embedding.export(
+    "embedding_savedmodel",
+    tf.TensorSpec([None, None], tf.int32),
+    tf.TensorSpec([None, 256], tf.float32),
+)
+restored = tf.saved_model.load("embedding_savedmodel")
+vectors = restored.signatures["serving_default"](inputs=token_ids)["outputs"]
+logits = restored.signatures["attend"](query=hidden_states)["outputs"]
+```
+
+For attention, omitting key/value specs exports self-attention. Provide both
+for cross-attention; inference export always fixes `training=False`:
+
+```python
+from nmn.tf import MultiHeadYatAttention
+
+attention = MultiHeadYatAttention(embed_dim=256, num_heads=8)
+sequence = tf.TensorSpec([None, None, 256], tf.float32)
+attention.export(
+    "attention_savedmodel",
+    sequence,
+    key_signature=sequence,
+    value_signature=sequence,
+)
+restored = tf.saved_model.load("attention_savedmodel")
+outputs = restored.signatures["serving_default"](
+    query=query, key=key, value=value
+)["outputs"]
 ```
 
 ### TFLite
