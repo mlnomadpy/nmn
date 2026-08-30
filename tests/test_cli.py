@@ -8,6 +8,7 @@ import os
 import signal
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -294,15 +295,29 @@ def _probe_result(*, returncode=0, stdout="", stderr=""):
     )
 
 
+class _FakeProbeProcess:
+    def __init__(self, *, returncode=0, stdout=b"", stderr=b""):
+        self.pid = 999_999_999
+        self.returncode = returncode
+        self._stdout = stdout
+        self._stderr = stderr
+
+    def communicate(self, timeout=None):
+        del timeout
+        return self._stdout, self._stderr
+
+
 def test_optional_backend_probe_success(monkeypatch):
-    completed = _probe_result(stdout=_isolated_backend._PROBE_MARKER + "\n")
+    process = _FakeProbeProcess(
+        stdout=_isolated_backend._PROBE_MARKER_BYTES + b"\n"
+    )
     calls = []
 
-    def fake_run(command, **kwargs):
+    def fake_popen(command, **kwargs):
         calls.append((command, kwargs))
-        return completed
+        return process
 
-    monkeypatch.setattr(_isolated_backend.subprocess, "run", fake_run)
+    monkeypatch.setattr(_isolated_backend.subprocess, "Popen", fake_popen)
 
     assert _isolated_backend.isolated_import_succeeds(
         ["mlx.core"], readiness="mlx"
@@ -313,18 +328,42 @@ def test_optional_backend_probe_success(monkeypatch):
         "modules": ["mlx.core"],
         "readiness": "mlx",
     }
-    assert kwargs["check"] is False
-    assert kwargs["timeout"] == _isolated_backend._PROBE_TIMEOUT_SECONDS
+    assert kwargs["stdout"] is subprocess.PIPE
+    assert kwargs["stderr"] is subprocess.PIPE
+    if os.name == "posix":
+        assert kwargs["start_new_session"] is True
+    else:
+        assert kwargs["creationflags"] == subprocess.CREATE_NEW_PROCESS_GROUP
+
+
+def test_optional_backend_probe_handles_none_and_malformed_output(monkeypatch):
+    processes = iter([
+        _FakeProbeProcess(stdout=None, stderr=None),
+        _FakeProbeProcess(stdout=_isolated_backend._PROBE_MARKER),
+        _FakeProbeProcess(
+            stdout=b"\xff\xfe\n" + _isolated_backend._PROBE_MARKER_BYTES + b"\n",
+            stderr=b"\x80",
+        ),
+    ])
+    monkeypatch.setattr(
+        _isolated_backend.subprocess, "Popen", lambda *args, **kwargs: next(processes)
+    )
+    monkeypatch.setattr(_isolated_backend, "_stop_process_tree", lambda process: None)
+
+    assert not _isolated_backend.isolated_import_succeeds(["unused"])
+    assert not _isolated_backend.isolated_import_succeeds(["unused"])
+    assert _isolated_backend.isolated_import_succeeds(["unused"])
 
 
 def test_optional_backend_probe_python_failure_is_unavailable(monkeypatch):
     monkeypatch.setattr(
         _isolated_backend.subprocess,
-        "run",
-        lambda *args, **kwargs: _probe_result(
-            returncode=1, stderr="RuntimeError: backend initialization failed"
+        "Popen",
+        lambda *args, **kwargs: _FakeProbeProcess(
+            returncode=1, stderr=b"RuntimeError: backend initialization failed"
         ),
     )
+    monkeypatch.setattr(_isolated_backend, "_stop_process_tree", lambda process: None)
     assert not _isolated_backend.mlx_is_usable()
 
 
@@ -334,9 +373,10 @@ def test_optional_backend_probe_native_failure_is_unavailable(
 ):
     monkeypatch.setattr(
         _isolated_backend.subprocess,
-        "run",
-        lambda *args, **kwargs: _probe_result(returncode=returncode),
+        "Popen",
+        lambda *args, **kwargs: _FakeProbeProcess(returncode=returncode),
     )
+    monkeypatch.setattr(_isolated_backend, "_stop_process_tree", lambda process: None)
     assert not _isolated_backend.mlx_is_usable()
 
 
@@ -379,6 +419,58 @@ def test_optional_backend_probe_really_contains_native_abort(
     assert not _isolated_backend.isolated_import_succeeds(
         ["native_abort_backend"]
     )
+
+
+def test_optional_backend_probe_really_handles_invalid_bytes(
+    tmp_path, monkeypatch
+):
+    (tmp_path / "invalid_bytes_backend.py").write_text(
+        "import os\nos.write(1, b'\\xff\\xfe\\n')\n"
+        "os.write(2, b'\\x80\\n')\n",
+        encoding="utf-8",
+    )
+    _prepend_pythonpath(monkeypatch, tmp_path)
+
+    assert _isolated_backend.isolated_import_succeeds(
+        ["invalid_bytes_backend"]
+    )
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group assertion")
+def test_optional_backend_probe_timeout_kills_descendant_group(
+    tmp_path, monkeypatch
+):
+    pid_file = tmp_path / "descendant.pid"
+    (tmp_path / "descendant_backend.py").write_text(
+        "import pathlib, signal, subprocess, sys, time\n"
+        "child = subprocess.Popen([sys.executable, '-c', "
+        "'import time; time.sleep(60)'])\n"
+        f"pathlib.Path({str(pid_file)!r}).write_text(str(child.pid))\n"
+        "def stop(signum, frame):\n"
+        "    child.wait(timeout=2)\n"
+        "    raise SystemExit(128 + signum)\n"
+        "signal.signal(signal.SIGTERM, stop)\n"
+        "time.sleep(60)\n",
+        encoding="utf-8",
+    )
+    _prepend_pythonpath(monkeypatch, tmp_path)
+    monkeypatch.setattr(_isolated_backend, "_PROBE_TIMEOUT_SECONDS", 1.0)
+    monkeypatch.setattr(_isolated_backend, "_PROBE_REAP_SECONDS", 0.5)
+
+    assert not _isolated_backend.isolated_import_succeeds(
+        ["descendant_backend"]
+    )
+    descendant_pid = int(pid_file.read_text(encoding="utf-8"))
+
+    deadline = time.monotonic() + 3.0
+    while time.monotonic() < deadline:
+        try:
+            os.kill(descendant_pid, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.05)
+    else:
+        pytest.fail(f"probe descendant {descendant_pid} remained alive")
 
 
 def test_doctor_probe_success_ignores_backend_output(monkeypatch):
