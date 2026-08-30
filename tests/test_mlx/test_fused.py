@@ -130,6 +130,59 @@ def test_fused_yat_gradient_matches_finite_difference():
         mx.set_default_device(mx.cpu)
 
 
+def test_fused_yat_array_epsilon_all_gradients_match_eager_and_compile():
+    """An array epsilon remains a differentiable argument, including when
+    the value-and-gradient function is compiled."""
+    mx.set_default_device(mx.cpu)
+    try:
+        x = mx.array([[0.2, -0.4, 0.7], [0.5, 0.1, -0.3]])
+        w = mx.array([[0.3, -0.2, 0.6], [-0.5, 0.4, 0.2]])
+        b = mx.array([0.1, -0.2])
+        alpha = mx.array([1.25])
+        eps = mx.array([0.07])
+
+        def eager_loss(x, w, b, alpha, eps):
+            dot = x @ w.T
+            dist = mx.maximum(
+                mx.sum(x * x, axis=-1, keepdims=True)
+                + mx.sum(w * w, axis=-1)[None, :]
+                - 2.0 * dot,
+                0.0,
+            )
+            return mx.sum(alpha * (dot + b) ** 2 / (dist + eps))
+
+        def fused_loss(x, w, b, alpha, eps):
+            return mx.sum(
+                fused_yat_score(x, w, bias=b, alpha=alpha, epsilon=eps)
+            )
+
+        argnums = (0, 1, 2, 3, 4)
+        eager_value, eager_grads = mx.value_and_grad(
+            eager_loss, argnums=argnums
+        )(x, w, b, alpha, eps)
+        fused_value, fused_grads = mx.value_and_grad(
+            fused_loss, argnums=argnums
+        )(x, w, b, alpha, eps)
+        compiled_value, compiled_grads = mx.compile(
+            mx.value_and_grad(fused_loss, argnums=argnums)
+        )(x, w, b, alpha, eps)
+
+        assert np.allclose(np.array(fused_value), np.array(eager_value), atol=1e-6)
+        assert np.allclose(np.array(compiled_value), np.array(eager_value), atol=1e-6)
+        for eager_grad, fused_grad, compiled_grad in zip(
+            eager_grads, fused_grads, compiled_grads
+        ):
+            assert np.allclose(
+                np.array(fused_grad), np.array(eager_grad), rtol=2e-5, atol=2e-6
+            )
+            assert np.allclose(
+                np.array(compiled_grad), np.array(eager_grad), rtol=2e-5, atol=2e-6
+            )
+        assert abs(float(np.array(fused_grads[-1])[0])) > 0.0
+    finally:
+        mx.set_default_device(mx.cpu)
+
+
 # ---------------------------------------------------------------------------
 # YatNMN(fused=True) integration
 # ---------------------------------------------------------------------------
@@ -233,5 +286,55 @@ def test_yat_nmn_fused_gradient_flow():
         opt.update(layer, grads)
         mx.eval(layer.parameters())
         assert float(loss_fn(layer, x, y)) < float(loss)
+    finally:
+        mx.set_default_device(mx.cpu)
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_yat_nmn_fused_learnable_epsilon_gradient_parity(lazy):
+    """Fused module gradients include the softplus epsilon parameter;
+    lazy mode freezes only the kernel."""
+
+    def loss_fn(model, x):
+        return mx.sum(model(x))
+
+    mx.set_default_device(mx.cpu)
+    try:
+        plain = YatNMN(
+            features=2, learnable_epsilon=True, epsilon=0.07, lazy=lazy
+        )
+        fused = YatNMN(
+            features=2, learnable_epsilon=True, epsilon=0.07,
+            fused=True, lazy=lazy,
+        )
+        plain.build(3)
+        fused.build(3)
+        fused.kernel = plain.kernel
+        fused.bias = plain.bias
+        fused.alpha = plain.alpha
+        fused.epsilon_param = plain.epsilon_param
+        x = mx.array([[0.2, -0.4, 0.7], [0.5, 0.1, -0.3]])
+
+        eager_out = plain(x)
+        fused_out = fused(x)
+        _, eager_grads = mlx_nn.value_and_grad(plain, loss_fn)(plain, x)
+        _, fused_grads = mlx_nn.value_and_grad(fused, loss_fn)(fused, x)
+
+        expected_keys = {"bias", "alpha", "epsilon_param"}
+        if not lazy:
+            expected_keys.add("kernel")
+        assert set(eager_grads) == expected_keys
+        assert set(fused_grads) == expected_keys
+        assert np.allclose(np.array(fused_out), np.array(eager_out), atol=1e-6)
+        for name in expected_keys:
+            assert np.allclose(
+                np.array(fused_grads[name]),
+                np.array(eager_grads[name]),
+                rtol=2e-5,
+                atol=2e-6,
+            )
+        eps_grad = np.array(fused_grads["epsilon_param"])
+        assert np.all(np.isfinite(eps_grad))
+        assert np.any(eps_grad != 0.0)
     finally:
         mx.set_default_device(mx.cpu)

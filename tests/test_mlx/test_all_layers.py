@@ -76,6 +76,46 @@ def test_conv_transpose2d_same_shape():
     assert out.shape == (1, 16, 16, 4)
 
 
+@pytest.mark.parametrize(
+    "layer_cls,input_shape,kernel,stride,dilation,output_padding,expected",
+    [
+        (YatConvTranspose1D, (1, 5, 2), 3, 2, 1, 0, (1, 10, 3)),
+        (YatConvTranspose1D, (1, 5, 2), 4, 1, 1, 0, (1, 5, 3)),
+        (YatConvTranspose1D, (1, 5, 2), 2, 2, 2, 1, (1, 11, 3)),
+        (
+            YatConvTranspose2D,
+            (1, 4, 5, 2),
+            (4, 3),
+            (2, 1),
+            (1, 2),
+            (1, 0),
+            (1, 9, 5, 3),
+        ),
+        (
+            YatConvTranspose3D,
+            (1, 3, 4, 5, 2),
+            (2, 3, 4),
+            (2, 1, 2),
+            (2, 1, 1),
+            (0, 0, 0),
+            (1, 6, 4, 10, 3),
+        ),
+    ],
+)
+def test_conv_transpose_same_exact_shape_all_dimensions(
+    layer_cls, input_shape, kernel, stride, dilation, output_padding, expected
+):
+    layer = layer_cls(
+        filters=3,
+        kernel_size=kernel,
+        strides=stride,
+        dilation_rate=dilation,
+        output_padding=output_padding,
+        padding="same",
+    )
+    assert layer(mx.ones(input_shape)).shape == expected
+
+
 def test_conv_transpose3d_shape():
     layer = YatConvTranspose3D(filters=2, kernel_size=2, strides=2)
     x = mx.random.normal(shape=(1, 4, 4, 4, 2))
@@ -146,6 +186,57 @@ def test_conv_transpose1d_math_parity():
             ref[0, p, f] = a * (dot + b[f]) ** 2 / (dist + 1e-5)
 
     assert np.max(np.abs(y - ref)) < 1e-5
+
+
+@pytest.mark.parametrize("kernel_size,stride,dilation", [(3, 2, 1), (4, 1, 1), (2, 2, 2)])
+def test_conv_transpose1d_same_math_parity(kernel_size, stride, dilation):
+    """SAME uses a symmetric native transpose followed by a high-side
+    adjustment; compare its complete YAT result to that definition."""
+    layer = YatConvTranspose1D(
+        filters=2,
+        kernel_size=kernel_size,
+        strides=stride,
+        dilation_rate=dilation,
+        padding="same",
+        epsilon=0.02,
+    )
+    x = mx.array([[[0.2], [-0.4], [0.7], [0.1]]])
+    layer.build(1)
+    layer.kernel = mx.reshape(
+        mx.arange(1, 2 * kernel_size + 1, dtype=mx.float32) * 0.05,
+        (2, kernel_size, 1),
+    )
+    layer.bias = mx.array([0.1, -0.2])
+    layer.alpha = mx.array([1.3])
+    actual = np.array(layer(x))
+
+    xn = np.array(x)
+    weights = np.array(layer.kernel)
+    effective = (kernel_size - 1) * dilation + 1
+    native_pad = max(effective - stride, 0) // 2
+    full_size = (xn.shape[1] - 1) * stride + effective
+    dot_full = np.zeros((1, full_size, 2), dtype=np.float32)
+    patch_full = np.zeros_like(dot_full)
+    for index in range(xn.shape[1]):
+        for k in range(kernel_size):
+            out_index = index * stride + k * dilation
+            dot_full[0, out_index, :] += xn[0, index, 0] * weights[:, k, 0]
+            patch_full[0, out_index, :] += xn[0, index, 0] ** 2
+    native_stop = full_size - native_pad if native_pad else full_size
+    dot = dot_full[:, native_pad:native_stop, :]
+    patch_sq = patch_full[:, native_pad:native_stop, :]
+    target = xn.shape[1] * stride
+    dot = dot[:, :target, :]
+    patch_sq = patch_sq[:, :target, :]
+    if dot.shape[1] < target:
+        width = target - dot.shape[1]
+        dot = np.pad(dot, ((0, 0), (0, width), (0, 0)))
+        patch_sq = np.pad(patch_sq, ((0, 0), (0, width), (0, 0)))
+    kernel_sq = np.sum(weights * weights, axis=(1, 2))[None, None, :]
+    dist = np.maximum(patch_sq + kernel_sq - 2.0 * dot, 0.0)
+    expected = 1.3 * (dot + np.array([0.1, -0.2])) ** 2 / (dist + 0.02)
+    assert actual.shape == (1, target, 2)
+    assert np.allclose(actual, expected, rtol=2e-5, atol=2e-6)
 
 
 # ---------------------------------------------------------------------------
