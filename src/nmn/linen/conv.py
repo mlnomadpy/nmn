@@ -16,7 +16,7 @@ from nmn._epsilon import (
     validate_epsilon_for_dtype,
 )
 
-from ._yat_core import yat_score
+from ._yat_core import safe_kernel_init, upcast_yat_operands, yat_score
 
 
 def _epsilon_dtype(param_dtype, epsilon):
@@ -112,7 +112,7 @@ class YatConv1D(_EpsilonValidatedModule):
         # Kernel shape: [kernel_size, input_channels // groups, features]
         kernel_shape = tuple(self.kernel_size) + (input_channels // self.feature_group_count, self.features)
         
-        kernel = self.param('kernel', self.kernel_init, kernel_shape, self.param_dtype)
+        kernel = self.param('kernel', safe_kernel_init(self.kernel_init), kernel_shape, self.param_dtype)
         
         if self.constant_bias is not None and self.constant_bias is not False:
             bias = jnp.full((self.features,), float(self.constant_bias), dtype=self.param_dtype)
@@ -140,6 +140,9 @@ class YatConv1D(_EpsilonValidatedModule):
             epsilon_param = None
         
         inputs, kernel, bias, alpha = promote_dtype(inputs, kernel, bias, alpha, dtype=self.dtype)
+        inputs, kernel, bias, alpha, output_dtype = upcast_yat_operands(
+            inputs, kernel, bias, alpha
+        )
         
         # Compute dot product using lax.conv_general_dilated
         dn = lax.conv_dimension_numbers(inputs.shape, kernel.shape, ('NWC', 'WIO', 'NWC'))
@@ -192,6 +195,7 @@ class YatConv1D(_EpsilonValidatedModule):
         return yat_score(
             dot_prod_map, distance_sq,
             bias=bias, epsilon=self.epsilon, epsilon_param=epsilon_param, alpha=alpha,
+            output_dtype=output_dtype,
         )
 
 
@@ -252,7 +256,7 @@ class YatConv2D(_EpsilonValidatedModule):
         # Kernel shape: [height, width, input_channels // groups, features]
         kernel_shape = tuple(self.kernel_size) + (input_channels // self.feature_group_count, self.features)
         
-        kernel = self.param('kernel', self.kernel_init, kernel_shape, self.param_dtype)
+        kernel = self.param('kernel', safe_kernel_init(self.kernel_init), kernel_shape, self.param_dtype)
         
         if self.constant_bias is not None and self.constant_bias is not False:
             bias = jnp.full((self.features,), float(self.constant_bias), dtype=self.param_dtype)
@@ -280,6 +284,9 @@ class YatConv2D(_EpsilonValidatedModule):
             epsilon_param = None
         
         inputs, kernel, bias, alpha = promote_dtype(inputs, kernel, bias, alpha, dtype=self.dtype)
+        inputs, kernel, bias, alpha, output_dtype = upcast_yat_operands(
+            inputs, kernel, bias, alpha
+        )
         
         # Compute dot product using lax.conv_general_dilated
         dn = lax.conv_dimension_numbers(inputs.shape, kernel.shape, ('NHWC', 'HWIO', 'NHWC'))
@@ -329,6 +336,7 @@ class YatConv2D(_EpsilonValidatedModule):
         return yat_score(
             dot_prod_map, distance_sq,
             bias=bias, epsilon=self.epsilon, epsilon_param=epsilon_param, alpha=alpha,
+            output_dtype=output_dtype,
         )
 
 
@@ -389,7 +397,7 @@ class YatConv3D(_EpsilonValidatedModule):
         # Kernel shape: [depth, height, width, input_channels // groups, features]
         kernel_shape = tuple(self.kernel_size) + (input_channels // self.feature_group_count, self.features)
         
-        kernel = self.param('kernel', self.kernel_init, kernel_shape, self.param_dtype)
+        kernel = self.param('kernel', safe_kernel_init(self.kernel_init), kernel_shape, self.param_dtype)
         
         if self.constant_bias is not None and self.constant_bias is not False:
             bias = jnp.full((self.features,), float(self.constant_bias), dtype=self.param_dtype)
@@ -417,6 +425,9 @@ class YatConv3D(_EpsilonValidatedModule):
             epsilon_param = None
         
         inputs, kernel, bias, alpha = promote_dtype(inputs, kernel, bias, alpha, dtype=self.dtype)
+        inputs, kernel, bias, alpha, output_dtype = upcast_yat_operands(
+            inputs, kernel, bias, alpha
+        )
         
         # Compute dot product using lax.conv_general_dilated
         dn = lax.conv_dimension_numbers(inputs.shape, kernel.shape, ('NDHWC', 'DHWIO', 'NDHWC'))
@@ -466,6 +477,7 @@ class YatConv3D(_EpsilonValidatedModule):
         return yat_score(
             dot_prod_map, distance_sq,
             bias=bias, epsilon=self.epsilon, epsilon_param=epsilon_param, alpha=alpha,
+            output_dtype=output_dtype,
         )
 
 
@@ -517,7 +529,7 @@ class YatConvTranspose1D(_EpsilonValidatedModule):
         # Kernel shape for transpose conv: [kernel_size, in_channels, features]
         kernel_shape = tuple(self.kernel_size) + (input_channels, self.features)
 
-        kernel = self.param('kernel', self.kernel_init, kernel_shape, self.param_dtype)
+        kernel = self.param('kernel', safe_kernel_init(self.kernel_init), kernel_shape, self.param_dtype)
 
         if self.constant_bias is not None and self.constant_bias is not False:
             bias = jnp.full((self.features,), float(self.constant_bias), dtype=self.param_dtype)
@@ -545,6 +557,9 @@ class YatConvTranspose1D(_EpsilonValidatedModule):
             epsilon_param = None
 
         inputs, kernel, bias, alpha = promote_dtype(inputs, kernel, bias, alpha, dtype=self.dtype)
+        inputs, kernel, bias, alpha, output_dtype = upcast_yat_operands(
+            inputs, kernel, bias, alpha
+        )
 
         # Compute transposed convolution using lax.conv_transpose
         dn = lax.conv_dimension_numbers(inputs.shape, kernel.shape, ('NWC', 'WIO', 'NWC'))
@@ -582,6 +597,7 @@ class YatConvTranspose1D(_EpsilonValidatedModule):
         return yat_score(
             dot_prod_map, distance_sq,
             bias=bias, epsilon=self.epsilon, epsilon_param=epsilon_param, alpha=alpha,
+            output_dtype=output_dtype,
         )
 
 
@@ -633,7 +649,7 @@ class YatConvTranspose2D(_EpsilonValidatedModule):
         # Kernel shape for transpose conv: [height, width, in_channels, features]
         kernel_shape = tuple(self.kernel_size) + (input_channels, self.features)
 
-        kernel = self.param('kernel', self.kernel_init, kernel_shape, self.param_dtype)
+        kernel = self.param('kernel', safe_kernel_init(self.kernel_init), kernel_shape, self.param_dtype)
 
         if self.constant_bias is not None and self.constant_bias is not False:
             bias = jnp.full((self.features,), float(self.constant_bias), dtype=self.param_dtype)
@@ -661,6 +677,9 @@ class YatConvTranspose2D(_EpsilonValidatedModule):
             epsilon_param = None
 
         inputs, kernel, bias, alpha = promote_dtype(inputs, kernel, bias, alpha, dtype=self.dtype)
+        inputs, kernel, bias, alpha, output_dtype = upcast_yat_operands(
+            inputs, kernel, bias, alpha
+        )
 
         # Compute transposed convolution using lax.conv_transpose
         dn = lax.conv_dimension_numbers(inputs.shape, kernel.shape, ('NHWC', 'HWIO', 'NHWC'))
@@ -698,6 +717,7 @@ class YatConvTranspose2D(_EpsilonValidatedModule):
         return yat_score(
             dot_prod_map, distance_sq,
             bias=bias, epsilon=self.epsilon, epsilon_param=epsilon_param, alpha=alpha,
+            output_dtype=output_dtype,
         )
 
 
@@ -749,7 +769,7 @@ class YatConvTranspose3D(_EpsilonValidatedModule):
         # Kernel shape for transpose conv: [depth, height, width, in_channels, features]
         kernel_shape = tuple(self.kernel_size) + (input_channels, self.features)
 
-        kernel = self.param('kernel', self.kernel_init, kernel_shape, self.param_dtype)
+        kernel = self.param('kernel', safe_kernel_init(self.kernel_init), kernel_shape, self.param_dtype)
 
         if self.constant_bias is not None and self.constant_bias is not False:
             bias = jnp.full((self.features,), float(self.constant_bias), dtype=self.param_dtype)
@@ -777,6 +797,9 @@ class YatConvTranspose3D(_EpsilonValidatedModule):
             epsilon_param = None
 
         inputs, kernel, bias, alpha = promote_dtype(inputs, kernel, bias, alpha, dtype=self.dtype)
+        inputs, kernel, bias, alpha, output_dtype = upcast_yat_operands(
+            inputs, kernel, bias, alpha
+        )
 
         # Compute transposed convolution using lax.conv_transpose
         dn = lax.conv_dimension_numbers(inputs.shape, kernel.shape, ('NDHWC', 'DHWIO', 'NDHWC'))
@@ -814,6 +837,7 @@ class YatConvTranspose3D(_EpsilonValidatedModule):
         return yat_score(
             dot_prod_map, distance_sq,
             bias=bias, epsilon=self.epsilon, epsilon_param=epsilon_param, alpha=alpha,
+            output_dtype=output_dtype,
         )
 
 

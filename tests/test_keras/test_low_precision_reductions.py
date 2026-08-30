@@ -15,6 +15,8 @@ from nmn.keras import (
     YatConvTranspose2D,
     YatConvTranspose3D,
     YatEmbed,
+    YatNMN,
+    yat_attention,
 )
 from nmn.keras._yat_core import stable_yat_ratio
 
@@ -166,6 +168,92 @@ def keras_embed_value_and_gradients(layer, query):
     pytest.skip("gradient regression requires a supported Keras autodiff backend")
 
 
+def keras_dense_value_and_gradients(layer, inputs):
+    if BACKEND == "jax":
+        import jax
+
+        variables = list(layer.trainable_variables)
+        values = [variable.value for variable in variables]
+        kernel_index = next(
+            i for i, variable in enumerate(variables) if variable is layer.kernel
+        )
+
+        def evaluate(input_value, kernel_value):
+            current = list(values)
+            current[kernel_index] = kernel_value
+            output, _ = layer.stateless_call(
+                current, layer.non_trainable_variables, input_value
+            )
+            return ops.sum(ops.cast(output, "float32")), output
+
+        (_, output), gradients = jax.value_and_grad(
+            evaluate, argnums=(0, 1), has_aux=True
+        )(inputs, values[kernel_index])
+        return output, gradients
+
+    if BACKEND == "torch":
+        torch = pytest.importorskip("torch")
+        input_value = inputs.detach().clone().requires_grad_(True)
+        output = layer(input_value)
+        gradients = torch.autograd.grad(
+            ops.sum(ops.cast(output, "float32")),
+            (input_value, layer.kernel.value),
+        )
+        return output, gradients
+
+    if BACKEND == "tensorflow":
+        tf = pytest.importorskip("tensorflow")
+        input_value = tf.Variable(inputs)
+        with tf.GradientTape() as tape:
+            output = layer(input_value)
+            loss = tf.reduce_sum(tf.cast(output, tf.float32))
+        gradients = tape.gradient(loss, (input_value, layer.kernel.value))
+        return output, gradients
+
+    pytest.skip("gradient regression requires a supported Keras autodiff backend")
+
+
+def keras_attention_value_and_gradients(dtype):
+    query = ops.full((1, 1, 1, 2), 100.0, dtype=dtype)
+    key = ops.full((1, 2, 1, 2), 100.0, dtype=dtype)
+    value = ops.convert_to_tensor([[[[1.0]], [[2.0]]]], dtype=dtype)
+
+    def attend(q, k, v):
+        return yat_attention(q, k, v, training=False, epsilon=1.0)
+
+    if BACKEND == "jax":
+        import jax
+
+        def loss(q, k, v):
+            output = attend(q, k, v)
+            return ops.sum(ops.cast(output, "float32")) * 0.015625
+
+        output = attend(query, key, value)
+        gradients = jax.grad(loss, argnums=(0, 1, 2))(query, key, value)
+        return output, gradients
+
+    if BACKEND == "torch":
+        query = query.detach().clone().requires_grad_(True)
+        key = key.detach().clone().requires_grad_(True)
+        value = value.detach().clone().requires_grad_(True)
+        output = attend(query, key, value)
+        gradients = pytest.importorskip("torch").autograd.grad(
+            ops.sum(ops.cast(output, "float32")) * 0.015625,
+            (query, key, value),
+        )
+        return output, gradients
+
+    if BACKEND == "tensorflow":
+        tf = pytest.importorskip("tensorflow")
+        query, key, value = tf.Variable(query), tf.Variable(key), tf.Variable(value)
+        with tf.GradientTape() as tape:
+            output = attend(query, key, value)
+            loss = tf.reduce_sum(tf.cast(output, tf.float32)) * 0.015625
+        return output, tape.gradient(loss, (query, key, value))
+
+    pytest.skip("gradient regression requires a supported Keras autodiff backend")
+
+
 @pytest.mark.skipif(
     BACKEND not in SUPPORTED_GRADIENT_BACKENDS,
     reason="requires a supported Keras autodiff backend",
@@ -303,3 +391,70 @@ def test_low_precision_ratio_preserves_nan():
     assert np.isnan(to_numpy(output)[0, 0])
     assert np.isfinite(to_numpy(output)[0, 1])
     assert np.isnan(to_numpy(gradient)[0, 0])
+
+
+@pytest.mark.skipif(
+    BACKEND not in SUPPORTED_GRADIENT_BACKENDS,
+    reason="requires a supported Keras autodiff backend",
+)
+@pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
+def test_large_magnitude_dense_matches_fp32_forward_and_gradients(dtype):
+    def make(layer_dtype):
+        inputs = ops.full((1, 2), 100.0, dtype=layer_dtype)
+        layer = YatNMN(
+            1, use_bias=False, use_alpha=False, epsilon=1.0,
+            kernel_initializer="zeros", dtype=layer_dtype,
+        )
+        layer(inputs)
+        layer.kernel.assign(
+            ops.convert_to_tensor([[-100.0], [-99.0]], dtype=layer_dtype)
+        )
+        return layer, inputs
+
+    reference, reference_inputs = make("float32")
+    lowp, lowp_inputs = make(dtype)
+    reference_output, reference_gradients = keras_dense_value_and_gradients(
+        reference, reference_inputs
+    )
+    output, gradients = keras_dense_value_and_gradients(lowp, lowp_inputs)
+    np.testing.assert_allclose(
+        to_numpy(ops.cast(output, "float32")), to_numpy(reference_output),
+        rtol=5e-3, atol=0.15,
+    )
+    for actual, expected in zip(gradients, reference_gradients):
+        np.testing.assert_allclose(
+            to_numpy(ops.cast(actual, "float32")), to_numpy(expected),
+            rtol=5e-3, atol=0.15,
+        )
+
+
+@pytest.mark.skipif(
+    BACKEND not in SUPPORTED_GRADIENT_BACKENDS,
+    reason="requires a supported Keras autodiff backend",
+)
+@pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
+def test_large_magnitude_attention_matches_fp32_forward_and_gradients(dtype):
+    ref_output, ref_gradients = keras_attention_value_and_gradients("float32")
+    output, gradients = keras_attention_value_and_gradients(dtype)
+    np.testing.assert_allclose(
+        to_numpy(ops.cast(output, "float32")), to_numpy(ref_output), atol=2e-3
+    )
+    for actual, expected in zip(gradients, ref_gradients):
+        np.testing.assert_allclose(
+            to_numpy(ops.cast(actual, "float32")), to_numpy(expected),
+            rtol=7e-3, atol=8.0,
+        )
+
+
+def test_dense_and_attention_preserve_genuine_nan():
+    inputs = ops.convert_to_tensor([[np.nan, 1.0]], dtype="float16")
+    layer = YatNMN(
+        1, use_bias=False, use_alpha=False, kernel_initializer="ones",
+        dtype="float16",
+    )
+    assert np.isnan(to_numpy(layer(inputs))).all()
+
+    query = ops.convert_to_tensor([[[[np.nan, 100.0]]]], dtype="float16")
+    key = ops.full((1, 2, 1, 2), 100.0, dtype="float16")
+    value = ops.ones((1, 2, 1, 1), dtype="float16")
+    assert np.isnan(to_numpy(yat_attention(query, key, value))).all()

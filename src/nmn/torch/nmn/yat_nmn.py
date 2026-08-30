@@ -371,8 +371,18 @@ class YatNMN(nn.Module):
                 bias = F.softplus(bias)
         alpha_param = self.alpha if self.alpha is not None else None
 
-        # Promote all tensors to computation dtype
+        # Promote all tensors to computation dtype.  The YAT numerator grows as
+        # dot(x, w)^2 and the expanded distance can overflow fp16 even when the
+        # final ratio is perfectly representable.  Accumulate the complete
+        # geometric score in fp32 for both fp16 and bf16, then restore the
+        # public computation dtype at the output boundary.
         x, kernel, bias, alpha_param = self._promote_dtype(x, kernel, bias, alpha_param)
+        output_dtype = x.dtype
+        if output_dtype in (torch.float16, torch.bfloat16):
+            x = x.float()
+            kernel = kernel.float()
+            bias = bias.float() if bias is not None else None
+            alpha_param = alpha_param.float() if alpha_param is not None else None
 
         # Spherical mode: normalize inputs and kernel
         if self.spherical:

@@ -68,6 +68,12 @@ def yat_attention_weights(
     Returns:
         Attention weights (batch, num_heads, q_len, kv_len).
     """
+    output_dtype = query.dtype
+    if output_dtype in (tf.float16, tf.bfloat16):
+        query = tf.cast(query, tf.float32)
+        key = tf.cast(key, tf.float32)
+        alpha = tf.cast(alpha, tf.float32) if alpha is not None else None
+
     # Scale by 1/√head_dim to match standard attention's score growth profile.
     head_dim = query.shape[-1]
     dim_scale = tf.sqrt(tf.cast(head_dim, query.dtype))
@@ -112,7 +118,7 @@ def yat_attention_weights(
     if dropout_rate > 0.0 and training:
         attn_weights = tf.nn.dropout(attn_weights, rate=dropout_rate)
 
-    return attn_weights
+    return tf.cast(attn_weights, output_dtype)
 
 
 def yat_attention(

@@ -18,7 +18,32 @@ import jax.numpy as jnp
 from jax import Array
 
 
-__all__ = ["yat_score"]
+__all__ = ["safe_kernel_init", "upcast_yat_operands", "yat_score"]
+
+
+def safe_kernel_init(initializer):
+    """Run decomposition-based initializers in fp32 before a lowp cast.
+
+    JAX's CPU QR kernel does not accept float16, which made the default
+    orthogonal convolution initializer fail before the layer could run.
+    """
+    def init(key, shape, dtype):
+        if dtype in (jnp.float16, jnp.bfloat16):
+            return initializer(key, shape, jnp.float32).astype(dtype)
+        return initializer(key, shape, dtype)
+
+    return init
+
+
+def upcast_yat_operands(inputs, kernel, bias, alpha):
+    """Return score operands in fp32 for fp16/bf16 computation policies."""
+    output_dtype = inputs.dtype
+    if output_dtype in (jnp.float16, jnp.bfloat16):
+        inputs = inputs.astype(jnp.float32)
+        kernel = kernel.astype(jnp.float32)
+        bias = bias.astype(jnp.float32) if bias is not None else None
+        alpha = alpha.astype(jnp.float32) if alpha is not None else None
+    return inputs, kernel, bias, alpha, output_dtype
 
 
 def yat_score(
@@ -29,6 +54,7 @@ def yat_score(
     epsilon: float,
     epsilon_param: Optional[Array],
     alpha: Optional[Array],
+    output_dtype=None,
 ) -> Array:
     """Apply bias / epsilon / YAT-divide / alpha to a raw conv output.
 
@@ -41,7 +67,8 @@ def yat_score(
         bias_broadcast_shape = (1,) * (dot_prod_map.ndim - 1) + (-1,)
         dot_prod_map = dot_prod_map + bias.reshape(bias_broadcast_shape)
 
-    output_dtype = dot_prod_map.dtype
+    if output_dtype is None:
+        output_dtype = dot_prod_map.dtype
     if epsilon_param is not None:
         score_dtype = jnp.promote_types(dot_prod_map.dtype, epsilon_param.dtype)
         eps = jax.nn.softplus(epsilon_param.astype(score_dtype))
@@ -50,6 +77,9 @@ def yat_score(
     else:
         eps = epsilon
 
+    # Squared distances are non-negative; clamp cancellation noise while
+    # retaining NaNs from genuinely invalid inputs.
+    distance_sq = jnp.maximum(distance_sq, 0.0)
     y = dot_prod_map ** 2 / (distance_sq + eps)
 
     if alpha is not None:

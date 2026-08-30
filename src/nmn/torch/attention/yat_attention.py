@@ -85,6 +85,14 @@ def yat_attention_weights(
         Attention weights of shape (batch, num_heads, q_len, kv_len)
     """
     assert query.ndim == key.ndim == 4, "Expected (batch, seq, heads, dim)"
+    output_dtype = query.dtype
+    if output_dtype in (torch.float16, torch.bfloat16):
+        # dot^2 and the expanded squared distance both overflow/cancel readily
+        # in fp16.  Keep score formation and softmax in fp32; only the bounded
+        # normalized weights cross back to the caller's dtype.
+        query = query.float()
+        key = key.float()
+        alpha = alpha.float() if isinstance(alpha, Tensor) else alpha
     head_dim = query.shape[-1]
 
     # Scale by 1/√head_dim to match standard attention's score growth profile.
@@ -137,7 +145,7 @@ def yat_attention_weights(
     if dropout_p > 0.0 and training:
         attn_weights = F.dropout(attn_weights, p=dropout_p, training=True)
 
-    return attn_weights
+    return attn_weights.to(output_dtype)
 
 
 def yat_attention(
