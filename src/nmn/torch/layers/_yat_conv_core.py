@@ -24,7 +24,11 @@ from torch.nn import functional as F
 from torch.nn.modules.utils import _single
 from torch.nn.parameter import Parameter
 
-from nmn._epsilon import inverse_softplus, validate_epsilon
+from nmn._epsilon import (
+    inverse_softplus,
+    validate_epsilon,
+    validate_epsilon_for_dtype,
+)
 
 from .._precision import saturating_upcast
 
@@ -92,11 +96,15 @@ def setup_yat_attrs(
     layer.epsilon = validate_epsilon(epsilon)
     layer.learnable_epsilon = learnable_epsilon
     if learnable_epsilon:
+        epsilon_dtype = storage_dtype or torch.float32
+        if epsilon_dtype in (torch.float16, torch.bfloat16):
+            epsilon_dtype = torch.float32
+        validate_epsilon_for_dtype(layer.epsilon, epsilon_dtype)
         raw_eps = inverse_softplus(layer.epsilon)
         layer.epsilon_param = nn.Parameter(
             torch.full(
                 (1,), raw_eps,
-                dtype=storage_dtype if storage_dtype else torch.float32,
+                dtype=epsilon_dtype,
                 device=device,
             )
         )
@@ -170,13 +178,8 @@ def _resolve_alpha(layer, input: Tensor) -> Optional[Tensor]:
 def _resolve_eps(layer, dtype: torch.dtype):
     if layer.learnable_epsilon and layer.epsilon_param is not None:
         epsilon_param = layer.epsilon_param
-        if dtype != epsilon_param.dtype and epsilon_param.dtype in (
-            torch.float16,
-            torch.bfloat16,
-        ):
-            epsilon_param = saturating_upcast(epsilon_param).to(dtype)
-        else:
-            epsilon_param = epsilon_param.to(dtype)
+        dtype = torch.promote_types(dtype, epsilon_param.dtype)
+        epsilon_param = epsilon_param.to(dtype)
         return F.softplus(epsilon_param)
     return layer.epsilon
 
@@ -188,6 +191,9 @@ def _yat_score(layer, dot_prod_map: Tensor, distance_sq_map: Tensor,
     if bias_val is not None:
         dot_prod_map = dot_prod_map + bias_val.view(*view_shape)
     eps = _resolve_eps(layer, distance_sq_map.dtype)
+    if isinstance(eps, Tensor):
+        dot_prod_map = dot_prod_map.to(eps.dtype)
+        distance_sq_map = distance_sq_map.to(eps.dtype)
     y = dot_prod_map ** 2 / (distance_sq_map + eps)
     if layer._constant_alpha_value is not None:
         y = y * layer._constant_alpha_value

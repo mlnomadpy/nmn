@@ -13,7 +13,21 @@ from flax import linen as nn
 from flax.linen.initializers import zeros_init
 from typing import Any, Optional
 
-from nmn._epsilon import inverse_softplus, validate_epsilon
+from nmn._epsilon import (
+    epsilon_parameter_dtype,
+    inverse_softplus,
+    validate_epsilon,
+    validate_epsilon_for_dtype,
+)
+
+
+def _epsilon_dtype(param_dtype, epsilon):
+    name = epsilon_parameter_dtype(param_dtype)
+    if name == "float64" and not jax.config.x64_enabled:
+        raise ValueError("float64 learnable epsilon requires jax_enable_x64")
+    dtype = getattr(jnp, name)
+    validate_epsilon_for_dtype(epsilon, dtype)
+    return dtype
 
 # Default constant alpha value (sqrt(2))
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
@@ -170,12 +184,13 @@ class YatNMN(Module):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
+            epsilon_dtype = _epsilon_dtype(self.param_dtype, self.epsilon)
             raw_eps_init = inverse_softplus(self.epsilon)
             epsilon_param = self.param(
                 'epsilon_param',
                 lambda key, shape, dtype: jnp.full(shape, raw_eps_init, dtype=dtype),
                 (1,),
-                self.param_dtype,
+                epsilon_dtype,
             )
         else:
             epsilon_param = None
@@ -228,8 +243,12 @@ class YatNMN(Module):
             y += jnp.reshape(bias, (1,) * (y.ndim - 1) + (-1,))
 
         # Resolve effective epsilon (learnable via softplus, or constant)
+        output_dtype = y.dtype
         if epsilon_param is not None:
-            eps = jax.nn.softplus(epsilon_param.astype(y.dtype))
+            score_dtype = jnp.promote_types(y.dtype, epsilon_param.dtype)
+            eps = jax.nn.softplus(epsilon_param.astype(score_dtype))
+            y = y.astype(score_dtype)
+            distances = distances.astype(score_dtype)
         else:
             eps = self.epsilon
 
@@ -242,6 +261,8 @@ class YatNMN(Module):
         elif alpha is not None:
             # Simple learnable alpha scaling
             y = y * alpha
+
+        y = y.astype(output_dtype)
 
         if self.return_weights:
            return y, kernel

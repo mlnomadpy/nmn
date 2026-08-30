@@ -1,5 +1,7 @@
 """Stable learnable-epsilon initialization across Keras YAT families."""
 
+from contextlib import nullcontext
+
 import keras
 from keras import ops
 import numpy as np
@@ -29,7 +31,7 @@ FAMILIES = (
 )
 
 
-def _make(layer_cls, kernel_size, epsilon):
+def _make(layer_cls, kernel_size, epsilon, dtype=None):
     kwargs = dict(
         epsilon=epsilon,
         learnable_epsilon=True,
@@ -37,6 +39,8 @@ def _make(layer_cls, kernel_size, epsilon):
         use_alpha=False,
         kernel_initializer="zeros",
     )
+    if dtype is not None:
+        kwargs["dtype"] = dtype
     if kernel_size is None:
         return layer_cls(1, **kwargs)
     return layer_cls(1, kernel_size, **kwargs)
@@ -152,3 +156,72 @@ def test_default_epsilon_remains_backward_compatible():
         1e-5,
         rtol=2e-6,
     )
+
+
+@pytest.mark.parametrize("layer_cls,kernel_size,input_shape", FAMILIES)
+@pytest.mark.parametrize("epsilon", [1e-8, 1e-20, 1e5])
+def test_float16_uses_fp32_epsilon_storage(
+    layer_cls, kernel_size, input_shape, epsilon
+):
+    layer = _make(layer_cls, kernel_size, epsilon, "float16")
+    inputs = ops.full(input_shape, 0.2, dtype="float16")
+    layer(inputs)
+    layer.kernel.assign(ops.full(layer.kernel.shape, 0.3, dtype="float16"))
+    output, gradients = _value_and_gradients(layer, inputs)
+    assert keras.backend.standardize_dtype(layer.epsilon_param.dtype) == "float32"
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(ops.softplus(layer.epsilon_param)),
+        epsilon,
+        rtol=2e-6,
+    )
+    assert keras.backend.standardize_dtype(output.dtype) == "float16"
+    assert np.isfinite(ops.convert_to_numpy(output)).all()
+    epsilon_grad = ops.convert_to_numpy(gradients[-1])
+    assert np.isfinite(epsilon_grad).all() and np.abs(epsilon_grad).max() > 0
+
+
+@pytest.mark.parametrize("layer_cls,kernel_size,input_shape", FAMILIES[:2])
+@pytest.mark.parametrize("epsilon", [5e-324, 1e-46, 1e39])
+def test_float32_rejects_unrepresentable_epsilon(
+    layer_cls, kernel_size, input_shape, epsilon
+):
+    layer = _make(layer_cls, kernel_size, epsilon, "float32")
+    with pytest.raises(ValueError, match="not representable"):
+        layer(ops.ones(input_shape, dtype="float32"))
+
+
+@pytest.mark.parametrize("layer_cls,kernel_size,input_shape", FAMILIES[:2])
+@pytest.mark.parametrize("epsilon", [2.0 ** -1022, 1e150])
+def test_float64_extreme_epsilon_is_effective_and_differentiable(
+    layer_cls, kernel_size, input_shape, epsilon
+):
+    if BACKEND == "jax":
+        import jax
+
+        dtype_context = jax.enable_x64()
+    else:
+        dtype_context = nullcontext()
+
+    with dtype_context:
+        layer = _make(layer_cls, kernel_size, epsilon, "float64")
+        inputs = ops.full(input_shape, 0.2, dtype="float64")
+        layer(inputs)
+        layer.kernel.assign(ops.full(layer.kernel.shape, 0.3, dtype="float64"))
+        output, gradients = _value_and_gradients(layer, inputs)
+        np.testing.assert_allclose(
+            ops.convert_to_numpy(ops.softplus(layer.epsilon_param)),
+            epsilon,
+            rtol=5e-14,
+        )
+        epsilon_grad = ops.convert_to_numpy(gradients[-1])
+        assert np.isfinite(ops.convert_to_numpy(output)).all()
+        assert np.isfinite(epsilon_grad).all() and np.abs(epsilon_grad).max() > 0
+
+
+@pytest.mark.parametrize("layer_cls,kernel_size,input_shape", FAMILIES[:2])
+def test_float64_rejects_softplus_underflow(
+    layer_cls, kernel_size, input_shape
+):
+    layer = _make(layer_cls, kernel_size, 5e-324, "float64")
+    with pytest.raises(ValueError, match="not representable"):
+        layer(ops.ones(input_shape, dtype="float64"))

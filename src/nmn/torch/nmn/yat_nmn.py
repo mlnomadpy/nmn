@@ -8,7 +8,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from nmn._epsilon import inverse_softplus, validate_epsilon
+from nmn._epsilon import (
+    inverse_softplus,
+    validate_epsilon,
+    validate_epsilon_for_dtype,
+)
 
 __all__ = ["YatNMN"]
 
@@ -110,10 +114,16 @@ class YatNMN(nn.Module):
         self.epsilon = validate_epsilon(epsilon)
         self.learnable_epsilon = learnable_epsilon
         if learnable_epsilon:
+            epsilon_dtype = (
+                torch.float32
+                if param_dtype in (torch.float16, torch.bfloat16)
+                else param_dtype
+            )
+            validate_epsilon_for_dtype(self.epsilon, epsilon_dtype)
             # Initialize so that softplus(raw) ≈ epsilon: raw = log(exp(eps) - 1)
             raw_eps = inverse_softplus(self.epsilon)
             self.epsilon_param = nn.Parameter(
-                torch.full((1,), raw_eps, dtype=param_dtype, device=device)
+                torch.full((1,), raw_eps, dtype=epsilon_dtype, device=device)
             )
         else:
             self.register_parameter('epsilon_param', None)
@@ -402,8 +412,12 @@ class YatNMN(nn.Module):
             distances = (inputs_squared_sum + kernel_squared_sum - 2 * dot_for_dist).clamp(min=0.0)
 
         # Resolve effective epsilon (learnable via softplus, or constant)
+        output_dtype = y.dtype
         if self.learnable_epsilon and self.epsilon_param is not None:
-            eps = F.softplus(self.epsilon_param.to(distances.dtype))
+            score_dtype = torch.promote_types(distances.dtype, self.epsilon_param.dtype)
+            eps = F.softplus(self.epsilon_param.to(score_dtype))
+            y = y.to(score_dtype)
+            distances = distances.to(score_dtype)
         else:
             eps = self.epsilon
 
@@ -418,7 +432,7 @@ class YatNMN(nn.Module):
             # Simple learnable alpha scaling
             y = y * alpha_param
 
-        return y
+        return y.to(output_dtype)
 
     def _apply(self, fn, recurse=True):
         if getattr(self, "tie_kernel_bank", False):

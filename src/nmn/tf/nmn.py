@@ -4,7 +4,12 @@ import tensorflow as tf
 import math
 from typing import Optional, Tuple, Union, List
 
-from nmn._epsilon import inverse_softplus, validate_epsilon
+from nmn._epsilon import (
+    epsilon_parameter_dtype,
+    inverse_softplus,
+    validate_epsilon,
+    validate_epsilon_for_dtype,
+)
 
 from .saved_model import SingleInputSavedModelMixin
 
@@ -174,9 +179,11 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
+            epsilon_dtype = tf.as_dtype(epsilon_parameter_dtype(self.dtype))
+            validate_epsilon_for_dtype(self.epsilon, epsilon_dtype)
             raw_eps = inverse_softplus(self.epsilon)
             self.epsilon_param = tf.Variable(
-                tf.constant(raw_eps, shape=[1], dtype=self.dtype),
+                tf.constant(raw_eps, shape=[1], dtype=epsilon_dtype),
                 trainable=True,
                 name='epsilon_param',
             )
@@ -262,6 +269,8 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
         # Resolve effective epsilon (learnable via softplus, or constant)
         if self.learnable_epsilon and self.epsilon_param is not None:
             eps = tf.nn.softplus(self.epsilon_param)
+            y = tf.cast(y, eps.dtype)
+            distances = tf.cast(distances, eps.dtype)
         else:
             eps = self.epsilon
 
@@ -270,10 +279,12 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
 
         # Apply scaling factor
         if self._constant_alpha_value is not None:
-            y = y * tf.cast(self._constant_alpha_value, self.dtype)
+            y = y * tf.cast(self._constant_alpha_value, y.dtype)
         elif self.alpha is not None:
             # Simple learnable alpha scaling
-            y = y * self.alpha
+            y = y * tf.cast(self.alpha, y.dtype)
+
+        y = tf.cast(y, self.dtype)
 
 
         if self.return_weights:

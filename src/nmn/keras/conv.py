@@ -14,9 +14,27 @@ from keras.src.ops.operation_utils import compute_conv_output_shape
 from keras.src.saving.object_registration import register_keras_serializable
 from keras.src.saving.serialization_lib import deserialize_keras_object
 
-from nmn._epsilon import inverse_softplus, validate_epsilon
+from nmn._epsilon import (
+    epsilon_parameter_dtype,
+    inverse_softplus,
+    validate_epsilon,
+    validate_epsilon_for_dtype,
+)
 
 from ._yat_core import reduction_safe_upcast, yat_score
+
+
+def _epsilon_weight_dtype(layer):
+    dtype = epsilon_parameter_dtype(layer.variable_dtype)
+    validate_epsilon_for_dtype(layer.epsilon, dtype)
+    return dtype
+
+
+def _epsilon_initializer(value):
+    def initialize(shape, dtype=None):
+        return ops.full(shape, value, dtype=dtype)
+
+    return initialize
 
 
 def _reject_kernel_bank_expansion(bank_id, existing_filters, requested_filters):
@@ -462,7 +480,8 @@ class YatConv1D(_KernelBankSerializationMixin, Layer):
             self.epsilon_param = self.add_weight(
                 name="epsilon_param",
                 shape=(1,),
-                initializer=initializers.Constant(raw_eps),
+                initializer=_epsilon_initializer(raw_eps),
+                dtype=_epsilon_weight_dtype(self),
                 trainable=True,
             )
         else:
@@ -807,7 +826,8 @@ class YatConv2D(_KernelBankSerializationMixin, Layer):
             self.epsilon_param = self.add_weight(
                 name="epsilon_param",
                 shape=(1,),
-                initializer=initializers.Constant(raw_eps),
+                initializer=_epsilon_initializer(raw_eps),
+                dtype=_epsilon_weight_dtype(self),
                 trainable=True,
             )
         else:
@@ -1108,7 +1128,8 @@ class YatConv3D(_KernelBankSerializationMixin, Layer):
             self.epsilon_param = self.add_weight(
                 name="epsilon_param",
                 shape=(1,),
-                initializer=initializers.Constant(raw_eps),
+                initializer=_epsilon_initializer(raw_eps),
+                dtype=_epsilon_weight_dtype(self),
                 trainable=True,
             )
         else:
@@ -1388,7 +1409,8 @@ class YatConvTranspose1D(_KernelBankSerializationMixin, Layer):
             self.epsilon_param = self.add_weight(
                 name="epsilon_param",
                 shape=(1,),
-                initializer=initializers.Constant(raw_eps),
+                initializer=_epsilon_initializer(raw_eps),
+                dtype=_epsilon_weight_dtype(self),
                 trainable=True,
             )
         else:
@@ -1668,7 +1690,8 @@ class YatConvTranspose2D(_KernelBankSerializationMixin, Layer):
             self.epsilon_param = self.add_weight(
                 name="epsilon_param",
                 shape=(1,),
-                initializer=initializers.Constant(raw_eps),
+                initializer=_epsilon_initializer(raw_eps),
+                dtype=_epsilon_weight_dtype(self),
                 trainable=True,
             )
         else:
@@ -1948,7 +1971,8 @@ class YatConvTranspose3D(_KernelBankSerializationMixin, Layer):
             self.epsilon_param = self.add_weight(
                 name="epsilon_param",
                 shape=(1,),
-                initializer=initializers.Constant(raw_eps),
+                initializer=_epsilon_initializer(raw_eps),
+                dtype=_epsilon_weight_dtype(self),
                 trainable=True,
             )
         else:

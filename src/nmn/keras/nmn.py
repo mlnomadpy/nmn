@@ -6,10 +6,22 @@ from keras.src import ops
 import math
 import numpy as np
 
-from nmn._epsilon import inverse_softplus, validate_epsilon
+from nmn._epsilon import (
+    epsilon_parameter_dtype,
+    inverse_softplus,
+    validate_epsilon,
+    validate_epsilon_for_dtype,
+)
 
 # Default constant alpha value (sqrt(2))
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
+
+
+def _epsilon_initializer(value):
+    def initialize(shape, dtype=None):
+        return ops.full(shape, value, dtype=dtype)
+
+    return initialize
 
 @keras_export("keras.layers.YatNMN")
 class YatNMN(Layer):
@@ -157,11 +169,14 @@ class YatNMN(Layer):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
+            epsilon_dtype = epsilon_parameter_dtype(self.variable_dtype)
+            validate_epsilon_for_dtype(self.epsilon, epsilon_dtype)
             raw_eps = inverse_softplus(self.epsilon)
             self.epsilon_param = self.add_weight(
                 name="epsilon_param",
                 shape=(1,),
-                initializer=initializers.Constant(raw_eps),
+                initializer=_epsilon_initializer(raw_eps),
+                dtype=epsilon_dtype,
                 trainable=True,
             )
         else:
@@ -220,6 +235,9 @@ class YatNMN(Layer):
         # Resolve effective epsilon (learnable via softplus, or constant)
         if self.learnable_epsilon and self.epsilon_param is not None:
             eps = ops.softplus(self.epsilon_param)
+            score_dtype = self.epsilon_param.dtype
+            dot_product = ops.cast(dot_product, score_dtype)
+            distances = ops.cast(distances, score_dtype)
         else:
             eps = self.epsilon
 
@@ -233,7 +251,7 @@ class YatNMN(Layer):
             # Simple learnable alpha scaling
             outputs = outputs * self.alpha
 
-        return outputs
+        return ops.cast(outputs, self.compute_dtype)
 
     def compute_output_shape(self, input_shape):
         output_shape = list(input_shape)

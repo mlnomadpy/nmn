@@ -9,9 +9,23 @@ from flax.linen.dtypes import promote_dtype
 from flax.linen.initializers import zeros_init
 from typing import Any, Optional, Sequence, Union, Tuple
 
-from nmn._epsilon import inverse_softplus, validate_epsilon
+from nmn._epsilon import (
+    epsilon_parameter_dtype,
+    inverse_softplus,
+    validate_epsilon,
+    validate_epsilon_for_dtype,
+)
 
 from ._yat_core import yat_score
+
+
+def _epsilon_dtype(param_dtype, epsilon):
+    name = epsilon_parameter_dtype(param_dtype)
+    if name == "float64" and not jax.config.x64_enabled:
+        raise ValueError("float64 learnable epsilon requires jax_enable_x64")
+    dtype = getattr(jnp, name)
+    validate_epsilon_for_dtype(epsilon, dtype)
+    return dtype
 
 
 def _validate_feature_groups(
@@ -114,12 +128,13 @@ class YatConv1D(_EpsilonValidatedModule):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
+            epsilon_dtype = _epsilon_dtype(self.param_dtype, self.epsilon)
             raw_eps_init = inverse_softplus(self.epsilon)
             epsilon_param = self.param(
                 'epsilon_param',
                 lambda key, shape, dtype: jnp.full(shape, raw_eps_init, dtype=dtype),
                 (1,),
-                self.param_dtype,
+                epsilon_dtype,
             )
         else:
             epsilon_param = None
@@ -253,12 +268,13 @@ class YatConv2D(_EpsilonValidatedModule):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
+            epsilon_dtype = _epsilon_dtype(self.param_dtype, self.epsilon)
             raw_eps_init = inverse_softplus(self.epsilon)
             epsilon_param = self.param(
                 'epsilon_param',
                 lambda key, shape, dtype: jnp.full(shape, raw_eps_init, dtype=dtype),
                 (1,),
-                self.param_dtype,
+                epsilon_dtype,
             )
         else:
             epsilon_param = None
@@ -389,12 +405,13 @@ class YatConv3D(_EpsilonValidatedModule):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
+            epsilon_dtype = _epsilon_dtype(self.param_dtype, self.epsilon)
             raw_eps_init = inverse_softplus(self.epsilon)
             epsilon_param = self.param(
                 'epsilon_param',
                 lambda key, shape, dtype: jnp.full(shape, raw_eps_init, dtype=dtype),
                 (1,),
-                self.param_dtype,
+                epsilon_dtype,
             )
         else:
             epsilon_param = None
@@ -516,12 +533,13 @@ class YatConvTranspose1D(_EpsilonValidatedModule):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
+            epsilon_dtype = _epsilon_dtype(self.param_dtype, self.epsilon)
             raw_eps_init = inverse_softplus(self.epsilon)
             epsilon_param = self.param(
                 'epsilon_param',
                 lambda key, shape, dtype: jnp.full(shape, raw_eps_init, dtype=dtype),
                 (1,),
-                self.param_dtype,
+                epsilon_dtype,
             )
         else:
             epsilon_param = None
@@ -631,12 +649,13 @@ class YatConvTranspose2D(_EpsilonValidatedModule):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
+            epsilon_dtype = _epsilon_dtype(self.param_dtype, self.epsilon)
             raw_eps_init = inverse_softplus(self.epsilon)
             epsilon_param = self.param(
                 'epsilon_param',
                 lambda key, shape, dtype: jnp.full(shape, raw_eps_init, dtype=dtype),
                 (1,),
-                self.param_dtype,
+                epsilon_dtype,
             )
         else:
             epsilon_param = None
@@ -746,12 +765,13 @@ class YatConvTranspose3D(_EpsilonValidatedModule):
 
         # Learnable epsilon parameter (softplus-constrained)
         if self.learnable_epsilon:
+            epsilon_dtype = _epsilon_dtype(self.param_dtype, self.epsilon)
             raw_eps_init = inverse_softplus(self.epsilon)
             epsilon_param = self.param(
                 'epsilon_param',
                 lambda key, shape, dtype: jnp.full(shape, raw_eps_init, dtype=dtype),
                 (1,),
-                self.param_dtype,
+                epsilon_dtype,
             )
         else:
             epsilon_param = None

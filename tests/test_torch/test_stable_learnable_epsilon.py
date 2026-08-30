@@ -29,8 +29,10 @@ FAMILIES = (
 )
 
 
-def _make(layer_cls, args, epsilon):
+def _make(layer_cls, args, epsilon, dtype=None):
     kwargs = dict(epsilon=epsilon, learnable_epsilon=True)
+    if dtype is not None:
+        kwargs.update(dtype=dtype, param_dtype=dtype)
     if layer_cls is YatNMN:
         kwargs["bias"] = False
         kwargs["alpha"] = False
@@ -89,3 +91,55 @@ def test_default_epsilon_remains_backward_compatible():
     layer = YatNMN(1, 2, learnable_epsilon=True)
     assert layer.epsilon == 1e-5
     assert F.softplus(layer.epsilon_param).item() == pytest.approx(1e-5, rel=2e-6)
+
+
+@pytest.mark.parametrize("layer_cls,args,input_shape", FAMILIES)
+@pytest.mark.parametrize("epsilon", [1e-8, 1e-20, 1e5])
+def test_float16_uses_fp32_epsilon_storage(
+    layer_cls, args, input_shape, epsilon
+):
+    layer = _make(layer_cls, args, epsilon, torch.float16)
+    with torch.no_grad():
+        layer.weight.fill_(0.3)
+    inputs = torch.full(input_shape, 0.2, dtype=torch.float16, requires_grad=True)
+    output = layer(inputs)
+    (epsilon_grad,) = torch.autograd.grad(
+        output.float().sum(), (layer.epsilon_param,)
+    )
+    assert layer.epsilon_param.dtype == torch.float32
+    assert F.softplus(layer.epsilon_param).item() == pytest.approx(
+        epsilon, rel=2e-6
+    )
+    assert output.dtype == torch.float16 and output.isfinite().all()
+    assert epsilon_grad.isfinite().all() and epsilon_grad.abs().max() > 0
+
+
+@pytest.mark.parametrize("layer_cls,args,_", [FAMILIES[0], FAMILIES[1]])
+@pytest.mark.parametrize("epsilon", [5e-324, 1e-46, 1e39])
+def test_float32_rejects_unrepresentable_epsilon(layer_cls, args, _, epsilon):
+    with pytest.raises(ValueError, match="not representable"):
+        _make(layer_cls, args, epsilon, torch.float32)
+
+
+@pytest.mark.parametrize("layer_cls,args,input_shape", [FAMILIES[0], FAMILIES[1]])
+@pytest.mark.parametrize("epsilon", [2.0 ** -1022, 1e150])
+def test_float64_extreme_epsilon_is_effective_and_differentiable(
+    layer_cls, args, input_shape, epsilon
+):
+    layer = _make(layer_cls, args, epsilon, torch.float64)
+    with torch.no_grad():
+        layer.weight.fill_(0.3)
+    inputs = torch.full(input_shape, 0.2, dtype=torch.float64, requires_grad=True)
+    output = layer(inputs)
+    (epsilon_grad,) = torch.autograd.grad(output.sum(), (layer.epsilon_param,))
+    assert F.softplus(layer.epsilon_param).item() == pytest.approx(
+        epsilon, rel=2e-14
+    )
+    assert output.isfinite().all() and epsilon_grad.isfinite().all()
+    assert epsilon_grad.abs().max() > 0
+
+
+@pytest.mark.parametrize("layer_cls,args,_", [FAMILIES[0], FAMILIES[1]])
+def test_float64_rejects_softplus_underflow(layer_cls, args, _):
+    with pytest.raises(ValueError, match="not representable"):
+        _make(layer_cls, args, 5e-324, torch.float64)

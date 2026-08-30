@@ -29,7 +29,7 @@ FAMILIES = (
 )
 
 
-def _make(layer_cls, kernel_size, epsilon):
+def _make(layer_cls, kernel_size, epsilon, dtype=None):
     kwargs = dict(
         features=1,
         epsilon=epsilon,
@@ -37,6 +37,14 @@ def _make(layer_cls, kernel_size, epsilon):
         use_bias=False,
         use_alpha=False,
     )
+    if dtype is not None:
+        kwargs.update(
+            dtype=dtype,
+            param_dtype=dtype,
+            kernel_init=lambda key, shape, init_dtype: jnp.zeros(
+                shape, init_dtype
+            ),
+        )
     if kernel_size is not None:
         kwargs["kernel_size"] = kernel_size
     return layer_cls(**kwargs)
@@ -103,3 +111,83 @@ def test_default_epsilon_remains_backward_compatible():
         1e-5,
         rtol=2e-6,
     )
+
+
+@pytest.mark.parametrize("layer_cls,kernel_size,input_shape", FAMILIES)
+@pytest.mark.parametrize("epsilon", [1e-8, 1e-20, 1e5])
+def test_float16_uses_fp32_epsilon_storage(
+    layer_cls, kernel_size, input_shape, epsilon
+):
+    layer = _make(layer_cls, kernel_size, epsilon, jnp.float16)
+    inputs = jnp.full(input_shape, 0.2, dtype=jnp.float16)
+    variables = layer.init(jax.random.key(3), inputs)
+    variables = {
+        "params": dict(
+            variables["params"],
+            kernel=jnp.full_like(variables["params"]["kernel"], 0.3),
+        )
+    }
+
+    def loss(epsilon_param):
+        params = dict(variables["params"], epsilon_param=epsilon_param)
+        return layer.apply({"params": params}, inputs).astype(jnp.float32).sum()
+
+    epsilon_param = variables["params"]["epsilon_param"]
+    output = jax.jit(layer.apply)(variables, inputs)
+    epsilon_grad = jax.jit(jax.grad(loss))(epsilon_param)
+    assert epsilon_param.dtype == jnp.float32
+    np.testing.assert_allclose(
+        np.asarray(jax.nn.softplus(epsilon_param)), epsilon, rtol=2e-6
+    )
+    assert output.dtype == jnp.float16 and jnp.isfinite(output).all()
+    assert jnp.isfinite(epsilon_grad).all() and jnp.abs(epsilon_grad).max() > 0
+
+
+@pytest.mark.parametrize("layer_cls,kernel_size,input_shape", FAMILIES[:2])
+@pytest.mark.parametrize("epsilon", [5e-324, 1e-46, 1e39])
+def test_float32_rejects_unrepresentable_epsilon(
+    layer_cls, kernel_size, input_shape, epsilon
+):
+    layer = _make(layer_cls, kernel_size, epsilon, jnp.float32)
+    with pytest.raises(ValueError, match="not representable"):
+        layer.init(jax.random.key(4), jnp.ones(input_shape, jnp.float32))
+
+
+@pytest.mark.parametrize("layer_cls,kernel_size,input_shape", FAMILIES[:2])
+@pytest.mark.parametrize("epsilon", [2.0 ** -1022, 1e150])
+def test_float64_extreme_epsilon_is_effective_and_differentiable(
+    layer_cls, kernel_size, input_shape, epsilon
+):
+    with jax.enable_x64():
+        layer = _make(layer_cls, kernel_size, epsilon, jnp.float64)
+        inputs = jnp.full(input_shape, 0.2, dtype=jnp.float64)
+        variables = layer.init(jax.random.key(5), inputs)
+        variables = {
+            "params": dict(
+                variables["params"],
+                kernel=jnp.full_like(variables["params"]["kernel"], 0.3),
+            )
+        }
+        epsilon_param = variables["params"]["epsilon_param"]
+
+        def loss(raw_epsilon):
+            params = dict(variables["params"], epsilon_param=raw_epsilon)
+            return layer.apply({"params": params}, inputs).sum()
+
+        output = layer.apply(variables, inputs)
+        epsilon_grad = jax.grad(loss)(epsilon_param)
+        np.testing.assert_allclose(
+            np.asarray(jax.nn.softplus(epsilon_param)), epsilon, rtol=5e-14
+        )
+        assert jnp.isfinite(output).all() and jnp.isfinite(epsilon_grad).all()
+        assert jnp.abs(epsilon_grad).max() > 0
+
+
+@pytest.mark.parametrize("layer_cls,kernel_size,input_shape", FAMILIES[:2])
+def test_float64_rejects_softplus_underflow(
+    layer_cls, kernel_size, input_shape
+):
+    with jax.enable_x64():
+        layer = _make(layer_cls, kernel_size, 5e-324, jnp.float64)
+        with pytest.raises(ValueError, match="not representable"):
+            layer.init(jax.random.key(6), jnp.ones(input_shape, jnp.float64))
