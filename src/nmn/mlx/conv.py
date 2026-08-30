@@ -12,8 +12,10 @@ Tensor layouts (MLX native, channels-last):
 * output : ``(N, *spatial', C_out)``
 
 Padding accepts ``"valid"`` / ``"same"`` strings or an integer / sequence
-of integers for explicit symmetric padding. Asymmetric padding for
-"same" is supported via ``mx.conv_general``'s tuple form.
+of integers for explicit symmetric padding. Forward convolution uses
+``mx.conv_general``'s asymmetric tuple form. Transposed ``"same"`` produces
+``input * stride + output_padding`` spatial sizes, using a high-side shape
+adjustment where MLX's symmetric-only native padding cannot express it.
 
 Limitations vs the NNX backend (to be lifted in later PRs):
 * No ``CIRCULAR`` / ``REFLECT`` / ``CAUSAL`` padding modes — only
@@ -152,6 +154,33 @@ def _prepad_input(
             parts.append(suffix)
         x = mx.concatenate(parts, axis=axis)
     return x
+
+
+def _resize_spatial_high(
+    x: mx.array,
+    target_spatial: Tuple[int, ...],
+) -> mx.array:
+    """Crop or zero-pad the high side of each spatial axis to ``target``.
+
+    MLX transposed convolution only accepts symmetric input padding. Some
+    ``SAME`` configurations require asymmetric effective padding, so we use
+    the closest symmetric native convolution and make the one-sided shape
+    adjustment explicitly. Applying this identically to the dot-product and
+    patch-norm maps preserves the YAT calculation at every retained position.
+    """
+    slices = [slice(None)]
+    for current, target in zip(x.shape[1:-1], target_spatial):
+        slices.append(slice(0, min(int(current), int(target))))
+    slices.append(slice(None))
+    x = x[tuple(slices)]
+
+    pad_width = [(0, 0)] * x.ndim
+    needs_padding = False
+    for axis, target in enumerate(target_spatial, start=1):
+        extra = max(int(target) - int(x.shape[axis]), 0)
+        pad_width[axis] = (0, extra)
+        needs_padding = needs_padding or extra > 0
+    return mx.pad(x, pad_width) if needs_padding else x
 
 
 def _take_slice(x: mx.array, axis: int, start: int, stop: int) -> mx.array:
@@ -546,17 +575,31 @@ class _YatConvTransposeBase(nn.Module):
             inputs = inputs.astype(self.dtype)
         self._maybe_build(inputs)
 
-        # MLX's conv_transpose*d takes integer / tuple padding. For "same"
-        # we approximate symmetric padding from the kernel size — works
-        # exactly for odd kernels with stride 1, slightly off otherwise.
+        # ``SAME`` is defined per axis as
+        # ``output = input * stride + output_padding``. MLX only accepts
+        # symmetric padding, while even effective kernels and some stride /
+        # dilation combinations require asymmetric padding. We therefore run
+        # with the closest symmetric padding and crop/pad the high side below.
+        same_target: Optional[Tuple[int, ...]] = None
         if isinstance(self.padding, str):
             mode = self.padding.upper()
             if mode == "VALID":
                 pad_arg: Union[int, Tuple[int, ...]] = 0
             elif mode == "SAME":
-                pad_arg = tuple(
-                    ((k - 1) * d) // 2
+                effective_kernel = tuple(
+                    (k - 1) * d + 1
                     for k, d in zip(self.kernel_size, self.dilation_rate)
+                )
+                native_padding = tuple(
+                    max(effective - stride, 0) // 2
+                    for effective, stride in zip(effective_kernel, self.strides)
+                )
+                pad_arg = native_padding if self._ndim > 1 else native_padding[0]
+                same_target = tuple(
+                    int(size) * stride + out_pad
+                    for size, stride, out_pad in zip(
+                        inputs.shape[1:-1], self.strides, self.output_padding
+                    )
                 )
             else:
                 raise ValueError(f"unknown padding mode: {self.padding!r}")
@@ -599,6 +642,11 @@ class _YatConvTransposeBase(nn.Module):
             dilation=self.dilation_rate if self._ndim > 1 else self.dilation_rate[0],
             output_padding=self.output_padding if self._ndim > 1 else self.output_padding[0],
         )
+        if same_target is not None:
+            dot_prod_map = _resize_spatial_high(dot_prod_map, same_target)
+            patch_sq_filter_map = _resize_spatial_high(
+                patch_sq_filter_map, same_target
+            )
         # All filter channels carry the same sum (the kernel was all ones)
         # — take channel 0 and broadcast.
         patch_sq_map_one = patch_sq_filter_map[..., :1]

@@ -241,7 +241,9 @@ class YatNMN(nn.Module):
             else:
                 alpha_arr = mx.ones((1,), dtype=self.dtype)
             if self.learnable_epsilon and getattr(self, "epsilon_param", None) is not None:
-                eps_val = float(nn.softplus(self.epsilon_param)[0])
+                # Keep epsilon as an MLX array. Converting it to ``float``
+                # detaches epsilon_param from autodiff and breaks mx.compile.
+                eps_val = nn.softplus(self.epsilon_param)
             else:
                 eps_val = self.epsilon
             return fused_yat_score(inputs, kernel, bias=bias, alpha=alpha_arr,

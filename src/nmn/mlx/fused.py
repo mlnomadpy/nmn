@@ -15,7 +15,7 @@ Use via the convenience helper :func:`fused_yat_score`, or pass
 """
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Union
 
 import mlx.core as mx
 
@@ -176,7 +176,7 @@ def fused_yat_score(
     w: mx.array,
     bias: Optional[mx.array] = None,
     alpha: Optional[mx.array] = None,
-    epsilon: float = 1e-5,
+    epsilon: Union[float, mx.array] = 1e-5,
 ) -> mx.array:
     """Convenience wrapper that fills in defaults and flattens batch dims.
 
@@ -187,7 +187,8 @@ def fused_yat_score(
             :class:`nmn.mlx.YatNMN.kernel`.
         bias: Optional ``(out_features,)``; defaults to all zeros.
         alpha: Optional scalar (or 1-element array); defaults to 1.0.
-        epsilon: Stability constant.
+        epsilon: Stability constant. May be a Python scalar or a scalar /
+            one-element MLX array. Array inputs are kept in the autodiff graph.
 
     Returns:
         ``(..., out_features)``.
@@ -207,7 +208,18 @@ def fused_yat_score(
         alpha = mx.ones((1,), dtype=x.dtype)
     elif alpha.ndim == 0:
         alpha = mx.reshape(alpha, (1,))
-    eps_arr = mx.array([epsilon], dtype=x.dtype)
+    # Do not unconditionally reconstruct epsilon with ``mx.array``: doing so
+    # detaches a learnable epsilon from the graph (and fails under tracing).
+    # Reshape/cast are differentiable MLX operations, so gradients from the
+    # custom VJP continue through softplus to ``epsilon_param``.
+    if hasattr(epsilon, "shape"):
+        if epsilon.size != 1:
+            raise ValueError(
+                f"epsilon must be scalar or have one element, got shape {epsilon.shape}"
+            )
+        eps_arr = mx.reshape(epsilon, (1,)).astype(x.dtype)
+    else:
+        eps_arr = mx.array([epsilon], dtype=x.dtype)
 
     out_flat = _fused_yat_core(flat_x, w, bias, alpha, eps_arr)
     return mx.reshape(out_flat, leading + (out_features,))
