@@ -128,7 +128,7 @@ def stable_yat_ratio(dot_product, distance_sq, epsilon, output_dtype=None):
     return saturating_downcast(ratio, output_dtype)
 
 
-def yat_score(layer, dot_prod_map, distance_sq_map):
+def yat_score(layer, dot_prod_map, distance_sq_map, data_format=None):
     """Apply bias / epsilon / YAT-divide / alpha to a raw conv output.
 
     Returns ``(dot_prod_map + bias) ** 2 / (distance_sq_map + eps) * alpha``.
@@ -141,16 +141,17 @@ def yat_score(layer, dot_prod_map, distance_sq_map):
       effective epsilon (softplus-of-raw or constant).
     * ``use_alpha``, ``alpha`` — for the optional alpha multiplier.
 
-    `dot_prod_map` and `distance_sq_map` must already be in the layer's
-    output layout (channels_first or channels_last).
+    `dot_prod_map` and `distance_sq_map` must already be in `data_format`, which
+    defaults to the layer's public output layout.
     """
+    data_format = layer.data_format if data_format is None else data_format
     # Add bias before squaring (constant or learnable; reshape for channels_first).
     if layer.use_bias:
         if layer._constant_bias_value is not None:
             dot_prod_map = dot_prod_map + layer._constant_bias_value
         else:
             bias = reduction_safe_upcast(layer.bias)
-            if layer.data_format == "channels_first":
+            if data_format == "channels_first":
                 bias_shape = (1, -1) + (1,) * len(layer.kernel_size)
                 bias = ops.reshape(bias, bias_shape)
             dot_prod_map = ops.add(dot_prod_map, bias)

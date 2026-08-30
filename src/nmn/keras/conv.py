@@ -4,7 +4,7 @@ import math
 import threading
 import weakref
 
-from keras.src import activations, constraints, initializers, regularizers
+from keras.src import constraints, initializers, regularizers
 from keras.src import ops
 from keras.src.api_export import keras_export
 from keras.src.backend import backend, standardize_dtype
@@ -153,9 +153,47 @@ def _conv_transpose_output_shape(layer, input_shape):
             layer.filters,
             strides=tuple(layer.strides),
             padding=layer.padding,
+            output_padding=layer.output_padding,
             data_format=layer.data_format or "channels_last",
             dilation_rate=tuple(layer.dilation_rate),
         )
+    )
+
+
+def _standardize_output_padding(output_padding, rank):
+    if output_padding is None:
+        return None
+    if isinstance(output_padding, int):
+        return (output_padding,) * rank
+    output_padding = tuple(output_padding)
+    if len(output_padding) != rank:
+        raise ValueError(
+            f"output_padding must have {rank} values, got {output_padding}"
+        )
+    return output_padding
+
+
+def _to_channels_last(value, data_format):
+    """Move a public channels-first tensor to TensorFlow's CPU-safe layout."""
+    if data_format != "channels_first":
+        return value
+    rank = len(value.shape)
+    return ops.transpose(value, (0,) + tuple(range(2, rank)) + (1,))
+
+
+def _from_channels_last(value, data_format):
+    """Restore a CPU-safe channels-last result to the public layout."""
+    if data_format != "channels_first":
+        return value
+    rank = len(value.shape)
+    return ops.transpose(value, (0, rank - 1) + tuple(range(1, rank - 1)))
+
+
+def _channels_last_yat_score(layer, dot_prod_map, distance_sq_map):
+    """Apply the complete CPU-safe YAT tail, then restore public layout."""
+    return _from_channels_last(
+        yat_score(layer, dot_prod_map, distance_sq_map, data_format="channels_last"),
+        layer.data_format,
     )
 
 
@@ -451,6 +489,7 @@ class YatConv1D(_KernelBankSerializationMixin, Layer):
 
         inputs = reduction_safe_upcast(inputs)
         kernel = reduction_safe_upcast(kernel)
+        inputs = _to_channels_last(inputs, self.data_format)
 
         # DropConnect: random kernel mask during training
         if self.use_dropconnect and training and self.drop_rate > 0.0:
@@ -475,10 +514,7 @@ class YatConv1D(_KernelBankSerializationMixin, Layer):
         conv_padding = self.padding
         if self.padding == "causal":
             left_pad = self.dilation_rate[0] * (self.kernel_size[0] - 1)
-            if self.data_format == "channels_first":
-                pad_width = ((0, 0), (0, 0), (left_pad, 0))
-            else:
-                pad_width = ((0, 0), (left_pad, 0), (0, 0))
+            pad_width = ((0, 0), (left_pad, 0), (0, 0))
             conv_inputs = ops.pad(inputs, pad_width)
             conv_padding = "valid"
 
@@ -488,7 +524,7 @@ class YatConv1D(_KernelBankSerializationMixin, Layer):
             kernel,
             strides=self.strides,
             padding=conv_padding,
-            data_format=self.data_format,
+            data_format="channels_last",
             dilation_rate=self.dilation_rate,
         )
 
@@ -508,16 +544,15 @@ class YatConv1D(_KernelBankSerializationMixin, Layer):
             ones_kernel,
             strides=self.strides,
             padding=conv_padding,
-            data_format=self.data_format,
+            data_format="channels_last",
             dilation_rate=self.dilation_rate,
         )
 
         # Handle grouped convolution
-        channel_axis = 1 if self.data_format == "channels_first" else -1
         patch_sq_sum_map = ops.repeat(
             patch_sq_sum_map_raw,
             self.filters // self.groups,
-            axis=channel_axis,
+            axis=-1,
         )
 
         # Compute kernel squared sum per filter (1.0 if normalized)
@@ -529,14 +564,13 @@ class YatConv1D(_KernelBankSerializationMixin, Layer):
             )
 
         # Reshape for broadcasting
-        if self.data_format == "channels_first":
-            kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, -1, 1))
-        else:
-            kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, -1))
+        kernel_sq_sum_reshaped = ops.reshape(
+            kernel_sq_sum_per_filter, (1, 1, -1)
+        )
 
         # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
-        return yat_score(self, dot_prod_map, distance_sq_map)
+        return _channels_last_yat_score(self, dot_prod_map, distance_sq_map)
 
     def compute_output_shape(self, input_shape):
         return _conv_output_shape(self, input_shape)
@@ -802,6 +836,7 @@ class YatConv2D(_KernelBankSerializationMixin, Layer):
 
         inputs = reduction_safe_upcast(inputs)
         kernel = reduction_safe_upcast(kernel)
+        inputs = _to_channels_last(inputs, self.data_format)
 
         # DropConnect: random kernel mask during training
         if self.use_dropconnect and training and self.drop_rate > 0.0:
@@ -825,7 +860,7 @@ class YatConv2D(_KernelBankSerializationMixin, Layer):
             kernel,
             strides=self.strides,
             padding=self.padding,
-            data_format=self.data_format,
+            data_format="channels_last",
             dilation_rate=self.dilation_rate,
         )
 
@@ -845,16 +880,15 @@ class YatConv2D(_KernelBankSerializationMixin, Layer):
             ones_kernel,
             strides=self.strides,
             padding=self.padding,
-            data_format=self.data_format,
+            data_format="channels_last",
             dilation_rate=self.dilation_rate,
         )
 
         # Handle grouped convolution
-        channel_axis = 1 if self.data_format == "channels_first" else -1
         patch_sq_sum_map = ops.repeat(
             patch_sq_sum_map_raw,
             self.filters // self.groups,
-            axis=channel_axis,
+            axis=-1,
         )
 
         # Compute kernel squared sum per filter (1.0 if normalized)
@@ -866,14 +900,13 @@ class YatConv2D(_KernelBankSerializationMixin, Layer):
             )
 
         # Reshape for broadcasting
-        if self.data_format == "channels_first":
-            kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, -1, 1, 1))
-        else:
-            kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, 1, -1))
+        kernel_sq_sum_reshaped = ops.reshape(
+            kernel_sq_sum_per_filter, (1, 1, 1, -1)
+        )
 
         # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
-        return yat_score(self, dot_prod_map, distance_sq_map)
+        return _channels_last_yat_score(self, dot_prod_map, distance_sq_map)
 
     def compute_output_shape(self, input_shape):
         return _conv_output_shape(self, input_shape)
@@ -1106,6 +1139,7 @@ class YatConv3D(_KernelBankSerializationMixin, Layer):
 
         inputs = reduction_safe_upcast(inputs)
         kernel = reduction_safe_upcast(kernel)
+        inputs = _to_channels_last(inputs, self.data_format)
 
         # DropConnect: random kernel mask during training
         if self.use_dropconnect and training and self.drop_rate > 0.0:
@@ -1129,7 +1163,7 @@ class YatConv3D(_KernelBankSerializationMixin, Layer):
             kernel,
             strides=self.strides,
             padding=self.padding,
-            data_format=self.data_format,
+            data_format="channels_last",
             dilation_rate=self.dilation_rate,
         )
 
@@ -1149,16 +1183,15 @@ class YatConv3D(_KernelBankSerializationMixin, Layer):
             ones_kernel,
             strides=self.strides,
             padding=self.padding,
-            data_format=self.data_format,
+            data_format="channels_last",
             dilation_rate=self.dilation_rate,
         )
 
         # Handle grouped convolution
-        channel_axis = 1 if self.data_format == "channels_first" else -1
         patch_sq_sum_map = ops.repeat(
             patch_sq_sum_map_raw,
             self.filters // self.groups,
-            axis=channel_axis,
+            axis=-1,
         )
 
         # Compute kernel squared sum per filter (1.0 if normalized)
@@ -1170,14 +1203,13 @@ class YatConv3D(_KernelBankSerializationMixin, Layer):
             )
 
         # Reshape for broadcasting
-        if self.data_format == "channels_first":
-            kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, -1, 1, 1, 1))
-        else:
-            kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, 1, 1, -1))
+        kernel_sq_sum_reshaped = ops.reshape(
+            kernel_sq_sum_per_filter, (1, 1, 1, 1, -1)
+        )
 
         # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
-        return yat_score(self, dot_prod_map, distance_sq_map)
+        return _channels_last_yat_score(self, dot_prod_map, distance_sq_map)
 
     def compute_output_shape(self, input_shape):
         return _conv_output_shape(self, input_shape)
@@ -1232,6 +1264,8 @@ class YatConvTranspose1D(_KernelBankSerializationMixin, Layer):
         padding: one of `"valid"` or `"same"` (case-insensitive).
         data_format: A string, one of `channels_last` or `channels_first`.
         dilation_rate: an integer or tuple/list of a single integer.
+        output_padding: Optional integer or tuple/list of a single integer
+            specifying the added output size along the spatial dimension.
         use_bias: Boolean, whether the layer uses a bias vector.
         use_alpha: Boolean, whether to use alpha scaling. Defaults to `True`.
         epsilon: Float, small constant for numerical stability.
@@ -1272,6 +1306,7 @@ class YatConvTranspose1D(_KernelBankSerializationMixin, Layer):
         activity_regularizer=None,
         kernel_constraint=None,
         bias_constraint=None,
+        output_padding=None,
         **kwargs,
     ):
         super().__init__(activity_regularizer=activity_regularizer, **kwargs)
@@ -1281,6 +1316,7 @@ class YatConvTranspose1D(_KernelBankSerializationMixin, Layer):
         self.padding = padding.lower()
         self.data_format = data_format
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate,)
+        self.output_padding = _standardize_output_padding(output_padding, 1)
         self.use_alpha = use_alpha
         if epsilon <= 0:
             raise ValueError(f"epsilon must be positive, got {epsilon}")
@@ -1390,6 +1426,7 @@ class YatConvTranspose1D(_KernelBankSerializationMixin, Layer):
 
         inputs = reduction_safe_upcast(inputs)
         kernel = reduction_safe_upcast(kernel)
+        inputs = _to_channels_last(inputs, self.data_format)
 
         # DropConnect: random kernel mask during training
         if self.use_dropconnect and training and self.drop_rate > 0.0:
@@ -1414,7 +1451,8 @@ class YatConvTranspose1D(_KernelBankSerializationMixin, Layer):
             kernel,
             strides=self.strides,
             padding=self.padding,
-            data_format=self.data_format,
+            output_padding=self.output_padding,
+            data_format="channels_last",
             dilation_rate=self.dilation_rate,
         )
 
@@ -1430,12 +1468,12 @@ class YatConvTranspose1D(_KernelBankSerializationMixin, Layer):
             ones_kernel,
             strides=self.strides,
             padding=self.padding,
-            data_format=self.data_format,
+            output_padding=self.output_padding,
+            data_format="channels_last",
             dilation_rate=self.dilation_rate,
         )
 
-        channel_axis = 1 if self.data_format == "channels_first" else -1
-        patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=channel_axis)
+        patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
 
         # Compute kernel squared sum per filter (1.0 if normalized)
         if self.weight_normalized:
@@ -1447,14 +1485,13 @@ class YatConvTranspose1D(_KernelBankSerializationMixin, Layer):
             reduce_axes = tuple(i for i in range(kernel.ndim) if i != filter_axis)
             kernel_sq_sum_per_filter = ops.sum(kernel ** 2, axis=reduce_axes)
 
-        if self.data_format == "channels_first":
-            kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, -1, 1))
-        else:
-            kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, -1))
+        kernel_sq_sum_reshaped = ops.reshape(
+            kernel_sq_sum_per_filter, (1, 1, -1)
+        )
 
         # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
-        return yat_score(self, dot_prod_map, distance_sq_map)
+        return _channels_last_yat_score(self, dot_prod_map, distance_sq_map)
 
     def compute_output_shape(self, input_shape):
         return _conv_transpose_output_shape(self, input_shape)
@@ -1468,6 +1505,7 @@ class YatConvTranspose1D(_KernelBankSerializationMixin, Layer):
             "padding": self.padding,
             "data_format": self.data_format,
             "dilation_rate": self.dilation_rate,
+            "output_padding": self.output_padding,
             "use_bias": self.use_bias,
             "constant_bias": self.constant_bias,
             "use_alpha": self.use_alpha,
@@ -1508,6 +1546,8 @@ class YatConvTranspose2D(_KernelBankSerializationMixin, Layer):
         padding: one of `"valid"` or `"same"` (case-insensitive).
         data_format: A string, one of `channels_last` or `channels_first`.
         dilation_rate: an integer or tuple/list of 2 integers.
+        output_padding: Optional integer or tuple/list of 2 integers specifying
+            the added output size along each spatial dimension.
         use_bias: Boolean, whether the layer uses a bias vector.
         use_alpha: Boolean, whether to use alpha scaling. Defaults to `True`.
         epsilon: Float, small constant for numerical stability.
@@ -1548,6 +1588,7 @@ class YatConvTranspose2D(_KernelBankSerializationMixin, Layer):
         activity_regularizer=None,
         kernel_constraint=None,
         bias_constraint=None,
+        output_padding=None,
         **kwargs,
     ):
         super().__init__(activity_regularizer=activity_regularizer, **kwargs)
@@ -1557,6 +1598,7 @@ class YatConvTranspose2D(_KernelBankSerializationMixin, Layer):
         self.padding = padding.lower()
         self.data_format = data_format
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate)
+        self.output_padding = _standardize_output_padding(output_padding, 2)
         self.use_alpha = use_alpha
         if epsilon <= 0:
             raise ValueError(f"epsilon must be positive, got {epsilon}")
@@ -1666,6 +1708,7 @@ class YatConvTranspose2D(_KernelBankSerializationMixin, Layer):
 
         inputs = reduction_safe_upcast(inputs)
         kernel = reduction_safe_upcast(kernel)
+        inputs = _to_channels_last(inputs, self.data_format)
 
         # DropConnect: random kernel mask during training
         if self.use_dropconnect and training and self.drop_rate > 0.0:
@@ -1690,7 +1733,8 @@ class YatConvTranspose2D(_KernelBankSerializationMixin, Layer):
             kernel,
             strides=self.strides,
             padding=self.padding,
-            data_format=self.data_format,
+            output_padding=self.output_padding,
+            data_format="channels_last",
             dilation_rate=self.dilation_rate,
         )
 
@@ -1706,12 +1750,12 @@ class YatConvTranspose2D(_KernelBankSerializationMixin, Layer):
             ones_kernel,
             strides=self.strides,
             padding=self.padding,
-            data_format=self.data_format,
+            output_padding=self.output_padding,
+            data_format="channels_last",
             dilation_rate=self.dilation_rate,
         )
 
-        channel_axis = 1 if self.data_format == "channels_first" else -1
-        patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=channel_axis)
+        patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
 
         # Compute kernel squared sum per filter (1.0 if normalized)
         if self.weight_normalized:
@@ -1723,14 +1767,13 @@ class YatConvTranspose2D(_KernelBankSerializationMixin, Layer):
             reduce_axes = tuple(i for i in range(kernel.ndim) if i != filter_axis)
             kernel_sq_sum_per_filter = ops.sum(kernel ** 2, axis=reduce_axes)
 
-        if self.data_format == "channels_first":
-            kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, -1, 1, 1))
-        else:
-            kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, 1, -1))
+        kernel_sq_sum_reshaped = ops.reshape(
+            kernel_sq_sum_per_filter, (1, 1, 1, -1)
+        )
 
         # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
-        return yat_score(self, dot_prod_map, distance_sq_map)
+        return _channels_last_yat_score(self, dot_prod_map, distance_sq_map)
 
     def compute_output_shape(self, input_shape):
         return _conv_transpose_output_shape(self, input_shape)
@@ -1744,6 +1787,7 @@ class YatConvTranspose2D(_KernelBankSerializationMixin, Layer):
             "padding": self.padding,
             "data_format": self.data_format,
             "dilation_rate": self.dilation_rate,
+            "output_padding": self.output_padding,
             "use_bias": self.use_bias,
             "constant_bias": self.constant_bias,
             "use_alpha": self.use_alpha,
@@ -1784,6 +1828,8 @@ class YatConvTranspose3D(_KernelBankSerializationMixin, Layer):
         padding: one of `"valid"` or `"same"` (case-insensitive).
         data_format: A string, one of `channels_last` or `channels_first`.
         dilation_rate: an integer or tuple/list of 3 integers.
+        output_padding: Optional integer or tuple/list of 3 integers specifying
+            the added output size along each spatial dimension.
         use_bias: Boolean, whether the layer uses a bias vector.
         use_alpha: Boolean, whether to use alpha scaling. Defaults to `True`.
         epsilon: Float, small constant for numerical stability.
@@ -1824,6 +1870,7 @@ class YatConvTranspose3D(_KernelBankSerializationMixin, Layer):
         activity_regularizer=None,
         kernel_constraint=None,
         bias_constraint=None,
+        output_padding=None,
         **kwargs,
     ):
         super().__init__(activity_regularizer=activity_regularizer, **kwargs)
@@ -1833,6 +1880,7 @@ class YatConvTranspose3D(_KernelBankSerializationMixin, Layer):
         self.padding = padding.lower()
         self.data_format = data_format
         self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate, dilation_rate)
+        self.output_padding = _standardize_output_padding(output_padding, 3)
         self.use_alpha = use_alpha
         if epsilon <= 0:
             raise ValueError(f"epsilon must be positive, got {epsilon}")
@@ -1942,6 +1990,7 @@ class YatConvTranspose3D(_KernelBankSerializationMixin, Layer):
 
         inputs = reduction_safe_upcast(inputs)
         kernel = reduction_safe_upcast(kernel)
+        inputs = _to_channels_last(inputs, self.data_format)
 
         # DropConnect: random kernel mask during training
         if self.use_dropconnect and training and self.drop_rate > 0.0:
@@ -1966,7 +2015,8 @@ class YatConvTranspose3D(_KernelBankSerializationMixin, Layer):
             kernel,
             strides=self.strides,
             padding=self.padding,
-            data_format=self.data_format,
+            output_padding=self.output_padding,
+            data_format="channels_last",
             dilation_rate=self.dilation_rate,
         )
 
@@ -1982,12 +2032,12 @@ class YatConvTranspose3D(_KernelBankSerializationMixin, Layer):
             ones_kernel,
             strides=self.strides,
             padding=self.padding,
-            data_format=self.data_format,
+            output_padding=self.output_padding,
+            data_format="channels_last",
             dilation_rate=self.dilation_rate,
         )
 
-        channel_axis = 1 if self.data_format == "channels_first" else -1
-        patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=channel_axis)
+        patch_sq_sum_map = ops.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
 
         # Compute kernel squared sum per filter (1.0 if normalized).
         # Transpose conv kernel shape: (*kernel_size, filters, in_dim)
@@ -1998,14 +2048,13 @@ class YatConvTranspose3D(_KernelBankSerializationMixin, Layer):
             reduce_axes = tuple(i for i in range(kernel.ndim) if i != filter_axis)
             kernel_sq_sum_per_filter = ops.sum(kernel ** 2, axis=reduce_axes)
 
-        if self.data_format == "channels_first":
-            kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, -1, 1, 1, 1))
-        else:
-            kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, 1, 1, -1))
+        kernel_sq_sum_reshaped = ops.reshape(
+            kernel_sq_sum_per_filter, (1, 1, 1, 1, -1)
+        )
 
         # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
-        return yat_score(self, dot_prod_map, distance_sq_map)
+        return _channels_last_yat_score(self, dot_prod_map, distance_sq_map)
 
     def compute_output_shape(self, input_shape):
         return _conv_transpose_output_shape(self, input_shape)
@@ -2019,6 +2068,7 @@ class YatConvTranspose3D(_KernelBankSerializationMixin, Layer):
             "padding": self.padding,
             "data_format": self.data_format,
             "dilation_rate": self.dilation_rate,
+            "output_padding": self.output_padding,
             "use_bias": self.use_bias,
             "constant_bias": self.constant_bias,
             "use_alpha": self.use_alpha,
