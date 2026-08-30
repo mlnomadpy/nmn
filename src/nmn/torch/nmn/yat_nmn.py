@@ -427,7 +427,6 @@ class YatNMN(nn.Module):
             distances = (inputs_squared_sum + kernel_squared_sum - 2 * dot_for_dist).clamp(min=0.0)
 
         # Resolve effective epsilon (learnable via softplus, or constant)
-        output_dtype = y.dtype
         if self.learnable_epsilon and self.epsilon_param is not None:
             score_dtype = torch.promote_types(distances.dtype, self.epsilon_param.dtype)
             eps = F.softplus(self.epsilon_param.to(score_dtype))

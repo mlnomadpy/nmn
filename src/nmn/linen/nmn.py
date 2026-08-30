@@ -255,7 +255,6 @@ class YatNMN(Module):
             y += jnp.reshape(bias, (1,) * (y.ndim - 1) + (-1,))
 
         # Resolve effective epsilon (learnable via softplus, or constant)
-        output_dtype = y.dtype
         if epsilon_param is not None:
             score_dtype = jnp.promote_types(y.dtype, epsilon_param.dtype)
             eps = jax.nn.softplus(epsilon_param.astype(score_dtype))
