@@ -307,7 +307,18 @@ class _FakeProbeProcess:
         return self._stdout, self._stderr
 
 
+def _patch_fake_windows_job(monkeypatch):
+    if os.name == "nt":
+        monkeypatch.setattr(
+            _isolated_backend, "_assign_windows_kill_job", lambda process: None
+        )
+        monkeypatch.setattr(
+            _isolated_backend, "_close_windows_kill_job", lambda process: True
+        )
+
+
 def test_optional_backend_probe_success(monkeypatch):
+    _patch_fake_windows_job(monkeypatch)
     process = _FakeProbeProcess(
         stdout=_isolated_backend._PROBE_MARKER_BYTES + b"\n"
     )
@@ -324,10 +335,10 @@ def test_optional_backend_probe_success(monkeypatch):
     )
     command, kwargs = calls[0]
     assert command[:3] == [sys.executable, "-c", _isolated_backend._PROBE_SCRIPT]
-    assert json.loads(command[3]) == {
-        "modules": ["mlx.core"],
-        "readiness": "mlx",
-    }
+    request = json.loads(command[3])
+    assert request["modules"] == ["mlx.core"]
+    assert request["readiness"] == "mlx"
+    assert ("gate" in request) == (os.name == "nt")
     assert kwargs["stdout"] is subprocess.PIPE
     assert kwargs["stderr"] is subprocess.PIPE
     if os.name == "posix":
@@ -337,6 +348,7 @@ def test_optional_backend_probe_success(monkeypatch):
 
 
 def test_optional_backend_probe_handles_none_and_malformed_output(monkeypatch):
+    _patch_fake_windows_job(monkeypatch)
     processes = iter([
         _FakeProbeProcess(stdout=None, stderr=None),
         _FakeProbeProcess(stdout=_isolated_backend._PROBE_MARKER),
@@ -356,6 +368,7 @@ def test_optional_backend_probe_handles_none_and_malformed_output(monkeypatch):
 
 
 def test_optional_backend_probe_python_failure_is_unavailable(monkeypatch):
+    _patch_fake_windows_job(monkeypatch)
     monkeypatch.setattr(
         _isolated_backend.subprocess,
         "Popen",
@@ -371,6 +384,7 @@ def test_optional_backend_probe_python_failure_is_unavailable(monkeypatch):
 def test_optional_backend_probe_native_failure_is_unavailable(
     monkeypatch, returncode
 ):
+    _patch_fake_windows_job(monkeypatch)
     monkeypatch.setattr(
         _isolated_backend.subprocess,
         "Popen",
@@ -471,6 +485,66 @@ def test_optional_backend_probe_timeout_kills_descendant_group(
         time.sleep(0.05)
     else:
         pytest.fail(f"probe descendant {descendant_pid} remained alive")
+
+
+def _windows_pid_is_running(pid):
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, wintypes.LPDWORD]
+    kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    handle = kernel32.OpenProcess(0x1000, False, pid)
+    if not handle:
+        return False
+    try:
+        exit_code = wintypes.DWORD()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+            return False
+        return exit_code.value == 259
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows Job Object assertion")
+@pytest.mark.parametrize("termination", ["timeout", "nonzero", "abort"])
+def test_optional_backend_probe_windows_job_kills_descendants(
+    tmp_path, monkeypatch, termination
+):
+    pid_file = tmp_path / f"windows-{termination}.pid"
+    ending = {
+        "timeout": "time.sleep(60)",
+        "nonzero": "raise SystemExit(23)",
+        "abort": "os.abort()",
+    }[termination]
+    (tmp_path / "windows_descendant_backend.py").write_text(
+        "import os, pathlib, subprocess, sys, time\n"
+        "child = subprocess.Popen([sys.executable, '-c', "
+        "'import time; time.sleep(60)'], stdout=subprocess.DEVNULL, "
+        "stderr=subprocess.DEVNULL)\n"
+        f"pathlib.Path({str(pid_file)!r}).write_text(str(child.pid))\n"
+        f"{ending}\n",
+        encoding="utf-8",
+    )
+    _prepend_pythonpath(monkeypatch, tmp_path)
+    monkeypatch.setattr(_isolated_backend, "_PROBE_TIMEOUT_SECONDS", 1.0)
+    monkeypatch.setattr(_isolated_backend, "_PROBE_REAP_SECONDS", 0.5)
+
+    assert not _isolated_backend.isolated_import_succeeds(
+        ["windows_descendant_backend"]
+    )
+    descendant_pid = int(pid_file.read_text(encoding="utf-8"))
+    deadline = time.monotonic() + 3.0
+    while time.monotonic() < deadline:
+        if not _windows_pid_is_running(descendant_pid):
+            break
+        time.sleep(0.05)
+    else:
+        pytest.fail(f"job descendant {descendant_pid} remained alive")
 
 
 def test_doctor_probe_success_ignores_backend_output(monkeypatch):
