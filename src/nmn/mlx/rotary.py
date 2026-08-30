@@ -458,9 +458,9 @@ class RotaryYatAttention(nn.Module):
         out = mx.reshape(out, (B, L, self.embed_dim))
         if self.use_out_proj and getattr(self, "out_kernel", None) is not None:
             out = self._linear(out, self.out_kernel, getattr(self, "out_bias", None))
-        effective_mask = full_mask if self.decode and L > 1 else mask
+        effective_mask = full_mask if decode else mask
         if effective_mask is not None:
-            attention_k_len = cache_new if self.decode else K_len
+            attention_k_len = cache_new if decode else L
             effective_mask = mx.broadcast_to(
                 effective_mask.astype(mx.bool_),
                 (B, self.num_heads, L, attention_k_len),
