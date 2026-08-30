@@ -131,7 +131,37 @@ def test_dilation_aware_output_shape_matches_runtime(
     )
     x = keras.ops.ones(input_shape, dtype="float32")
 
-    assert tuple(layer(x).shape) == tuple(layer.compute_output_shape(input_shape))
+    is_transpose = layer_cls in (
+        YatConvTranspose1D,
+        YatConvTranspose2D,
+        YatConvTranspose3D,
+    )
+    effective_kernel = dilation_value * 2 + 1
+    if is_transpose:
+        expected_spatial = tuple(
+            size * stride_value
+            if padding == "same"
+            else (size - 1) * stride_value + effective_kernel
+            for size in input_shape[1:-1]
+        )
+    else:
+        expected_spatial = tuple(
+            (size + stride_value - 1) // stride_value
+            if padding == "same"
+            else (size - effective_kernel) // stride_value + 1
+            for size in input_shape[1:-1]
+        )
+    computed = tuple(layer.compute_output_shape(input_shape))
+    assert computed == (input_shape[0], *expected_spatial, 3)
+
+    # TensorFlow CPU does not implement dilated transposed convolution.  The
+    # canonical shape formula above remains backend-neutral; runtime parity is
+    # exercised for this case by the JAX and Torch clean-environment jobs.
+    tensorflow_cpu_limitation = (
+        BACKEND == "tensorflow" and is_transpose and dilation_value > 1
+    )
+    if not tensorflow_cpu_limitation:
+        assert tuple(layer(x).shape) == computed
 
     unknown = (None,) + (None,) * rank + (input_shape[-1],)
     expected = (None,) + (None,) * rank + (3,)
