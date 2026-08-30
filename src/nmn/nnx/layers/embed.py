@@ -16,6 +16,8 @@ from flax.typing import (
   PromoteDtypeFn,
 )
 
+from ._numerics import finite_cast, fp32_if_low_precision, inverse_softplus
+
 Array = jax.Array
 
 default_embed_init = initializers.variance_scaling(
@@ -146,8 +148,7 @@ class Embed(Module):
     self.learnable_epsilon = learnable_epsilon
     self.epsilon_param: nnx.Param[jax.Array] | None
     if learnable_epsilon:
-      raw_eps = jnp.log(jnp.exp(jnp.array(epsilon, dtype=param_dtype)) - 1.0)
-      self.epsilon_param = nnx.Param(raw_eps.reshape((1,)))
+      self.epsilon_param = nnx.Param(inverse_softplus(epsilon, param_dtype))
     else:
       self.epsilon_param = None
     self.spherical = spherical
@@ -210,12 +211,19 @@ class Embed(Module):
     # Spherical normalization (only if not using weight normalization)
     # weight_normalized only normalizes at init, doesn't maintain it during training
     if self.spherical:
-      query = query / jnp.linalg.norm(query, axis=-1, keepdims=True)
-      embedding = embedding / jnp.linalg.norm(embedding, axis=1, keepdims=True)
+      query_norm = jnp.linalg.norm(query.astype(jnp.float32), axis=-1, keepdims=True)
+      embedding_norm = jnp.linalg.norm(
+        embedding.astype(jnp.float32), axis=1, keepdims=True
+      )
+      tiny = jnp.finfo(jnp.float32).tiny
+      query = query / jnp.maximum(query_norm, tiny)
+      embedding = embedding / jnp.maximum(embedding_norm, tiny)
 
     query, embedding, alpha = self.promote_dtype(
       (query, embedding, alpha), dtype=self.dtype
     )
+    output_dtype = query.dtype
+    query, embedding, alpha = fp32_if_low_precision(query, embedding, alpha)
     
     # Compute dot product: query · embedding^T
     y = jnp.dot(query, embedding.T)
@@ -223,16 +231,19 @@ class Embed(Module):
     if self.spherical:
       # Spherical YAT: query and embedding are normalized
       # distances = ||query||² + ||embedding||² - 2(query · embedding) = 1 + 1 - 2(query · embedding) = 2 - 2(query · embedding)
-      distances = 2 - 2 * y
+      distances = jnp.maximum(2 - 2 * y, 0.0)
     else:
       # Compute squared Euclidean distance: ||query||² + ||embedding||² - 2(query · embedding)
       query_squared_sum = jnp.sum(query**2, axis=-1, keepdims=True)
       embedding_squared_sum = jnp.sum(embedding**2, axis=1, keepdims=True).T
-      distances = query_squared_sum + embedding_squared_sum - 2 * y
+      distances = jnp.maximum(
+        query_squared_sum + embedding_squared_sum - 2 * y, 0.0
+      )
 
     # Resolve effective epsilon (learnable via softplus, or constant)
     if self.learnable_epsilon and self.epsilon_param is not None:
-      eps = jax.nn.softplus(self.epsilon_param[...].astype(jnp.float32))
+      (raw_epsilon,) = fp32_if_low_precision(self.epsilon_param[...])
+      eps = jax.nn.softplus(raw_epsilon)
     else:
       eps = self.epsilon
 
@@ -247,4 +258,4 @@ class Embed(Module):
       # Learnable alpha scaling
       y = y * alpha
 
-    return y
+    return finite_cast(y, output_dtype)

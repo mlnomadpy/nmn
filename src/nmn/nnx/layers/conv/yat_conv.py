@@ -43,6 +43,7 @@ from .utils import (
     default_alpha_init,
     DEFAULT_CONSTANT_ALPHA,
 )
+from .._numerics import finite_cast, fp32_if_low_precision, inverse_softplus
 
 Array = jax.Array
 
@@ -156,6 +157,16 @@ class YatConv(Module):
         kernel_bank_id: str = "default",
         rngs: rnglib.Rngs,
     ):
+        if feature_group_count <= 0:
+            raise ValueError("feature_group_count must be positive")
+        if in_features % feature_group_count != 0:
+            raise ValueError(
+                "in_features must be a multiple of feature_group_count"
+            )
+        if out_features % feature_group_count != 0:
+            raise ValueError(
+                "out_features must be a multiple of feature_group_count"
+            )
         if isinstance(kernel_size, int):
             kernel_size = (kernel_size,)
         else:
@@ -287,8 +298,7 @@ class YatConv(Module):
         self.learnable_epsilon = learnable_epsilon
         self.epsilon_param: nnx.Param[jax.Array] | None
         if learnable_epsilon:
-            raw_eps = jnp.log(jnp.exp(jnp.array(epsilon, dtype=param_dtype)) - 1.0)
-            self.epsilon_param = nnx.Param(raw_eps.reshape((1,)))
+            self.epsilon_param = nnx.Param(inverse_softplus(epsilon, param_dtype))
         else:
             self.epsilon_param = None
         self.drop_rate = drop_rate
@@ -305,7 +315,7 @@ class YatConv(Module):
             self.kernel.value = kernel_val / (kernel_norm + 1e-8)
 
         if use_dropconnect:
-            self.dropconnect_key = rngs.params()
+            self.dropconnect_key = rngs.dropout.fork()
         else:
             self.dropconnect_key = None
 
@@ -382,7 +392,7 @@ class YatConv(Module):
         if self.use_dropconnect and not deterministic and self.drop_rate > 0.0:
             keep_prob = 1.0 - self.drop_rate
             mask = jax.random.bernoulli(
-                self.dropconnect_key, p=keep_prob, shape=kernel_val.shape
+                self.dropconnect_key(), p=keep_prob, shape=kernel_val.shape
             )
             kernel_val = (kernel_val * mask) / keep_prob
 
@@ -426,6 +436,10 @@ class YatConv(Module):
         inputs_flat = inputs_promoted
         kernel_val = kernel_promoted
         bias_val = bias_promoted
+        output_dtype = inputs_flat.dtype
+        inputs_flat, kernel_val, bias_val, alpha = fp32_if_low_precision(
+            inputs_flat, kernel_val, bias_val, alpha
+        )
 
         # Compute dot product via convolution
         dot_prod_map = self.conv_general_dilated(
@@ -445,7 +459,7 @@ class YatConv(Module):
         kernel_in_channels_for_sum_sq = self.kernel_shape[-2]
         kernel_for_patch_sq_sum_shape = self.kernel_size + (
             kernel_in_channels_for_sum_sq,
-            1,
+            self.feature_group_count,
         )
         kernel_for_patch_sq_sum = jnp.ones(
             kernel_for_patch_sq_sum_shape, dtype=kernel_val.dtype
@@ -495,12 +509,16 @@ class YatConv(Module):
 
         # Resolve effective epsilon (learnable via softplus, or constant)
         if self.learnable_epsilon and self.epsilon_param is not None:
-            eps = jax.nn.softplus(self.epsilon_param[...].astype(dot_prod_map.dtype))
+            (raw_epsilon,) = fp32_if_low_precision(self.epsilon_param[...])
+            eps = jax.nn.softplus(raw_epsilon)
         else:
             eps = self.epsilon
 
         # YAT formula: (x·W + b)² / (||x - W||² + ε)
-        distance_sq_map = patch_sq_sum_map + kernel_sq_sum_per_filter - 2 * dot_prod_raw
+        distance_sq_map = jnp.maximum(
+            patch_sq_sum_map + kernel_sq_sum_per_filter - 2 * dot_prod_raw,
+            0.0,
+        )
         y = dot_prod_map**2 / (distance_sq_map + eps)
 
         # Apply alpha scaling
@@ -511,10 +529,11 @@ class YatConv(Module):
             # Simple learnable alpha scaling
             y = y * alpha
 
+        y = finite_cast(y, output_dtype)
+
         # Reshape output if needed
         if num_batch_dimensions != 1:
             output_shape = input_batch_shape + y.shape[1:]
             y = jnp.reshape(y, output_shape)
 
         return y
-
