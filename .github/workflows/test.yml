@@ -297,11 +297,14 @@ jobs:
         tests/test_mlx/test_all_layers.py
         -v
         -k "fused_yat_score_executes_metal_kernel_on_gpu or
+        gpu_array_epsilon_all_vjps_compile_and_softplus_chain or
+        gpu_compiled_fused_module_lazy_epsilon_chain or
         fused_yat_array_epsilon_all_gradients_match_eager_and_compile or
         yat_nmn_fused_learnable_epsilon_gradient_parity or
         compiled_yat_nmn_preserves_softplus_epsilon_parameter_chain or
         conv_transpose_same_exact_shape_all_dimensions or
         conv_transpose1d_same_math_parity or
+        gpu_conv_transpose_same_multidim_forward_and_gradient_parity or
         conv_transpose_same_multidim_forward_and_gradient_parity"
 
     - name: Run full MLX suite

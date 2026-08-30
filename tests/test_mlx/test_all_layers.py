@@ -297,36 +297,40 @@ def test_conv_transpose1d_same_math_parity(kernel_size, stride, dilation):
     assert np.allclose(actual, expected, rtol=2e-5, atol=2e-6)
 
 
-@pytest.mark.parametrize(
-    "layer_cls,input_shape,kernel_size,strides,dilation,output_padding",
-    [
-        (
-            YatConvTranspose2D,
-            (1, 3, 2, 1),
-            (4, 3),
-            (2, 1),
-            (1, 2),
-            (1, 0),
-        ),
-        (
-            YatConvTranspose3D,
-            (1, 2, 2, 2, 1),
-            (3, 2, 2),
-            (1, 2, 2),
-            (1, 2, 1),
-            (0, 1, 1),
-        ),
-    ],
-)
-def test_conv_transpose_same_multidim_forward_and_gradient_parity(
-    layer_cls, input_shape, kernel_size, strides, dilation, output_padding
-):
-    """2D/3D mixed-axis SAME matches the explicit asymmetric definition.
+_SAME_MULTIDIM_CASES = [
+    (
+        YatConvTranspose2D,
+        (1, 3, 2, 1),
+        (4, 3),
+        (2, 1),
+        (1, 2),
+        (1, 0),
+    ),
+    (
+        YatConvTranspose3D,
+        (1, 2, 2, 2, 1),
+        (3, 2, 2),
+        (1, 2, 2),
+        (1, 2, 1),
+        (0, 1, 1),
+    ),
+]
 
-    Both cases combine odd and even kernels, non-unit stride/dilation, and
-    nonzero output padding. Input and kernel gradients are compared as well
-    as the complete forward tensor.
-    """
+
+def _assert_same_multidim_forward_and_gradient_parity(
+    layer_cls,
+    input_shape,
+    kernel_size,
+    strides,
+    dilation,
+    output_padding,
+    *,
+    forward_rtol,
+    forward_atol,
+    gradient_rtol,
+    gradient_atol,
+    require_gpu=False,
+):
     epsilon = 0.03
     layer = layer_cls(
         filters=2,
@@ -384,19 +388,86 @@ def test_conv_transpose_same_multidim_forward_and_gradient_parity(
     _, (expected_input_grad, expected_kernel_grad) = mx.value_and_grad(
         reference_loss, argnums=(0, 1)
     )(inputs, layer.kernel)
+    mx.eval(
+        actual,
+        expected,
+        actual_input_grad,
+        expected_input_grad,
+        layer_grads["kernel"],
+        expected_kernel_grad,
+    )
 
-    assert np.allclose(np.array(actual), np.array(expected), rtol=3e-5, atol=3e-6)
+    if require_gpu:
+        assert str(mx.default_device()) == "Device(gpu, 0)"
+    assert np.allclose(
+        np.array(actual),
+        np.array(expected),
+        rtol=forward_rtol,
+        atol=forward_atol,
+    )
     assert np.allclose(
         np.array(actual_input_grad),
         np.array(expected_input_grad),
-        rtol=8e-5,
-        atol=8e-6,
+        rtol=gradient_rtol,
+        atol=gradient_atol,
     )
     assert np.allclose(
         np.array(layer_grads["kernel"]),
         np.array(expected_kernel_grad),
-        rtol=8e-5,
-        atol=8e-6,
+        rtol=gradient_rtol,
+        atol=gradient_atol,
+    )
+
+
+@pytest.mark.parametrize(
+    "layer_cls,input_shape,kernel_size,strides,dilation,output_padding",
+    _SAME_MULTIDIM_CASES,
+)
+def test_conv_transpose_same_multidim_forward_and_gradient_parity(
+    layer_cls, input_shape, kernel_size, strides, dilation, output_padding
+):
+    """2D/3D mixed-axis SAME matches the explicit asymmetric definition."""
+    _assert_same_multidim_forward_and_gradient_parity(
+        layer_cls,
+        input_shape,
+        kernel_size,
+        strides,
+        dilation,
+        output_padding,
+        forward_rtol=3e-5,
+        forward_atol=3e-6,
+        gradient_rtol=8e-5,
+        gradient_atol=8e-6,
+    )
+
+
+@pytest.mark.parametrize(
+    "layer_cls,input_shape,kernel_size,strides,dilation,output_padding",
+    _SAME_MULTIDIM_CASES,
+)
+def test_gpu_conv_transpose_same_multidim_forward_and_gradient_parity(
+    mlx_gpu,
+    layer_cls,
+    input_shape,
+    kernel_size,
+    strides,
+    dilation,
+    output_padding,
+):
+    """Mixed-axis 2D/3D SAME output and gradients agree on Metal."""
+    del mlx_gpu
+    _assert_same_multidim_forward_and_gradient_parity(
+        layer_cls,
+        input_shape,
+        kernel_size,
+        strides,
+        dilation,
+        output_padding,
+        forward_rtol=3e-3,
+        forward_atol=3e-4,
+        gradient_rtol=6e-3,
+        gradient_atol=6e-4,
+        require_gpu=True,
     )
 
 

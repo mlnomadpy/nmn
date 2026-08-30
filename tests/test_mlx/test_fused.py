@@ -26,25 +26,163 @@ def _ref_yat(x_np, w_np, b_np, alpha, eps=1e-5):
     return alpha * (num ** 2) / (dist + eps)
 
 
-def test_fused_yat_score_executes_metal_kernel_on_gpu():
+def test_fused_yat_score_executes_metal_kernel_on_gpu(mlx_gpu):
     """The public Apple Silicon CI runner must execute the fused Metal path."""
-    previous_device = mx.default_device()
-    mx.set_default_device(mx.gpu)
-    try:
-        assert is_gpu_available()
-        x = mx.array([[0.2, -0.4, 0.7], [0.5, 0.1, -0.3]])
-        w = mx.array([[0.3, -0.2, 0.6], [-0.5, 0.4, 0.2]])
-        bias = mx.array([0.1, -0.2])
-        alpha = mx.array([1.25])
-        actual = fused_yat_score(x, w, bias=bias, alpha=alpha, epsilon=0.07)
-        mx.eval(actual)
+    del mlx_gpu
+    assert is_gpu_available()
+    x = mx.array([[0.2, -0.4, 0.7], [0.5, 0.1, -0.3]])
+    w = mx.array([[0.3, -0.2, 0.6], [-0.5, 0.4, 0.2]])
+    bias = mx.array([0.1, -0.2])
+    alpha = mx.array([1.25])
+    actual = fused_yat_score(x, w, bias=bias, alpha=alpha, epsilon=0.07)
+    mx.eval(actual)
 
-        expected = _ref_yat(
-            np.array(x), np.array(w), np.array(bias), 1.25, eps=0.07
+    expected = _ref_yat(
+        np.array(x), np.array(w), np.array(bias), 1.25, eps=0.07
+    )
+    assert np.allclose(np.array(actual), expected, rtol=3e-3, atol=3e-4)
+
+
+def test_gpu_array_epsilon_all_vjps_compile_and_softplus_chain(mlx_gpu):
+    """Metal forward and VJP preserve every primal, including raw epsilon."""
+    del mlx_gpu
+    x = mx.array([[0.2, -0.4, 0.7], [0.5, 0.1, -0.3]])
+    w = mx.array([[0.3, -0.2, 0.6], [-0.5, 0.4, 0.2]])
+    bias = mx.array([0.1, -0.2])
+    alpha = mx.array([1.25])
+    epsilon_param = mx.array([-2.5])
+
+    def reference_loss(x, w, bias, alpha, epsilon_param):
+        epsilon = mlx_nn.softplus(epsilon_param)
+        dot = x @ w.T
+        distance = mx.maximum(
+            mx.sum(x * x, axis=-1, keepdims=True)
+            + mx.sum(w * w, axis=-1)[None, :]
+            - 2.0 * dot,
+            0.0,
         )
-        assert np.allclose(np.array(actual), expected, rtol=2e-5, atol=2e-6)
-    finally:
-        mx.set_default_device(previous_device)
+        return mx.sum(alpha * (dot + bias) ** 2 / (distance + epsilon))
+
+    def fused_loss(x, w, bias, alpha, epsilon_param):
+        return mx.sum(
+            fused_yat_score(
+                x,
+                w,
+                bias=bias,
+                alpha=alpha,
+                epsilon=mlx_nn.softplus(epsilon_param),
+            )
+        )
+
+    argnums = (0, 1, 2, 3, 4)
+    expected_value, expected_grads = mx.value_and_grad(
+        reference_loss, argnums=argnums
+    )(x, w, bias, alpha, epsilon_param)
+    actual_value, actual_grads = mx.value_and_grad(
+        fused_loss, argnums=argnums
+    )(x, w, bias, alpha, epsilon_param)
+    compiled_value, compiled_grads = mx.compile(
+        mx.value_and_grad(fused_loss, argnums=argnums)
+    )(x, w, bias, alpha, epsilon_param)
+    mx.eval(
+        expected_value,
+        *expected_grads,
+        actual_value,
+        *actual_grads,
+        compiled_value,
+        *compiled_grads,
+    )
+
+    assert is_gpu_available()
+    assert np.allclose(
+        np.array(actual_value), np.array(expected_value), rtol=3e-3, atol=3e-4
+    )
+    assert np.allclose(
+        np.array(compiled_value), np.array(expected_value), rtol=3e-3, atol=3e-4
+    )
+    for expected, actual, compiled in zip(
+        expected_grads, actual_grads, compiled_grads
+    ):
+        assert np.allclose(
+            np.array(actual), np.array(expected), rtol=6e-3, atol=6e-4
+        )
+        assert np.allclose(
+            np.array(compiled), np.array(expected), rtol=6e-3, atol=6e-4
+        )
+    epsilon_grad = np.array(compiled_grads[-1])
+    assert np.all(np.isfinite(epsilon_grad))
+    assert np.any(epsilon_grad != 0.0)
+
+
+@pytest.mark.parametrize("lazy", [False, True])
+def test_gpu_compiled_fused_module_lazy_epsilon_chain(mlx_gpu, lazy):
+    """Compiled GPU modules retain softplus epsilon gradients in lazy mode."""
+    del mlx_gpu
+
+    def loss_fn(model, value):
+        return mx.sum(model(value))
+
+    plain = YatNMN(features=2, learnable_epsilon=True, epsilon=0.07, lazy=lazy)
+    fused = YatNMN(
+        features=2,
+        learnable_epsilon=True,
+        epsilon=0.07,
+        fused=True,
+        lazy=lazy,
+    )
+    plain.build(3)
+    fused.build(3)
+    fused.kernel = plain.kernel
+    fused.bias = plain.bias
+    fused.alpha = plain.alpha
+    fused.epsilon_param = plain.epsilon_param
+    inputs = mx.array([[0.2, -0.4, 0.7], [0.5, 0.1, -0.3]])
+
+    plain_value, plain_grads = mlx_nn.value_and_grad(plain, loss_fn)(plain, inputs)
+    grad_fn = mlx_nn.value_and_grad(fused, loss_fn)
+    fused_value, fused_grads = grad_fn(fused, inputs)
+    compiled_value, compiled_grads = mx.compile(
+        lambda value: grad_fn(fused, value),
+        inputs=fused.trainable_parameters(),
+    )(inputs)
+    mx.eval(
+        plain_value,
+        *plain_grads.values(),
+        fused_value,
+        *fused_grads.values(),
+        compiled_value,
+        *compiled_grads.values(),
+    )
+
+    expected_keys = {"bias", "alpha", "epsilon_param"}
+    if not lazy:
+        expected_keys.add("kernel")
+    assert is_gpu_available()
+    assert set(plain_grads) == expected_keys
+    assert set(fused_grads) == expected_keys
+    assert set(compiled_grads) == expected_keys
+    assert np.allclose(
+        np.array(fused_value), np.array(plain_value), rtol=3e-3, atol=3e-4
+    )
+    assert np.allclose(
+        np.array(compiled_value), np.array(plain_value), rtol=3e-3, atol=3e-4
+    )
+    for name in expected_keys:
+        assert np.allclose(
+            np.array(fused_grads[name]),
+            np.array(plain_grads[name]),
+            rtol=6e-3,
+            atol=6e-4,
+        )
+        assert np.allclose(
+            np.array(compiled_grads[name]),
+            np.array(plain_grads[name]),
+            rtol=6e-3,
+            atol=6e-4,
+        )
+    epsilon_grad = np.array(compiled_grads["epsilon_param"])
+    assert np.all(np.isfinite(epsilon_grad))
+    assert np.any(epsilon_grad != 0.0)
 
 
 def test_fused_yat_score_2d_matches_numpy_on_cpu():

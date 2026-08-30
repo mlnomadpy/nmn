@@ -33,3 +33,18 @@ def _force_cpu():
     mlx_core.set_default_device(mlx_core.cpu)
     yield
     mlx_core.set_default_device(prev)
+
+
+@pytest.fixture
+def mlx_gpu(_force_cpu):
+    """Override the CPU fixture for tests that must execute Metal kernels."""
+    assert mlx_core is not None
+    previous = mlx_core.default_device()
+    mlx_core.set_default_device(mlx_core.gpu)
+    assert str(mlx_core.default_device()) == "Device(gpu, 0)"
+    try:
+        yield mlx_core.gpu
+        # Catch tests that accidentally switch back to the CPU before teardown.
+        assert str(mlx_core.default_device()) == "Device(gpu, 0)"
+    finally:
+        mlx_core.set_default_device(previous)
