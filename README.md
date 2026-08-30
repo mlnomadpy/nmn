@@ -86,7 +86,7 @@ pip install nmn                   # the Yat layers, no framework deps
 pip install "nmn[torch]"          # + PyTorch
 pip install "nmn[nnx]"            # + Flax NNX (JAX)
 pip install "nmn[linen]"          # + Flax Linen (JAX)
-pip install "nmn[keras]"          # + Keras 3 / TensorFlow
+pip install "nmn[keras]"          # + Keras 3 (choose JAX, TF, or Torch separately)
 pip install "nmn[tf]"             # + TensorFlow
 pip install "nmn[mlx]"            # + MLX (Apple Silicon only)
 pip install "nmn[all]"            # everything except MLX (Linux/Windows safe)

@@ -7,6 +7,8 @@ keras = pytest.importorskip("keras")
 
 from nmn.keras.embed import YatEmbed
 
+to_numpy = keras.ops.convert_to_numpy
+
 
 class TestYatEmbed:
     def test_forward_shape(self):
@@ -41,7 +43,7 @@ class TestYatEmbed:
         embed = YatEmbed(num_embeddings=100, features=32)
         embed.build()
         query = np.random.randn(4, 32).astype(np.float32)
-        out = np.array(embed.attend(query))
+        out = to_numpy(embed.attend(query))
         assert not np.any(np.isnan(out))
         assert not np.any(np.isinf(out))
 
@@ -49,7 +51,7 @@ class TestYatEmbed:
         embed = YatEmbed(num_embeddings=100, features=32)
         embed.build()
         query = np.random.randn(4, 32).astype(np.float32)
-        out = np.array(embed.attend(query))
+        out = to_numpy(embed.attend(query))
         assert np.all(out >= 0)
 
     def test_constant_alpha(self):
@@ -57,7 +59,7 @@ class TestYatEmbed:
         embed.build()
         assert embed._constant_alpha_value == pytest.approx(1.4142135, abs=1e-5)
         query = np.random.randn(4, 16).astype(np.float32)
-        out = np.array(embed.attend(query))
+        out = to_numpy(embed.attend(query))
         assert not np.any(np.isnan(out))
 
     def test_no_alpha(self):
@@ -65,7 +67,7 @@ class TestYatEmbed:
         embed.build()
         assert embed.alpha is None
         query = np.random.randn(4, 16).astype(np.float32)
-        out = np.array(embed.attend(query))
+        out = to_numpy(embed.attend(query))
         assert not np.any(np.isnan(out))
 
     def test_spherical_mode(self):

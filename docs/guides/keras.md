@@ -3,7 +3,8 @@
 End-to-end walkthrough for using NMN with **Keras 3** (backend-agnostic: works on JAX, TensorFlow, or PyTorch backends).
 
 - **Module path**: `nmn.keras`
-- **Minimum versions**: Python 3.10+, Keras 3.x, TensorFlow ≥ 2.10
+- **Minimum versions**: Python 3.10+, Keras 3.x, plus a supported JAX,
+  TensorFlow, or PyTorch backend
 
 ---
 
@@ -11,6 +12,9 @@ End-to-end walkthrough for using NMN with **Keras 3** (backend-agnostic: works o
 
 ```bash
 pip install "nmn[keras]"
+# Then install one backend, for example:
+pip install jax                 # or tensorflow / torch
+export KERAS_BACKEND=jax        # set before importing keras
 ```
 
 Verify:
@@ -24,7 +28,7 @@ layer = YatNMN(units=64)
 print(layer(keras.ops.ones((32, 128))).shape)  # (32, 64)
 ```
 
-To switch Keras backend, set the env var **before** importing keras:
+To switch Keras backend, change the env var **before** importing keras:
 
 ```bash
 export KERAS_BACKEND=jax      # or tensorflow, torch

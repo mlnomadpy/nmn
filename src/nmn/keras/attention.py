@@ -13,6 +13,7 @@ from typing import Optional, Tuple, Union
 
 from keras.src import initializers, ops
 from keras.src.layers.layer import Layer
+from keras.src.saving.object_registration import register_keras_serializable
 
 __all__ = [
     "normalize_qk",
@@ -172,6 +173,7 @@ def yat_attention_normalized(
     )
 
 
+@register_keras_serializable(package="nmn", name="MultiHeadYatAttention")
 class MultiHeadYatAttention(Layer):
     """Multi-head attention using the YAT formula (Keras Layer).
 
