@@ -26,6 +26,27 @@ def _ref_yat(x_np, w_np, b_np, alpha, eps=1e-5):
     return alpha * (num ** 2) / (dist + eps)
 
 
+def test_fused_yat_score_executes_metal_kernel_on_gpu():
+    """The public Apple Silicon CI runner must execute the fused Metal path."""
+    previous_device = mx.default_device()
+    mx.set_default_device(mx.gpu)
+    try:
+        assert is_gpu_available()
+        x = mx.array([[0.2, -0.4, 0.7], [0.5, 0.1, -0.3]])
+        w = mx.array([[0.3, -0.2, 0.6], [-0.5, 0.4, 0.2]])
+        bias = mx.array([0.1, -0.2])
+        alpha = mx.array([1.25])
+        actual = fused_yat_score(x, w, bias=bias, alpha=alpha, epsilon=0.07)
+        mx.eval(actual)
+
+        expected = _ref_yat(
+            np.array(x), np.array(w), np.array(bias), 1.25, eps=0.07
+        )
+        assert np.allclose(np.array(actual), expected, rtol=2e-5, atol=2e-6)
+    finally:
+        mx.set_default_device(previous_device)
+
+
 def test_fused_yat_score_2d_matches_numpy_on_cpu():
     """On the CPU fallback the fused score must match a numpy reference
     to fp32 ULP."""
