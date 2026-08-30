@@ -41,6 +41,7 @@ from flax.nnx.nn.dtypes import promote_dtype
 from flax.typing import Dtype, PrecisionLike
 from jax import Array
 
+from nmn.nnx.layers._numerics import fp32_if_low_precision
 from nmn.nnx.layers.squashers import softermax
 
 from ._attention_core import finalize_attention_weights
@@ -116,8 +117,11 @@ def yat_attention_weights(
     # YAT scores grow as O(dot²) — squaring the dot product causes
     # overflow in bf16 (7-bit mantissa, exp() overflows at ~88).
     # All score math runs in f32; we cast back after softmax.
-    query_f32 = query.astype(jnp.float32)
-    key_f32 = key.astype(jnp.float32)
+    query_f32, key_f32 = fp32_if_low_precision(query, key)
+    alpha_val = (
+        fp32_if_low_precision(alpha)[0] if hasattr(alpha, "dtype") else alpha
+    )
+    bias_val = fp32_if_low_precision(bias)[0] if bias is not None else None
 
     # Calculate dot product: q·k
     dot_product = jnp.einsum(
@@ -151,8 +155,11 @@ def yat_attention_weights(
     # All score math stays in float32 — cast alpha / bias accordingly so the
     # shared tail can run in f32 too, then it casts the final softmax /
     # softermax / l1 output back to the caller's `dtype`.
-    alpha_val = jnp.asarray(alpha, dtype=jnp.float32) if alpha is not None else None
-    bias_val = bias.astype(jnp.float32) if bias is not None else None
+    alpha_val = (
+        jnp.asarray(alpha_val, dtype=jnp.float32)
+        if alpha_val is not None else None
+    )
+    bias_val = bias_val.astype(jnp.float32) if bias_val is not None else None
 
     return finalize_attention_weights(
         attn_weights,
@@ -604,4 +611,3 @@ def create_yat_projection(
         return projection * jnp.sqrt(head_dim).astype(dtype)
     else:
         return random.normal(key, (num_features, head_dim), dtype=dtype)
-

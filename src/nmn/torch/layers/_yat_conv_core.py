@@ -30,7 +30,7 @@ from nmn._epsilon import (
     validate_epsilon_for_dtype,
 )
 
-from .._precision import saturating_upcast
+from .._precision import saturating_downcast, saturating_upcast
 
 
 __all__ = [
@@ -320,9 +320,7 @@ def yat_conv_forward(
     ).clamp(min=0.0)
 
     output = _yat_score(layer, dot_prod_map, distance_sq, bias_val, alpha)
-    if output_dtype in (torch.float16, torch.bfloat16):
-        output = output.clamp(max=torch.finfo(output_dtype).max)
-    return output.to(output_dtype)
+    return saturating_downcast(output, output_dtype)
 
 
 # ----------------------------------------------------------------------
@@ -398,6 +396,4 @@ def yat_conv_transpose_forward(
     ).clamp(min=0.0)
 
     output = _yat_score(layer, dot_prod_map, distance_sq, bias_val, alpha)
-    if output_dtype in (torch.float16, torch.bfloat16):
-        output = output.clamp(max=torch.finfo(output_dtype).max)
-    return output.to(output_dtype)
+    return saturating_downcast(output, output_dtype)

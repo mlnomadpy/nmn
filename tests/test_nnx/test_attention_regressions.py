@@ -11,6 +11,7 @@ from nmn.nnx.layers.attention.fused_yat_attention import (
     fused_yat_l1_attention,
     fused_yat_l1_self_attention,
 )
+from nmn.nnx.layers.attention.yat_attention import yat_attention
 
 
 def _causal_mask(batch_size: int, length: int) -> jax.Array:
@@ -18,6 +19,35 @@ def _causal_mask(batch_size: int, length: int) -> jax.Array:
         jnp.tril(jnp.ones((length, length), dtype=jnp.bool_)),
         (batch_size, 1, length, length),
     )
+
+
+@pytest.mark.parametrize("compiled", [False, True])
+def test_fp16_attention_aggregate_cotangents_match_saturated_fp32_reference(compiled):
+    def evaluate(dtype):
+        query = jnp.full((1, 1, 1, 2), 100.0, dtype=dtype)
+        key = jnp.full((1, 2, 1, 2), 99.0, dtype=dtype)
+        value = jnp.array([[[[0.0]], [[1.0]]]], dtype=dtype)
+
+        def loss(q, k, v):
+            return yat_attention(q, k, v, deterministic=True, epsilon=1.0).astype(jnp.float32).sum()
+
+        output = yat_attention(query, key, value, deterministic=True, epsilon=1.0)
+        gradient_fn = jax.grad(loss, argnums=(0, 1, 2))
+        if compiled:
+            gradient_fn = jax.jit(gradient_fn)
+        return output, gradient_fn(query, key, value)
+
+    reference_output, reference_grads = evaluate(jnp.float32)
+    output, grads = evaluate(jnp.float16)
+    limit = jnp.finfo(jnp.float16)
+    np.testing.assert_allclose(np.asarray(output, np.float32), np.asarray(reference_output), atol=2e-3)
+    for actual, expected in zip(grads, reference_grads):
+        clipped = jnp.asarray(jnp.clip(expected, limit.min, limit.max), jnp.float16)
+        assert jnp.all(jnp.isfinite(actual))
+        np.testing.assert_allclose(
+            np.asarray(actual, np.float32), np.asarray(clipped, np.float32),
+            rtol=7e-3, atol=8.0,
+        )
 
 
 def _reference_l1(query, key, value, bias=None, epsilon=1e-3):

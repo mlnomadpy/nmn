@@ -12,6 +12,7 @@ from nmn._epsilon import (
 )
 
 from .saved_model import SingleInputSavedModelMixin
+from ._precision import reduction_safe_upcast, saturating_downcast
 
 # Default constant alpha value (sqrt(2))
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
@@ -214,7 +215,14 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
         # Build if necessary
         self._maybe_build(inputs)
 
+        output_dtype = self.dtype
         kernel = self.kernel
+        # The expanded distance and squared numerator can overflow fp16 before
+        # their finite ratio is formed.  Score arithmetic is therefore always
+        # accumulated in fp32 for fp16/bf16 layers.
+        if output_dtype in (tf.float16, tf.bfloat16):
+            inputs = reduction_safe_upcast(inputs)
+            kernel = reduction_safe_upcast(kernel)
 
         # Spherical mode: normalize inputs and each kernel row (neuron) to unit norm.
         # TF kernel shape is (features, last_dim) → each row is a neuron → axis=-1.
@@ -260,11 +268,11 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
             bias_shape = [1] * (len(y.shape) - 1) + [-1]
             if self._constant_bias_value is not None:
                 bias_const = tf.constant(
-                    self._constant_bias_value, shape=[self.features], dtype=self.dtype
+                    self._constant_bias_value, shape=[self.features], dtype=kernel.dtype
                 )
                 y = y + tf.reshape(bias_const, bias_shape)
             else:
-                y = y + tf.reshape(self.bias, bias_shape)
+                y = y + tf.reshape(reduction_safe_upcast(self.bias), bias_shape)
 
         # Resolve effective epsilon (learnable via softplus, or constant)
         if self.learnable_epsilon and self.epsilon_param is not None:
@@ -282,10 +290,8 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
             y = y * tf.cast(self._constant_alpha_value, y.dtype)
         elif self.alpha is not None:
             # Simple learnable alpha scaling
-            y = y * tf.cast(self.alpha, y.dtype)
-
-        y = tf.cast(y, self.dtype)
-
+            y = y * reduction_safe_upcast(self.alpha)
+        y = saturating_downcast(y, output_dtype)
 
         if self.return_weights:
             return y, self.kernel

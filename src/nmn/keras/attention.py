@@ -15,6 +15,8 @@ from keras.src import initializers, ops
 from keras.src.layers.layer import Layer
 from keras.src.saving.object_registration import register_keras_serializable
 
+from ._yat_core import reduction_safe_upcast
+
 __all__ = [
     "normalize_qk",
     "yat_attention_weights",
@@ -61,6 +63,12 @@ def yat_attention_weights(
     Returns:
         Attention weights (batch, num_heads, q_len, kv_len).
     """
+    output_dtype = query.dtype
+    query = reduction_safe_upcast(query)
+    key = reduction_safe_upcast(key)
+    if alpha is not None and hasattr(alpha, "dtype"):
+        alpha = reduction_safe_upcast(alpha)
+
     # Scale by 1/√head_dim to match standard attention's score growth profile.
     head_dim = query.shape[-1]
     dim_scale = ops.sqrt(ops.cast(head_dim, query.dtype))
@@ -104,7 +112,7 @@ def yat_attention_weights(
         )
         attn_weights = attn_weights * keep
 
-    return attn_weights
+    return ops.cast(attn_weights, output_dtype)
 
 
 def yat_attention(

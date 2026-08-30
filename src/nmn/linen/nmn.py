@@ -29,6 +29,8 @@ def _epsilon_dtype(param_dtype, epsilon):
     validate_epsilon_for_dtype(epsilon, dtype)
     return dtype
 
+from ._yat_core import reduction_safe_upcast, saturating_downcast
+
 # Default constant alpha value (sqrt(2))
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
 
@@ -196,6 +198,16 @@ class YatNMN(Module):
             epsilon_param = None
 
         inputs, kernel, bias, alpha = promote_dtype(inputs, kernel, bias, alpha, dtype=self.dtype)
+        output_dtype = inputs.dtype
+        return_kernel = kernel
+        if output_dtype in (jnp.float16, jnp.bfloat16):
+            # The expanded distance and squared numerator can overflow fp16
+            # even when their ratio is finite.  Match NNX by performing all YAT
+            # score arithmetic in fp32 and casting only the final output.
+            inputs = reduction_safe_upcast(inputs)
+            kernel = reduction_safe_upcast(kernel)
+            bias = reduction_safe_upcast(bias) if bias is not None else None
+            alpha = reduction_safe_upcast(alpha) if alpha is not None else None
 
         # Spherical mode: normalize inputs and each kernel row (neuron) to unit norm.
         # Linen kernel shape is (features, input_dim), so each row is a neuron → axis=-1.
@@ -243,7 +255,6 @@ class YatNMN(Module):
             y += jnp.reshape(bias, (1,) * (y.ndim - 1) + (-1,))
 
         # Resolve effective epsilon (learnable via softplus, or constant)
-        output_dtype = y.dtype
         if epsilon_param is not None:
             score_dtype = jnp.promote_types(y.dtype, epsilon_param.dtype)
             eps = jax.nn.softplus(epsilon_param.astype(score_dtype))
@@ -262,8 +273,7 @@ class YatNMN(Module):
             # Simple learnable alpha scaling
             y = y * alpha
 
-        y = y.astype(output_dtype)
-
+        y = saturating_downcast(y, output_dtype)
         if self.return_weights:
-           return y, kernel
+           return y, return_kernel
         return y

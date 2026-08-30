@@ -14,6 +14,7 @@ from typing import Optional, Tuple, Union
 import tensorflow as tf
 
 from .saved_model import ExportPath, export_attention
+from ._precision import reduction_safe_upcast
 
 __all__ = [
     "normalize_qk",
@@ -68,6 +69,12 @@ def yat_attention_weights(
     Returns:
         Attention weights (batch, num_heads, q_len, kv_len).
     """
+    output_dtype = query.dtype
+    if output_dtype in (tf.float16, tf.bfloat16):
+        query = reduction_safe_upcast(query)
+        key = reduction_safe_upcast(key)
+        alpha = reduction_safe_upcast(alpha) if alpha is not None else None
+
     # Scale by 1/√head_dim to match standard attention's score growth profile.
     head_dim = query.shape[-1]
     dim_scale = tf.sqrt(tf.cast(head_dim, query.dtype))
@@ -112,7 +119,7 @@ def yat_attention_weights(
     if dropout_rate > 0.0 and training:
         attn_weights = tf.nn.dropout(attn_weights, rate=dropout_rate)
 
-    return attn_weights
+    return tf.cast(attn_weights, output_dtype)
 
 
 def yat_attention(

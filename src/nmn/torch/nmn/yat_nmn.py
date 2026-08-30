@@ -14,6 +14,8 @@ from nmn._epsilon import (
     validate_epsilon_for_dtype,
 )
 
+from .._precision import saturating_downcast, saturating_upcast
+
 __all__ = ["YatNMN"]
 
 
@@ -371,8 +373,21 @@ class YatNMN(nn.Module):
                 bias = F.softplus(bias)
         alpha_param = self.alpha if self.alpha is not None else None
 
-        # Promote all tensors to computation dtype
+        # Promote all tensors to computation dtype.  The YAT numerator grows as
+        # dot(x, w)^2 and the expanded distance can overflow fp16 even when the
+        # final ratio is perfectly representable.  Accumulate the complete
+        # geometric score in fp32 for both fp16 and bf16, then restore the
+        # public computation dtype at the output boundary.
         x, kernel, bias, alpha_param = self._promote_dtype(x, kernel, bias, alpha_param)
+        output_dtype = x.dtype
+        if output_dtype in (torch.float16, torch.bfloat16):
+            x = saturating_upcast(x)
+            kernel = saturating_upcast(kernel)
+            bias = saturating_upcast(bias) if bias is not None else None
+            alpha_param = (
+                saturating_upcast(alpha_param)
+                if alpha_param is not None else None
+            )
 
         # Spherical mode: normalize inputs and kernel
         if self.spherical:
@@ -412,7 +427,6 @@ class YatNMN(nn.Module):
             distances = (inputs_squared_sum + kernel_squared_sum - 2 * dot_for_dist).clamp(min=0.0)
 
         # Resolve effective epsilon (learnable via softplus, or constant)
-        output_dtype = y.dtype
         if self.learnable_epsilon and self.epsilon_param is not None:
             score_dtype = torch.promote_types(distances.dtype, self.epsilon_param.dtype)
             eps = F.softplus(self.epsilon_param.to(score_dtype))
@@ -432,7 +446,7 @@ class YatNMN(nn.Module):
             # Simple learnable alpha scaling
             y = y * alpha_param
 
-        return y.to(output_dtype)
+        return saturating_downcast(y, output_dtype)
 
     def _apply(self, fn, recurse=True):
         if getattr(self, "tie_kernel_bank", False):

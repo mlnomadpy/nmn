@@ -11,6 +11,7 @@ from nmn._epsilon import (
 )
 
 from ._yat_core import yat_score
+from ._precision import reduction_safe_upcast
 from .saved_model import SingleInputSavedModelMixin
 
 
@@ -56,6 +57,13 @@ def _grouped_convolution(inputs, kernel, groups, convolution):
         ],
         axis=-1,
     )
+
+
+def _upcast_yat_operands(inputs, kernel):
+    """Accumulate low-precision convolutional YAT scores in float32."""
+    if inputs.dtype in (tf.float16, tf.bfloat16):
+        return reduction_safe_upcast(inputs), reduction_safe_upcast(kernel)
+    return inputs, kernel
 
 
 class YatConv1D(SingleInputSavedModelMixin, tf.Module):
@@ -201,6 +209,7 @@ class YatConv1D(SingleInputSavedModelMixin, tf.Module):
         """
         inputs = tf.convert_to_tensor(inputs, dtype=self.dtype)
         self._maybe_build(inputs)
+        inputs, kernel = _upcast_yat_operands(inputs, self.kernel)
 
         # Compute dot product using standard convolution
         convolution = lambda x, kernel: tf.nn.conv1d(
@@ -211,7 +220,7 @@ class YatConv1D(SingleInputSavedModelMixin, tf.Module):
             dilations=self.dilation_rate,
         )
         dot_prod_map = _grouped_convolution(
-            inputs, self.kernel, self.groups, convolution
+            inputs, kernel, self.groups, convolution
         )
 
         # Compute ||input_patches||^2 using convolution with ones kernel
@@ -222,7 +231,7 @@ class YatConv1D(SingleInputSavedModelMixin, tf.Module):
             (self.kernel_size,),
             self.input_channels // self.groups,
             self.groups,
-            self.dtype,
+            inputs.dtype,
         )
         
         patch_sq_sum_map_raw = _grouped_convolution(
@@ -239,7 +248,7 @@ class YatConv1D(SingleInputSavedModelMixin, tf.Module):
         )
 
         # Compute ||kernel||^2 per filter
-        kernel_sq_sum_per_filter = tf.reduce_sum(self.kernel**2, axis=[0, 1])  # Sum over spatial and input channel dims
+        kernel_sq_sum_per_filter = tf.reduce_sum(kernel**2, axis=[0, 1])  # Sum over spatial and input channel dims
 
         # Reshape for broadcasting: [1, 1, filters]
         kernel_sq_sum_reshaped = tf.reshape(kernel_sq_sum_per_filter, [1, 1, -1])
@@ -395,6 +404,7 @@ class YatConv2D(SingleInputSavedModelMixin, tf.Module):
         """
         inputs = tf.convert_to_tensor(inputs, dtype=self.dtype)
         self._maybe_build(inputs)
+        inputs, kernel = _upcast_yat_operands(inputs, self.kernel)
 
         # Compute dot product using standard convolution
         convolution = lambda x, kernel: tf.nn.conv2d(
@@ -405,7 +415,7 @@ class YatConv2D(SingleInputSavedModelMixin, tf.Module):
             dilations=[1] + list(self.dilation_rate) + [1],
         )
         dot_prod_map = _grouped_convolution(
-            inputs, self.kernel, self.groups, convolution
+            inputs, kernel, self.groups, convolution
         )
 
         # Compute ||input_patches||^2 using convolution with ones kernel
@@ -416,7 +426,7 @@ class YatConv2D(SingleInputSavedModelMixin, tf.Module):
             self.kernel_size,
             self.input_channels // self.groups,
             self.groups,
-            self.dtype,
+            inputs.dtype,
         )
         
         patch_sq_sum_map_raw = _grouped_convolution(
@@ -433,7 +443,7 @@ class YatConv2D(SingleInputSavedModelMixin, tf.Module):
         )
 
         # Compute ||kernel||^2 per filter
-        kernel_sq_sum_per_filter = tf.reduce_sum(self.kernel**2, axis=[0, 1, 2])  # Sum over spatial and input channel dims
+        kernel_sq_sum_per_filter = tf.reduce_sum(kernel**2, axis=[0, 1, 2])  # Sum over spatial and input channel dims
 
         # Reshape for broadcasting: [1, 1, 1, filters]
         kernel_sq_sum_reshaped = tf.reshape(kernel_sq_sum_per_filter, [1, 1, 1, -1])
@@ -590,6 +600,7 @@ class YatConv3D(SingleInputSavedModelMixin, tf.Module):
         """
         inputs = tf.convert_to_tensor(inputs, dtype=self.dtype)
         self._maybe_build(inputs)
+        inputs, kernel = _upcast_yat_operands(inputs, self.kernel)
 
         # Compute dot product using standard convolution
         convolution = lambda x, kernel: tf.nn.conv3d(
@@ -600,7 +611,7 @@ class YatConv3D(SingleInputSavedModelMixin, tf.Module):
             dilations=[1] + list(self.dilation_rate) + [1],
         )
         dot_prod_map = _grouped_convolution(
-            inputs, self.kernel, self.groups, convolution
+            inputs, kernel, self.groups, convolution
         )
 
         # Compute ||input_patches||^2 using convolution with ones kernel
@@ -611,7 +622,7 @@ class YatConv3D(SingleInputSavedModelMixin, tf.Module):
             self.kernel_size,
             self.input_channels // self.groups,
             self.groups,
-            self.dtype,
+            inputs.dtype,
         )
         
         patch_sq_sum_map_raw = _grouped_convolution(
@@ -628,7 +639,7 @@ class YatConv3D(SingleInputSavedModelMixin, tf.Module):
         )
 
         # Compute ||kernel||^2 per filter
-        kernel_sq_sum_per_filter = tf.reduce_sum(self.kernel**2, axis=[0, 1, 2, 3])  # Sum over spatial and input channel dims
+        kernel_sq_sum_per_filter = tf.reduce_sum(kernel**2, axis=[0, 1, 2, 3])  # Sum over spatial and input channel dims
 
         # Reshape for broadcasting: [1, 1, 1, 1, filters]
         kernel_sq_sum_reshaped = tf.reshape(kernel_sq_sum_per_filter, [1, 1, 1, 1, -1])
@@ -755,6 +766,7 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
         """
         inputs = tf.convert_to_tensor(inputs, dtype=self.dtype)
         self._maybe_build(inputs)
+        inputs, kernel = _upcast_yat_operands(inputs, self.kernel)
 
         input_shape = tf.shape(inputs)
         batch_size = input_shape[0]
@@ -785,7 +797,7 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
         # Transpose convolution
         dot_prod_map = tf.nn.conv1d_transpose(
             inputs,
-            self.kernel,
+            kernel,
             output_shape=output_shape,
             strides=strides,
             padding=self.padding,
@@ -796,7 +808,7 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
         
         # Ones kernel for patch norms
         ones_kernel_shape = (kernel_size, 1, self.input_channels)
-        ones_kernel = tf.ones(ones_kernel_shape, dtype=self.dtype)
+        ones_kernel = tf.ones(ones_kernel_shape, dtype=inputs.dtype)
         
         patch_sq_sum_map_raw = tf.nn.conv1d_transpose(
             inputs_squared,
@@ -809,7 +821,7 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
         patch_sq_sum_map = tf.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
 
         # Compute kernel squared sum
-        kernel_sq_sum_per_filter = tf.reduce_sum(self.kernel**2, axis=[0, 2])
+        kernel_sq_sum_per_filter = tf.reduce_sum(kernel**2, axis=[0, 2])
         kernel_sq_sum_reshaped = tf.reshape(kernel_sq_sum_per_filter, [1, 1, -1])
 
         # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha
@@ -935,6 +947,7 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
         """
         inputs = tf.convert_to_tensor(inputs, dtype=self.dtype)
         self._maybe_build(inputs)
+        inputs, kernel = _upcast_yat_operands(inputs, self.kernel)
 
         batch_size = tf.shape(inputs)[0]
         input_height = tf.shape(inputs)[1]
@@ -953,7 +966,7 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
         # Transpose convolution
         dot_prod_map = tf.nn.conv2d_transpose(
             inputs,
-            self.kernel,
+            kernel,
             output_shape=output_shape,
             strides=[1] + list(self.strides) + [1],
             padding=self.padding,
@@ -964,7 +977,7 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
         
         # Ones kernel for patch norms
         ones_kernel_shape = self.kernel_size + (1, self.input_channels)
-        ones_kernel = tf.ones(ones_kernel_shape, dtype=self.dtype)
+        ones_kernel = tf.ones(ones_kernel_shape, dtype=inputs.dtype)
         
         patch_sq_sum_map_raw = tf.nn.conv2d_transpose(
             inputs_squared,
@@ -977,7 +990,7 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
         patch_sq_sum_map = tf.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
 
         # Compute kernel squared sum
-        kernel_sq_sum_per_filter = tf.reduce_sum(self.kernel**2, axis=[0, 1, 3])
+        kernel_sq_sum_per_filter = tf.reduce_sum(kernel**2, axis=[0, 1, 3])
         kernel_sq_sum_reshaped = tf.reshape(kernel_sq_sum_per_filter, [1, 1, 1, -1])
 
         # YAT computation
@@ -1105,6 +1118,7 @@ class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
         """
         inputs = tf.convert_to_tensor(inputs, dtype=self.dtype)
         self._maybe_build(inputs)
+        inputs, kernel = _upcast_yat_operands(inputs, self.kernel)
 
         batch_size = tf.shape(inputs)[0]
         input_depth = tf.shape(inputs)[1]
@@ -1126,7 +1140,7 @@ class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
         # Transpose convolution
         dot_prod_map = tf.nn.conv3d_transpose(
             inputs,
-            self.kernel,
+            kernel,
             output_shape=output_shape,
             strides=[1] + list(self.strides) + [1],
             padding=self.padding,
@@ -1137,7 +1151,7 @@ class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
         
         # Ones kernel for patch norms
         ones_kernel_shape = self.kernel_size + (1, self.input_channels)
-        ones_kernel = tf.ones(ones_kernel_shape, dtype=self.dtype)
+        ones_kernel = tf.ones(ones_kernel_shape, dtype=inputs.dtype)
         
         patch_sq_sum_map_raw = tf.nn.conv3d_transpose(
             inputs_squared,
@@ -1150,7 +1164,7 @@ class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
         patch_sq_sum_map = tf.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
 
         # Compute kernel squared sum
-        kernel_sq_sum_per_filter = tf.reduce_sum(self.kernel**2, axis=[0, 1, 2, 4])
+        kernel_sq_sum_per_filter = tf.reduce_sum(kernel**2, axis=[0, 1, 2, 4])
         kernel_sq_sum_reshaped = tf.reshape(kernel_sq_sum_per_filter, [1, 1, 1, 1, -1])
 
         # YAT computation

@@ -14,6 +14,8 @@ from nmn._epsilon import (
     validate_epsilon_for_dtype,
 )
 
+from ._yat_core import reduction_safe_upcast, saturating_downcast, stable_yat_ratio
+
 # Default constant alpha value (sqrt(2))
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
 
@@ -218,7 +220,9 @@ class YatNMN(Layer):
         self.built = True
 
     def call(self, inputs):
-        kernel = self.kernel
+        output_dtype = self.compute_dtype
+        inputs = reduction_safe_upcast(inputs)
+        kernel = reduction_safe_upcast(self.kernel)
 
         # Spherical mode: normalize inputs and kernel columns (each neuron) to unit norm
         # Kernel shape is (input_dim, units), so each neuron is a column → axis=0
@@ -252,7 +256,7 @@ class YatNMN(Layer):
             if self._constant_bias_value is not None:
                 dot_product = dot_product + self._constant_bias_value
             else:
-                dot_product = ops.add(dot_product, self.bias)
+                dot_product = ops.add(dot_product, reduction_safe_upcast(self.bias))
 
         # Resolve effective epsilon (learnable via softplus, or constant)
         if self.learnable_epsilon and self.epsilon_param is not None:
@@ -263,17 +267,25 @@ class YatNMN(Layer):
         else:
             eps = self.epsilon
 
-        # Compute inverse square attention
-        outputs = dot_product ** 2 / (distances + eps)
+        # Compute the ratio in fp32 for low-precision policies.  Both dot^2 and
+        # the expanded distance can overflow before their finite ratio forms.
+        ratio_dtype = (
+            "float32"
+            if output_dtype in ("float16", "bfloat16")
+            else output_dtype
+        )
+        outputs = stable_yat_ratio(
+            dot_product, distances, eps, output_dtype=ratio_dtype
+        )
 
         # Apply alpha scaling
         if self._constant_alpha_value is not None:
             outputs = outputs * self._constant_alpha_value
         elif self.alpha is not None:
             # Simple learnable alpha scaling
-            outputs = outputs * self.alpha
+            outputs = outputs * reduction_safe_upcast(self.alpha)
 
-        return ops.cast(outputs, self.compute_dtype)
+        return saturating_downcast(outputs, output_dtype)
 
     def compute_output_shape(self, input_shape):
         output_shape = list(input_shape)

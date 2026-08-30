@@ -53,7 +53,21 @@ else:  # pragma: no cover - compatibility path for torch 1.11-1.x
 
 
 def saturating_upcast(tensor: Tensor) -> Tensor:
-    """Return fp32 ``tensor`` with a finite low-precision gradient boundary."""
+    """Return fp32 ``tensor`` with an operator-local gradient boundary.
+
+    The boundary saturates one returning cotangent, but autograd may add
+    several such finite cotangents later at a shared low-precision leaf.  If
+    that final mathematical sum is outside the leaf dtype's range it can still
+    overflow; use fp32 parameter/gradient storage for that training regime.
+    """
     if tensor.dtype in (torch.float16, torch.bfloat16):
         return _SaturatingUpcast.apply(tensor)
     return tensor.float()
+
+
+def saturating_downcast(tensor: Tensor, dtype: torch.dtype) -> Tensor:
+    """Two-sided finite cast to a low-precision public output dtype."""
+    if dtype in (torch.float16, torch.bfloat16):
+        limits = torch.finfo(dtype)
+        tensor = tensor.clamp(min=limits.min, max=limits.max)
+    return tensor.to(dtype)
