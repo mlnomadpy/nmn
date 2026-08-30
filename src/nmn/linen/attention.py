@@ -9,7 +9,7 @@ Attention functions are re-exported from NNX (both use JAX).
 from __future__ import annotations
 
 import math
-from typing import Any, Callable, Optional, Union
+from typing import Any, Optional
 
 import jax.numpy as jnp
 from jax import Array
@@ -23,7 +23,6 @@ from nmn.nnx.layers.attention.yat_attention import (
     normalize_qk,
     yat_attention_weights as _nnx_yat_attention_weights,
     yat_attention as _nnx_yat_attention,
-    yat_attention_normalized as _nnx_yat_attention_normalized,
 )
 
 __all__ = [
@@ -177,13 +176,15 @@ class MultiHeadAttention(Module):
     constant_alpha: Optional[Any] = None
     normalize_qk: bool = False
     spherical: bool = False
-    normalization: str = "softmax"
     epsilon: float = 1e-5
     dtype: Optional[Any] = None
     param_dtype: Any = jnp.float32
     kernel_init: Any = nn.initializers.xavier_normal()
     bias_init: Any = nn.initializers.zeros_init()
     alpha_init: Any = lambda key, shape, dtype: jnp.ones(shape, dtype)
+    # Appended after every pre-existing field to preserve the positional
+    # constructor ABI of Linen dataclass modules.
+    normalization: str = "softmax"
 
     @compact
     def __call__(
@@ -206,6 +207,11 @@ class MultiHeadAttention(Module):
         Returns:
             Output (batch, q_len, out_features).
         """
+        if self.normalization not in ("softmax", "l1"):
+            raise ValueError(
+                "normalization must be either 'softmax' or 'l1', got "
+                f"{self.normalization!r}"
+            )
         if inputs_k is None:
             inputs_k = inputs_q
         if inputs_v is None:

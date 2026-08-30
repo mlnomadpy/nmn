@@ -28,6 +28,19 @@ def _assert_tree_allclose(actual, expected, *, rtol=2e-5, atol=2e-6):
         )
 
 
+def test_attention_normalization_preserves_positional_epsilon_abi_and_validates():
+    layer = MultiHeadAttention(
+        2, None, None, 0.0, True, True, None, False, False, 1e-4
+    )
+    assert layer.epsilon == 1e-4
+    assert layer.normalization == "softmax"
+
+    inputs = jnp.ones((1, 2, 4), dtype=jnp.float32)
+    invalid = MultiHeadAttention(num_heads=2, normalization="typo")
+    with pytest.raises(ValueError, match="normalization must be"):
+        invalid.init(jax.random.key(99), inputs)
+
+
 @pytest.mark.parametrize("normalization", ["softmax", "l1"])
 def test_attention_constant_and_matched_learnable_alpha_have_same_stage_and_vjp(
     normalization,
