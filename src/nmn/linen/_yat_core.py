@@ -18,7 +18,39 @@ import jax.numpy as jnp
 from jax import Array
 
 
-__all__ = ["safe_kernel_init", "upcast_yat_operands", "yat_score"]
+__all__ = [
+    "reduction_safe_upcast",
+    "safe_kernel_init",
+    "upcast_yat_operands",
+    "yat_score",
+]
+
+
+@jax.custom_vjp
+def _reduction_safe_upcast(value):
+    return value.astype(jnp.float32)
+
+
+def _reduction_safe_upcast_fwd(value):
+    return value.astype(jnp.float32), jnp.zeros((), dtype=value.dtype)
+
+
+def _reduction_safe_upcast_bwd(dtype_anchor, cotangent):
+    limits = jnp.finfo(dtype_anchor.dtype)
+    cotangent = jnp.clip(cotangent, limits.min, limits.max)
+    return (cotangent.astype(dtype_anchor.dtype),)
+
+
+_reduction_safe_upcast.defvjp(
+    _reduction_safe_upcast_fwd, _reduction_safe_upcast_bwd
+)
+
+
+def reduction_safe_upcast(value):
+    """Upcast lowp values after aggregating and saturating their cotangent."""
+    if value.dtype in (jnp.float16, jnp.bfloat16):
+        return _reduction_safe_upcast(value)
+    return value
 
 
 def safe_kernel_init(initializer):
@@ -39,10 +71,10 @@ def upcast_yat_operands(inputs, kernel, bias, alpha):
     """Return score operands in fp32 for fp16/bf16 computation policies."""
     output_dtype = inputs.dtype
     if output_dtype in (jnp.float16, jnp.bfloat16):
-        inputs = inputs.astype(jnp.float32)
-        kernel = kernel.astype(jnp.float32)
-        bias = bias.astype(jnp.float32) if bias is not None else None
-        alpha = alpha.astype(jnp.float32) if alpha is not None else None
+        inputs = reduction_safe_upcast(inputs)
+        kernel = reduction_safe_upcast(kernel)
+        bias = reduction_safe_upcast(bias) if bias is not None else None
+        alpha = reduction_safe_upcast(alpha) if alpha is not None else None
     return inputs, kernel, bias, alpha, output_dtype
 
 

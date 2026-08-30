@@ -10,6 +10,7 @@ from nmn.linen import (
     YatConvTranspose1D, YatConvTranspose2D, YatConvTranspose3D,
     YatNMN, yat_attention,
 )
+from nmn.linen._yat_core import reduction_safe_upcast
 
 
 LOWP_DTYPES = (jnp.float16, jnp.bfloat16)
@@ -52,6 +53,40 @@ def test_large_magnitude_dense_matches_fp32_forward_and_gradients(dtype):
     np.testing.assert_allclose(_as_f32(output), _as_f32(ref_output), rtol=5e-3, atol=0.15)
     for actual, expected in zip(grads, ref_grads):
         np.testing.assert_allclose(_as_f32(actual), _as_f32(expected), rtol=5e-3, atol=0.15)
+
+
+def _aggregate_dense_grads(dtype, compiled=False):
+    layer = YatNMN(features=1, use_bias=True, use_alpha=True, epsilon=1.0,
+                   dtype=dtype, param_dtype=dtype)
+    x = jnp.full((4096, 2), 100.0, dtype=dtype)
+    variables = layer.init(jax.random.key(0), x)
+    params = dict(
+        variables["params"],
+        kernel=jnp.array([[-100.0, -99.0]], dtype=dtype),
+        bias=jnp.array([0.5], dtype=dtype),
+        alpha=jnp.array([1.25], dtype=dtype),
+    )
+
+    def loss(input_value, parameter_values):
+        return layer.apply({"params": parameter_values}, input_value).astype(jnp.float32).sum()
+
+    output = layer.apply({"params": params}, x)
+    gradient_fn = jax.grad(loss, argnums=(0, 1))
+    if compiled:
+        gradient_fn = jax.jit(gradient_fn)
+    return output, gradient_fn(x, params)
+
+
+@pytest.mark.parametrize("compiled", [False, True])
+def test_fp16_dense_aggregate_cotangents_match_saturated_fp32_reference(compiled):
+    reference_output, reference_grads = _aggregate_dense_grads(jnp.float32, compiled)
+    output, grads = _aggregate_dense_grads(jnp.float16, compiled)
+    limit = jnp.finfo(jnp.float16)
+    np.testing.assert_allclose(_as_f32(output), _as_f32(reference_output), rtol=5e-3, atol=2.0)
+    for actual, expected in zip(jax.tree.leaves(grads), jax.tree.leaves(reference_grads)):
+        clipped = jnp.asarray(jnp.clip(expected, limit.min, limit.max), jnp.float16)
+        assert jnp.all(jnp.isfinite(actual))
+        np.testing.assert_allclose(_as_f32(actual), _as_f32(clipped), rtol=5e-3, atol=8.0)
 
 
 def _conv_value_and_grads(layer_cls, shape, kernel_size, dtype):
@@ -118,6 +153,33 @@ def test_large_magnitude_attention_matches_fp32_forward_and_gradients(dtype):
         np.testing.assert_allclose(_as_f32(actual), _as_f32(expected), rtol=7e-3, atol=8.0)
 
 
+def _aggregate_attention_grads(dtype, compiled=False):
+    query = jnp.full((1, 1, 1, 2), 100.0, dtype=dtype)
+    key = jnp.full((1, 2, 1, 2), 99.0, dtype=dtype)
+    value = jnp.array([[[[0.0]], [[1.0]]]], dtype=dtype)
+
+    def loss(q, k, v):
+        return yat_attention(q, k, v, deterministic=True, epsilon=1.0).astype(jnp.float32).sum()
+
+    output = yat_attention(query, key, value, deterministic=True, epsilon=1.0)
+    gradient_fn = jax.grad(loss, argnums=(0, 1, 2))
+    if compiled:
+        gradient_fn = jax.jit(gradient_fn)
+    return output, gradient_fn(query, key, value)
+
+
+@pytest.mark.parametrize("compiled", [False, True])
+def test_fp16_attention_aggregate_cotangents_match_saturated_fp32_reference(compiled):
+    reference_output, reference_grads = _aggregate_attention_grads(jnp.float32, compiled)
+    output, grads = _aggregate_attention_grads(jnp.float16, compiled)
+    limit = jnp.finfo(jnp.float16)
+    np.testing.assert_allclose(_as_f32(output), _as_f32(reference_output), atol=2e-3)
+    for actual, expected in zip(grads, reference_grads):
+        clipped = jnp.asarray(jnp.clip(expected, limit.min, limit.max), jnp.float16)
+        assert jnp.all(jnp.isfinite(actual))
+        np.testing.assert_allclose(_as_f32(actual), _as_f32(clipped), rtol=7e-3, atol=8.0)
+
+
 def test_low_precision_core_preserves_genuine_nan():
     layer = YatNMN(
         features=1, use_bias=False, use_alpha=False, dtype=jnp.float16,
@@ -139,3 +201,8 @@ def test_low_precision_core_preserves_genuine_nan():
     key = jnp.full((1, 2, 1, 2), 100.0, dtype=jnp.float16)
     value = jnp.ones((1, 2, 1, 1), dtype=jnp.float16)
     assert jnp.isnan(yat_attention(query, key, value, deterministic=True)).all()
+
+    gradient = jax.grad(
+        lambda value: (reduction_safe_upcast(value) * jnp.nan).sum()
+    )(jnp.ones((1,), dtype=jnp.float16))
+    assert jnp.isnan(gradient).all()

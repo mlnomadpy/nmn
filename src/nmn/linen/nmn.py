@@ -29,6 +29,8 @@ def _epsilon_dtype(param_dtype, epsilon):
     validate_epsilon_for_dtype(epsilon, dtype)
     return dtype
 
+from ._yat_core import reduction_safe_upcast
+
 # Default constant alpha value (sqrt(2))
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
 
@@ -202,10 +204,10 @@ class YatNMN(Module):
             # The expanded distance and squared numerator can overflow fp16
             # even when their ratio is finite.  Match NNX by performing all YAT
             # score arithmetic in fp32 and casting only the final output.
-            inputs = inputs.astype(jnp.float32)
-            kernel = kernel.astype(jnp.float32)
-            bias = bias.astype(jnp.float32) if bias is not None else None
-            alpha = alpha.astype(jnp.float32) if alpha is not None else None
+            inputs = reduction_safe_upcast(inputs)
+            kernel = reduction_safe_upcast(kernel)
+            bias = reduction_safe_upcast(bias) if bias is not None else None
+            alpha = reduction_safe_upcast(alpha) if alpha is not None else None
 
         # Spherical mode: normalize inputs and each kernel row (neuron) to unit norm.
         # Linen kernel shape is (features, input_dim), so each row is a neuron → axis=-1.

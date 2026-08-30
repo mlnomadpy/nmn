@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import tensorflow as tf
 
+from ._precision import reduction_safe_upcast
+
 
 __all__ = ["yat_score"]
 
@@ -34,7 +36,7 @@ def yat_score(layer, dot_prod_map, distance_sq_map):
         if layer._constant_bias_value is not None:
             dot_prod_map = dot_prod_map + tf.cast(layer._constant_bias_value, dot_prod_map.dtype)
         else:
-            dot_prod_map = dot_prod_map + tf.cast(layer.bias, dot_prod_map.dtype)
+            dot_prod_map = dot_prod_map + reduction_safe_upcast(layer.bias)
 
     # Resolve effective epsilon (learnable via softplus, or constant).
     output_dtype = dot_prod_map.dtype
@@ -50,6 +52,6 @@ def yat_score(layer, dot_prod_map, distance_sq_map):
 
     # Optional alpha (learnable; constant_alpha is folded into layer.alpha).
     if layer.use_alpha and layer.alpha is not None:
-        y = y * tf.cast(layer.alpha, y.dtype)
+        y = y * reduction_safe_upcast(layer.alpha)
 
     return tf.cast(y, output_dtype)

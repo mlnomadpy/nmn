@@ -28,6 +28,8 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 
+from .._precision import saturating_upcast
+
 
 def normalize_qk(
     query: Tensor,
@@ -90,9 +92,9 @@ def yat_attention_weights(
         # dot^2 and the expanded squared distance both overflow/cancel readily
         # in fp16.  Keep score formation and softmax in fp32; only the bounded
         # normalized weights cross back to the caller's dtype.
-        query = query.float()
-        key = key.float()
-        alpha = alpha.float() if isinstance(alpha, Tensor) else alpha
+        query = saturating_upcast(query)
+        key = saturating_upcast(key)
+        alpha = saturating_upcast(alpha) if isinstance(alpha, Tensor) else alpha
     head_dim = query.shape[-1]
 
     # Scale by 1/√head_dim to match standard attention's score growth profile.

@@ -432,6 +432,40 @@ def test_large_magnitude_dense_matches_fp32_forward_and_gradients(dtype):
     BACKEND not in SUPPORTED_GRADIENT_BACKENDS,
     reason="requires a supported Keras autodiff backend",
 )
+def test_fp16_dense_aggregate_cotangents_match_saturated_fp32_reference():
+    def make(layer_dtype):
+        inputs = ops.full((4096, 2), 100.0, dtype=layer_dtype)
+        layer = YatNMN(
+            1, use_bias=False, use_alpha=False, epsilon=1.0,
+            kernel_initializer="zeros", dtype=layer_dtype,
+        )
+        layer(inputs)
+        layer.kernel.assign(
+            ops.convert_to_tensor([[-100.0], [-99.0]], dtype=layer_dtype)
+        )
+        return layer, inputs
+
+    reference, reference_inputs = make("float32")
+    lowp, lowp_inputs = make("float16")
+    reference_output, reference_gradients = keras_dense_value_and_gradients(
+        reference, reference_inputs
+    )
+    output, gradients = keras_dense_value_and_gradients(lowp, lowp_inputs)
+    np.testing.assert_allclose(
+        to_numpy(ops.cast(output, "float32")), to_numpy(reference_output),
+        rtol=5e-3, atol=2.0,
+    )
+    limit = np.finfo(np.float16)
+    for actual, expected in zip(gradients, reference_gradients):
+        clipped = np.clip(to_numpy(expected), limit.min, limit.max).astype(np.float16)
+        assert np.all(np.isfinite(to_numpy(actual)))
+        np.testing.assert_allclose(to_numpy(actual), clipped, rtol=5e-3, atol=8.0)
+
+
+@pytest.mark.skipif(
+    BACKEND not in SUPPORTED_GRADIENT_BACKENDS,
+    reason="requires a supported Keras autodiff backend",
+)
 @pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
 def test_large_magnitude_attention_matches_fp32_forward_and_gradients(dtype):
     ref_output, ref_gradients = keras_attention_value_and_gradients("float32")

@@ -14,6 +14,7 @@ from typing import Optional, Tuple, Union
 import tensorflow as tf
 
 from .saved_model import ExportPath, export_attention
+from ._precision import reduction_safe_upcast
 
 __all__ = [
     "normalize_qk",
@@ -70,9 +71,9 @@ def yat_attention_weights(
     """
     output_dtype = query.dtype
     if output_dtype in (tf.float16, tf.bfloat16):
-        query = tf.cast(query, tf.float32)
-        key = tf.cast(key, tf.float32)
-        alpha = tf.cast(alpha, tf.float32) if alpha is not None else None
+        query = reduction_safe_upcast(query)
+        key = reduction_safe_upcast(key)
+        alpha = reduction_safe_upcast(alpha) if alpha is not None else None
 
     # Scale by 1/√head_dim to match standard attention's score growth profile.
     head_dim = query.shape[-1]

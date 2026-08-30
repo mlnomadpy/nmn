@@ -14,6 +14,8 @@ from nmn._epsilon import (
     validate_epsilon_for_dtype,
 )
 
+from .._precision import saturating_upcast
+
 __all__ = ["YatNMN"]
 
 
@@ -379,10 +381,13 @@ class YatNMN(nn.Module):
         x, kernel, bias, alpha_param = self._promote_dtype(x, kernel, bias, alpha_param)
         output_dtype = x.dtype
         if output_dtype in (torch.float16, torch.bfloat16):
-            x = x.float()
-            kernel = kernel.float()
-            bias = bias.float() if bias is not None else None
-            alpha_param = alpha_param.float() if alpha_param is not None else None
+            x = saturating_upcast(x)
+            kernel = saturating_upcast(kernel)
+            bias = saturating_upcast(bias) if bias is not None else None
+            alpha_param = (
+                saturating_upcast(alpha_param)
+                if alpha_param is not None else None
+            )
 
         # Spherical mode: normalize inputs and kernel
         if self.spherical:

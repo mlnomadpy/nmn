@@ -33,6 +33,38 @@ def test_large_magnitude_dense_matches_fp32_forward_and_gradients(dtype):
     assert lowp[0].dtype == dtype
 
 
+def _aggregate_dense_grads(dtype):
+    layer = YatNMN(2, 1, bias=True, alpha=True, epsilon=1.0,
+                   dtype=dtype, param_dtype=dtype)
+    with torch.no_grad():
+        layer.weight.copy_(torch.tensor([[-100.0, -99.0]], dtype=dtype))
+        layer.bias.fill_(0.5)
+        layer.alpha.fill_(1.25)
+    x = torch.full((4096, 2), 100.0, dtype=dtype, requires_grad=True)
+    output = layer(x)
+    gradients = torch.autograd.grad(
+        output.float().sum(), (x, layer.weight, layer.bias, layer.alpha)
+    )
+    return output, gradients
+
+
+def test_fp16_dense_aggregate_cotangents_match_saturated_fp32_reference():
+    reference_output, reference_grads = _aggregate_dense_grads(torch.float32)
+    output, grads = _aggregate_dense_grads(torch.float16)
+    limit = torch.finfo(torch.float16)
+    assert torch.isfinite(output).all()
+    np.testing.assert_allclose(
+        output.float().detach().numpy(), reference_output.detach().numpy(),
+        rtol=5e-3, atol=2.0,
+    )
+    for actual, expected in zip(grads, reference_grads):
+        clipped = expected.clamp(limit.min, limit.max).to(torch.float16)
+        assert torch.isfinite(actual).all()
+        np.testing.assert_allclose(
+            actual.detach().numpy(), clipped.detach().numpy(), rtol=5e-3, atol=8.0
+        )
+
+
 def _attention_value_and_grads(dtype):
     query = torch.full((1, 1, 1, 2), 100.0, dtype=dtype, requires_grad=True)
     key = torch.full((1, 2, 1, 2), 100.0, dtype=dtype, requires_grad=True)
@@ -57,6 +89,30 @@ def test_large_magnitude_attention_matches_fp32_forward_and_gradients(dtype):
         np.testing.assert_allclose(
             actual.float().detach().numpy(), expected.detach().numpy(),
             rtol=7e-3, atol=8.0,
+        )
+
+
+def _aggregate_attention_grads(dtype):
+    query = torch.full((1, 1, 1, 2), 100.0, dtype=dtype, requires_grad=True)
+    key = torch.full((1, 2, 1, 2), 99.0, dtype=dtype, requires_grad=True)
+    value = torch.tensor([[[[0.0]], [[1.0]]]], dtype=dtype, requires_grad=True)
+    output = yat_attention(query, key, value, training=False, epsilon=1.0)
+    gradients = torch.autograd.grad(output.float().sum(), (query, key, value))
+    return output, gradients
+
+
+def test_fp16_attention_aggregate_cotangents_match_saturated_fp32_reference():
+    reference_output, reference_grads = _aggregate_attention_grads(torch.float32)
+    output, grads = _aggregate_attention_grads(torch.float16)
+    limit = torch.finfo(torch.float16)
+    np.testing.assert_allclose(
+        output.float().detach().numpy(), reference_output.detach().numpy(), atol=2e-3
+    )
+    for actual, expected in zip(grads, reference_grads):
+        clipped = expected.clamp(limit.min, limit.max).to(torch.float16)
+        assert torch.isfinite(actual).all()
+        np.testing.assert_allclose(
+            actual.detach().numpy(), clipped.detach().numpy(), rtol=7e-3, atol=8.0
         )
 
 

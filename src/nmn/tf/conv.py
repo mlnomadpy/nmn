@@ -11,6 +11,7 @@ from nmn._epsilon import (
 )
 
 from ._yat_core import yat_score
+from ._precision import reduction_safe_upcast
 from .saved_model import SingleInputSavedModelMixin
 
 
@@ -61,7 +62,7 @@ def _grouped_convolution(inputs, kernel, groups, convolution):
 def _upcast_yat_operands(inputs, kernel):
     """Accumulate low-precision convolutional YAT scores in float32."""
     if inputs.dtype in (tf.float16, tf.bfloat16):
-        return tf.cast(inputs, tf.float32), tf.cast(kernel, tf.float32)
+        return reduction_safe_upcast(inputs), reduction_safe_upcast(kernel)
     return inputs, kernel
 
 

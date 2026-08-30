@@ -12,6 +12,7 @@ from nmn._epsilon import (
 )
 
 from .saved_model import SingleInputSavedModelMixin
+from ._precision import reduction_safe_upcast
 
 # Default constant alpha value (sqrt(2))
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
@@ -220,8 +221,8 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
         # their finite ratio is formed.  Score arithmetic is therefore always
         # accumulated in fp32 for fp16/bf16 layers.
         if output_dtype in (tf.float16, tf.bfloat16):
-            inputs = tf.cast(inputs, tf.float32)
-            kernel = tf.cast(kernel, tf.float32)
+            inputs = reduction_safe_upcast(inputs)
+            kernel = reduction_safe_upcast(kernel)
 
         # Spherical mode: normalize inputs and each kernel row (neuron) to unit norm.
         # TF kernel shape is (features, last_dim) → each row is a neuron → axis=-1.
@@ -271,7 +272,7 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
                 )
                 y = y + tf.reshape(bias_const, bias_shape)
             else:
-                y = y + tf.reshape(tf.cast(self.bias, y.dtype), bias_shape)
+                y = y + tf.reshape(reduction_safe_upcast(self.bias), bias_shape)
 
         # Resolve effective epsilon (learnable via softplus, or constant)
         if self.learnable_epsilon and self.epsilon_param is not None:
@@ -289,7 +290,7 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
             y = y * tf.cast(self._constant_alpha_value, y.dtype)
         elif self.alpha is not None:
             # Simple learnable alpha scaling
-            y = y * tf.cast(self.alpha, y.dtype)
+            y = y * reduction_safe_upcast(self.alpha)
         y = tf.cast(y, output_dtype)
 
         if self.return_weights:
