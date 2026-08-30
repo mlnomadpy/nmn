@@ -11,6 +11,8 @@ Covers:
 
 from __future__ import annotations
 
+import itertools
+
 import numpy as np
 import pytest
 
@@ -22,6 +24,62 @@ from nmn.mlx import (  # noqa: E402
     YatConv1D, YatConv2D, YatConv3D,
     YatConvTranspose1D, YatConvTranspose2D, YatConvTranspose3D,
 )
+
+
+def _explicit_same_transpose_reference(
+    inputs, kernel, bias, alpha, epsilon, strides, dilation, output_padding
+):
+    """Differentiable definition of asymmetric SAME transpose convolution.
+
+    This intentionally does not call an MLX convolution or reproduce the
+    implementation's symmetric-convolution/crop strategy. Instead it applies
+    the defining scatter relation directly: input position ``i`` and kernel
+    position ``k`` contribute to ``i * stride + k * dilation - pad_low``.
+    """
+    spatial = tuple(int(size) for size in inputs.shape[1:-1])
+    kernel_size = tuple(int(size) for size in kernel.shape[1:-1])
+    strides = tuple(int(value) for value in strides)
+    dilation = tuple(int(value) for value in dilation)
+    output_padding = tuple(int(value) for value in output_padding)
+    effective = tuple(
+        (size - 1) * rate + 1 for size, rate in zip(kernel_size, dilation)
+    )
+    pad_low = tuple(
+        max(size - stride, 0) // 2 for size, stride in zip(effective, strides)
+    )
+    target = tuple(
+        size * stride + extra
+        for size, stride, extra in zip(spatial, strides, output_padding)
+    )
+    batch = inputs.shape[0]
+    filters = kernel.shape[0]
+    kernel_sq = mx.sum(kernel * kernel, axis=tuple(range(1, kernel.ndim)))
+    output_values = []
+    for out_coord in itertools.product(*(range(size) for size in target)):
+        dot = mx.zeros((batch, filters), dtype=inputs.dtype)
+        patch_sq = mx.zeros((batch, 1), dtype=inputs.dtype)
+        for input_coord in itertools.product(*(range(size) for size in spatial)):
+            x_value = inputs[(slice(None), *input_coord, slice(None))]
+            for kernel_coord in itertools.product(
+                *(range(size) for size in kernel_size)
+            ):
+                scattered = tuple(
+                    index * stride + offset * rate - low
+                    for index, stride, offset, rate, low in zip(
+                        input_coord, strides, kernel_coord, dilation, pad_low
+                    )
+                )
+                if scattered != out_coord:
+                    continue
+                kernel_value = kernel[(slice(None), *kernel_coord, slice(None))]
+                dot = dot + x_value @ kernel_value.T
+                patch_sq = patch_sq + mx.sum(
+                    x_value * x_value, axis=-1, keepdims=True
+                )
+        distance = mx.maximum(patch_sq + kernel_sq - 2.0 * dot, 0.0)
+        output_values.append(alpha * (dot + bias) ** 2 / (distance + epsilon))
+    flat = mx.stack(output_values, axis=1)
+    return mx.reshape(flat, (batch, *target, filters))
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +261,7 @@ def test_conv_transpose1d_same_math_parity(kernel_size, stride, dilation):
     x = mx.array([[[0.2], [-0.4], [0.7], [0.1]]])
     layer.build(1)
     layer.kernel = mx.reshape(
-        mx.arange(1, 2 * kernel_size + 1, dtype=mx.float32) * 0.05,
+        (mx.arange(2 * kernel_size, dtype=mx.float32) + 1) * 0.05,
         (2, kernel_size, 1),
     )
     layer.bias = mx.array([0.1, -0.2])
@@ -237,6 +295,109 @@ def test_conv_transpose1d_same_math_parity(kernel_size, stride, dilation):
     expected = 1.3 * (dot + np.array([0.1, -0.2])) ** 2 / (dist + 0.02)
     assert actual.shape == (1, target, 2)
     assert np.allclose(actual, expected, rtol=2e-5, atol=2e-6)
+
+
+@pytest.mark.parametrize(
+    "layer_cls,input_shape,kernel_size,strides,dilation,output_padding",
+    [
+        (
+            YatConvTranspose2D,
+            (1, 3, 2, 1),
+            (4, 3),
+            (2, 1),
+            (1, 2),
+            (1, 0),
+        ),
+        (
+            YatConvTranspose3D,
+            (1, 2, 2, 2, 1),
+            (3, 2, 2),
+            (1, 2, 2),
+            (1, 2, 1),
+            (0, 1, 1),
+        ),
+    ],
+)
+def test_conv_transpose_same_multidim_forward_and_gradient_parity(
+    layer_cls, input_shape, kernel_size, strides, dilation, output_padding
+):
+    """2D/3D mixed-axis SAME matches the explicit asymmetric definition.
+
+    Both cases combine odd and even kernels, non-unit stride/dilation, and
+    nonzero output padding. Input and kernel gradients are compared as well
+    as the complete forward tensor.
+    """
+    epsilon = 0.03
+    layer = layer_cls(
+        filters=2,
+        kernel_size=kernel_size,
+        strides=strides,
+        dilation_rate=dilation,
+        output_padding=output_padding,
+        padding="same",
+        epsilon=epsilon,
+    )
+    layer.build(input_shape[-1])
+    kernel_elements = int(np.prod(layer.kernel.shape))
+    layer.kernel = mx.reshape(
+        (mx.arange(kernel_elements, dtype=mx.float32) + 1) * 0.025,
+        layer.kernel.shape,
+    )
+    layer.bias = mx.array([0.08, -0.11])
+    layer.alpha = mx.array([1.2])
+    input_elements = int(np.prod(input_shape))
+    inputs = mx.reshape(
+        (mx.arange(input_elements, dtype=mx.float32) + 1) * 0.04 - 0.2,
+        input_shape,
+    )
+
+    def reference(value, kernel):
+        return _explicit_same_transpose_reference(
+            value,
+            kernel,
+            layer.bias,
+            layer.alpha,
+            epsilon,
+            strides,
+            dilation,
+            output_padding,
+        )
+
+    actual = layer(inputs)
+    expected = reference(inputs, layer.kernel)
+    cotangent = mx.reshape(
+        (mx.arange(actual.size, dtype=mx.float32) + 1) / actual.size,
+        actual.shape,
+    )
+
+    def layer_loss(model, value):
+        return mx.sum(model(value) * cotangent)
+
+    _, layer_grads = mlx_nn.value_and_grad(layer, layer_loss)(layer, inputs)
+    actual_input_grad = mx.grad(
+        lambda value: mx.sum(layer(value) * cotangent)
+    )(inputs)
+
+    def reference_loss(value, kernel):
+        return mx.sum(reference(value, kernel) * cotangent)
+
+    _, (expected_input_grad, expected_kernel_grad) = mx.value_and_grad(
+        reference_loss, argnums=(0, 1)
+    )(inputs, layer.kernel)
+
+    assert np.allclose(np.array(actual), np.array(expected), rtol=3e-5, atol=3e-6)
+    assert np.allclose(
+        np.array(actual_input_grad),
+        np.array(expected_input_grad),
+        rtol=8e-5,
+        atol=8e-6,
+    )
+    assert np.allclose(
+        np.array(layer_grads["kernel"]),
+        np.array(expected_kernel_grad),
+        rtol=8e-5,
+        atol=8e-6,
+    )
 
 
 # ---------------------------------------------------------------------------

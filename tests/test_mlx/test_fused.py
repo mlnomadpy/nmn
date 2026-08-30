@@ -183,6 +183,41 @@ def test_fused_yat_array_epsilon_all_gradients_match_eager_and_compile():
         mx.set_default_device(mx.cpu)
 
 
+def test_fused_yat_scalar_array_epsilon_vjp_matches_eager():
+    """A zero-dimensional MLX epsilon is a direct differentiable primal."""
+    mx.set_default_device(mx.cpu)
+    try:
+        x = mx.array([[0.2, -0.4], [0.5, 0.1]])
+        w = mx.array([[0.3, -0.2], [-0.5, 0.4]])
+        b = mx.array([0.1, -0.2])
+        alpha = mx.array([1.25])
+        eps = mx.array(0.07)
+
+        def eager_loss(value):
+            dot = x @ w.T
+            dist = mx.maximum(
+                mx.sum(x * x, axis=-1, keepdims=True)
+                + mx.sum(w * w, axis=-1)[None, :]
+                - 2.0 * dot,
+                0.0,
+            )
+            return mx.sum(alpha * (dot + b) ** 2 / (dist + value))
+
+        def fused_loss(value):
+            return mx.sum(
+                fused_yat_score(x, w, bias=b, alpha=alpha, epsilon=value)
+            )
+
+        expected = mx.grad(eager_loss)(eps)
+        actual = mx.grad(fused_loss)(eps)
+        assert actual.shape == ()
+        assert np.allclose(np.array(actual), np.array(expected), rtol=2e-5, atol=2e-6)
+        assert np.isfinite(float(actual))
+        assert float(actual) != 0.0
+    finally:
+        mx.set_default_device(mx.cpu)
+
+
 # ---------------------------------------------------------------------------
 # YatNMN(fused=True) integration
 # ---------------------------------------------------------------------------
@@ -336,5 +371,65 @@ def test_yat_nmn_fused_learnable_epsilon_gradient_parity(lazy):
         eps_grad = np.array(fused_grads["epsilon_param"])
         assert np.all(np.isfinite(eps_grad))
         assert np.any(eps_grad != 0.0)
+    finally:
+        mx.set_default_device(mx.cpu)
+
+
+def test_compiled_yat_nmn_preserves_softplus_epsilon_parameter_chain():
+    """Compilation keeps the module's epsilon_param -> softplus -> fused VJP
+    chain intact, rather than merely differentiating a precomputed epsilon."""
+
+    def loss_fn(model, x):
+        return mx.sum(model(x))
+
+    mx.set_default_device(mx.cpu)
+    try:
+        layer = YatNMN(
+            features=2,
+            fused=True,
+            learnable_epsilon=True,
+            epsilon=0.07,
+        )
+        layer.build(3)
+        layer.kernel = mx.array([[0.3, -0.2, 0.6], [-0.5, 0.4, 0.2]])
+        layer.bias = mx.array([0.1, -0.2])
+        layer.alpha = mx.array([1.25])
+        inputs = mx.array([[0.2, -0.4, 0.7], [0.5, 0.1, -0.3]])
+
+        grad_fn = mlx_nn.value_and_grad(layer, loss_fn)
+        _, eager_grads = grad_fn(layer, inputs)
+        compiled_grad_fn = mx.compile(
+            lambda value: grad_fn(layer, value),
+            inputs=layer.trainable_parameters(),
+        )
+        _, compiled_grads = compiled_grad_fn(inputs)
+
+        constrained_epsilon = mlx_nn.softplus(layer.epsilon_param)
+        epsilon_grad = mx.grad(
+            lambda eps: mx.sum(
+                fused_yat_score(
+                    inputs,
+                    layer.kernel,
+                    bias=layer.bias,
+                    alpha=layer.alpha,
+                    epsilon=eps,
+                )
+            )
+        )(constrained_epsilon)
+        expected_param_grad = epsilon_grad * mx.sigmoid(layer.epsilon_param)
+
+        assert np.allclose(
+            np.array(compiled_grads["epsilon_param"]),
+            np.array(eager_grads["epsilon_param"]),
+            rtol=2e-5,
+            atol=2e-6,
+        )
+        assert np.allclose(
+            np.array(compiled_grads["epsilon_param"]),
+            np.array(expected_param_grad),
+            rtol=2e-5,
+            atol=2e-6,
+        )
+        assert np.any(np.array(compiled_grads["epsilon_param"]) != 0.0)
     finally:
         mx.set_default_device(mx.cpu)
