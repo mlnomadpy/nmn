@@ -332,6 +332,37 @@ def test_low_precision_dense_supports_jvp():
 
 
 @pytest.mark.parametrize("compiled", [False, True])
+def test_low_precision_dense_supports_jacfwd_and_batched_jvp(compiled):
+    layer = YatNMN(
+        features=1, use_bias=False, use_alpha=False, epsilon=1.0,
+        dtype=jnp.float16, param_dtype=jnp.float16,
+        kernel_init=lambda key, shape, dtype: jnp.full(shape, -100.0, dtype),
+    )
+    inputs = jnp.full((1, 2), 100.0, dtype=jnp.float16)
+    variables = layer.init(jax.random.key(9), inputs)
+
+    jacobian_fn = jax.jacfwd(lambda value: layer.apply(variables, value))
+    batched_jvp_fn = jax.vmap(
+        lambda value, tangent: jax.jvp(
+            lambda operand: layer.apply(variables, operand),
+            (value,),
+            (tangent,),
+        )
+    )
+    if compiled:
+        jacobian_fn = jax.jit(jacobian_fn)
+        batched_jvp_fn = jax.jit(batched_jvp_fn)
+
+    jacobian = jacobian_fn(inputs)
+    batched_inputs = jnp.broadcast_to(inputs, (3,) + inputs.shape)
+    primals, tangents = batched_jvp_fn(
+        batched_inputs, jnp.ones_like(batched_inputs)
+    )
+    assert jnp.isfinite(jacobian).all()
+    assert jnp.isfinite(primals).all() and jnp.isfinite(tangents).all()
+
+
+@pytest.mark.parametrize("compiled", [False, True])
 def test_reused_fp16_leaf_requires_fp32_gradient_storage(compiled):
     def lowp_loss(value):
         first = (reduction_safe_upcast(value) * 40000.0).sum()

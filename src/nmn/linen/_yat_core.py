@@ -15,8 +15,9 @@ from typing import Optional
 
 import jax
 import jax.numpy as jnp
-from jax.custom_transpose import custom_transpose
 from jax import Array
+from jax.extend import core
+from jax.interpreters import ad, batching, mlir
 
 
 __all__ = [
@@ -28,6 +29,46 @@ __all__ = [
 ]
 
 
+_saturating_tangent_upcast_p = core.Primitive("nmn_saturating_tangent_upcast")
+
+
+def _saturating_tangent_upcast_impl(value, *, target_dtype):
+    del target_dtype
+    return value.astype(jnp.float32)
+
+
+_saturating_tangent_upcast_p.def_impl(_saturating_tangent_upcast_impl)
+_saturating_tangent_upcast_p.def_abstract_eval(
+    lambda value, *, target_dtype: jax.core.ShapedArray(
+        value.shape, jnp.dtype("float32")
+    )
+)
+mlir.register_lowering(
+    _saturating_tangent_upcast_p,
+    mlir.lower_fun(_saturating_tangent_upcast_impl, multiple_results=False),
+)
+
+
+def _saturating_tangent_upcast_transpose(cotangent, *, target_dtype):
+    limits = jnp.finfo(target_dtype)
+    cotangent = jnp.clip(cotangent, limits.min, limits.max)
+    return (cotangent.astype(target_dtype),)
+
+
+ad.deflinear(
+    _saturating_tangent_upcast_p, _saturating_tangent_upcast_transpose
+)
+
+
+def _saturating_tangent_upcast_batch(args, dimensions, **params):
+    return _saturating_tangent_upcast_p.bind(*args, **params), dimensions[0]
+
+
+batching.primitive_batchers[_saturating_tangent_upcast_p] = (
+    _saturating_tangent_upcast_batch
+)
+
+
 @jax.custom_jvp
 def _reduction_safe_upcast(value):
     return value.astype(jnp.float32)
@@ -37,20 +78,9 @@ def _reduction_safe_upcast(value):
 def _reduction_safe_upcast_jvp(primals, tangents):
     (value,), (tangent,) = primals, tangents
     output = _reduction_safe_upcast(value)
-
-    @custom_transpose
-    def tangent_cast(dtype_anchor, tangent_value):
-        del dtype_anchor
-        return tangent_value.astype(jnp.float32)
-
-    @tangent_cast.def_transpose
-    def tangent_cast_transpose(dtype_anchor, cotangent):
-        limits = jnp.finfo(dtype_anchor.dtype)
-        cotangent = jnp.clip(cotangent, limits.min, limits.max)
-        return (cotangent.astype(dtype_anchor.dtype),)
-
-    tangent_output_type = jax.typeof(output).to_tangent_aval()
-    tangent_output = tangent_cast(tangent_output_type, value, tangent)
+    tangent_output = _saturating_tangent_upcast_p.bind(
+        tangent, target_dtype=value.dtype
+    )
     return output, tangent_output
 
 
