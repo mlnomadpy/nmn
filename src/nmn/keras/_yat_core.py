@@ -40,27 +40,41 @@ def reduction_safe_upcast(value):
     finite.  This boundary keeps the reduction in fp32 and performs exactly one
     saturating cast when its aggregate cotangent returns to the lowp leaf.
     """
-    # Materialize Keras Variables before passing them to custom_gradient.
-    # The Torch backend's autograd.Function only tracks Tensor arguments;
-    # handing it a Variable wrapper disconnects the underlying Parameter.
-    value = ops.convert_to_tensor(value)
     dtype = standardize_dtype(value.dtype)
     if dtype not in _LOW_PRECISION_DTYPES:
-        return value
+        return ops.convert_to_tensor(value)
+    # Materialize Keras Variables *outside* custom_gradient.  Torch's
+    # autograd.Function only tracks Tensor arguments, while TensorFlow treats
+    # a resource read performed inside a custom forward as a captured variable
+    # and then requires a separate ``variables=`` gradient result.  A
+    # dtype-changing cast creates a tracked tensor boundary without detaching
+    # the underlying parameter on any backend.  The custom identity below
+    # clips its fp32 cotangent before the ordinary cast backward converts that
+    # finite value to the low-precision leaf dtype.
+    value = ops.cast(value, "float32")
     max_value = _dtype_max(dtype)
 
     @ops.custom_gradient
     def upcast(x):
-        result = ops.cast(x, "float32")
+        result = x
 
-        def grad(*args, upstream=None):
+        def grad(*args, upstream=None, variables=None):
             if upstream is None:
                 (upstream,) = args
             # clip preserves NaNs on the supported Keras backends while
             # saturating both finite overflow and +/-inf.
             upstream32 = ops.cast(upstream, "float32")
             saturated = ops.clip(upstream32, -max_value, max_value)
-            return ops.cast(saturated, dtype)
+            input_grad = saturated
+            if variables is not None:
+                # This is a defensive TensorFlow-contract fallback.  The
+                # materializing cast above ensures current callers have no
+                # variables captured inside this custom forward.
+                variable_grads = [
+                    ops.cast(input_grad, variable.dtype) for variable in variables
+                ]
+                return input_grad, variable_grads
+            return input_grad
 
         return result, grad
 
@@ -79,14 +93,20 @@ def saturating_downcast(value, dtype):
         active = ops.logical_and(x > -max_value, x < max_value)
         result = ops.cast(ops.clip(x, -max_value, max_value), dtype)
 
-        def grad(*args, upstream=None):
+        def grad(*args, upstream=None, variables=None):
             if upstream is None:
                 (upstream,) = args
             upstream32 = ops.cast(upstream, "float32")
             # Comparisons are false for NaN.  Pass its cotangent through so the
             # upstream arithmetic remains NaN instead of silently zeroing it.
             active_or_nan = ops.logical_or(active, ops.isnan(x))
-            return upstream32 * ops.cast(active_or_nan, "float32")
+            input_grad = upstream32 * ops.cast(active_or_nan, "float32")
+            if variables is not None:
+                variable_grads = [
+                    ops.cast(input_grad, variable.dtype) for variable in variables
+                ]
+                return input_grad, variable_grads
+            return input_grad
 
         return result, grad
 
