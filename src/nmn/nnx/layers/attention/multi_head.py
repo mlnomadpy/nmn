@@ -642,11 +642,24 @@ class MultiHeadAttention(Module):
         else:
             effective_epsilon = self.epsilon
 
+        # Materialize the user mask at the actual score shape before both the
+        # attention call and the post-projection zero-row policy.  Reducing an
+        # unbroadcast rank-1/2 mask would otherwise confuse query/head axes.
+        effective_mask = None
+        if mask is not None:
+            effective_mask = jnp.broadcast_to(
+                mask,
+                query.shape[:-3]
+                + (query.shape[-2], query.shape[-3], key.shape[-3]),
+            )
+
         # Apply attention (YAT by default)
         x = self.attention_fn(
             query,
             key,
             value,
+            # Preserve the user/custom attention_fn mask ABI; the built-in
+            # attention core materializes broadcasting internally.
             mask=mask,
             dropout_rng=dropout_rng,
             dropout_rate=self.dropout_rate,
@@ -678,6 +691,12 @@ class MultiHeadAttention(Module):
             )
         else:
             output = self.out(x)
+
+        if effective_mask is not None:
+            query_has_key = jnp.any(effective_mask, axis=(-3, -1))
+            output = jnp.where(
+                query_has_key[..., None], output, jnp.zeros_like(output)
+            )
 
         if pending_cache is not None:
             assert self.cached_key is not None

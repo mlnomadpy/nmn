@@ -858,6 +858,13 @@ class RotaryYatAttention(Module):
             elif self.alpha is not None:
                 alpha_value = self.alpha[...]
 
+        effective_mask = None
+        if mask is not None:
+            effective_mask = jnp.broadcast_to(
+                mask,
+                q.shape[:-3] + (q.shape[-2], q.shape[-3], k.shape[-3]),
+            )
+
         # Apply Rotary YAT attention
         if self.use_performer and self.performer_kind == "slay":
             # Performer mode (SLAY anchor approximation): O(n) complexity
@@ -939,7 +946,7 @@ class RotaryYatAttention(Module):
                 v,
                 freqs_cos,
                 freqs_sin,
-                mask=mask,
+                mask=effective_mask,
                 dropout_rng=dropout_rng,
                 dropout_rate=self.dropout_rate,
                 broadcast_dropout=self.broadcast_dropout,
@@ -966,6 +973,12 @@ class RotaryYatAttention(Module):
         # Optional output projection
         if self.o_proj is not None:
             output = self.o_proj(output)
+
+        if effective_mask is not None:
+            query_has_key = jnp.any(effective_mask, axis=(-3, -1))
+            output = jnp.where(
+                query_has_key[..., None], output, jnp.zeros_like(output)
+            )
 
         if pending_cache is not None:
             assert self.cached_key is not None

@@ -101,9 +101,18 @@ def yat_attention_weights(
         attn_weights = attn_weights * scale
 
     if mask is not None:
-        attn_weights = ops.where(mask, attn_weights, -1e9)
+        mask = ops.broadcast_to(
+            ops.cast(mask, "bool"), ops.shape(attn_weights)
+        )
+        row_has_key = ops.any(mask, axis=-1, keepdims=True)
+        attn_weights = ops.where(mask, attn_weights, -float("inf"))
+        attn_weights = ops.where(
+            row_has_key, attn_weights, ops.zeros_like(attn_weights)
+        )
 
     attn_weights = ops.softmax(attn_weights, axis=-1)
+    if mask is not None:
+        attn_weights = ops.where(mask, attn_weights, ops.zeros_like(attn_weights))
 
     if dropout_rate > 0.0 and training:
         from keras.src import random
@@ -344,10 +353,17 @@ class MultiHeadYatAttention(Layer):
             elif self.alpha_param is not None:
                 alpha_val = self.alpha_param
 
+        effective_mask = None
+        if mask is not None:
+            effective_mask = ops.broadcast_to(
+                ops.cast(mask, "bool"),
+                (batch_size, self.num_heads, q_len, kv_len),
+            )
+
         dropout = self.dropout_rate if training else 0.0
         x = yat_attention(
             q, k, v,
-            mask=mask,
+            mask=effective_mask,
             dropout_rate=dropout,
             training=training,
             epsilon=self.epsilon,
@@ -360,6 +376,12 @@ class MultiHeadYatAttention(Layer):
 
         if self.out_kernel is not None:
             x = self._linear(x, self.out_kernel, self.out_bias)
+
+        if effective_mask is not None:
+            query_has_key = ops.any(effective_mask, axis=(-3, -1))
+            x = ops.where(
+                ops.expand_dims(query_has_key, -1), x, ops.zeros_like(x)
+            )
 
         return x
 

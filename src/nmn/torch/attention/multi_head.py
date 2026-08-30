@@ -226,10 +226,16 @@ class MultiHeadYatAttention(nn.Module):
         (q, k, v, alpha) = self._promote_dtype(q, k, v, alpha)
 
         # Apply YAT attention
+        effective_mask = None
+        if mask is not None:
+            effective_mask = torch.broadcast_to(
+                mask.to(dtype=torch.bool),
+                (batch_size, self.num_heads, q_len, kv_len),
+            )
         dropout_p = self.dropout if self.training and not deterministic else 0.0
         x = yat_attention(
             q, k, v,
-            mask=mask,
+            mask=effective_mask,
             dropout_p=dropout_p,
             training=self.training and not deterministic,
             epsilon=self.epsilon,
@@ -244,5 +250,11 @@ class MultiHeadYatAttention(nn.Module):
         # Output projection
         if self.out_proj is not None:
             x = self._linear(x, self.out_proj)
+
+        # A projection bias must not reintroduce a value for a query whose
+        # every key is masked in every head.
+        if effective_mask is not None:
+            query_has_key = effective_mask.any(dim=(-3, -1))
+            x = torch.where(query_has_key.unsqueeze(-1), x, torch.zeros_like(x))
 
         return x
