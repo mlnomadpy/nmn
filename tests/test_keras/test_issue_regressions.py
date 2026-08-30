@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 import threading
-import tomllib
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10 compatibility
+    import tomli as tomllib
 
 import keras
 import numpy as np

@@ -42,6 +42,7 @@ dev = [
     "isort>=5.12.0",
     "mypy>=1.0.0",
     "hatch-vcs>=0.3.0",
+    "tomli>=1.1.0; python_version < '3.11'",
 ]
 nnx = ["jax>=0.9.1", "jaxlib>=0.9.1", "flax>=0.12.5"]
 torch = ["torch>=1.11.0", "torchvision>=0.12.0"]
