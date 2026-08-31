@@ -30,11 +30,16 @@ from __future__ import annotations
 
 import functools
 import math
+
 import jax
+import jax.numpy as jnp
 from jax import lax
 from jax.experimental import pallas as pl
-import jax.numpy as jnp
 
+
+def _dot(a, b, precision):
+  """Pallas dot with an explicit caller-selected precision policy."""
+  return pl.dot(a, b, precision=precision)
 
 # ═══════════════════════════════════════════════════════════════════════
 # Forward kernel
@@ -50,6 +55,7 @@ def _yat_l1_fwd_kernel(
     block_k: int,
     head_dim: int,
     causal: bool,
+    precision,
 ):
   kv_seq_len = k_ref.shape[0]
   start_q = pl.program_id(0)
@@ -69,7 +75,7 @@ def _yat_l1_fwd_kernel(
     k = k_ref[curr_k_slice, :]                          # [block_k, head_dim_padded]
     v = v_ref[curr_k_slice, :]                          # [block_k, value_dim]
 
-    dot = pl.dot(q, k.T)                                # [block_q, block_k]
+    dot = _dot(q, k.T, precision)                       # [block_q, block_k]
     k_sq = jnp.sum(k * k, axis=-1)                     # [block_k]
 
     dist = q_sq[:, None] + k_sq[None, :] - 2.0 * dot
@@ -83,7 +89,7 @@ def _yat_l1_fwd_kernel(
       scores = jnp.where(span_q[:, None] >= span_k[None, :], scores, 0.0)
 
     l_next = l_prev + jnp.sum(scores, axis=-1)
-    o_next = o_prev + pl.dot(scores.astype(v.dtype), v)
+    o_next = o_prev + _dot(scores.astype(v.dtype), v, precision)
     return o_next, l_next
 
   if causal:
@@ -98,7 +104,11 @@ def _yat_l1_fwd_kernel(
 
   o = o / jnp.maximum(l_i[:, None], 1e-12)
   o_ref[...] = o.astype(o_ref.dtype)
-  l_ref[...] = l_i
+  # Keep a trailing singleton dimension in the backing array.  On TPU this
+  # makes the sequence axis the second-minor dimension (8-wide tiling) rather
+  # than the minor dimension (128-wide tiling), so block_q values such as 64
+  # are legal Mosaic blocks.
+  l_ref[...] = l_i[:, None]
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -115,15 +125,15 @@ def _yat_l1_bwd_dkv_kernel(
     block_k: int,
     head_dim: int,
     causal: bool,
+    precision,
 ):
   q_seq_len = q_ref.shape[0]
   start_k = pl.program_id(0)
   head_dim_padded = k_ref.shape[-1]
   value_dim = v_ref.shape[-1]
 
-  curr_k_slice = pl.dslice(start_k * block_k, block_k)
-  k = k_ref[curr_k_slice, :]                           # [block_k, head_dim_padded]
-  v = v_ref[curr_k_slice, :]
+  k = k_ref[...]                                       # [block_k, head_dim_padded]
+  v = v_ref[...]
   k_sq = jnp.sum(k * k, axis=-1)                       # [block_k]
 
   dk = jnp.zeros((block_k, head_dim_padded), dtype=jnp.float32)
@@ -136,10 +146,10 @@ def _yat_l1_bwd_dkv_kernel(
     q = q_ref[curr_q_slice, :]                          # [block_q, head_dim_padded]
     do = do_ref[curr_q_slice, :]
     out = out_ref[curr_q_slice, :]
-    l = l_ref[curr_q_slice]                             # [block_q]
+    l = l_ref[curr_q_slice, 0]                          # [block_q]
 
     q_sq = jnp.sum(q * q, axis=-1)
-    dot = pl.dot(q, k.T)                                # [block_q, block_k]
+    dot = _dot(q, k.T, precision)                       # [block_q, block_k]
     dist = jnp.maximum(q_sq[:, None] + k_sq[None, :] - 2.0 * dot, 0.0) + epsilon
     scores = (dot * dot) / (dist * scale)
 
@@ -154,7 +164,7 @@ def _yat_l1_bwd_dkv_kernel(
 
     # dW = dO @ V^T.  The normalization correction must be global
     # across all K/V tiles: sum_j(dW_j * W_j) == dO dot output.
-    dW = pl.dot(do, v.T)                                # [block_q, block_k]
+    dW = _dot(do, v.T, precision)                       # [block_q, block_k]
     delta = jnp.sum(do * out, axis=-1, keepdims=True)
     dS = (dW - delta) / l_safe[:, None]
 
@@ -162,7 +172,7 @@ def _yat_l1_bwd_dkv_kernel(
       dS = jnp.where(mask, dS, 0.0)
 
     # dV += W^T @ dO
-    dv_next = dv_prev + pl.dot(W.astype(do.dtype).T, do)
+    dv_next = dv_prev + _dot(W.astype(do.dtype).T, do, precision)
 
     # dK from dS through YAT score
     inv_dist_scale = 1.0 / (dist * scale)
@@ -173,7 +183,7 @@ def _yat_l1_bwd_dkv_kernel(
     g_dist = dS * d_scores_d_dist
     g_dot_total = g_num + g_dist * (-2.0)
 
-    dk_next = dk_prev + pl.dot(g_dot_total.astype(q.dtype).T, q)
+    dk_next = dk_prev + _dot(g_dot_total.astype(q.dtype).T, q, precision)
     dk_next = dk_next + 2.0 * k * jnp.sum(g_dist, axis=0, keepdims=True).T
 
     return dk_next, dv_next
@@ -181,8 +191,8 @@ def _yat_l1_bwd_dkv_kernel(
   lower_bound = lax.div(start_k * block_k, block_q) if causal else 0
   dk, dv = lax.fori_loop(lower_bound, pl.cdiv(q_seq_len, block_q), body, (dk, dv))
 
-  dk_ref[curr_k_slice, :] = dk.astype(dk_ref.dtype)
-  dv_ref[curr_k_slice, :] = dv.astype(dv_ref.dtype)
+  dk_ref[...] = dk.astype(dk_ref.dtype)
+  dv_ref[...] = dv.astype(dv_ref.dtype)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -199,16 +209,16 @@ def _yat_l1_bwd_dq_kernel(
     block_k: int,
     head_dim: int,
     causal: bool,
+    precision,
 ):
   kv_seq_len = k_ref.shape[0]
   start_q = pl.program_id(0)
   head_dim_padded = q_ref.shape[-1]
 
-  curr_q_slice = pl.dslice(start_q * block_q, block_q)
-  q = q_ref[curr_q_slice, :]
-  do = do_ref[curr_q_slice, :]
-  out = out_ref[curr_q_slice, :]
-  l = l_ref[curr_q_slice]
+  q = q_ref[...]
+  do = do_ref[...]
+  out = out_ref[...]
+  l = l_ref[:, 0]
   q_sq = jnp.sum(q * q, axis=-1)
 
   dq = jnp.zeros((block_q, head_dim_padded), dtype=jnp.float32)
@@ -219,7 +229,7 @@ def _yat_l1_bwd_dq_kernel(
     v = v_ref[curr_k_slice, :]
     k_sq = jnp.sum(k * k, axis=-1)
 
-    dot = pl.dot(q, k.T)
+    dot = _dot(q, k.T, precision)
     dist = jnp.maximum(q_sq[:, None] + k_sq[None, :] - 2.0 * dot, 0.0) + epsilon
     scores = (dot * dot) / (dist * scale)
 
@@ -232,7 +242,7 @@ def _yat_l1_bwd_dq_kernel(
     l_safe = jnp.maximum(l, 1e-12)
     W = scores / l_safe[:, None]
 
-    dW = pl.dot(do, v.T)
+    dW = _dot(do, v.T, precision)
     delta = jnp.sum(do * out, axis=-1, keepdims=True)
     dS = (dW - delta) / l_safe[:, None]
 
@@ -247,7 +257,7 @@ def _yat_l1_bwd_dq_kernel(
     g_dist = dS * d_scores_d_dist
     g_dot_total = g_num + g_dist * (-2.0)
 
-    dq_next = dq_prev + pl.dot(g_dot_total.astype(k.dtype), k)
+    dq_next = dq_prev + _dot(g_dot_total.astype(k.dtype), k, precision)
     dq_next = dq_next + 2.0 * q * jnp.sum(g_dist, axis=-1, keepdims=True)
 
     return dq_next
@@ -261,14 +271,14 @@ def _yat_l1_bwd_dq_kernel(
     upper_bound = pl.cdiv(kv_seq_len, block_k)
 
   dq = lax.fori_loop(0, upper_bound, body, dq)
-  dq_ref[curr_q_slice, :] = dq.astype(dq_ref.dtype)
+  dq_ref[...] = dq.astype(dq_ref.dtype)
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # Public API with custom_vjp
 # ═══════════════════════════════════════════════════════════════════════
 
-@functools.partial(jax.custom_vjp, nondiff_argnums=[3, 4, 5, 6, 7])
+@functools.partial(jax.custom_vjp, nondiff_argnums=[3, 4, 5, 6, 7, 8])
 def pallas_yat_l1_attention(
     q: jax.Array,
     k: jax.Array,
@@ -278,6 +288,7 @@ def pallas_yat_l1_attention(
     block_q: int = 128,
     block_k: int = 128,
     interpret: bool = False,
+    precision: jax.lax.Precision | None = None,
 ) -> jax.Array:
   """Pallas-fused YAT L1 attention.
 
@@ -292,18 +303,22 @@ def pallas_yat_l1_attention(
       block_q: Q tile size. Ragged sequence tails are padded internally.
       block_k: K/V tile size. Ragged sequence tails are padded internally.
       interpret: If True, run on CPU via JAX tracing (for testing).
+      precision: Optional JAX dot precision. On TPU, pass
+        ``jax.lax.Precision.HIGHEST`` to prevent fp32 inputs from being rounded
+        to bfloat16 by the matrix unit.
 
   Returns:
       Output of shape [..., q_len, num_heads, v_dim].
   """
-  _validate_inputs(q, k, v, block_q, block_k)
-  q, k, v, batch_shape = _flatten_batch(q, k, v)
+  _validate_inputs(q, k, v, block_q, block_k, interpret)
+  q, k, v, layout = _flatten_batch_and_heads(q, k, v)
 
-  out = _pallas_yat_l1_fwd(q, k, v, epsilon, causal, block_q, block_k, interpret)
-  return _restore_batch(out, batch_shape)
+  out = _pallas_yat_l1_fwd(
+      q, k, v, epsilon, causal, block_q, block_k, interpret, precision)
+  return _restore_batch_and_heads(out, layout)
 
 
-def _validate_inputs(q, k, v, block_q, block_k):
+def _validate_inputs(q, k, v, block_q, block_k, interpret):
   if q.ndim < 3 or k.ndim < 3 or v.ndim < 3:
     raise ValueError("q, k, and v must have shape [..., sequence, heads, features]")
   if q.shape[:-3] != k.shape[:-3] or q.shape[:-3] != v.shape[:-3]:
@@ -320,52 +335,74 @@ def _validate_inputs(q, k, v, block_q, block_k):
     raise ValueError("block_q and block_k must be positive")
   if q.dtype != k.dtype:
     raise ValueError("q and k dtypes must match")
+  if not interpret and jax.default_backend() == "tpu":
+    _validate_tpu_block_size("block_q", block_q, q.shape[-3])
+    _validate_tpu_block_size("block_k", block_k, k.shape[-3])
 
 
-def _flatten_batch(q, k, v):
+def _validate_tpu_block_size(name, block_size, sequence_length):
+  actual = min(block_size, sequence_length)
+  if actual < sequence_length and actual % 8:
+    raise ValueError(
+        f"{name} must be divisible by 8 for multi-tile native TPU execution; "
+        f"got {block_size} for sequence length {sequence_length}"
+    )
+
+
+def _flatten_batch_and_heads(q, k, v):
   batch_shape = q.shape[:-3]
-  if not batch_shape:
-    return q[None], k[None], v[None], batch_shape
-  if len(batch_shape) == 1:
-    return q, k, v, batch_shape
-  flat = math.prod(batch_shape)
+  num_heads = q.shape[-2]
   return (
-      q.reshape(flat, *q.shape[-3:]),
-      k.reshape(flat, *k.shape[-3:]),
-      v.reshape(flat, *v.shape[-3:]),
-      batch_shape,
+      _flatten_one_batch_and_heads(q),
+      _flatten_one_batch_and_heads(k),
+      _flatten_one_batch_and_heads(v),
+      (batch_shape, num_heads),
   )
 
 
-def _restore_batch(x, batch_shape):
+def _flatten_one_batch_and_heads(x):
+  batch_shape = x.shape[:-3]
+  flat_batch = math.prod(batch_shape) if batch_shape else 1
+  seq_len, num_heads, feature_dim = x.shape[-3:]
+  x = x.reshape(flat_batch, seq_len, num_heads, feature_dim)
+  x = jnp.transpose(x, (0, 2, 1, 3))
+  return x.reshape(flat_batch * num_heads, seq_len, feature_dim)
+
+
+def _restore_batch_and_heads(x, layout):
+  batch_shape, num_heads = layout
+  flat_batch = math.prod(batch_shape) if batch_shape else 1
+  seq_len, feature_dim = x.shape[-2:]
+  x = x.reshape(flat_batch, num_heads, seq_len, feature_dim)
+  x = jnp.transpose(x, (0, 2, 1, 3))
   if not batch_shape:
     return x[0]
-  if len(batch_shape) > 1:
-    return x.reshape(*batch_shape, *x.shape[-3:])
-  return x
+  return x.reshape(*batch_shape, seq_len, num_heads, feature_dim)
 
 
 def _pad_sequences(q, k, v, block_q, block_k):
   q_len, kv_len = q.shape[1], k.shape[1]
   q_pad = (-q_len) % block_q
   kv_pad = (-kv_len) % block_k
-  q = jnp.pad(q, ((0, 0), (0, q_pad), (0, 0), (0, 0)))
-  k = jnp.pad(k, ((0, 0), (0, kv_pad), (0, 0), (0, 0)))
-  v = jnp.pad(v, ((0, 0), (0, kv_pad), (0, 0), (0, 0)))
+  q = jnp.pad(q, ((0, 0), (0, q_pad), (0, 0)))
+  k = jnp.pad(k, ((0, 0), (0, kv_pad), (0, 0)))
+  v = jnp.pad(v, ((0, 0), (0, kv_pad), (0, 0)))
   return q, k, v, q_len, kv_len
 
 
-def _pallas_yat_l1_fwd(q, k, v, epsilon, causal, block_q, block_k, interpret):
+def _pallas_yat_l1_fwd(
+    q, k, v, epsilon, causal, block_q, block_k, interpret, precision):
   block_q = min(block_q, q.shape[1])
   block_k = min(block_k, k.shape[1])
   q, k, v, q_len, _ = _pad_sequences(q, k, v, block_q, block_k)
   out, _ = _pallas_yat_l1_fwd_padded(
-      q, k, v, epsilon, causal, block_q, block_k, interpret)
+      q, k, v, epsilon, causal, block_q, block_k, interpret, precision)
   return out[:, :q_len]
 
 
-def _pallas_yat_l1_fwd_padded(q, k, v, epsilon, causal, block_q, block_k, interpret):
-  batch_size, q_seq_len, num_heads, head_dim = q.shape
+def _pallas_yat_l1_fwd_padded(
+    q, k, v, epsilon, causal, block_q, block_k, interpret, precision=None):
+  batch_heads, q_seq_len, head_dim = q.shape
   kv_seq_len, value_dim = k.shape[1], v.shape[-1]
   scale = math.sqrt(float(head_dim))
 
@@ -373,23 +410,23 @@ def _pallas_yat_l1_fwd_padded(q, k, v, epsilon, causal, block_q, block_k, interp
       _yat_l1_fwd_kernel,
       epsilon=epsilon, scale=scale,
       block_q=block_q, block_k=block_k,
-      head_dim=head_dim, causal=causal,
+      head_dim=head_dim, causal=causal, precision=precision,
   )
 
-  grid = (pl.cdiv(q_seq_len, block_q), batch_size, num_heads)
+  grid = (pl.cdiv(q_seq_len, block_q), batch_heads)
 
   in_specs = [
-      pl.BlockSpec((None, block_q, None, head_dim), lambda i, j, k: (j, i, k, 0)),
-      pl.BlockSpec((None, kv_seq_len, None, head_dim), lambda _, j, k: (j, 0, k, 0)),
-      pl.BlockSpec((None, kv_seq_len, None, value_dim), lambda _, j, k: (j, 0, k, 0)),
+      pl.BlockSpec((None, block_q, head_dim), lambda i, j: (j, i, 0)),
+      pl.BlockSpec((None, kv_seq_len, head_dim), lambda _, j: (j, 0, 0)),
+      pl.BlockSpec((None, kv_seq_len, value_dim), lambda _, j: (j, 0, 0)),
   ]
   out_specs = [
-      pl.BlockSpec((None, block_q, None, value_dim), lambda i, j, k: (j, i, k, 0)),
-      pl.BlockSpec((None, None, block_q), lambda i, j, k: (j, k, i)),
+      pl.BlockSpec((None, block_q, value_dim), lambda i, j: (j, i, 0)),
+      pl.BlockSpec((None, block_q, 1), lambda i, j: (j, i, 0)),
   ]
   out_shapes = [
-      jax.ShapeDtypeStruct((batch_size, q_seq_len, num_heads, value_dim), v.dtype),
-      jax.ShapeDtypeStruct((batch_size, num_heads, q_seq_len), jnp.float32),
+      jax.ShapeDtypeStruct((batch_heads, q_seq_len, value_dim), v.dtype),
+      jax.ShapeDtypeStruct((batch_heads, q_seq_len, 1), jnp.float32),
   ]
 
   out, l = pl.pallas_call(
@@ -404,48 +441,53 @@ def _pallas_yat_l1_fwd_padded(q, k, v, epsilon, causal, block_q, block_k, interp
   return out, l
 
 
-def _pallas_yat_l1_fwd_with_residuals(q, k, v, epsilon, causal, block_q, block_k, interpret):
+def _pallas_yat_l1_fwd_with_residuals(
+    q, k, v, epsilon, causal, block_q, block_k, interpret, precision):
   block_q_actual = min(block_q, q.shape[1])
   block_k_actual = min(block_k, k.shape[1])
   q, k, v, q_len, kv_len = _pad_sequences(
       q, k, v, block_q_actual, block_k_actual)
   out, l = _pallas_yat_l1_fwd_padded(
-      q, k, v, epsilon, causal, block_q_actual, block_k_actual, interpret)
+      q, k, v, epsilon, causal, block_q_actual, block_k_actual, interpret,
+      precision)
   return out[:, :q_len], (q, k, v, l, out, q_len, kv_len)
 
 
-def _pallas_yat_l1_bwd(epsilon, causal, block_q, block_k, interpret, res, do):
+def _pallas_yat_l1_bwd(
+    epsilon, causal, block_q, block_k, interpret, precision, res, do):
   q, k, v, l, out = res
-  batch_size, q_seq_len, num_heads, head_dim = q.shape
+  batch_heads, q_seq_len, head_dim = q.shape
   kv_seq_len, value_dim = k.shape[1], v.shape[-1]
   scale = math.sqrt(float(head_dim))
 
   block_q_actual = min(block_q, q_seq_len)
   block_k_actual = min(block_k, kv_seq_len)
 
-  common = dict(epsilon=epsilon, scale=scale, head_dim=head_dim, causal=causal)
+  common = dict(
+      epsilon=epsilon, scale=scale, head_dim=head_dim, causal=causal,
+      precision=precision)
 
   # ── dK, dV kernel ──
   dkv_kernel = functools.partial(
       _yat_l1_bwd_dkv_kernel,
       block_q=block_q_actual, block_k=block_k_actual, **common,
   )
-  grid_dkv = (pl.cdiv(kv_seq_len, block_k_actual), batch_size, num_heads)
+  grid_dkv = (pl.cdiv(kv_seq_len, block_k_actual), batch_heads)
 
   dk, dv = pl.pallas_call(
       dkv_kernel,
       grid=grid_dkv,
       in_specs=[
-          pl.BlockSpec((None, q_seq_len, None, head_dim), lambda _, j, k: (j, 0, k, 0)),
-          pl.BlockSpec((None, kv_seq_len, None, head_dim), lambda _, j, k: (j, 0, k, 0)),
-          pl.BlockSpec((None, kv_seq_len, None, value_dim), lambda _, j, k: (j, 0, k, 0)),
-          pl.BlockSpec((None, None, q_seq_len), lambda _, j, k: (j, k, 0)),
-          pl.BlockSpec((None, q_seq_len, None, value_dim), lambda _, j, k: (j, 0, k, 0)),
-          pl.BlockSpec((None, q_seq_len, None, value_dim), lambda _, j, k: (j, 0, k, 0)),
+          pl.BlockSpec((None, q_seq_len, head_dim), lambda _, j: (j, 0, 0)),
+          pl.BlockSpec((None, block_k_actual, head_dim), lambda i, j: (j, i, 0)),
+          pl.BlockSpec((None, block_k_actual, value_dim), lambda i, j: (j, i, 0)),
+          pl.BlockSpec((None, q_seq_len, 1), lambda _, j: (j, 0, 0)),
+          pl.BlockSpec((None, q_seq_len, value_dim), lambda _, j: (j, 0, 0)),
+          pl.BlockSpec((None, q_seq_len, value_dim), lambda _, j: (j, 0, 0)),
       ],
       out_specs=[
-          pl.BlockSpec((None, kv_seq_len, None, head_dim), lambda _, j, k: (j, 0, k, 0)),
-          pl.BlockSpec((None, kv_seq_len, None, value_dim), lambda _, j, k: (j, 0, k, 0)),
+          pl.BlockSpec((None, block_k_actual, head_dim), lambda i, j: (j, i, 0)),
+          pl.BlockSpec((None, block_k_actual, value_dim), lambda i, j: (j, i, 0)),
       ],
       out_shape=[
           jax.ShapeDtypeStruct(k.shape, k.dtype),
@@ -460,20 +502,20 @@ def _pallas_yat_l1_bwd(epsilon, causal, block_q, block_k, interpret, res, do):
       _yat_l1_bwd_dq_kernel,
       block_q=block_q_actual, block_k=block_k_actual, **common,
   )
-  grid_dq = (pl.cdiv(q_seq_len, block_q_actual), batch_size, num_heads)
+  grid_dq = (pl.cdiv(q_seq_len, block_q_actual), batch_heads)
 
   dq = pl.pallas_call(
       dq_kernel,
       grid=grid_dq,
       in_specs=[
-          pl.BlockSpec((None, q_seq_len, None, head_dim), lambda _, j, k: (j, 0, k, 0)),
-          pl.BlockSpec((None, kv_seq_len, None, head_dim), lambda _, j, k: (j, 0, k, 0)),
-          pl.BlockSpec((None, kv_seq_len, None, value_dim), lambda _, j, k: (j, 0, k, 0)),
-          pl.BlockSpec((None, None, q_seq_len), lambda _, j, k: (j, k, 0)),
-          pl.BlockSpec((None, q_seq_len, None, value_dim), lambda _, j, k: (j, 0, k, 0)),
-          pl.BlockSpec((None, q_seq_len, None, value_dim), lambda _, j, k: (j, 0, k, 0)),
+          pl.BlockSpec((None, block_q_actual, head_dim), lambda i, j: (j, i, 0)),
+          pl.BlockSpec((None, kv_seq_len, head_dim), lambda _, j: (j, 0, 0)),
+          pl.BlockSpec((None, kv_seq_len, value_dim), lambda _, j: (j, 0, 0)),
+          pl.BlockSpec((None, block_q_actual, 1), lambda i, j: (j, i, 0)),
+          pl.BlockSpec((None, block_q_actual, value_dim), lambda i, j: (j, i, 0)),
+          pl.BlockSpec((None, block_q_actual, value_dim), lambda i, j: (j, i, 0)),
       ],
-      out_specs=pl.BlockSpec((None, q_seq_len, None, head_dim), lambda _, j, k: (j, 0, k, 0)),
+      out_specs=pl.BlockSpec((None, block_q_actual, head_dim), lambda i, j: (j, i, 0)),
       out_shape=jax.ShapeDtypeStruct(q.shape, q.dtype),
       interpret=interpret,
       name="yat_l1_bwd_dq",
@@ -482,32 +524,32 @@ def _pallas_yat_l1_bwd(epsilon, causal, block_q, block_k, interpret, res, do):
   return dq, dk, dv
 
 
-def _pallas_vjp_fwd(q, k, v, epsilon, causal, block_q, block_k, interpret):
-  _validate_inputs(q, k, v, block_q, block_k)
-  q, k, v, batch_shape = _flatten_batch(q, k, v)
+def _pallas_vjp_fwd(
+    q, k, v, epsilon, causal, block_q, block_k, interpret, precision):
+  _validate_inputs(q, k, v, block_q, block_k, interpret)
+  q, k, v, layout = _flatten_batch_and_heads(q, k, v)
 
   out, residuals = _pallas_yat_l1_fwd_with_residuals(
-      q, k, v, epsilon, causal, block_q, block_k, interpret)
+      q, k, v, epsilon, causal, block_q, block_k, interpret, precision)
 
-  return _restore_batch(out, batch_shape), (residuals, batch_shape)
+  return _restore_batch_and_heads(out, layout), (residuals, layout)
 
 
-def _pallas_vjp_bwd(epsilon, causal, block_q, block_k, interpret, res, do):
-  (q, k, v, l, out, q_len, kv_len), batch_shape = res
+def _pallas_vjp_bwd(
+    epsilon, causal, block_q, block_k, interpret, precision, res, do):
+  (q, k, v, l, out, q_len, kv_len), layout = res
 
-  if not batch_shape:
-    do = do[None]
-  elif len(batch_shape) > 1:
-    flat = math.prod(batch_shape)
-    do = do.reshape(flat, *do.shape[-3:])
-  do = jnp.pad(do, ((0, 0), (0, q.shape[1] - q_len), (0, 0), (0, 0)))
+  do = _flatten_one_batch_and_heads(do)
+  do = jnp.pad(do, ((0, 0), (0, q.shape[1] - q_len), (0, 0)))
 
-  dq, dk, dv = _pallas_yat_l1_bwd(epsilon, causal, block_q, block_k, interpret, (q, k, v, l, out), do)
+  dq, dk, dv = _pallas_yat_l1_bwd(
+      epsilon, causal, block_q, block_k, interpret, precision,
+      (q, k, v, l, out), do)
   dq, dk, dv = dq[:, :q_len], dk[:, :kv_len], dv[:, :kv_len]
   return (
-      _restore_batch(dq, batch_shape),
-      _restore_batch(dk, batch_shape),
-      _restore_batch(dv, batch_shape),
+      _restore_batch_and_heads(dq, layout),
+      _restore_batch_and_heads(dk, layout),
+      _restore_batch_and_heads(dv, layout),
   )
 
 
