@@ -36,6 +36,11 @@ import jax.numpy as jnp
 from jax import lax
 from jax.experimental import pallas as pl
 
+
+def _dot_highest(a, b):
+  """Pallas dot without TPU's default fp32-to-bf16 input rounding."""
+  return pl.dot(a, b, precision=lax.Precision.HIGHEST)
+
 # ═══════════════════════════════════════════════════════════════════════
 # Forward kernel
 # ═══════════════════════════════════════════════════════════════════════
@@ -69,7 +74,7 @@ def _yat_l1_fwd_kernel(
     k = k_ref[curr_k_slice, :]                          # [block_k, head_dim_padded]
     v = v_ref[curr_k_slice, :]                          # [block_k, value_dim]
 
-    dot = pl.dot(q, k.T)                                # [block_q, block_k]
+    dot = _dot_highest(q, k.T)                          # [block_q, block_k]
     k_sq = jnp.sum(k * k, axis=-1)                     # [block_k]
 
     dist = q_sq[:, None] + k_sq[None, :] - 2.0 * dot
@@ -83,7 +88,7 @@ def _yat_l1_fwd_kernel(
       scores = jnp.where(span_q[:, None] >= span_k[None, :], scores, 0.0)
 
     l_next = l_prev + jnp.sum(scores, axis=-1)
-    o_next = o_prev + pl.dot(scores.astype(v.dtype), v)
+    o_next = o_prev + _dot_highest(scores.astype(v.dtype), v)
     return o_next, l_next
 
   if causal:
@@ -142,7 +147,7 @@ def _yat_l1_bwd_dkv_kernel(
     l = l_ref[curr_q_slice, 0]                          # [block_q]
 
     q_sq = jnp.sum(q * q, axis=-1)
-    dot = pl.dot(q, k.T)                                # [block_q, block_k]
+    dot = _dot_highest(q, k.T)                          # [block_q, block_k]
     dist = jnp.maximum(q_sq[:, None] + k_sq[None, :] - 2.0 * dot, 0.0) + epsilon
     scores = (dot * dot) / (dist * scale)
 
@@ -157,7 +162,7 @@ def _yat_l1_bwd_dkv_kernel(
 
     # dW = dO @ V^T.  The normalization correction must be global
     # across all K/V tiles: sum_j(dW_j * W_j) == dO dot output.
-    dW = pl.dot(do, v.T)                                # [block_q, block_k]
+    dW = _dot_highest(do, v.T)                          # [block_q, block_k]
     delta = jnp.sum(do * out, axis=-1, keepdims=True)
     dS = (dW - delta) / l_safe[:, None]
 
@@ -165,7 +170,7 @@ def _yat_l1_bwd_dkv_kernel(
       dS = jnp.where(mask, dS, 0.0)
 
     # dV += W^T @ dO
-    dv_next = dv_prev + pl.dot(W.astype(do.dtype).T, do)
+    dv_next = dv_prev + _dot_highest(W.astype(do.dtype).T, do)
 
     # dK from dS through YAT score
     inv_dist_scale = 1.0 / (dist * scale)
@@ -176,7 +181,7 @@ def _yat_l1_bwd_dkv_kernel(
     g_dist = dS * d_scores_d_dist
     g_dot_total = g_num + g_dist * (-2.0)
 
-    dk_next = dk_prev + pl.dot(g_dot_total.astype(q.dtype).T, q)
+    dk_next = dk_prev + _dot_highest(g_dot_total.astype(q.dtype).T, q)
     dk_next = dk_next + 2.0 * k * jnp.sum(g_dist, axis=0, keepdims=True).T
 
     return dk_next, dv_next
@@ -221,7 +226,7 @@ def _yat_l1_bwd_dq_kernel(
     v = v_ref[curr_k_slice, :]
     k_sq = jnp.sum(k * k, axis=-1)
 
-    dot = pl.dot(q, k.T)
+    dot = _dot_highest(q, k.T)
     dist = jnp.maximum(q_sq[:, None] + k_sq[None, :] - 2.0 * dot, 0.0) + epsilon
     scores = (dot * dot) / (dist * scale)
 
@@ -234,7 +239,7 @@ def _yat_l1_bwd_dq_kernel(
     l_safe = jnp.maximum(l, 1e-12)
     W = scores / l_safe[:, None]
 
-    dW = pl.dot(do, v.T)
+    dW = _dot_highest(do, v.T)
     delta = jnp.sum(do * out, axis=-1, keepdims=True)
     dS = (dW - delta) / l_safe[:, None]
 
@@ -249,7 +254,7 @@ def _yat_l1_bwd_dq_kernel(
     g_dist = dS * d_scores_d_dist
     g_dot_total = g_num + g_dist * (-2.0)
 
-    dq_next = dq_prev + pl.dot(g_dot_total.astype(k.dtype), k)
+    dq_next = dq_prev + _dot_highest(g_dot_total.astype(k.dtype), k)
     dq_next = dq_next + 2.0 * q * jnp.sum(g_dist, axis=-1, keepdims=True)
 
     return dq_next

@@ -1,6 +1,8 @@
 """Numerical parity tests for Pallas-fused YAT L1 attention."""
 
+import ast
 import importlib
+import inspect
 import math
 
 import numpy as np
@@ -209,6 +211,37 @@ def test_native_tpu_rejects_only_illegal_multi_tile_block_sizes(monkeypatch):
     pallas_module._validate_inputs(q, k, v, 7, 7, True)
     monkeypatch.setattr(pallas_module.jax, "default_backend", lambda: "gpu")
     pallas_module._validate_inputs(q, k, v, 7, 7, False)
+
+
+def test_all_kernel_dots_request_highest_precision():
+    """Prevent TPU's default fp32-to-bf16 rounding from returning silently."""
+    source = inspect.getsource(pallas_module)
+    tree = ast.parse(source)
+    direct_pallas_dots = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "pl"
+        and node.func.attr == "dot"
+    ]
+    kernel_dot_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "_dot_highest"
+    ]
+
+    assert len(direct_pallas_dots) == 1
+    precision = next(
+        keyword.value
+        for keyword in direct_pallas_dots[0].keywords
+        if keyword.arg == "precision"
+    )
+    assert ast.unparse(precision) == "lax.Precision.HIGHEST"
+    assert len(kernel_dot_calls) == 9
 
 
 @pytest.mark.parametrize(
