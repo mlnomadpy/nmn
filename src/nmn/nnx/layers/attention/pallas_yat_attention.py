@@ -37,9 +37,9 @@ from jax import lax
 from jax.experimental import pallas as pl
 
 
-def _dot_highest(a, b):
-  """Pallas dot without TPU's default fp32-to-bf16 input rounding."""
-  return pl.dot(a, b, precision=lax.Precision.HIGHEST)
+def _dot(a, b, precision):
+  """Pallas dot with an explicit caller-selected precision policy."""
+  return pl.dot(a, b, precision=precision)
 
 # ═══════════════════════════════════════════════════════════════════════
 # Forward kernel
@@ -55,6 +55,7 @@ def _yat_l1_fwd_kernel(
     block_k: int,
     head_dim: int,
     causal: bool,
+    precision,
 ):
   kv_seq_len = k_ref.shape[0]
   start_q = pl.program_id(0)
@@ -74,7 +75,7 @@ def _yat_l1_fwd_kernel(
     k = k_ref[curr_k_slice, :]                          # [block_k, head_dim_padded]
     v = v_ref[curr_k_slice, :]                          # [block_k, value_dim]
 
-    dot = _dot_highest(q, k.T)                          # [block_q, block_k]
+    dot = _dot(q, k.T, precision)                       # [block_q, block_k]
     k_sq = jnp.sum(k * k, axis=-1)                     # [block_k]
 
     dist = q_sq[:, None] + k_sq[None, :] - 2.0 * dot
@@ -88,7 +89,7 @@ def _yat_l1_fwd_kernel(
       scores = jnp.where(span_q[:, None] >= span_k[None, :], scores, 0.0)
 
     l_next = l_prev + jnp.sum(scores, axis=-1)
-    o_next = o_prev + _dot_highest(scores.astype(v.dtype), v)
+    o_next = o_prev + _dot(scores.astype(v.dtype), v, precision)
     return o_next, l_next
 
   if causal:
@@ -124,6 +125,7 @@ def _yat_l1_bwd_dkv_kernel(
     block_k: int,
     head_dim: int,
     causal: bool,
+    precision,
 ):
   q_seq_len = q_ref.shape[0]
   start_k = pl.program_id(0)
@@ -147,7 +149,7 @@ def _yat_l1_bwd_dkv_kernel(
     l = l_ref[curr_q_slice, 0]                          # [block_q]
 
     q_sq = jnp.sum(q * q, axis=-1)
-    dot = _dot_highest(q, k.T)                          # [block_q, block_k]
+    dot = _dot(q, k.T, precision)                       # [block_q, block_k]
     dist = jnp.maximum(q_sq[:, None] + k_sq[None, :] - 2.0 * dot, 0.0) + epsilon
     scores = (dot * dot) / (dist * scale)
 
@@ -162,7 +164,7 @@ def _yat_l1_bwd_dkv_kernel(
 
     # dW = dO @ V^T.  The normalization correction must be global
     # across all K/V tiles: sum_j(dW_j * W_j) == dO dot output.
-    dW = _dot_highest(do, v.T)                          # [block_q, block_k]
+    dW = _dot(do, v.T, precision)                       # [block_q, block_k]
     delta = jnp.sum(do * out, axis=-1, keepdims=True)
     dS = (dW - delta) / l_safe[:, None]
 
@@ -170,7 +172,7 @@ def _yat_l1_bwd_dkv_kernel(
       dS = jnp.where(mask, dS, 0.0)
 
     # dV += W^T @ dO
-    dv_next = dv_prev + _dot_highest(W.astype(do.dtype).T, do)
+    dv_next = dv_prev + _dot(W.astype(do.dtype).T, do, precision)
 
     # dK from dS through YAT score
     inv_dist_scale = 1.0 / (dist * scale)
@@ -181,7 +183,7 @@ def _yat_l1_bwd_dkv_kernel(
     g_dist = dS * d_scores_d_dist
     g_dot_total = g_num + g_dist * (-2.0)
 
-    dk_next = dk_prev + _dot_highest(g_dot_total.astype(q.dtype).T, q)
+    dk_next = dk_prev + _dot(g_dot_total.astype(q.dtype).T, q, precision)
     dk_next = dk_next + 2.0 * k * jnp.sum(g_dist, axis=0, keepdims=True).T
 
     return dk_next, dv_next
@@ -207,6 +209,7 @@ def _yat_l1_bwd_dq_kernel(
     block_k: int,
     head_dim: int,
     causal: bool,
+    precision,
 ):
   kv_seq_len = k_ref.shape[0]
   start_q = pl.program_id(0)
@@ -226,7 +229,7 @@ def _yat_l1_bwd_dq_kernel(
     v = v_ref[curr_k_slice, :]
     k_sq = jnp.sum(k * k, axis=-1)
 
-    dot = _dot_highest(q, k.T)
+    dot = _dot(q, k.T, precision)
     dist = jnp.maximum(q_sq[:, None] + k_sq[None, :] - 2.0 * dot, 0.0) + epsilon
     scores = (dot * dot) / (dist * scale)
 
@@ -239,7 +242,7 @@ def _yat_l1_bwd_dq_kernel(
     l_safe = jnp.maximum(l, 1e-12)
     W = scores / l_safe[:, None]
 
-    dW = _dot_highest(do, v.T)
+    dW = _dot(do, v.T, precision)
     delta = jnp.sum(do * out, axis=-1, keepdims=True)
     dS = (dW - delta) / l_safe[:, None]
 
@@ -254,7 +257,7 @@ def _yat_l1_bwd_dq_kernel(
     g_dist = dS * d_scores_d_dist
     g_dot_total = g_num + g_dist * (-2.0)
 
-    dq_next = dq_prev + _dot_highest(g_dot_total.astype(k.dtype), k)
+    dq_next = dq_prev + _dot(g_dot_total.astype(k.dtype), k, precision)
     dq_next = dq_next + 2.0 * q * jnp.sum(g_dist, axis=-1, keepdims=True)
 
     return dq_next
@@ -275,7 +278,7 @@ def _yat_l1_bwd_dq_kernel(
 # Public API with custom_vjp
 # ═══════════════════════════════════════════════════════════════════════
 
-@functools.partial(jax.custom_vjp, nondiff_argnums=[3, 4, 5, 6, 7])
+@functools.partial(jax.custom_vjp, nondiff_argnums=[3, 4, 5, 6, 7, 8])
 def pallas_yat_l1_attention(
     q: jax.Array,
     k: jax.Array,
@@ -285,6 +288,7 @@ def pallas_yat_l1_attention(
     block_q: int = 128,
     block_k: int = 128,
     interpret: bool = False,
+    precision: jax.lax.Precision | None = None,
 ) -> jax.Array:
   """Pallas-fused YAT L1 attention.
 
@@ -299,6 +303,9 @@ def pallas_yat_l1_attention(
       block_q: Q tile size. Ragged sequence tails are padded internally.
       block_k: K/V tile size. Ragged sequence tails are padded internally.
       interpret: If True, run on CPU via JAX tracing (for testing).
+      precision: Optional JAX dot precision. On TPU, pass
+        ``jax.lax.Precision.HIGHEST`` to prevent fp32 inputs from being rounded
+        to bfloat16 by the matrix unit.
 
   Returns:
       Output of shape [..., q_len, num_heads, v_dim].
@@ -306,7 +313,8 @@ def pallas_yat_l1_attention(
   _validate_inputs(q, k, v, block_q, block_k, interpret)
   q, k, v, layout = _flatten_batch_and_heads(q, k, v)
 
-  out = _pallas_yat_l1_fwd(q, k, v, epsilon, causal, block_q, block_k, interpret)
+  out = _pallas_yat_l1_fwd(
+      q, k, v, epsilon, causal, block_q, block_k, interpret, precision)
   return _restore_batch_and_heads(out, layout)
 
 
@@ -382,16 +390,18 @@ def _pad_sequences(q, k, v, block_q, block_k):
   return q, k, v, q_len, kv_len
 
 
-def _pallas_yat_l1_fwd(q, k, v, epsilon, causal, block_q, block_k, interpret):
+def _pallas_yat_l1_fwd(
+    q, k, v, epsilon, causal, block_q, block_k, interpret, precision):
   block_q = min(block_q, q.shape[1])
   block_k = min(block_k, k.shape[1])
   q, k, v, q_len, _ = _pad_sequences(q, k, v, block_q, block_k)
   out, _ = _pallas_yat_l1_fwd_padded(
-      q, k, v, epsilon, causal, block_q, block_k, interpret)
+      q, k, v, epsilon, causal, block_q, block_k, interpret, precision)
   return out[:, :q_len]
 
 
-def _pallas_yat_l1_fwd_padded(q, k, v, epsilon, causal, block_q, block_k, interpret):
+def _pallas_yat_l1_fwd_padded(
+    q, k, v, epsilon, causal, block_q, block_k, interpret, precision=None):
   batch_heads, q_seq_len, head_dim = q.shape
   kv_seq_len, value_dim = k.shape[1], v.shape[-1]
   scale = math.sqrt(float(head_dim))
@@ -400,7 +410,7 @@ def _pallas_yat_l1_fwd_padded(q, k, v, epsilon, causal, block_q, block_k, interp
       _yat_l1_fwd_kernel,
       epsilon=epsilon, scale=scale,
       block_q=block_q, block_k=block_k,
-      head_dim=head_dim, causal=causal,
+      head_dim=head_dim, causal=causal, precision=precision,
   )
 
   grid = (pl.cdiv(q_seq_len, block_q), batch_heads)
@@ -431,17 +441,20 @@ def _pallas_yat_l1_fwd_padded(q, k, v, epsilon, causal, block_q, block_k, interp
   return out, l
 
 
-def _pallas_yat_l1_fwd_with_residuals(q, k, v, epsilon, causal, block_q, block_k, interpret):
+def _pallas_yat_l1_fwd_with_residuals(
+    q, k, v, epsilon, causal, block_q, block_k, interpret, precision):
   block_q_actual = min(block_q, q.shape[1])
   block_k_actual = min(block_k, k.shape[1])
   q, k, v, q_len, kv_len = _pad_sequences(
       q, k, v, block_q_actual, block_k_actual)
   out, l = _pallas_yat_l1_fwd_padded(
-      q, k, v, epsilon, causal, block_q_actual, block_k_actual, interpret)
+      q, k, v, epsilon, causal, block_q_actual, block_k_actual, interpret,
+      precision)
   return out[:, :q_len], (q, k, v, l, out, q_len, kv_len)
 
 
-def _pallas_yat_l1_bwd(epsilon, causal, block_q, block_k, interpret, res, do):
+def _pallas_yat_l1_bwd(
+    epsilon, causal, block_q, block_k, interpret, precision, res, do):
   q, k, v, l, out = res
   batch_heads, q_seq_len, head_dim = q.shape
   kv_seq_len, value_dim = k.shape[1], v.shape[-1]
@@ -450,7 +463,9 @@ def _pallas_yat_l1_bwd(epsilon, causal, block_q, block_k, interpret, res, do):
   block_q_actual = min(block_q, q_seq_len)
   block_k_actual = min(block_k, kv_seq_len)
 
-  common = dict(epsilon=epsilon, scale=scale, head_dim=head_dim, causal=causal)
+  common = dict(
+      epsilon=epsilon, scale=scale, head_dim=head_dim, causal=causal,
+      precision=precision)
 
   # ── dK, dV kernel ──
   dkv_kernel = functools.partial(
@@ -509,23 +524,27 @@ def _pallas_yat_l1_bwd(epsilon, causal, block_q, block_k, interpret, res, do):
   return dq, dk, dv
 
 
-def _pallas_vjp_fwd(q, k, v, epsilon, causal, block_q, block_k, interpret):
+def _pallas_vjp_fwd(
+    q, k, v, epsilon, causal, block_q, block_k, interpret, precision):
   _validate_inputs(q, k, v, block_q, block_k, interpret)
   q, k, v, layout = _flatten_batch_and_heads(q, k, v)
 
   out, residuals = _pallas_yat_l1_fwd_with_residuals(
-      q, k, v, epsilon, causal, block_q, block_k, interpret)
+      q, k, v, epsilon, causal, block_q, block_k, interpret, precision)
 
   return _restore_batch_and_heads(out, layout), (residuals, layout)
 
 
-def _pallas_vjp_bwd(epsilon, causal, block_q, block_k, interpret, res, do):
+def _pallas_vjp_bwd(
+    epsilon, causal, block_q, block_k, interpret, precision, res, do):
   (q, k, v, l, out, q_len, kv_len), layout = res
 
   do = _flatten_one_batch_and_heads(do)
   do = jnp.pad(do, ((0, 0), (0, q.shape[1] - q_len), (0, 0)))
 
-  dq, dk, dv = _pallas_yat_l1_bwd(epsilon, causal, block_q, block_k, interpret, (q, k, v, l, out), do)
+  dq, dk, dv = _pallas_yat_l1_bwd(
+      epsilon, causal, block_q, block_k, interpret, precision,
+      (q, k, v, l, out), do)
   dq, dk, dv = dq[:, :q_len], dk[:, :kv_len], dv[:, :kv_len]
   return (
       _restore_batch_and_heads(dq, layout),

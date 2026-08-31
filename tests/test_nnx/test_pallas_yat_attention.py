@@ -169,7 +169,7 @@ def test_native_block_specs_keep_tpu_minor_axes_legal(monkeypatch):
         q, k, v, 1e-5, False, 64, 64, False)
     do = jnp.zeros_like(out)
     pallas_module._pallas_yat_l1_bwd(
-        1e-5, False, 64, 64, False, (q, k, v, l, out), do)
+        1e-5, False, 64, 64, False, None, (q, k, v, l, out), do)
 
     assert [call[1]["grid"] for call in calls] == [(2, 6), (3, 6), (2, 6)]
 
@@ -213,8 +213,8 @@ def test_native_tpu_rejects_only_illegal_multi_tile_block_sizes(monkeypatch):
     pallas_module._validate_inputs(q, k, v, 7, 7, False)
 
 
-def test_all_kernel_dots_request_highest_precision():
-    """Prevent TPU's default fp32-to-bf16 rounding from returning silently."""
+def test_all_kernel_dots_honor_the_public_precision_policy():
+    """Prevent any kernel contraction from ignoring the precision argument."""
     source = inspect.getsource(pallas_module)
     tree = ast.parse(source)
     direct_pallas_dots = [
@@ -231,7 +231,7 @@ def test_all_kernel_dots_request_highest_precision():
         for node in ast.walk(tree)
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
-        and node.func.id == "_dot_highest"
+        and node.func.id == "_dot"
     ]
 
     assert len(direct_pallas_dots) == 1
@@ -240,8 +240,39 @@ def test_all_kernel_dots_request_highest_precision():
         for keyword in direct_pallas_dots[0].keywords
         if keyword.arg == "precision"
     )
-    assert ast.unparse(precision) == "lax.Precision.HIGHEST"
+    assert ast.unparse(precision) == "precision"
     assert len(kernel_dot_calls) == 9
+    assert all(
+        len(call.args) == 3 and ast.unparse(call.args[2]) == "precision"
+        for call in kernel_dot_calls
+    )
+
+
+def test_highest_precision_forward_and_gradients_match_reference():
+    q = _rand((1, 7, 2, 4), 20)
+    k = _rand((1, 11, 2, 4), 21)
+    v = _rand((1, 11, 2, 5), 22)
+    cotangent = _rand((1, 7, 2, 5), 23)
+
+    def pallas_loss(q, k, v):
+        out = pallas_yat_l1_attention(
+            q, k, v, block_q=4, block_k=4, interpret=True,
+            precision=jax.lax.Precision.HIGHEST)
+        return jnp.vdot(out, cotangent), out
+
+    def reference_loss(q, k, v):
+        with jax.default_matmul_precision("float32"):
+            out = _reference(q, k, v)
+        return jnp.vdot(out, cotangent), out
+
+    (_, actual), actual_grads = jax.value_and_grad(
+        pallas_loss, argnums=(0, 1, 2), has_aux=True)(q, k, v)
+    (_, expected), expected_grads = jax.value_and_grad(
+        reference_loss, argnums=(0, 1, 2), has_aux=True)(q, k, v)
+
+    np.testing.assert_allclose(actual, expected, rtol=2e-5, atol=2e-5)
+    for got, want in zip(actual_grads, expected_grads):
+        np.testing.assert_allclose(got, want, rtol=2e-4, atol=2e-4)
 
 
 @pytest.mark.parametrize(
