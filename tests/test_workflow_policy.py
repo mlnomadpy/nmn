@@ -20,6 +20,8 @@ def test_ci_actions_use_node24_compatible_releases():
     assert "actions/setup-python@v5" not in workflows
     assert "codecov/codecov-action@v4" not in workflows
     assert "codecov/codecov-action@v5" not in workflows
+    assert "actions/upload-artifact@v4" not in workflows
+    assert "actions/download-artifact@v4" not in workflows
 
 
 def test_codecov_uses_current_files_input():
