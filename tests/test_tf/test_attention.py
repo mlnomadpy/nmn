@@ -1,16 +1,16 @@
 """Tests for TensorFlow YAT attention."""
 
-import pytest
 import numpy as np
+import pytest
 
 tf = pytest.importorskip("tensorflow")
 
 from nmn.tf.attention import (
+    MultiHeadYatAttention,
     normalize_qk,
-    yat_attention_weights,
     yat_attention,
     yat_attention_normalized,
-    MultiHeadYatAttention,
+    yat_attention_weights,
 )
 
 

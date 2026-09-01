@@ -14,7 +14,6 @@ from typing import Optional, Union
 import mlx.core as mx
 import mlx.nn as nn
 
-
 __all__ = ["YatEmbed"]
 
 

@@ -383,14 +383,12 @@ jobs:
 
     - name: Check formatting with black
       run: black --check --diff src/nmn tests
-      continue-on-error: true  # style only — warn, don't fail
 
     - name: Check imports with isort
       run: isort --check-only --diff src/nmn tests
-      continue-on-error: true  # style only — warn, don't fail
 
   mypy:
-    name: Type Check (MyPy)
+    name: Type Check (MyPy, typed core)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -403,15 +401,28 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install mypy
+        pip install "mypy==2.3.1" "numpy<2.3"
         pip install -e ".[dev]"
         pip install torch --index-url https://download.pytorch.org/whl/cpu
         pip install "jax==0.9.1" "jaxlib==0.9.1" "flax==0.12.5"
+        # NumPy 2.5 stubs use Python 3.12 syntax, while NMN's MyPy target is 3.10.
+        pip install "numpy<2.3"
 
-    - name: Run MyPy on torch module
-      run: mypy src/nmn/torch --ignore-missing-imports --no-error-summary
-      continue-on-error: true  # informational for now — tighten over time
+    - name: Run MyPy on the PyTorch typed core
+      run: |
+        mypy \
+          src/nmn/torch/squashers.py \
+          src/nmn/torch/attention/yat_attention.py \
+          src/nmn/torch/attention/performer_yat.py \
+          --ignore-missing-imports --no-error-summary
 
-    - name: Run MyPy on nnx module
-      run: mypy src/nmn/nnx --ignore-missing-imports --no-error-summary
-      continue-on-error: true
+    - name: Run MyPy on the NNX typed core
+      run: |
+        mypy \
+          src/nmn/nnx/layers/_numerics.py \
+          src/nmn/nnx/layers/conv/utils.py \
+          src/nmn/nnx/layers/attention/masks.py \
+          src/nmn/nnx/layers/attention/dot_product.py \
+          src/nmn/nnx/layers/attention/maclaurin_yat.py \
+          src/nmn/nnx/layers/attention/radial_yat.py \
+          --ignore-missing-imports --no-error-summary

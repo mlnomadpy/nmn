@@ -65,100 +65,74 @@ Quick Start
 # Core YAT Layers
 # =============================================================================
 
-from nmn.nnx.layers import YatNMN, Embed, FrozenParam
-
+# Attention Masks
+# Standard Dot-Product Attention
+# MAY / RAY bias-aware linear-attention feature maps
+# Spherical YAT-Performer (Linear Complexity)
+# Rotary YAT Attention (RoPE + YAT)
+# YAT Attention Functions
+# Multi-Head Attention Module
+from nmn.nnx.layers import (  # Layers; Utilities
+    ATTENTION_DEFAULT_CONSTANT_ALPHA,
+    CONV_DEFAULT_CONSTANT_ALPHA,
+    Embed,
+    FrozenParam,
+    MultiHeadAttention,
+    RotaryYatAttention,
+    YatConv,
+    YatConvTranspose,
+    YatNMN,
+    apply_rotary_emb,
+    canonicalize_padding,
+    causal_attention_mask,
+    combine_masks,
+    conv_dimension_numbers,
+    create_maclaurin_projection,
+    create_radial_projection,
+    create_yat_projection,
+    create_yat_tp_projection,
+    default_alpha_init,
+    default_bias_init,
+    default_kernel_init,
+    dot_product_attention,
+    dot_product_attention_weights,
+    maclaurin_coeffs,
+    maclaurin_features,
+    maclaurin_yat_attention,
+    make_attention_mask,
+    make_causal_mask,
+    normalize_qk,
+    precompute_freqs_cis,
+    radial_features,
+    radial_yat_attention,
+    rotary_yat_attention,
+    rotary_yat_attention_weights,
+    rotary_yat_performer_attention,
+    soft_tanh,
+    softer_sigmoid,
+    softermax,
+    yat_attention,
+    yat_attention_normalized,
+    yat_attention_weights,
+    yat_performer_attention,
+    yat_performer_feature_map,
+    yat_tp_attention,
+    yat_tp_features,
+)
 
 # =============================================================================
 # Convolution Layers
 # =============================================================================
-
-from nmn.nnx.layers import (
-    # Layers
-    YatConv,
-    YatConvTranspose,
-    # Utilities
-    canonicalize_padding,
-    conv_dimension_numbers,
-    default_kernel_init,
-    default_bias_init,
-    default_alpha_init,
-    CONV_DEFAULT_CONSTANT_ALPHA,
-)
 
 
 # =============================================================================
 # Attention Mechanisms
 # =============================================================================
 
-# Multi-Head Attention Module
-from nmn.nnx.layers import (
-    MultiHeadAttention,
-    ATTENTION_DEFAULT_CONSTANT_ALPHA,
-)
-
-# YAT Attention Functions
-from nmn.nnx.layers import (
-    yat_attention,
-    yat_attention_weights,
-    yat_attention_normalized,
-    yat_performer_attention,
-    yat_performer_feature_map,
-    create_yat_projection,
-    normalize_qk,
-)
-
-# Rotary YAT Attention (RoPE + YAT)
-from nmn.nnx.layers import (
-    RotaryYatAttention,
-    rotary_yat_attention,
-    rotary_yat_attention_weights,
-    rotary_yat_performer_attention,
-    precompute_freqs_cis,
-    apply_rotary_emb,
-)
-
-# Spherical YAT-Performer (Linear Complexity)
-from nmn.nnx.layers import (
-    yat_tp_attention,
-    yat_tp_features,
-    create_yat_tp_projection,
-)
-
-# MAY / RAY bias-aware linear-attention feature maps
-from nmn.nnx.layers import (
-    create_maclaurin_projection,
-    maclaurin_features,
-    maclaurin_yat_attention,
-    maclaurin_coeffs,
-    create_radial_projection,
-    radial_features,
-    radial_yat_attention,
-)
-
-# Standard Dot-Product Attention
-from nmn.nnx.layers import (
-    dot_product_attention,
-    dot_product_attention_weights,
-)
-
-# Attention Masks
-from nmn.nnx.layers import (
-    make_attention_mask,
-    make_causal_mask,
-    combine_masks,
-    causal_attention_mask,
-)
-
 
 # =============================================================================
 # Activation Functions
 # =============================================================================
-
-from nmn.nnx.layers import (
-    softermax,
-    softer_sigmoid,
-    soft_tanh,
-)
 
 
 # =============================================================================
@@ -191,7 +165,6 @@ __all__ = [
     "FrozenParam",
     "Embed",
     "YatEmbed",  # alias of Embed for cross-framework consistency
-
     # -------------------------------------------------------------------------
     # Convolution Layers
     # -------------------------------------------------------------------------
@@ -213,7 +186,6 @@ __all__ = [
     "default_bias_init",
     "default_alpha_init",
     "CONV_DEFAULT_CONSTANT_ALPHA",
-    
     # -------------------------------------------------------------------------
     # Attention Mechanisms
     # -------------------------------------------------------------------------
@@ -221,7 +193,6 @@ __all__ = [
     "MultiHeadAttention",
     "MultiHeadYatAttention",  # alias of MultiHeadAttention for cross-framework consistency
     "ATTENTION_DEFAULT_CONSTANT_ALPHA",
-    
     # YAT Attention
     "yat_attention",
     "yat_attention_weights",
@@ -230,7 +201,6 @@ __all__ = [
     "yat_performer_feature_map",
     "create_yat_projection",
     "normalize_qk",
-    
     # Rotary YAT Attention
     "RotaryYatAttention",
     "rotary_yat_attention",
@@ -238,12 +208,10 @@ __all__ = [
     "rotary_yat_performer_attention",
     "precompute_freqs_cis",
     "apply_rotary_emb",
-    
     # Spherical YAT-Performer
     "yat_tp_attention",
     "yat_tp_features",
     "create_yat_tp_projection",
-
     # MAY / RAY bias-aware feature maps
     "create_maclaurin_projection",
     "maclaurin_features",
@@ -252,17 +220,14 @@ __all__ = [
     "create_radial_projection",
     "radial_features",
     "radial_yat_attention",
-
     # Standard Attention
     "dot_product_attention",
     "dot_product_attention_weights",
-    
     # Attention Masks
     "make_attention_mask",
     "make_causal_mask",
     "combine_masks",
     "causal_attention_mask",
-    
     # -------------------------------------------------------------------------
     # Activation Functions
     # -------------------------------------------------------------------------

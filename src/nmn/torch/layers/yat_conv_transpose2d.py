@@ -5,12 +5,11 @@ from typing import Optional, Union
 import torch
 import torch.nn as nn
 from torch import Tensor
+from torch.nn import ConvTranspose2d
 from torch.nn import functional as F
 from torch.nn.common_types import _size_2_t
-from torch.nn.parameter import Parameter
 from torch.nn.modules.utils import _pair
-
-from torch.nn import ConvTranspose2d
+from torch.nn.parameter import Parameter
 
 from ._yat_conv_core import (
     apply_preserving_epsilon_dtype,
@@ -86,30 +85,52 @@ class YatConvTranspose2D(ConvTranspose2d):
 
         setup_yat_attrs(
             self,
-            bias=bias, constant_bias=constant_bias,
-            softplus_bias=softplus_bias, scalar_bias=scalar_bias,
-            use_alpha=use_alpha, constant_alpha=constant_alpha,
-            use_dropconnect=use_dropconnect, drop_rate=drop_rate, mask=mask,
-            epsilon=epsilon, learnable_epsilon=learnable_epsilon,
-            storage_dtype=storage_dtype, compute_dtype=dtype, device=device,
+            bias=bias,
+            constant_bias=constant_bias,
+            softplus_bias=softplus_bias,
+            scalar_bias=scalar_bias,
+            use_alpha=use_alpha,
+            constant_alpha=constant_alpha,
+            use_dropconnect=use_dropconnect,
+            drop_rate=drop_rate,
+            mask=mask,
+            epsilon=epsilon,
+            learnable_epsilon=learnable_epsilon,
+            storage_dtype=storage_dtype,
+            compute_dtype=dtype,
+            device=device,
         )
 
-    def forward(self, input: Tensor, output_size: Optional[list[int]] = None, *, deterministic: bool = False) -> Tensor:
+    def forward(
+        self,
+        input: Tensor,
+        output_size: Optional[list[int]] = None,
+        *,
+        deterministic: bool = False,
+    ) -> Tensor:
         if self.padding_mode != "zeros":
-            raise ValueError("Only `zeros` padding mode is supported for YatConvTranspose2D")
+            raise ValueError(
+                "Only `zeros` padding mode is supported for YatConvTranspose2D"
+            )
         if output_size is not None:
             output_padding = self._output_padding(
-                input, output_size, self.stride, self.padding,
-                self.kernel_size, num_spatial_dims=2, dilation=self.dilation,
+                input,
+                output_size,
+                self.stride,
+                self.padding,
+                self.kernel_size,
+                num_spatial_dims=2,
+                dilation=self.dilation,
             )
         else:
             output_padding = self.output_padding
         return yat_conv_transpose_forward(
-            self, input, F.conv_transpose2d, output_padding,
+            self,
+            input,
+            F.conv_transpose2d,
+            output_padding,
             deterministic=deterministic,
         )
 
     def _apply(self, fn, recurse=True):
-        return apply_preserving_epsilon_dtype(
-            self, fn, super()._apply, recurse=recurse
-        )
+        return apply_preserving_epsilon_dtype(self, fn, super()._apply, recurse=recurse)

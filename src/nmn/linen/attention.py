@@ -12,17 +12,18 @@ import math
 from typing import Any, Optional
 
 import jax.numpy as jnp
-from jax import Array
-
 from flax import linen as nn
 from flax.linen.dtypes import promote_dtype
 from flax.linen.module import Module, compact
+from jax import Array
 
 # Re-export attention functions from NNX (same JAX backend)
 from nmn.nnx.layers.attention.yat_attention import (
     normalize_qk,
+)
+from nmn.nnx.layers.attention.yat_attention import yat_attention as _nnx_yat_attention
+from nmn.nnx.layers.attention.yat_attention import (
     yat_attention_weights as _nnx_yat_attention_weights,
-    yat_attention as _nnx_yat_attention,
 )
 
 __all__ = [
@@ -68,7 +69,8 @@ def yat_attention_weights(
         query, key = normalize_qk(query, key, epsilon)
 
     return _nnx_yat_attention_weights(
-        query, key,
+        query,
+        key,
         mask=mask,
         dropout_rate=dropout_rate,
         deterministic=deterministic,
@@ -108,7 +110,9 @@ def yat_attention(
         query, key = normalize_qk(query, key, epsilon)
 
     return _nnx_yat_attention(
-        query, key, value,
+        query,
+        key,
+        value,
         mask=mask,
         dropout_rate=dropout_rate,
         deterministic=deterministic,
@@ -129,7 +133,9 @@ def yat_attention_normalized(
 ) -> Array:
     """YAT attention with normalized Q/K (optimized)."""
     return yat_attention(
-        query, key, value,
+        query,
+        key,
+        value,
         mask=mask,
         dropout_rate=dropout_rate,
         deterministic=deterministic,
@@ -292,7 +298,9 @@ class MultiHeadAttention(Module):
 
         # YAT attention (using NNX functions under the hood)
         x = _nnx_yat_attention(
-            q, k, v,
+            q,
+            k,
+            v,
             mask=effective_mask,
             dropout_rate=self.dropout_rate,
             deterministic=deterministic,

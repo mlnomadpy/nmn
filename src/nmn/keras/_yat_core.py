@@ -15,7 +15,6 @@ from __future__ import annotations
 from keras import ops
 from keras.src.backend import standardize_dtype
 
-
 __all__ = [
     "reduction_safe_upcast",
     "saturating_downcast",

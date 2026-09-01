@@ -52,10 +52,10 @@ def test_embed_attend_math_parity():
     a = float(np.array(layer.alpha)[0])
     qn = np.array(query)
     dot = qn @ E.T
-    q_sq = (qn ** 2).sum(axis=-1, keepdims=True)
-    e_sq = (E ** 2).sum(axis=-1)[None, :]
+    q_sq = (qn**2).sum(axis=-1, keepdims=True)
+    e_sq = (E**2).sum(axis=-1)[None, :]
     dist = np.maximum(q_sq + e_sq - 2 * dot, 0.0)
-    ref = a * (dot ** 2) / (dist + 1e-5)
+    ref = a * (dot**2) / (dist + 1e-5)
     assert np.max(np.abs(scores - ref)) < 1e-5
 
 

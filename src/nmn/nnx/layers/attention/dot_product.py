@@ -15,13 +15,11 @@ from typing import Optional
 
 import jax
 import jax.numpy as jnp
-from jax import random
-
 from flax import nnx
 from flax.nnx.module import Module
 from flax.nnx.nn.dtypes import promote_dtype
 from flax.typing import Dtype, PrecisionLike
-from jax import Array
+from jax import Array, random
 
 from ._attention_core import finalize_attention_weights
 
@@ -75,18 +73,21 @@ def dot_product_attention_weights(
     # Calculate scaled attention matrix
     depth = query.shape[-1]
     query = query / jnp.sqrt(depth).astype(dtype)
-    
+
     # Attention weight shape: [..., num_heads, q_length, kv_length]
-    attn_weights = jnp.einsum(
-        "...qhd,...khd->...hqk", query, key, precision=precision
-    )
+    attn_weights = jnp.einsum("...qhd,...khd->...hqk", query, key, precision=precision)
 
     return finalize_attention_weights(
         attn_weights,
-        dtype=dtype, key=key,
-        bias=bias, mask=mask,
-        broadcast_dropout=broadcast_dropout, dropout_rng=dropout_rng,
-        dropout_rate=dropout_rate, deterministic=deterministic, module=module,
+        dtype=dtype,
+        key=key,
+        bias=bias,
+        mask=mask,
+        broadcast_dropout=broadcast_dropout,
+        dropout_rng=dropout_rng,
+        dropout_rate=dropout_rate,
+        deterministic=deterministic,
+        module=module,
     )
 
 
@@ -160,7 +161,4 @@ def dot_product_attention(
     )
 
     # Return weighted sum over values for each query position
-    return jnp.einsum(
-        "...hqk,...khd->...qhd", attn_weights, value, precision=precision
-    )
-
+    return jnp.einsum("...hqk,...khd->...qhd", attn_weights, value, precision=precision)

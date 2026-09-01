@@ -3,6 +3,6 @@
 Re-exports from the NNX squashers since both use JAX.
 """
 
-from nmn.nnx.layers.squashers import softermax, softer_sigmoid, soft_tanh
+from nmn.nnx.layers.squashers import soft_tanh, softer_sigmoid, softermax
 
 __all__ = ["softermax", "softer_sigmoid", "soft_tanh"]

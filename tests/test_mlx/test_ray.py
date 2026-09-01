@@ -17,8 +17,13 @@ from nmn.mlx import (  # noqa: E402
 def test_projection_shapes():
     d, m, R, D = 16, 8, 4, 8
     p = create_radial_projection(
-        head_dim=d, sketch_m=m, num_radial=R, radial_dim=D,
-        bias=1.0, epsilon=0.5, seed=0,
+        head_dim=d,
+        sketch_m=m,
+        num_radial=R,
+        radial_dim=D,
+        bias=1.0,
+        epsilon=0.5,
+        seed=0,
     )
     assert p["W1"].shape == (m, d + 1)
     assert p["W2"].shape == (m, d + 1)
@@ -36,8 +41,9 @@ def test_seeded_projection_is_deterministic():
 
 def test_feature_shape_is_product():
     d, m, R, D = 16, 8, 4, 8
-    p = create_radial_projection(head_dim=d, sketch_m=m, num_radial=R,
-                                 radial_dim=D, seed=0)
+    p = create_radial_projection(
+        head_dim=d, sketch_m=m, num_radial=R, radial_dim=D, seed=0
+    )
     x = mx.random.normal(shape=(2, 5, 3, d))
     feat = radial_features(x, p)
     assert feat.shape == (2, 5, 3, m * R * D)

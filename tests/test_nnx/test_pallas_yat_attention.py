@@ -17,7 +17,8 @@ try:
     )
 
     pallas_module = importlib.import_module(
-        "nmn.nnx.layers.attention.pallas_yat_attention")
+        "nmn.nnx.layers.attention.pallas_yat_attention"
+    )
     HAS_JAX = True
 except ImportError:
     HAS_JAX = False
@@ -62,13 +63,20 @@ CASES = [
 
 @pytest.mark.parametrize("q_len,kv_len,head_dim,v_dim,causal,block_q,block_k", CASES)
 def test_forward_matches_plain_jax(
-    q_len, kv_len, head_dim, v_dim, causal, block_q, block_k,
+    q_len,
+    kv_len,
+    head_dim,
+    v_dim,
+    causal,
+    block_q,
+    block_k,
 ):
     q = _rand((1, q_len, 2, head_dim), 0)
     k = _rand((1, kv_len, 2, head_dim), 1)
     v = _rand((1, kv_len, 2, v_dim), 2)
     actual = pallas_yat_l1_attention(
-        q, k, v, causal=causal, block_q=block_q, block_k=block_k, interpret=True)
+        q, k, v, causal=causal, block_q=block_q, block_k=block_k, interpret=True
+    )
     expected = _reference(q, k, v, causal=causal)
     np.testing.assert_allclose(actual, expected, rtol=2e-5, atol=2e-5)
     assert actual.shape == (1, q_len, 2, v_dim)
@@ -76,7 +84,13 @@ def test_forward_matches_plain_jax(
 
 @pytest.mark.parametrize("q_len,kv_len,head_dim,v_dim,causal,block_q,block_k", CASES)
 def test_gradients_match_plain_jax(
-    q_len, kv_len, head_dim, v_dim, causal, block_q, block_k,
+    q_len,
+    kv_len,
+    head_dim,
+    v_dim,
+    causal,
+    block_q,
+    block_k,
 ):
     q = _rand((1, q_len, 2, head_dim), 3)
     k = _rand((1, kv_len, 2, head_dim), 4)
@@ -86,8 +100,8 @@ def test_gradients_match_plain_jax(
     def pallas_loss(q, k, v):
         return jnp.vdot(
             pallas_yat_l1_attention(
-                q, k, v, causal=causal, block_q=block_q, block_k=block_k,
-                interpret=True),
+                q, k, v, causal=causal, block_q=block_q, block_k=block_k, interpret=True
+            ),
             cotangent,
         )
 
@@ -123,7 +137,8 @@ def test_multi_batch_multi_head_ragged_causal_forward_and_gradients():
 
     def pallas_loss(q, k, v):
         out = pallas_yat_l1_attention(
-            q, k, v, causal=True, block_q=4, block_k=4, interpret=True)
+            q, k, v, causal=True, block_q=4, block_k=4, interpret=True
+        )
         return jnp.vdot(out, cotangent), out
 
     def reference_loss(q, k, v):
@@ -131,9 +146,11 @@ def test_multi_batch_multi_head_ragged_causal_forward_and_gradients():
         return jnp.vdot(out, cotangent), out
 
     (_, actual), actual_grads = jax.value_and_grad(
-        pallas_loss, argnums=(0, 1, 2), has_aux=True)(q, k, v)
+        pallas_loss, argnums=(0, 1, 2), has_aux=True
+    )(q, k, v)
     (_, expected), expected_grads = jax.value_and_grad(
-        reference_loss, argnums=(0, 1, 2), has_aux=True)(q, k, v)
+        reference_loss, argnums=(0, 1, 2), has_aux=True
+    )(q, k, v)
 
     np.testing.assert_allclose(actual, expected, rtol=2e-5, atol=2e-5)
     for name, got, want in zip(("dQ", "dK", "dV"), actual_grads, expected_grads):
@@ -166,10 +183,12 @@ def test_native_block_specs_keep_tpu_minor_axes_legal(monkeypatch):
     k = jnp.zeros((6, 192, 32), jnp.float32)
     v = jnp.zeros((6, 192, 24), jnp.float32)
     out, l = pallas_module._pallas_yat_l1_fwd_padded(
-        q, k, v, 1e-5, False, 64, 64, False)
+        q, k, v, 1e-5, False, 64, 64, False
+    )
     do = jnp.zeros_like(out)
     pallas_module._pallas_yat_l1_bwd(
-        1e-5, False, 64, 64, False, None, (q, k, v, l, out), do)
+        1e-5, False, 64, 64, False, None, (q, k, v, l, out), do
+    )
 
     assert [call[1]["grid"] for call in calls] == [(2, 6), (3, 6), (2, 6)]
 
@@ -256,8 +275,14 @@ def test_highest_precision_forward_and_gradients_match_reference():
 
     def pallas_loss(q, k, v):
         out = pallas_yat_l1_attention(
-            q, k, v, block_q=4, block_k=4, interpret=True,
-            precision=jax.lax.Precision.HIGHEST)
+            q,
+            k,
+            v,
+            block_q=4,
+            block_k=4,
+            interpret=True,
+            precision=jax.lax.Precision.HIGHEST,
+        )
         return jnp.vdot(out, cotangent), out
 
     def reference_loss(q, k, v):
@@ -266,9 +291,11 @@ def test_highest_precision_forward_and_gradients_match_reference():
         return jnp.vdot(out, cotangent), out
 
     (_, actual), actual_grads = jax.value_and_grad(
-        pallas_loss, argnums=(0, 1, 2), has_aux=True)(q, k, v)
+        pallas_loss, argnums=(0, 1, 2), has_aux=True
+    )(q, k, v)
     (_, expected), expected_grads = jax.value_and_grad(
-        reference_loss, argnums=(0, 1, 2), has_aux=True)(q, k, v)
+        reference_loss, argnums=(0, 1, 2), has_aux=True
+    )(q, k, v)
 
     np.testing.assert_allclose(actual, expected, rtol=2e-5, atol=2e-5)
     for got, want in zip(actual_grads, expected_grads):
@@ -286,4 +313,5 @@ def test_highest_precision_forward_and_gradients_match_reference():
 def test_shape_validation(q_shape, k_shape, v_shape, message):
     with pytest.raises(ValueError, match=message):
         pallas_yat_l1_attention(
-            jnp.ones(q_shape), jnp.ones(k_shape), jnp.ones(v_shape), interpret=True)
+            jnp.ones(q_shape), jnp.ones(k_shape), jnp.ones(v_shape), interpret=True
+        )

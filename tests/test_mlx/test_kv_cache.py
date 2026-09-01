@@ -12,8 +12,9 @@ from nmn.mlx import RotaryYatAttention  # noqa: E402
 
 def _build(embed_dim=32, num_heads=2, max_seq_len=16):
     mx.random.seed(0)
-    mha = RotaryYatAttention(embed_dim=embed_dim, num_heads=num_heads,
-                             max_seq_len=max_seq_len)
+    mha = RotaryYatAttention(
+        embed_dim=embed_dim, num_heads=num_heads, max_seq_len=max_seq_len
+    )
     _ = mha(mx.zeros((1, 1, embed_dim)))  # build lazy params
     return mha
 
@@ -101,7 +102,7 @@ def test_decode_matches_causal_prefill_byte_identical():
     mha.reset_cache()
     mha.init_cache(batch_size=1, max_length=L)
     out_decode = np.concatenate(
-        [np.array(mha(x[:, t:t + 1], decode=True)) for t in range(L)],
+        [np.array(mha(x[:, t : t + 1], decode=True)) for t in range(L)],
         axis=1,
     )
     assert np.max(np.abs(out_prefill - out_decode)) < 1e-4
@@ -117,8 +118,7 @@ def test_decode_multi_token_chunk_matches_single_step():
     # Chunked: 2 tokens, then 2 tokens.
     mha.init_cache(batch_size=1, max_length=4)
     out_chunked = np.concatenate(
-        [np.array(mha(x[:, :2], decode=True)),
-         np.array(mha(x[:, 2:], decode=True))],
+        [np.array(mha(x[:, :2], decode=True)), np.array(mha(x[:, 2:], decode=True))],
         axis=1,
     )
 
@@ -126,7 +126,7 @@ def test_decode_multi_token_chunk_matches_single_step():
     mha.reset_cache()
     mha.init_cache(batch_size=1, max_length=4)
     out_step = np.concatenate(
-        [np.array(mha(x[:, t:t + 1], decode=True)) for t in range(4)],
+        [np.array(mha(x[:, t : t + 1], decode=True)) for t in range(4)],
         axis=1,
     )
     assert np.max(np.abs(out_chunked - out_step)) < 1e-4

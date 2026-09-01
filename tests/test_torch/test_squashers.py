@@ -4,7 +4,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from nmn.torch.squashers import softermax, softer_sigmoid, soft_tanh
+from nmn.torch.squashers import soft_tanh, softer_sigmoid, softermax
 
 
 class TestSoftermax:

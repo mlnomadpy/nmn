@@ -142,12 +142,12 @@ class YatEmbed(nn.Module):
         if self.spherical:
             distances = (2.0 - 2.0 * y).clamp(min=0.0)
         else:
-            query_sq = torch.sum(query ** 2, dim=-1, keepdim=True)
-            embed_sq = torch.sum(embedding ** 2, dim=1, keepdim=True).t()
+            query_sq = torch.sum(query**2, dim=-1, keepdim=True)
+            embed_sq = torch.sum(embedding**2, dim=1, keepdim=True).t()
             distances = (query_sq + embed_sq - 2.0 * y).clamp(min=0.0)
 
         # YAT: (dot)^2 / (dist + eps)
-        y = y ** 2 / (distances + self.epsilon)
+        y = y**2 / (distances + self.epsilon)
 
         # Alpha scaling
         if self._constant_alpha_value is not None:

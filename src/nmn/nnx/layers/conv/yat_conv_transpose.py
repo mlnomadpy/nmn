@@ -14,28 +14,27 @@ import typing as tp
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax import lax
-
 from flax import nnx
-from flax.nnx.module import Module
 from flax.nnx import rnglib
+from flax.nnx.module import Module
 from flax.nnx.nn import dtypes
 from flax.typing import (
     Dtype,
     Initializer,
-    PrecisionLike,
     PaddingLike,
+    PrecisionLike,
     PromoteDtypeFn,
 )
+from jax import lax
 
-from .utils import (
-    canonicalize_padding,
-    default_kernel_init,
-    default_bias_init,
-    default_alpha_init,
-    DEFAULT_CONSTANT_ALPHA,
-)
 from .._numerics import finite_cast, fp32_if_low_precision, inverse_softplus
+from .utils import (
+    DEFAULT_CONSTANT_ALPHA,
+    canonicalize_padding,
+    default_alpha_init,
+    default_bias_init,
+    default_kernel_init,
+)
 
 Array = jax.Array
 
@@ -251,9 +250,7 @@ class YatConvTranspose(Module):
         if num_batch_dimensions != 1:
             input_batch_shape = inputs.shape[:num_batch_dimensions]
             total_batch_size = int(np.prod(input_batch_shape))
-            flat_input_shape = (total_batch_size,) + inputs.shape[
-                num_batch_dimensions:
-            ]
+            flat_input_shape = (total_batch_size,) + inputs.shape[num_batch_dimensions:]
             inputs_flat = jnp.reshape(inputs, flat_input_shape)
         else:
             inputs_flat = inputs
@@ -288,7 +285,9 @@ class YatConvTranspose(Module):
 
         # Get bias value (either learnable or constant)
         if self._constant_bias_value is not None:
-            bias_val = jnp.full((self.out_features,), self._constant_bias_value, dtype=self.param_dtype)
+            bias_val = jnp.full(
+                (self.out_features,), self._constant_bias_value, dtype=self.param_dtype
+            )
         elif self.bias is not None:
             bias_val = self.bias[...]
             if self.softplus_bias:
@@ -416,7 +415,9 @@ class YatConvTranspose(Module):
                 ]
             y = jnp.pad(y, [(0, 0)] + total_pad + [(0, 0)])
             for i in range(1, y.ndim - 1):
-                y = y.reshape(y.shape[:i] + (-1, scaled_x_dims[i - 1]) + y.shape[i + 1 :])
+                y = y.reshape(
+                    y.shape[:i] + (-1, scaled_x_dims[i - 1]) + y.shape[i + 1 :]
+                )
                 y = y.sum(axis=i)
 
         # Reshape output if needed

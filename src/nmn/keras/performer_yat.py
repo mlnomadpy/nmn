@@ -150,8 +150,8 @@ def create_maclaurin_projection(
     omegas = rng.choice([-1.0, 1.0], size=(num_features, nmax, head_dim))
 
     return {
-        "omegas": ops.convert_to_tensor(omegas.astype(dtype)),   # (M, nmax, d)
-        "degrees": ops.convert_to_tensor(degrees),               # (M,)
+        "omegas": ops.convert_to_tensor(omegas.astype(dtype)),  # (M, nmax, d)
+        "degrees": ops.convert_to_tensor(degrees),  # (M,)
         "Z": Z,
         "num_features": num_features,
         "nmax": nmax,
@@ -189,8 +189,8 @@ def maclaurin_features(
     if normalize:
         x = _normalize(x, epsilon)
 
-    omegas = params["omegas"]          # (M, nmax, d)
-    degrees = params["degrees"]        # (M,)
+    omegas = params["omegas"]  # (M, nmax, d)
+    degrees = params["degrees"]  # (M,)
     M = params["num_features"]
     nmax = params["nmax"]
     Z = params["Z"]
@@ -258,8 +258,8 @@ def create_radial_projection(
     # Radial RFF for 1/(eps + r^2) via 1/(eps+r^2) = ∫ e^{-t(eps+r^2)} dt,
     # Gauss-Laguerre over tau with the substitution t = tau / eps.
     tau, wq = np.polynomial.laguerre.laggauss(num_radial)
-    t_nodes = tau / epsilon                 # t_j = tau_j / eps
-    coef = (1.0 / epsilon) * wq             # (1/eps) w_j
+    t_nodes = tau / epsilon  # t_j = tau_j / eps
+    coef = (1.0 / epsilon) * wq  # (1/eps) w_j
     omegas, phases = [], []
     for tj in t_nodes:
         omegas.append(rng.standard_normal((radial_dim, da)) * np.sqrt(2.0 * tj))
@@ -307,9 +307,9 @@ def radial_features(
 
     W1 = params["W1"]
     W2 = params["W2"]
-    omegas = params["omegas"]      # (num_radial, radial_dim, d+1)
-    phases = params["phases"]      # (num_radial, radial_dim)
-    coef = params["coef"]          # (num_radial,)
+    omegas = params["omegas"]  # (num_radial, radial_dim, d+1)
+    phases = params["phases"]  # (num_radial, radial_dim)
+    coef = params["coef"]  # (num_radial,)
     sketch_m = params["sketch_m"]
     radial_dim = params["radial_dim"]
     num_radial = params["num_radial"]
@@ -320,20 +320,20 @@ def radial_features(
 
     # z = [x̂, sqrt(b)] → (..., d+1). Build the sqrt(b) pad from x so it carries
     # the same (dynamic) leading shape without manual shape juggling.
-    pad = ops.zeros_like(x[..., :1]) + sqrt_b              # (..., 1) filled with sqrt(b)
+    pad = ops.zeros_like(x[..., :1]) + sqrt_b  # (..., 1) filled with sqrt(b)
     z = ops.concatenate([x, pad], axis=-1)
 
     # Degree-2 sketch psi(z): (..., sketch_m), approximates (z·z')^2.
-    psi = (ops.matmul(z, ops.transpose(W1)) * ops.matmul(z, ops.transpose(W2)))
+    psi = ops.matmul(z, ops.transpose(W1)) * ops.matmul(z, ops.transpose(W2))
     psi = psi / math.sqrt(sketch_m)
 
     # Radial RFF per node: (..., num_radial, radial_dim).
     # proj[..., j, c] = sum_e z[..., e] * omega[j, c, e]
     proj = ops.einsum("...e,jce->...jc", z, omegas)
-    proj = proj + phases                                   # broadcast (num_radial, radial_dim)
-    rff = math.sqrt(2.0 / radial_dim) * ops.cos(proj)      # (..., num_radial, radial_dim)
-    sqrt_coef = ops.sqrt(ops.maximum(coef, 0.0))           # (num_radial,)
-    rff = rff * ops.reshape(sqrt_coef, (num_radial, 1))    # scale each node
+    proj = proj + phases  # broadcast (num_radial, radial_dim)
+    rff = math.sqrt(2.0 / radial_dim) * ops.cos(proj)  # (..., num_radial, radial_dim)
+    sqrt_coef = ops.sqrt(ops.maximum(coef, 0.0))  # (num_radial,)
+    rff = rff * ops.reshape(sqrt_coef, (num_radial, 1))  # scale each node
 
     # Flatten the (num_radial, radial_dim) tail → phi_rad (..., R*radial_dim).
     # ops.shape(...) returns a tuple of (possibly dynamic) dims; keep the leading

@@ -1,12 +1,12 @@
 """Tests for Linen squasher functions (re-exported from NNX)."""
 
-import pytest
 import numpy as np
+import pytest
 
 jax = pytest.importorskip("jax")
 jnp = jax.numpy
 
-from nmn.linen.squashers import softermax, softer_sigmoid, soft_tanh
+from nmn.linen.squashers import soft_tanh, softer_sigmoid, softermax
 
 
 class TestSoftermax:

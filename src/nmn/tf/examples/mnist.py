@@ -8,6 +8,7 @@ or:
 Requires:
     pip install "nmn[tf]" tensorflow tensorflow-datasets
 """
+
 from __future__ import annotations
 
 import argparse
@@ -56,10 +57,13 @@ def main() -> None:
     def prep(x, y):
         return tf.cast(x, tf.float32) / 255.0, y
 
-    train_ds = (tfds.load("mnist", split="train", as_supervised=True)
-                .map(prep).shuffle(10_000).batch(args.batch_size))
-    test_ds = (tfds.load("mnist", split="test", as_supervised=True)
-               .map(prep).batch(512))
+    train_ds = (
+        tfds.load("mnist", split="train", as_supervised=True)
+        .map(prep)
+        .shuffle(10_000)
+        .batch(args.batch_size)
+    )
+    test_ds = tfds.load("mnist", split="test", as_supervised=True).map(prep).batch(512)
 
     model = YatMLP()
     # Build variables with a dummy call so optimizer can see them.
@@ -80,12 +84,12 @@ def main() -> None:
     @tf.function
     def eval_step(x, y):
         logits = model(x)
-        loss = tf.reduce_sum(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(y, logits)
-        )
+        loss = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(y, logits))
         correct = tf.reduce_sum(
-            tf.cast(tf.argmax(logits, axis=1, output_type=tf.int32)
-                    == tf.cast(y, tf.int32), tf.int32)
+            tf.cast(
+                tf.argmax(logits, axis=1, output_type=tf.int32) == tf.cast(y, tf.int32),
+                tf.int32,
+            )
         )
         return loss, correct
 
@@ -120,10 +124,15 @@ def main() -> None:
             f"test_loss={test_loss:.4f} test_acc={test_acc:.4f} "
             f"time={epoch_s:.1f}s"
         )
-        history.append({
-            "epoch": epoch, "train_loss": train_loss,
-            "test_loss": test_loss, "test_acc": test_acc, "epoch_s": epoch_s,
-        })
+        history.append(
+            {
+                "epoch": epoch,
+                "train_loss": train_loss,
+                "test_loss": test_loss,
+                "test_acc": test_acc,
+                "epoch_s": epoch_s,
+            }
+        )
     total_s = time.perf_counter() - wall0
 
     result = {

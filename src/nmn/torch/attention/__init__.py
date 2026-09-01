@@ -12,24 +12,22 @@ Provides:
   bias-aware sketched degree-2 × radial-RFF linear-attention feature map
 """
 
-from .yat_attention import (
-    yat_attention,
-    yat_attention_weights,
-    yat_attention_normalized,
-    normalize_qk,
-)
-
-from .multi_head import MultiHeadYatAttention, DEFAULT_CONSTANT_ALPHA
-
+from .multi_head import DEFAULT_CONSTANT_ALPHA, MultiHeadYatAttention
 from .performer_yat import (
-    maclaurin_coeffs,
     create_maclaurin_projection,
+    create_radial_projection,
+    linear_attention_readout,
+    maclaurin_coeffs,
     maclaurin_features,
     maclaurin_yat_attention,
-    create_radial_projection,
     radial_features,
     radial_yat_attention,
-    linear_attention_readout,
+)
+from .yat_attention import (
+    normalize_qk,
+    yat_attention,
+    yat_attention_normalized,
+    yat_attention_weights,
 )
 
 __all__ = [

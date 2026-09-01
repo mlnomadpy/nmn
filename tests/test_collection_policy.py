@@ -28,7 +28,9 @@ def test_unusable_mlx_tree_is_ignored_before_import(monkeypatch):
 
 
 def test_available_backend_tree_is_collected(monkeypatch):
-    monkeypatch.setattr(shared_config, "_module_available", lambda name: name == "torch")
+    monkeypatch.setattr(
+        shared_config, "_module_available", lambda name: name == "torch"
+    )
     path = Path("/checkout/tests/test_torch/test_yat_nmn.py")
 
     assert shared_config.pytest_ignore_collect(path, object()) is False

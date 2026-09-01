@@ -20,25 +20,23 @@ from typing import Any, Callable, Optional, Union
 
 import jax
 import jax.numpy as jnp
-from jax import lax
-
 from flax import nnx
 from flax.nnx import rnglib
 from flax.nnx.module import Module, first_from
 from flax.nnx.nn import initializers
 from flax.nnx.nn.linear import LinearGeneral, default_kernel_init
 from flax.typing import (
+    DotGeneralT,
     Dtype,
-    Shape,
     Initializer,
     PrecisionLike,
-    DotGeneralT,
+    Shape,
 )
-from jax import Array
+from jax import Array, lax
 
-from .yat_attention import yat_attention
-from .masks import combine_masks
 from .._numerics import fp32_if_low_precision, inverse_softplus
+from .masks import combine_masks
+from .yat_attention import yat_attention
 
 # Default constant alpha value (sqrt(2)), same as NMN
 DEFAULT_CONSTANT_ALPHA = jnp.sqrt(2.0)
@@ -92,9 +90,7 @@ def _linear_general_with_kernel(
     """Apply ``LinearGeneral`` with an ephemeral DropConnect kernel."""
     ndim = inputs.ndim
     axis = tuple(ax if ax >= 0 else ndim + ax for ax in layer.axis)
-    batch_axes = tuple(
-        ax if ax >= 0 else ndim + ax for ax in layer.batch_axis.keys()
-    )
+    batch_axes = tuple(ax if ax >= 0 else ndim + ax for ax in layer.batch_axis.keys())
     n_batch_dims = len(batch_axes)
     expanded_batch_shape = tuple(
         inputs.shape[ax] if ax in batch_axes else 1
@@ -114,8 +110,10 @@ def _linear_general_with_kernel(
     output = dot_general(
         inputs,
         kernel,
-        ((axis, tuple(range(n_batch_dims, len(axis) + n_batch_dims))),
-         (batch_axes, tuple(range(n_batch_dims)))),
+        (
+            (axis, tuple(range(n_batch_dims, len(axis) + n_batch_dims))),
+            (batch_axes, tuple(range(n_batch_dims))),
+        ),
         precision=layer.precision,
         **dot_general_kwargs,
     )
@@ -319,7 +317,7 @@ class MultiHeadAttention(Module):
         #   3. use_alpha=True (default) -> learnable alpha parameter
         #   4. use_alpha=False -> no alpha scaling
         self.alpha: nnx.Param[Array] | None
-        
+
         if constant_alpha is not None and constant_alpha is not False:
             # Use constant alpha (no learnable parameter)
             if constant_alpha is True:
@@ -337,7 +335,7 @@ class MultiHeadAttention(Module):
             else:
                 # No alpha scaling
                 self.alpha = None
-        
+
         self.use_alpha = use_alpha
         self.constant_alpha = constant_alpha
         self.alpha_init = alpha_init
@@ -526,8 +524,7 @@ class MultiHeadAttention(Module):
             base_key = self.dropconnect_rng.key[...]
             count = self.dropconnect_rng.count[...]
             dropconnect_keys = tuple(
-                jax.random.fold_in(base_key, count + offset)
-                for offset in range(4)
+                jax.random.fold_in(base_key, count + offset) for offset in range(4)
             )
             pending_dropconnect_count = count + 4
             query = _linear_general_with_kernel(
@@ -649,8 +646,7 @@ class MultiHeadAttention(Module):
         if mask is not None:
             effective_mask = jnp.broadcast_to(
                 mask,
-                query.shape[:-3]
-                + (query.shape[-2], query.shape[-3], key.shape[-3]),
+                query.shape[:-3] + (query.shape[-2], query.shape[-3], key.shape[-3]),
             )
 
         # Apply attention (YAT by default)
@@ -694,9 +690,7 @@ class MultiHeadAttention(Module):
 
         if effective_mask is not None:
             query_has_key = jnp.any(effective_mask, axis=(-3, -1))
-            output = jnp.where(
-                query_has_key[..., None], output, jnp.zeros_like(output)
-            )
+            output = jnp.where(query_has_key[..., None], output, jnp.zeros_like(output))
 
         if pending_cache is not None:
             assert self.cached_key is not None

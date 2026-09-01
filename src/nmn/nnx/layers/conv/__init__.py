@@ -33,23 +33,22 @@ Modules:
     - utils: Utility functions and default initializers
 """
 
+# Utilities
+from .utils import (  # Backwards compatibility alias
+    DEFAULT_CONSTANT_ALPHA,
+    _conv_dimension_numbers,
+    canonicalize_padding,
+    conv_dimension_numbers,
+    default_alpha_init,
+    default_bias_init,
+    default_kernel_init,
+)
+
 # YAT Convolution
 from .yat_conv import YatConv
 
 # YAT Transposed Convolution
 from .yat_conv_transpose import YatConvTranspose
-
-# Utilities
-from .utils import (
-    canonicalize_padding,
-    conv_dimension_numbers,
-    default_kernel_init,
-    default_bias_init,
-    default_alpha_init,
-    DEFAULT_CONSTANT_ALPHA,
-    # Backwards compatibility alias
-    _conv_dimension_numbers,
-)
 
 __all__ = [
     # Core layers
@@ -65,7 +64,3 @@ __all__ = [
     # Backwards compatibility
     "_conv_dimension_numbers",
 ]
-
-
-
-

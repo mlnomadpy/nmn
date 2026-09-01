@@ -8,14 +8,13 @@ import pytest
 mx = pytest.importorskip("mlx.core")
 
 from nmn.mlx import (  # noqa: E402
-    maclaurin_coeffs,
     create_maclaurin_projection,
+    create_yat_tp_projection,
+    maclaurin_coeffs,
     maclaurin_features,
     maclaurin_yat_attention,
-    create_yat_tp_projection,
     yat_tp_attention,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers (NumPy reference mirrors).
@@ -64,7 +63,12 @@ def test_maclaurin_coeffs_non_negative():
 
 def test_projection_shapes():
     p = create_maclaurin_projection(
-        head_dim=16, num_features=64, bias=1.0, epsilon=0.5, nmax=40, seed=0,
+        head_dim=16,
+        num_features=64,
+        bias=1.0,
+        epsilon=0.5,
+        nmax=40,
+        seed=0,
     )
     assert p["omegas"].shape == (64, 40, 16)
     assert p["degrees"].shape == (64,)
@@ -120,8 +124,12 @@ def test_inner_product_tracks_kappa():
     d, M, b, eps = 32, 8000, 1.0, 0.5
     # MAY is an unbiased estimator; average several independent projections to
     # tame the Monte-Carlo variance of the high-degree terms.
-    projs = [create_maclaurin_projection(head_dim=d, num_features=M, bias=b,
-                                         epsilon=eps, seed=s) for s in range(8)]
+    projs = [
+        create_maclaurin_projection(
+            head_dim=d, num_features=M, bias=b, epsilon=eps, seed=s
+        )
+        for s in range(8)
+    ]
     rng = np.random.default_rng(1)
     q = rng.standard_normal(d).astype(np.float32)
     q /= np.linalg.norm(q)
@@ -134,8 +142,12 @@ def test_inner_product_tracks_kappa():
         k = (s * q + np.sqrt(1.0 - s * s) * r).astype(np.float32)
         est = []
         for p in projs:
-            qf = np.array(maclaurin_features(mx.array(q).reshape(1, 1, 1, d), p)).ravel()
-            kf = np.array(maclaurin_features(mx.array(k).reshape(1, 1, 1, d), p)).ravel()
+            qf = np.array(
+                maclaurin_features(mx.array(q).reshape(1, 1, 1, d), p)
+            ).ravel()
+            kf = np.array(
+                maclaurin_features(mx.array(k).reshape(1, 1, 1, d), p)
+            ).ravel()
             est.append(float(qf.dot(kf)))
         ips.append(float(np.mean(est)))
         ks.append(float(_kappa(s, b, eps)))
@@ -207,11 +219,18 @@ def test_may_beats_slay_at_bias_ge_1():
     qm, km, vm = to(q), to(k), to(v)
     for b in [1.0, 2.0]:
         exact = _exact_attention(q, k, v, b, eps)
-        mp = create_maclaurin_projection(d, num_features=256, bias=b,
-                                         epsilon=eps, seed=0)
+        mp = create_maclaurin_projection(
+            d, num_features=256, bias=b, epsilon=eps, seed=0
+        )
         may = np.array(maclaurin_yat_attention(qm, km, vm, mp)).reshape(N, d)
-        sp = create_yat_tp_projection(d, num_prf_features=8, num_quad_nodes=1,
-                                      num_anchor_features=32, epsilon=eps, seed=0)
+        sp = create_yat_tp_projection(
+            d,
+            num_prf_features=8,
+            num_quad_nodes=1,
+            num_anchor_features=32,
+            epsilon=eps,
+            seed=0,
+        )
         slay = np.array(yat_tp_attention(qm, km, vm, sp)).reshape(N, d)
         assert _cos(may, exact) > _cos(slay, exact)
 
@@ -232,8 +251,12 @@ def test_more_features_higher_fidelity():
     exact = _exact_attention(q, k, v, b, eps)
     cos_small, cos_large = [], []
     for seed in range(3):
-        ps = create_maclaurin_projection(d, num_features=64, bias=b, epsilon=eps, seed=seed)
-        pl = create_maclaurin_projection(d, num_features=1024, bias=b, epsilon=eps, seed=seed)
+        ps = create_maclaurin_projection(
+            d, num_features=64, bias=b, epsilon=eps, seed=seed
+        )
+        pl = create_maclaurin_projection(
+            d, num_features=1024, bias=b, epsilon=eps, seed=seed
+        )
         a_s = np.array(maclaurin_yat_attention(qm, km, vm, ps)).reshape(N, d)
         a_l = np.array(maclaurin_yat_attention(qm, km, vm, pl)).reshape(N, d)
         cos_small.append(_cos(a_s, exact))

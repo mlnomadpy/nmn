@@ -84,7 +84,6 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 
-
 __all__ = [
     "spherical_kappa",
     "maclaurin_coeffs",
@@ -184,9 +183,7 @@ def create_maclaurin_projection(
 
     k_deg, k_omega = jax.random.split(key)
     # N_r ~ Categorical(p), r = 1..M
-    degrees = jax.random.choice(
-        k_deg, a.shape[0], shape=(num_features,), p=p
-    )
+    degrees = jax.random.choice(k_deg, a.shape[0], shape=(num_features,), p=p)
     # Rademacher vectors: [M, nmax, d]; only the first N_r are used per feature.
     omegas = jnp.where(
         jax.random.bernoulli(k_omega, 0.5, (num_features, nmax, head_dim)),
@@ -195,9 +192,9 @@ def create_maclaurin_projection(
     ).astype(dtype)
 
     return {
-        "omegas": omegas,          # (M, nmax, d)
-        "degrees": degrees,        # (M,)
-        "Z": Z,                    # scalar
+        "omegas": omegas,  # (M, nmax, d)
+        "degrees": degrees,  # (M,)
+        "Z": Z,  # scalar
         "M": num_features,
         "nmax": nmax,
         "head_dim": head_dim,
@@ -225,19 +222,19 @@ def maclaurin_features(
     if normalize:
         x = _normalize(x, eps)
 
-    omegas = params["omegas"]          # (M, nmax, d)
-    degrees = params["degrees"]        # (M,)
+    omegas = params["omegas"]  # (M, nmax, d)
+    degrees = params["degrees"]  # (M,)
     Z = params["Z"]
     M = params["M"]
     nmax = omegas.shape[1]
 
     # proj[..., m, l] = omega[m, l] · x̂
-    proj = jnp.einsum("...d,mld->...ml", x, omegas)   # (..., M, nmax)
-    l = jnp.arange(nmax)                               # (nmax,)
-    mask = l[None, :] < degrees[:, None]               # (M, nmax)
+    proj = jnp.einsum("...d,mld->...ml", x, omegas)  # (..., M, nmax)
+    l = jnp.arange(nmax)  # (nmax,)
+    mask = l[None, :] < degrees[:, None]  # (M, nmax)
     # neutralize unused factors (l >= N_r) by setting them to 1.0
     proj = jnp.where(mask, proj, 1.0)
-    feat = jnp.prod(proj, axis=-1)                     # (..., M)
+    feat = jnp.prod(proj, axis=-1)  # (..., M)
     return jnp.sqrt(Z / M) * feat
 
 
@@ -283,7 +280,7 @@ def create_radial_projection(
         ``[num_radial]``, plus ``bias``, ``sketch_m``, ``radial_dim``,
         ``num_radial``, ``head_dim``.
     """
-    da = head_dim + 1   # augmented z = [x̂, sqrt(bias)]
+    da = head_dim + 1  # augmented z = [x̂, sqrt(bias)]
     k_w1, k_w2, k_om, k_ph = jax.random.split(key, 4)
 
     # degree-2 sketch: two independent projections -> approximates (z·z')^2
@@ -293,8 +290,8 @@ def create_radial_projection(
     # radial RFF for 1/(eps + r^2) via Gauss-Laguerre over
     # 1/(eps + r^2) = ∫ e^{-t(eps + r^2)} dt, substitute t = tau / eps.
     tau, wq = _laggauss(num_radial)
-    t_nodes = tau / epsilon              # t_j = tau_j / epsilon
-    coef = (1.0 / epsilon) * wq          # (1/epsilon) w_j
+    t_nodes = tau / epsilon  # t_j = tau_j / epsilon
+    coef = (1.0 / epsilon) * wq  # (1/epsilon) w_j
 
     # omega_j ~ N(0, 2 t_j I) ; phase ~ U(0, 2 pi)
     base = jax.random.normal(k_om, (num_radial, radial_dim, da), dtype=dtype)
@@ -305,11 +302,11 @@ def create_radial_projection(
     )
 
     return {
-        "W1": W1,                           # (m, d+1)
-        "W2": W2,                           # (m, d+1)
-        "omegas": omegas,                   # (num_radial, radial_dim, d+1)
-        "phases": phases,                   # (num_radial, radial_dim)
-        "coef": coef.astype(dtype),         # (num_radial,)
+        "W1": W1,  # (m, d+1)
+        "W2": W2,  # (m, d+1)
+        "omegas": omegas,  # (num_radial, radial_dim, d+1)
+        "phases": phases,  # (num_radial, radial_dim)
+        "coef": coef.astype(dtype),  # (num_radial,)
         "bias": float(bias),
         "sketch_m": sketch_m,
         "radial_dim": radial_dim,
@@ -347,18 +344,18 @@ def radial_features(
 
     # augment z = [x̂, sqrt(bias)]
     sqrt_b = jnp.full(x.shape[:-1] + (1,), math.sqrt(bias), dtype=x.dtype)
-    z = jnp.concatenate([x, sqrt_b], axis=-1)            # (..., d+1)
+    z = jnp.concatenate([x, sqrt_b], axis=-1)  # (..., d+1)
 
     # degree-2 sketch psi(z): (..., sketch_m), approximates (z·z')^2
     proj1 = jnp.einsum("...a,ma->...m", z, W1)
     proj2 = jnp.einsum("...a,ma->...m", z, W2)
-    psi = proj1 * proj2 / math.sqrt(sketch_m)            # (..., m)
+    psi = proj1 * proj2 / math.sqrt(sketch_m)  # (..., m)
 
     # radial RFF per node: (..., num_radial, radial_dim)
     proj = jnp.einsum("...a,jra->...jr", z, omegas) + phases
-    rff = jnp.sqrt(2.0 / radial_dim) * jnp.cos(proj)     # (..., num_radial, radial_dim)
-    sqrt_coef = jnp.sqrt(jnp.maximum(coef, 0.0))         # (num_radial,)
-    rff = rff * sqrt_coef[:, None]                       # broadcast over radial_dim
+    rff = jnp.sqrt(2.0 / radial_dim) * jnp.cos(proj)  # (..., num_radial, radial_dim)
+    sqrt_coef = jnp.sqrt(jnp.maximum(coef, 0.0))  # (num_radial,)
+    rff = rff * sqrt_coef[:, None]  # broadcast over radial_dim
     phi_rad = rff.reshape(x.shape[:-1] + (num_radial * radial_dim,))
 
     # tensor product psi (x) phi_rad -> (..., sketch_m * radial_total)

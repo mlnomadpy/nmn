@@ -1,17 +1,18 @@
 import math
+from typing import Any, Optional
+
 import jax
-import jax.numpy as jnp
 import jax.lax as lax
+import jax.numpy as jnp
+from flax import linen as nn
 from flax.linen.dtypes import promote_dtype
+from flax.linen.initializers import zeros_init
 from flax.linen.module import Module, compact
 from flax.typing import (
-  PRNGKey as PRNGKey,
-  Shape as Shape,
-  DotGeneralT,
+    DotGeneralT,
 )
-from flax import linen as nn
-from flax.linen.initializers import zeros_init
-from typing import Any, Optional
+from flax.typing import PRNGKey as PRNGKey
+from flax.typing import Shape as Shape
 
 from nmn._epsilon import (
     epsilon_parameter_dtype,
@@ -29,10 +30,12 @@ def _epsilon_dtype(param_dtype, epsilon):
     validate_epsilon_for_dtype(epsilon, dtype)
     return dtype
 
+
 from ._yat_core import reduction_safe_upcast, saturating_downcast
 
 # Default constant alpha value (sqrt(2))
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
+
 
 class YatNMN(Module):
     """A custom transformation applied over the last dimension of the input using squared Euclidean distance.
@@ -99,6 +102,7 @@ class YatNMN(Module):
 
        ``optax.set_to_zero()`` keeps the frozen kernel exactly constant.
     """
+
     features: int
     use_bias: bool = True
     constant_bias: Optional[float] = None
@@ -136,7 +140,7 @@ class YatNMN(Module):
           The transformed input.
         """
         kernel = self.param(
-            'kernel',
+            "kernel",
             self.kernel_init,
             (self.features, jnp.shape(inputs)[-1]),
             self.param_dtype,
@@ -164,7 +168,7 @@ class YatNMN(Module):
             alpha = None
         elif self.use_alpha:
             alpha = self.param(
-                'alpha',
+                "alpha",
                 self.alpha_init,
                 (1,),
                 self.param_dtype,
@@ -179,7 +183,7 @@ class YatNMN(Module):
             )
         elif self.use_bias:
             bias = self.param(
-                'bias', self.bias_init, (self.features,), self.param_dtype
+                "bias", self.bias_init, (self.features,), self.param_dtype
             )
         else:
             bias = None
@@ -189,7 +193,7 @@ class YatNMN(Module):
             epsilon_dtype = _epsilon_dtype(self.param_dtype, self.epsilon)
             raw_eps_init = inverse_softplus(self.epsilon)
             epsilon_param = self.param(
-                'epsilon_param',
+                "epsilon_param",
                 lambda key, shape, dtype: jnp.full(shape, raw_eps_init, dtype=dtype),
                 (1,),
                 epsilon_dtype,
@@ -197,7 +201,9 @@ class YatNMN(Module):
         else:
             epsilon_param = None
 
-        inputs, kernel, bias, alpha = promote_dtype(inputs, kernel, bias, alpha, dtype=self.dtype)
+        inputs, kernel, bias, alpha = promote_dtype(
+            inputs, kernel, bias, alpha, dtype=self.dtype
+        )
         output_dtype = inputs.dtype
         return_kernel = kernel
         if output_dtype in (jnp.float16, jnp.bfloat16):
@@ -218,21 +224,21 @@ class YatNMN(Module):
         # Weight normalization: normalize each kernel row at forward time.
         if self.weight_normalized:
             kernel = kernel / (
-                jnp.sqrt(jnp.sum(kernel ** 2, axis=-1, keepdims=True)) + 1e-8
+                jnp.sqrt(jnp.sum(kernel**2, axis=-1, keepdims=True)) + 1e-8
             )
 
         # Compute dot product between input and kernel
         if self.dot_general_cls is not None:
-          dot_general = self.dot_general_cls()
+            dot_general = self.dot_general_cls()
         elif self.dot_general is not None:
-          dot_general = self.dot_general
+            dot_general = self.dot_general
         else:
-          dot_general = lax.dot_general
+            dot_general = lax.dot_general
         y = dot_general(
-          inputs,
-          jnp.transpose(kernel),
-          (((inputs.ndim - 1,), (0,)), ((), ())),
-          precision=self.precision,
+            inputs,
+            jnp.transpose(kernel),
+            (((inputs.ndim - 1,), (0,)), ((), ())),
+            precision=self.precision,
         )
 
         # Compute squared distances
@@ -240,12 +246,12 @@ class YatNMN(Module):
             # Both x and each W_row are unit vectors → ||x - W||² = 2 - 2(x·W)
             distances = jnp.maximum(2.0 - 2.0 * y, 0.0)
         else:
-            inputs_squared_sum = jnp.sum(inputs ** 2, axis=-1, keepdims=True)
+            inputs_squared_sum = jnp.sum(inputs**2, axis=-1, keepdims=True)
             if self.weight_normalized:
                 # ||W_row||² = 1 for each neuron
                 kernel_squared_sum = jnp.ones((self.features,), dtype=kernel.dtype)
             else:
-                kernel_squared_sum = jnp.sum(kernel ** 2, axis=-1)
+                kernel_squared_sum = jnp.sum(kernel**2, axis=-1)
             # Clamp to zero: bf16 cancellation can make distance negative when x ≈ W
             distances = jnp.maximum(
                 inputs_squared_sum + kernel_squared_sum - 2 * y, 0.0
@@ -264,7 +270,7 @@ class YatNMN(Module):
             eps = self.epsilon
 
         # YAT: (x·W + b)² / (||x - W||² + ε)
-        y = y ** 2 / (distances + eps)
+        y = y**2 / (distances + eps)
 
         # Apply alpha scaling
         if _constant_alpha_value is not None:
@@ -275,5 +281,5 @@ class YatNMN(Module):
 
         y = saturating_downcast(y, output_dtype)
         if self.return_weights:
-           return y, return_kernel
+            return y, return_kernel
         return y

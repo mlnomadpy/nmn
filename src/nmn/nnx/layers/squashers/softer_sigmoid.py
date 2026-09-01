@@ -17,7 +17,7 @@ def softer_sigmoid(
     The soft-sigmoid function is defined as:
     .. math::
         \\text{soft-sigmoid}_n(x) = \\frac{x^n}{1 + x^n}
-    
+
     The power `n` modulates the softness: higher `n` makes the function approach
     zero faster for large `x`, while `n < 1` makes the decay slower.
 
@@ -37,6 +37,6 @@ def softer_sigmoid(
     """
     if n <= 0:
         raise ValueError("Power 'n' must be positive.")
-    
+
     x_n = jnp.power(x, n)
     return x_n / (1.0 + x_n)

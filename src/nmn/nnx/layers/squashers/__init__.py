@@ -28,9 +28,9 @@ All functions accept a power parameter `n` to control sharpness:
     - 0<n<1: Softer/smoother transitions
 """
 
-from .softermax import softermax
-from .softer_sigmoid import softer_sigmoid
 from .soft_tanh import soft_tanh
+from .softer_sigmoid import softer_sigmoid
+from .softermax import softermax
 
 __all__ = [
     "softermax",

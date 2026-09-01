@@ -17,8 +17,12 @@ def _trainable_names(layer):
 
 def test_lazy_freezes_only_kernel():
     layer = YatNMN(
-        in_features=8, out_features=4,
-        bias=True, alpha=True, learnable_epsilon=True, lazy=True,
+        in_features=8,
+        out_features=4,
+        bias=True,
+        alpha=True,
+        learnable_epsilon=True,
+        lazy=True,
     )
     assert layer.weight.requires_grad is False
     assert layer.bias.requires_grad is True
@@ -28,8 +32,12 @@ def test_lazy_freezes_only_kernel():
 
 def test_lazy_kernel_excluded_from_trainable_params():
     layer = YatNMN(
-        in_features=8, out_features=4,
-        bias=True, alpha=True, learnable_epsilon=True, lazy=True,
+        in_features=8,
+        out_features=4,
+        bias=True,
+        alpha=True,
+        learnable_epsilon=True,
+        lazy=True,
     )
     names = _trainable_names(layer)
     assert "weight" not in names
@@ -57,17 +65,20 @@ def test_lazy_training_step_kernel_unchanged_others_change():
     # Use a larger epsilon so softplus(raw) has a non-vanishing slope and the
     # smoke test can observe epsilon moving within a couple of SGD steps.
     layer = YatNMN(
-        in_features=8, out_features=4,
-        bias=True, alpha=True, learnable_epsilon=True, epsilon=0.5, lazy=True,
+        in_features=8,
+        out_features=4,
+        bias=True,
+        alpha=True,
+        learnable_epsilon=True,
+        epsilon=0.5,
+        lazy=True,
     )
     kernel_before = layer.weight.detach().clone()
     bias_before = layer.bias.detach().clone()
     alpha_before = layer.alpha.detach().clone()
     eps_before = layer.epsilon_param.detach().clone()
 
-    opt = torch.optim.SGD(
-        [p for p in layer.parameters() if p.requires_grad], lr=0.1
-    )
+    opt = torch.optim.SGD([p for p in layer.parameters() if p.requires_grad], lr=0.1)
     x = torch.randn(16, 8)
     target = torch.randn(16, 4)
 
@@ -80,7 +91,10 @@ def test_lazy_training_step_kernel_unchanged_others_change():
         # Kernel must get no gradient.
         assert layer.weight.grad is None
         # epsilon IS in the autograd graph (it is trainable in lazy mode).
-        if layer.epsilon_param.grad is not None and layer.epsilon_param.grad.abs().sum() > 0:
+        if (
+            layer.epsilon_param.grad is not None
+            and layer.epsilon_param.grad.abs().sum() > 0
+        ):
             eps_got_grad = True
         opt.step()
 

@@ -100,15 +100,19 @@ def test_lazy_training_smoke():
         return next(v for k, v in flat.items() if k[-1] == name)
 
     # kernel unchanged
-    assert np.allclose(np.asarray(get(flat0, "kernel")),
-                       np.asarray(get(flat1, "kernel")))
+    assert np.allclose(
+        np.asarray(get(flat0, "kernel")), np.asarray(get(flat1, "kernel"))
+    )
     # bias / alpha / epsilon moved
-    assert not np.allclose(np.asarray(get(flat0, "bias")),
-                           np.asarray(get(flat1, "bias")))
-    assert not np.allclose(np.asarray(get(flat0, "alpha")),
-                           np.asarray(get(flat1, "alpha")))
-    assert not np.allclose(np.asarray(get(flat0, "epsilon_param")),
-                           np.asarray(get(flat1, "epsilon_param")))
+    assert not np.allclose(
+        np.asarray(get(flat0, "bias")), np.asarray(get(flat1, "bias"))
+    )
+    assert not np.allclose(
+        np.asarray(get(flat0, "alpha")), np.asarray(get(flat1, "alpha"))
+    )
+    assert not np.allclose(
+        np.asarray(get(flat0, "epsilon_param")), np.asarray(get(flat1, "epsilon_param"))
+    )
 
 
 def test_lazy_forward_matches_nonlazy_at_init():

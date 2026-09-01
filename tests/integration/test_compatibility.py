@@ -1,23 +1,25 @@
 """Integration tests for cross-framework compatibility."""
 
-import pytest
-import numpy as np
 import os
+
+import numpy as np
+import pytest
 
 
 def test_package_import():
     """Test that the main package can be imported."""
     import nmn
-    assert hasattr(nmn, '__version__')
+
+    assert hasattr(nmn, "__version__")
 
 
 def test_all_framework_imports():
     """Test that all framework modules can be imported without errors."""
-    frameworks = ['nnx', 'torch', 'keras', 'tf', 'linen']
-    
+    frameworks = ["nnx", "torch", "keras", "tf", "linen"]
+
     for framework in frameworks:
         try:
-            module = __import__(f'nmn.{framework}', fromlist=['nmn'])
+            module = __import__(f"nmn.{framework}", fromlist=["nmn"])
             assert module is not None
         except ImportError:
             # Expected for frameworks not installed in test environment
@@ -27,35 +29,40 @@ def test_all_framework_imports():
 def test_version_consistency():
     """Test that version is consistent across files."""
     import nmn
-    
+
     # Find pyproject.toml relative to this file
     test_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(os.path.dirname(test_dir))
-    pyproject_path = os.path.join(project_root, 'pyproject.toml')
-    
+    pyproject_path = os.path.join(project_root, "pyproject.toml")
+
     # Read version from pyproject.toml
-    with open(pyproject_path, 'r') as f:
+    with open(pyproject_path, "r") as f:
         content = f.read()
-    
+
     # Extract version from pyproject.toml (under [project], not requires-python)
     import re
+
     # Match the version line that's NOT requires-python
     match = re.search(r'^version\s*=\s*"([^"]+)"', content, re.MULTILINE)
     if match is None:
         # Try dynamic versioning - version may not be in pyproject.toml
         pytest.skip("Version is dynamic (managed by hatch-vcs), not in pyproject.toml")
     pyproject_version = match.group(1)
-    
+
     # Check package version matches pyproject.toml
-    assert nmn.__version__ == pyproject_version, \
-        f"Package version {nmn.__version__} doesn't match pyproject.toml version {pyproject_version}"
+    assert (
+        nmn.__version__ == pyproject_version
+    ), f"Package version {nmn.__version__} doesn't match pyproject.toml version {pyproject_version}"
 
 
-@pytest.mark.parametrize("input_shape,expected_2d", [
-    ((4, 8), True),
-    ((2, 32, 32, 3), False),
-    ((1, 28, 28, 1), False),
-])
+@pytest.mark.parametrize(
+    "input_shape,expected_2d",
+    [
+        ((4, 8), True),
+        ((2, 32, 32, 3), False),
+        ((1, 28, 28, 1), False),
+    ],
+)
 def test_input_shape_validation(input_shape, expected_2d):
     """Test input shape validation logic."""
     is_2d = len(input_shape) == 2

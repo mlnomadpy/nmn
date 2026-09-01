@@ -56,7 +56,6 @@ from typing import Any, Dict, Optional
 import numpy as np
 import tensorflow as tf
 
-
 __all__ = [
     "maclaurin_coeffs",
     "create_maclaurin_projection",
@@ -138,10 +137,12 @@ def create_maclaurin_projection(
     p = a / a.sum()
 
     degrees = rng.choice(len(a), size=num_features, p=p).astype(np.int32)  # [M]
-    omegas = rng.choice([-1.0, 1.0], size=(num_features, nmax, head_dim))   # [M, nmax, d]
+    omegas = rng.choice(
+        [-1.0, 1.0], size=(num_features, nmax, head_dim)
+    )  # [M, nmax, d]
 
     return {
-        "omegas": tf.constant(omegas, dtype=dtype),       # [M, nmax, d]
+        "omegas": tf.constant(omegas, dtype=dtype),  # [M, nmax, d]
         "degrees": tf.constant(degrees, dtype=tf.int32),  # [M]
         "Z": Z,
         "num_features": num_features,
@@ -173,8 +174,8 @@ def maclaurin_features(
     if normalize:
         x = _normalize(x, epsilon)
 
-    omegas = params["omegas"]          # [M, nmax, d]
-    degrees = params["degrees"]        # [M]
+    omegas = params["omegas"]  # [M, nmax, d]
+    degrees = params["degrees"]  # [M]
     M = params["num_features"]
     nmax = params["nmax"]
     Z = params["Z"]
@@ -185,13 +186,15 @@ def maclaurin_features(
     proj = tf.einsum("...d,mld->...ml", x, omegas)
 
     # mask[m, l] = l < N_m  -> (M, nmax); neutralize unused factors to 1.0
-    l = tf.range(nmax, dtype=tf.int32)                       # [nmax]
+    l = tf.range(nmax, dtype=tf.int32)  # [nmax]
     # Cast degrees to int32 too so the comparison never mixes int32/int64.
-    mask = tf.expand_dims(l, 0) < tf.cast(tf.expand_dims(degrees, 1), tf.int32)  # [M, nmax]
+    mask = tf.expand_dims(l, 0) < tf.cast(
+        tf.expand_dims(degrees, 1), tf.int32
+    )  # [M, nmax]
     mask = tf.reshape(mask, [1] * (len(proj.shape) - 2) + [M, nmax])
     proj = tf.where(mask, proj, tf.ones_like(proj))
 
-    feat = tf.reduce_prod(proj, axis=-1)                     # (..., M)
+    feat = tf.reduce_prod(proj, axis=-1)  # (..., M)
     scale = tf.cast(math.sqrt(Z / float(M)), feat.dtype)
     return scale * feat
 
@@ -268,8 +271,8 @@ def create_radial_projection(
     # radial RFF for 1/(eps + ||z - z'||^2) via Gauss-Laguerre over the
     # exponential-integral representation 1/(eps + r^2) = ∫ e^{-t(eps + r^2)} dt.
     tau, wq = np.polynomial.laguerre.laggauss(num_radial)
-    t_nodes = tau / epsilon              # t_j = tau_j / epsilon
-    coef = (1.0 / epsilon) * wq          # (1/epsilon) w_j
+    t_nodes = tau / epsilon  # t_j = tau_j / epsilon
+    coef = (1.0 / epsilon) * wq  # (1/epsilon) w_j
 
     omegas, phases = [], []
     for tj in t_nodes:
@@ -277,11 +280,15 @@ def create_radial_projection(
         phases.append(rng.uniform(0, 2 * np.pi, radial_dim))
 
     return {
-        "W1": tf.constant(W1, dtype=dtype),                 # [m, d+1]
-        "W2": tf.constant(W2, dtype=dtype),                 # [m, d+1]
-        "omegas": tf.constant(np.stack(omegas), dtype=dtype),   # [num_radial, radial_dim, d+1]
-        "phases": tf.constant(np.stack(phases), dtype=dtype),   # [num_radial, radial_dim]
-        "coef": tf.constant(coef, dtype=dtype),             # [num_radial]
+        "W1": tf.constant(W1, dtype=dtype),  # [m, d+1]
+        "W2": tf.constant(W2, dtype=dtype),  # [m, d+1]
+        "omegas": tf.constant(
+            np.stack(omegas), dtype=dtype
+        ),  # [num_radial, radial_dim, d+1]
+        "phases": tf.constant(
+            np.stack(phases), dtype=dtype
+        ),  # [num_radial, radial_dim]
+        "coef": tf.constant(coef, dtype=dtype),  # [num_radial]
         "b": float(bias),
         "sketch_m": sketch_m,
         "radial_dim": radial_dim,
@@ -312,9 +319,9 @@ def radial_features(
     W1 = params["W1"]
     x = tf.cast(x, W1.dtype)
     W2 = params["W2"]
-    omegas = params["omegas"]          # [num_radial, radial_dim, d+1]
-    phases = params["phases"]          # [num_radial, radial_dim]
-    coef = params["coef"]              # [num_radial]
+    omegas = params["omegas"]  # [num_radial, radial_dim, d+1]
+    phases = params["phases"]  # [num_radial, radial_dim]
+    coef = params["coef"]  # [num_radial]
     sketch_m = params["sketch_m"]
     radial_dim = params["radial_dim"]
     num_radial = params["num_radial"]
@@ -336,7 +343,7 @@ def radial_features(
     # radial RFF per node: (..., num_radial, radial_dim)
     proj = tf.einsum("...d,jrd->...jr", z, omegas) + phases
     rff = tf.cast(math.sqrt(2.0 / float(radial_dim)), z.dtype) * tf.cos(proj)
-    sqrt_coef = tf.sqrt(tf.maximum(coef, 0.0))                  # [num_radial]
+    sqrt_coef = tf.sqrt(tf.maximum(coef, 0.0))  # [num_radial]
     rff = rff * tf.reshape(sqrt_coef, [num_radial, 1])
     # phi_rad: flatten (num_radial, radial_dim) -> (..., num_radial * radial_dim)
     rff_shape = tf.concat([leading, [num_radial * radial_dim]], axis=0)
@@ -398,7 +405,7 @@ def _linear_attention(
     kv = tf.einsum("bkhf,bkhd->bhfd", k_feat, value)
     num = tf.einsum("bqhf,bhfd->bqhd", q_feat, kv)
 
-    k_sum = tf.reduce_sum(k_feat, axis=1)                  # (B, H, F)
+    k_sum = tf.reduce_sum(k_feat, axis=1)  # (B, H, F)
     den = tf.einsum("bqhf,bhf->bqh", q_feat, k_sum)
     den = den[..., None] + epsilon
     return num / den

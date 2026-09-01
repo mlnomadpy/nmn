@@ -1,5 +1,6 @@
 # mypy: allow-untyped-defs
 """YatNMN - Yet Another Transformation Neural Matter Network."""
+
 import math
 import threading
 from typing import Optional, Union
@@ -21,55 +22,55 @@ __all__ = ["YatNMN"]
 
 class YatNMN(nn.Module):
     """
-    A PyTorch implementation of the Yat neuron with squared Euclidean distance transformation.
+      A PyTorch implementation of the Yat neuron with squared Euclidean distance transformation.
 
-    y = (x · W + b)² / (||x - W||² + ε)
+      y = (x · W + b)² / (||x - W||² + ε)
 
-  With optional scaling:
-    y = y * alpha (learnable) or y = y * sqrt(2) (constant)
+    With optional scaling:
+      y = y * alpha (learnable) or y = y * sqrt(2) (constant)
 
-    Attributes:
-        in_features (int): Size of each input sample
-        out_features (int): Size of each output sample
-        bias (bool): Whether to add a bias to the output
-        constant_bias: If a float, use that value as a fixed (non-learnable) bias
-            constant. If None (default), use learnable bias when bias=True.
-        softplus_bias (bool): If True, the learnable bias parameter is passed
-            through softplus in the forward pass to guarantee strict positivity
-            (default: False). Ignored when constant_bias is set or bias=False.
-        scalar_bias (bool): If True, the learnable bias is a single scalar
-            (shape ``(1,)``) shared and broadcast across all ``out_features``
-            neurons (default: False). Ignored when constant_bias is set or
-            bias=False.
-        alpha (bool): Whether to multiply with alpha. Ignored if constant_alpha is set.
-        constant_alpha: If True, use sqrt(2) as constant alpha. If a float, use that value.
-            If None (default), use learnable alpha when alpha=True.
-        dtype (torch.dtype): Data type for computation (default: infer from input and params).
-        param_dtype (torch.dtype): Data type for parameter initialization (default: float32).
-        device: Device for parameter initialization. Tied consumers must be
-            constructed on their final device because post-construction
-            migration is intentionally rejected.
-        epsilon (float): Small constant to avoid division by zero
-        learnable_epsilon (bool): If True, epsilon becomes a learnable parameter passed
-            through softplus to guarantee strict positivity (default: False).
-        spherical (bool): Whether to use spherical mode (normalize inputs and kernel)
-        weight_normalized (bool): If True, normalize each neuron (row) of the kernel
-            to have norm 1. (PyTorch kernels use shape ``(out_features, in_features)``,
-            so each row is one neuron.) This optimization avoids recomputing kernel
-            norms in YAT distance calculation since they are guaranteed to be 1.0.
-        lazy (bool): If True, freeze ONLY the kernel (``weight.requires_grad =
-            False``) so it is excluded from gradients/optimizer; bias, alpha,
-            and the learnable epsilon stay trainable. Composes with
-            ``use_bias`` / ``use_alpha`` / ``learnable_epsilon``. Default False
-            (fully backward compatible). Alias: ``freeze_kernel``.
-        freeze_kernel (bool): Alias for ``lazy`` (logical OR with ``lazy``).
-        tie_kernel_bank (bool): If True, reuse shared kernels across compatible layers.
-        kernel_bank_size (int): Optional explicit size for the shared bank. Banks
-            auto-expand only during construction, before any consumer executes.
-        kernel_bank_id (str): Namespace for shared banks (allows multiple independent banks).
-        kernel_init (callable): Initializer for the weight matrix
-        bias_init (callable): Initializer for the bias
-        alpha_init (callable): Initializer for the scaling parameter (only used if constant_alpha is None)
+      Attributes:
+          in_features (int): Size of each input sample
+          out_features (int): Size of each output sample
+          bias (bool): Whether to add a bias to the output
+          constant_bias: If a float, use that value as a fixed (non-learnable) bias
+              constant. If None (default), use learnable bias when bias=True.
+          softplus_bias (bool): If True, the learnable bias parameter is passed
+              through softplus in the forward pass to guarantee strict positivity
+              (default: False). Ignored when constant_bias is set or bias=False.
+          scalar_bias (bool): If True, the learnable bias is a single scalar
+              (shape ``(1,)``) shared and broadcast across all ``out_features``
+              neurons (default: False). Ignored when constant_bias is set or
+              bias=False.
+          alpha (bool): Whether to multiply with alpha. Ignored if constant_alpha is set.
+          constant_alpha: If True, use sqrt(2) as constant alpha. If a float, use that value.
+              If None (default), use learnable alpha when alpha=True.
+          dtype (torch.dtype): Data type for computation (default: infer from input and params).
+          param_dtype (torch.dtype): Data type for parameter initialization (default: float32).
+          device: Device for parameter initialization. Tied consumers must be
+              constructed on their final device because post-construction
+              migration is intentionally rejected.
+          epsilon (float): Small constant to avoid division by zero
+          learnable_epsilon (bool): If True, epsilon becomes a learnable parameter passed
+              through softplus to guarantee strict positivity (default: False).
+          spherical (bool): Whether to use spherical mode (normalize inputs and kernel)
+          weight_normalized (bool): If True, normalize each neuron (row) of the kernel
+              to have norm 1. (PyTorch kernels use shape ``(out_features, in_features)``,
+              so each row is one neuron.) This optimization avoids recomputing kernel
+              norms in YAT distance calculation since they are guaranteed to be 1.0.
+          lazy (bool): If True, freeze ONLY the kernel (``weight.requires_grad =
+              False``) so it is excluded from gradients/optimizer; bias, alpha,
+              and the learnable epsilon stay trainable. Composes with
+              ``use_bias`` / ``use_alpha`` / ``learnable_epsilon``. Default False
+              (fully backward compatible). Alias: ``freeze_kernel``.
+          freeze_kernel (bool): Alias for ``lazy`` (logical OR with ``lazy``).
+          tie_kernel_bank (bool): If True, reuse shared kernels across compatible layers.
+          kernel_bank_size (int): Optional explicit size for the shared bank. Banks
+              auto-expand only during construction, before any consumer executes.
+          kernel_bank_id (str): Namespace for shared banks (allows multiple independent banks).
+          kernel_init (callable): Initializer for the weight matrix
+          bias_init (callable): Initializer for the bias
+          alpha_init (callable): Initializer for the scaling parameter (only used if constant_alpha is None)
     """
 
     # Default constant alpha value (sqrt(2))
@@ -100,7 +101,7 @@ class YatNMN(nn.Module):
         freeze_kernel: bool = False,
         tie_kernel_bank: bool = False,
         kernel_bank_size: Optional[int] = None,
-        kernel_bank_id: str = 'default',
+        kernel_bank_id: str = "default",
         kernel_init: callable = None,
         bias_init: callable = None,
         alpha_init: callable = None,
@@ -128,7 +129,7 @@ class YatNMN(nn.Module):
                 torch.full((1,), raw_eps, dtype=epsilon_dtype, device=device)
             )
         else:
-            self.register_parameter('epsilon_param', None)
+            self.register_parameter("epsilon_param", None)
         self.spherical = spherical
         self.positive_init = positive_init
         self.weight_normalized = weight_normalized
@@ -155,25 +156,35 @@ class YatNMN(nn.Module):
                 )
             bank_device = torch.empty((), dtype=param_dtype, device=device).device
             bank_key = (
-                kernel_bank_id, in_features, param_dtype, bank_device,
-                id(kernel_init), positive_init,
+                kernel_bank_id,
+                in_features,
+                param_dtype,
+                bank_device,
+                id(kernel_init),
+                positive_init,
             )
 
             with YatNMN._KERNEL_BANKS_LOCK:
                 shared_weight = YatNMN._KERNEL_BANKS.get(bank_key)
                 if shared_weight is None:
                     # First layer: create bank
-                    self.weight = nn.Parameter(torch.empty(
-                        (bank_out_features, in_features),
-                        dtype=param_dtype,
-                        device=bank_device,
-                    ))
+                    self.weight = nn.Parameter(
+                        torch.empty(
+                            (bank_out_features, in_features),
+                            dtype=param_dtype,
+                            device=bank_device,
+                        )
+                    )
                     YatNMN._KERNEL_BANKS[bank_key] = self.weight
                     YatNMN._KERNEL_BANK_USED[bank_key] = False
                 else:
-                    if (shared_weight.device != bank_device
-                            or shared_weight.dtype != param_dtype):
-                        raise RuntimeError("shared kernel bank device/dtype registry is stale")
+                    if (
+                        shared_weight.device != bank_device
+                        or shared_weight.dtype != param_dtype
+                    ):
+                        raise RuntimeError(
+                            "shared kernel bank device/dtype registry is stale"
+                        )
                     if shared_weight.requires_grad != (not self.lazy):
                         raise ValueError(
                             "tied YatNMN consumers must use the same lazy/freeze_kernel "
@@ -206,11 +217,13 @@ class YatNMN(nn.Module):
             self._kernel_slice = slice(0, out_features)
         else:
             # Create weight parameter (non-shared)
-            self.weight = nn.Parameter(torch.empty(
-                (out_features, in_features),
-                dtype=param_dtype,
-                device=device,
-            ))
+            self.weight = nn.Parameter(
+                torch.empty(
+                    (out_features, in_features),
+                    dtype=param_dtype,
+                    device=device,
+                )
+            )
 
         # Handle alpha configuration
         # Priority: constant_alpha > alpha
@@ -227,16 +240,18 @@ class YatNMN(nn.Module):
                 self._constant_alpha_value = self.DEFAULT_CONSTANT_ALPHA
             else:
                 self._constant_alpha_value = float(constant_alpha)
-            self.register_parameter('alpha', None)
+            self.register_parameter("alpha", None)
             alpha = True  # Alpha scaling is enabled (but constant)
         elif alpha:
-            self.alpha = nn.Parameter(torch.ones(
-                (1,),
-                dtype=param_dtype,
-                device=device,
-            ))
+            self.alpha = nn.Parameter(
+                torch.ones(
+                    (1,),
+                    dtype=param_dtype,
+                    device=device,
+                )
+            )
         else:
-            self.register_parameter('alpha', None)
+            self.register_parameter("alpha", None)
         self.use_alpha = alpha
         self.constant_alpha = constant_alpha
 
@@ -244,17 +259,19 @@ class YatNMN(nn.Module):
         self._constant_bias_value: Optional[float] = None
         if constant_bias is not None and constant_bias is not False:
             self._constant_bias_value = float(constant_bias)
-            self.register_parameter('bias', None)
+            self.register_parameter("bias", None)
             bias = True  # Bias is applied (but constant)
         elif bias:
             bias_shape = (1,) if scalar_bias else (out_features,)
-            self.bias = nn.Parameter(torch.empty(
-                bias_shape,
-                dtype=param_dtype,
-                device=device,
-            ))
+            self.bias = nn.Parameter(
+                torch.empty(
+                    bias_shape,
+                    dtype=param_dtype,
+                    device=device,
+                )
+            )
         else:
-            self.register_parameter('bias', None)
+            self.register_parameter("bias", None)
         self.use_bias = bias
         self.constant_bias = constant_bias
         self.softplus_bias = softplus_bias and self.bias is not None
@@ -262,7 +279,9 @@ class YatNMN(nn.Module):
 
         # Initialize parameters
         self.reset_parameters(
-            kernel_init, bias_init, alpha_init,
+            kernel_init,
+            bias_init,
+            alpha_init,
             initialize_kernel=initialize_kernel,
         )
 
@@ -335,10 +354,7 @@ class YatNMN(nn.Module):
             if target is None:
                 target = self.param_dtype
 
-        return tuple(
-            t.to(target) if t is not None else None
-            for t in tensors
-        )
+        return tuple(t.to(target) if t is not None else None for t in tensors)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -385,8 +401,7 @@ class YatNMN(nn.Module):
             kernel = saturating_upcast(kernel)
             bias = saturating_upcast(bias) if bias is not None else None
             alpha_param = (
-                saturating_upcast(alpha_param)
-                if alpha_param is not None else None
+                saturating_upcast(alpha_param) if alpha_param is not None else None
             )
 
         # Spherical mode: normalize inputs and kernel
@@ -396,7 +411,9 @@ class YatNMN(nn.Module):
 
         # Normalize kernel if weight normalization is enabled
         if self.weight_normalized:
-            kernel = kernel / (torch.sqrt(torch.sum(kernel**2, dim=-1, keepdim=True)) + 1e-8)
+            kernel = kernel / (
+                torch.sqrt(torch.sum(kernel**2, dim=-1, keepdim=True)) + 1e-8
+            )
 
         # Compute dot product: x · W
         y = torch.matmul(x, kernel.t())
@@ -417,14 +434,18 @@ class YatNMN(nn.Module):
 
             # Optimization: if weights are normalized, ||W||² = 1 for each neuron
             if self.weight_normalized:
-                kernel_squared_sum = torch.ones(kernel.shape[0], device=kernel.device, dtype=kernel.dtype)
+                kernel_squared_sum = torch.ones(
+                    kernel.shape[0], device=kernel.device, dtype=kernel.dtype
+                )
             else:
                 kernel_squared_sum = torch.sum(kernel**2, dim=-1)
 
             # Reuse dot product for distance: ||x||² + ||W||² - 2(x·W)
             dot_for_dist = y - bias if bias is not None else y
             # Clamp to zero: bf16 cancellation can make distance negative when x ≈ W
-            distances = (inputs_squared_sum + kernel_squared_sum - 2 * dot_for_dist).clamp(min=0.0)
+            distances = (
+                inputs_squared_sum + kernel_squared_sum - 2 * dot_for_dist
+            ).clamp(min=0.0)
 
         # Resolve effective epsilon (learnable via softplus, or constant)
         if self.learnable_epsilon and self.epsilon_param is not None:
@@ -436,7 +457,7 @@ class YatNMN(nn.Module):
             eps = self.epsilon
 
         # Apply squared Euclidean distance transformation: (x·W + b)² / (||x - W||² + ε)
-        y = y ** 2 / (distances + eps)
+        y = y**2 / (distances + eps)
 
         # Dynamic scaling
         if self._constant_alpha_value is not None:
@@ -456,20 +477,20 @@ class YatNMN(nn.Module):
             )
         from ..layers._yat_conv_core import apply_preserving_epsilon_dtype
 
-        return apply_preserving_epsilon_dtype(
-            self, fn, super()._apply, recurse=recurse
-        )
+        return apply_preserving_epsilon_dtype(self, fn, super()._apply, recurse=recurse)
 
     def extra_repr(self) -> str:
         """
         Extra representation of the module for print formatting.
         """
-        return (f"in_features={self.in_features}, "
-                f"out_features={self.out_features}, "
-                f"bias={self.bias is not None}, "
-                f"alpha={self.alpha is not None}, "
-                f"constant_alpha={self.constant_alpha}, "
-                f"lazy={self.lazy}, "
-                f"spherical={self.spherical}, "
-                f"dtype={self.dtype}, "
-                f"param_dtype={self.param_dtype}")
+        return (
+            f"in_features={self.in_features}, "
+            f"out_features={self.out_features}, "
+            f"bias={self.bias is not None}, "
+            f"alpha={self.alpha is not None}, "
+            f"constant_alpha={self.constant_alpha}, "
+            f"lazy={self.lazy}, "
+            f"spherical={self.spherical}, "
+            f"dtype={self.dtype}, "
+            f"param_dtype={self.param_dtype}"
+        )

@@ -9,8 +9,8 @@ Covers issue #36 for the nnx backend:
   - RotaryYatAttention performer_kind selector ('slay'/'maclaurin'/'radial')
 """
 
-import pytest
 import numpy as np
+import pytest
 
 pytest.importorskip("jax")
 pytest.importorskip("flax")
@@ -21,13 +21,13 @@ from jax import random
 
 from nmn.nnx.layers.attention import (
     create_maclaurin_projection,
+    create_radial_projection,
+    create_yat_tp_projection,
+    maclaurin_coeffs,
     maclaurin_features,
     maclaurin_yat_attention,
-    maclaurin_coeffs,
-    create_radial_projection,
     radial_features,
     radial_yat_attention,
-    create_yat_tp_projection,
     yat_tp_attention,
 )
 
@@ -78,38 +78,54 @@ class TestMaclaurinCoeffs:
 class TestMaclaurinFeatures:
     def test_shape(self):
         key = random.PRNGKey(0)
-        p = create_maclaurin_projection(key, head_dim=16, num_features=64, bias=1.0, epsilon=0.1)
+        p = create_maclaurin_projection(
+            key, head_dim=16, num_features=64, bias=1.0, epsilon=0.1
+        )
         x = random.normal(random.PRNGKey(1), (2, 8, 4, 16))
         f = maclaurin_features(x, p)
         assert f.shape == (2, 8, 4, 64)
 
     def test_no_nan_inf(self):
         key = random.PRNGKey(0)
-        p = create_maclaurin_projection(key, head_dim=16, num_features=128, bias=1.0, epsilon=0.1)
+        p = create_maclaurin_projection(
+            key, head_dim=16, num_features=128, bias=1.0, epsilon=0.1
+        )
         x = random.normal(random.PRNGKey(2), (3, 5, 2, 16)) * 5.0
         f = maclaurin_features(x, p)
         assert bool(jnp.all(jnp.isfinite(f)))
 
     def test_determinism(self):
         key = random.PRNGKey(7)
-        p = create_maclaurin_projection(key, head_dim=16, num_features=64, bias=1.0, epsilon=0.1)
+        p = create_maclaurin_projection(
+            key, head_dim=16, num_features=64, bias=1.0, epsilon=0.1
+        )
         x = random.normal(random.PRNGKey(3), (2, 4, 16))
         f1 = maclaurin_features(x, p)
         f2 = maclaurin_features(x, p)
         np.testing.assert_array_equal(np.asarray(f1), np.asarray(f2))
 
     def test_same_key_same_projection(self):
-        p1 = create_maclaurin_projection(random.PRNGKey(11), 16, num_features=32, bias=1.0, epsilon=0.1)
-        p2 = create_maclaurin_projection(random.PRNGKey(11), 16, num_features=32, bias=1.0, epsilon=0.1)
-        np.testing.assert_array_equal(np.asarray(p1['omegas']), np.asarray(p2['omegas']))
-        np.testing.assert_array_equal(np.asarray(p1['degrees']), np.asarray(p2['degrees']))
+        p1 = create_maclaurin_projection(
+            random.PRNGKey(11), 16, num_features=32, bias=1.0, epsilon=0.1
+        )
+        p2 = create_maclaurin_projection(
+            random.PRNGKey(11), 16, num_features=32, bias=1.0, epsilon=0.1
+        )
+        np.testing.assert_array_equal(
+            np.asarray(p1["omegas"]), np.asarray(p2["omegas"])
+        )
+        np.testing.assert_array_equal(
+            np.asarray(p1["degrees"]), np.asarray(p2["degrees"])
+        )
 
     def test_inner_product_tracks_kappa(self):
         """E[phi(q)·phi(k)] = kappa(s); the inner product must rise with s."""
         d, b, eps = 32, 1.0, 0.3
         C = 2.0 + eps
         # Large feature budget to reduce estimator variance.
-        p = create_maclaurin_projection(random.PRNGKey(0), d, num_features=40000, bias=b, epsilon=eps, nmax=40)
+        p = create_maclaurin_projection(
+            random.PRNGKey(0), d, num_features=40000, bias=b, epsilon=eps, nmax=40
+        )
         q = random.normal(random.PRNGKey(5), (d,))
         q = q / jnp.linalg.norm(q)
         ko = random.normal(random.PRNGKey(7), (d,))
@@ -119,7 +135,7 @@ class TestMaclaurinFeatures:
         targets = [-0.5, 0.0, 0.5, 0.9]
         approx_vals, exact_vals = [], []
         for s in targets:
-            k = s * q + np.sqrt(max(0.0, 1 - s ** 2)) * ko
+            k = s * q + np.sqrt(max(0.0, 1 - s**2)) * ko
             k = k / jnp.linalg.norm(k)
             fq = maclaurin_features(q[None], p)[0]
             fk = maclaurin_features(k[None], p)[0]
@@ -141,7 +157,9 @@ class TestMaclaurinFeatures:
 class TestMaclaurinAttention:
     def test_shape_and_finite(self):
         d = 16
-        p = create_maclaurin_projection(random.PRNGKey(0), d, num_features=128, bias=1.0, epsilon=0.2)
+        p = create_maclaurin_projection(
+            random.PRNGKey(0), d, num_features=128, bias=1.0, epsilon=0.2
+        )
         q = random.normal(random.PRNGKey(1), (2, 10, 4, d))
         k = random.normal(random.PRNGKey(2), (2, 10, 4, d))
         v = random.normal(random.PRNGKey(3), (2, 10, 4, d))
@@ -151,7 +169,9 @@ class TestMaclaurinAttention:
 
     def test_causal_runs(self):
         d = 16
-        p = create_maclaurin_projection(random.PRNGKey(0), d, num_features=64, bias=1.0, epsilon=0.2)
+        p = create_maclaurin_projection(
+            random.PRNGKey(0), d, num_features=64, bias=1.0, epsilon=0.2
+        )
         q = random.normal(random.PRNGKey(1), (1, 8, 2, d))
         out = maclaurin_yat_attention(q, q, q, p, causal=True)
         assert out.shape == (1, 8, 2, d)
@@ -168,11 +188,20 @@ class TestMaclaurinAttention:
         eps = float(jnp.median((diff * diff).sum(-1)))
         exact = _exact_attention(q, k, v, b, eps)
 
-        mp = create_maclaurin_projection(random.PRNGKey(0), d, num_features=256, bias=b, epsilon=eps)
-        ma = maclaurin_yat_attention(q[:, None, :], k[:, None, :], v[:, None, :], mp)[:, 0, :]
+        mp = create_maclaurin_projection(
+            random.PRNGKey(0), d, num_features=256, bias=b, epsilon=eps
+        )
+        ma = maclaurin_yat_attention(q[:, None, :], k[:, None, :], v[:, None, :], mp)[
+            :, 0, :
+        ]
 
-        sp = create_yat_tp_projection(random.PRNGKey(0), d, num_prf_features=8,
-                                      num_quad_nodes=1, num_anchor_features=32)
+        sp = create_yat_tp_projection(
+            random.PRNGKey(0),
+            d,
+            num_prf_features=8,
+            num_quad_nodes=1,
+            num_anchor_features=32,
+        )
         sa = yat_tp_attention(q[:, None, :], k[:, None, :], v[:, None, :], sp)[:, 0, :]
 
         assert _cos(ma, exact) > _cos(sa, exact)
@@ -184,8 +213,15 @@ class TestMaclaurinAttention:
 class TestRadialFeatures:
     def test_shape(self):
         d = 16
-        p = create_radial_projection(random.PRNGKey(0), d, sketch_m=8, num_radial=4,
-                                     radial_dim=8, bias=1.0, epsilon=0.2)
+        p = create_radial_projection(
+            random.PRNGKey(0),
+            d,
+            sketch_m=8,
+            num_radial=4,
+            radial_dim=8,
+            bias=1.0,
+            epsilon=0.2,
+        )
         x = random.normal(random.PRNGKey(1), (2, 6, 3, d))
         f = radial_features(x, p)
         assert f.shape == (2, 6, 3, 8 * 4 * 8)
@@ -193,8 +229,15 @@ class TestRadialFeatures:
 
     def test_determinism(self):
         d = 16
-        p = create_radial_projection(random.PRNGKey(0), d, sketch_m=8, num_radial=4,
-                                     radial_dim=8, bias=1.0, epsilon=0.2)
+        p = create_radial_projection(
+            random.PRNGKey(0),
+            d,
+            sketch_m=8,
+            num_radial=4,
+            radial_dim=8,
+            bias=1.0,
+            epsilon=0.2,
+        )
         x = random.normal(random.PRNGKey(1), (2, 3, d))
         np.testing.assert_array_equal(
             np.asarray(radial_features(x, p)), np.asarray(radial_features(x, p))
@@ -202,8 +245,15 @@ class TestRadialFeatures:
 
     def test_attention_shape_and_finite(self):
         d = 16
-        p = create_radial_projection(random.PRNGKey(0), d, sketch_m=8, num_radial=4,
-                                     radial_dim=8, bias=1.0, epsilon=0.2)
+        p = create_radial_projection(
+            random.PRNGKey(0),
+            d,
+            sketch_m=8,
+            num_radial=4,
+            radial_dim=8,
+            bias=1.0,
+            epsilon=0.2,
+        )
         q = random.normal(random.PRNGKey(1), (2, 7, 2, d))
         k = random.normal(random.PRNGKey(2), (2, 7, 2, d))
         v = random.normal(random.PRNGKey(3), (2, 7, 2, d))
@@ -219,6 +269,7 @@ class TestPerformerSelector:
     @pytest.mark.parametrize("kind", ["slay", "maclaurin", "radial"])
     def test_selector_runs(self, kind):
         from flax import nnx
+
         from nmn.nnx.layers.attention import RotaryYatAttention
 
         attn = RotaryYatAttention(
@@ -240,20 +291,29 @@ class TestPerformerSelector:
 
     def test_default_is_slay(self):
         from flax import nnx
+
         from nmn.nnx.layers.attention import RotaryYatAttention
 
         attn = RotaryYatAttention(
-            embed_dim=32, num_heads=4, max_seq_len=64,
-            use_performer=True, rngs=nnx.Rngs(0),
+            embed_dim=32,
+            num_heads=4,
+            max_seq_len=64,
+            use_performer=True,
+            rngs=nnx.Rngs(0),
         )
         assert attn.performer_kind == "slay"
 
     def test_invalid_kind_raises(self):
         from flax import nnx
+
         from nmn.nnx.layers.attention import RotaryYatAttention
 
         with pytest.raises(ValueError):
             RotaryYatAttention(
-                embed_dim=32, num_heads=4, max_seq_len=64,
-                use_performer=True, performer_kind="bogus", rngs=nnx.Rngs(0),
+                embed_dim=32,
+                num_heads=4,
+                max_seq_len=64,
+                use_performer=True,
+                performer_kind="bogus",
+                rngs=nnx.Rngs(0),
             )

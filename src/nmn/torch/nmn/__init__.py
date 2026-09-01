@@ -2,5 +2,4 @@
 
 from .yat_nmn import YatNMN
 
-
 __all__ = ["YatNMN"]

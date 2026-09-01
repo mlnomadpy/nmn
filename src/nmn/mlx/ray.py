@@ -45,7 +45,6 @@ from typing import Any, Optional
 import mlx.core as mx
 import numpy as np
 
-
 __all__ = [
     "create_radial_projection",
     "radial_features",
@@ -94,22 +93,21 @@ def create_radial_projection(
     # Radial RFF for 1/(ε + r²) via Gauss-Laguerre over the exponential-integral
     # representation 1/(ε + r²) = ∫ e^{−t(ε + r²)} dt.
     tau, wq = np.polynomial.laguerre.laggauss(num_radial)
-    t_nodes = tau / epsilon                      # t_j = τ_j / ε
-    coef = (1.0 / epsilon) * wq                  # (1/ε) w_j
+    t_nodes = tau / epsilon  # t_j = τ_j / ε
+    coef = (1.0 / epsilon) * wq  # (1/ε) w_j
 
     omegas, phases = [], []
     for tj in t_nodes:
         omegas.append(
-            rng.standard_normal((radial_dim, da)).astype(np.float32)
-            * np.sqrt(2.0 * tj)
+            rng.standard_normal((radial_dim, da)).astype(np.float32) * np.sqrt(2.0 * tj)
         )
         phases.append(rng.uniform(0.0, 2.0 * np.pi, radial_dim).astype(np.float32))
 
     return {
-        "W1": mx.array(W1).astype(dtype),                       # (m, d+1)
-        "W2": mx.array(W2).astype(dtype),                       # (m, d+1)
-        "omegas": mx.array(np.stack(omegas)).astype(dtype),     # (num_radial, D, d+1)
-        "phases": mx.array(np.stack(phases)).astype(dtype),     # (num_radial, D)
+        "W1": mx.array(W1).astype(dtype),  # (m, d+1)
+        "W2": mx.array(W2).astype(dtype),  # (m, d+1)
+        "omegas": mx.array(np.stack(omegas)).astype(dtype),  # (num_radial, D, d+1)
+        "phases": mx.array(np.stack(phases)).astype(dtype),  # (num_radial, D)
         "coef": mx.array(coef.astype(np.float32)).astype(dtype),  # (num_radial,)
         "bias": float(bias),
         "head_dim": head_dim,
@@ -143,9 +141,9 @@ def radial_features(
 
     W1 = params["W1"]
     W2 = params["W2"]
-    omegas = params["omegas"]        # (num_radial, D, d+1)
-    phases = params["phases"]        # (num_radial, D)
-    coef = params["coef"]            # (num_radial,)
+    omegas = params["omegas"]  # (num_radial, D, d+1)
+    phases = params["phases"]  # (num_radial, D)
+    coef = params["coef"]  # (num_radial,)
     b = params["bias"]
     m = params["sketch_m"]
     D = params["radial_dim"]
@@ -156,19 +154,20 @@ def radial_features(
     z = mx.concatenate([x, sqrt_b], axis=-1)
 
     # Degree-2 sketch psi(z): (..., m), approximates (z·z')².
-    psi = (mx.einsum("...d,md->...m", z, W1)
-           * mx.einsum("...d,md->...m", z, W2)) / math.sqrt(m)
+    psi = (
+        mx.einsum("...d,md->...m", z, W1) * mx.einsum("...d,md->...m", z, W2)
+    ) / math.sqrt(m)
 
     # Radial RFF per node: (..., num_radial, D).
-    proj = mx.einsum("...d,jrd->...jr", z, omegas) + phases   # (..., num_radial, D)
+    proj = mx.einsum("...d,jrd->...jr", z, omegas) + phases  # (..., num_radial, D)
     rff = math.sqrt(2.0 / D) * mx.cos(proj)
     scale = mx.sqrt(mx.maximum(coef, 0.0)).reshape((num_radial, 1))
-    rff = rff * scale                                          # (..., num_radial, D)
+    rff = rff * scale  # (..., num_radial, D)
     leading = rff.shape[:-2]
-    phi_rad = mx.reshape(rff, leading + (num_radial * D,))     # (..., num_radial*D)
+    phi_rad = mx.reshape(rff, leading + (num_radial * D,))  # (..., num_radial*D)
 
     # Tensor product psi ⊗ phi_rad → (..., m * num_radial * D).
-    out = psi[..., :, None] * phi_rad[..., None, :]            # (..., m, R*D)
+    out = psi[..., :, None] * phi_rad[..., None, :]  # (..., m, R*D)
     return mx.reshape(out, leading + (m * num_radial * D,))
 
 

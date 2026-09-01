@@ -15,7 +15,7 @@ similar in direction AND close in Euclidean space.
 Alpha Scaling:
     Optional alpha parameter scales the attention scores:
         scaled_attn = attn * (sqrt(head_dim) / log(1 + head_dim))^alpha
-    
+
     Alpha can be:
     - Learnable: Pass alpha as a trainable parameter
     - Constant: Pass alpha as a float value (e.g., sqrt(2) ≈ 1.414)
@@ -33,13 +33,11 @@ from typing import Optional
 
 import jax
 import jax.numpy as jnp
-from jax import random
-
 from flax import nnx
 from flax.nnx.module import Module
 from flax.nnx.nn.dtypes import promote_dtype
 from flax.typing import Dtype, PrecisionLike
-from jax import Array
+from jax import Array, random
 
 from nmn.nnx.layers._numerics import fp32_if_low_precision
 from nmn.nnx.layers.squashers import softermax
@@ -118,9 +116,7 @@ def yat_attention_weights(
     # overflow in bf16 (7-bit mantissa, exp() overflows at ~88).
     # All score math runs in f32; we cast back after softmax.
     query_f32, key_f32 = fp32_if_low_precision(query, key)
-    alpha_val = (
-        fp32_if_low_precision(alpha)[0] if hasattr(alpha, "dtype") else alpha
-    )
+    alpha_val = fp32_if_low_precision(alpha)[0] if hasattr(alpha, "dtype") else alpha
     bias_val = fp32_if_low_precision(bias)[0] if bias is not None else None
 
     # Calculate dot product: q·k
@@ -148,27 +144,32 @@ def yat_attention_weights(
 
     # YAT scores: (q·k)² / ((||q-k||² + ε) * √d), still in float32.
     scale = jnp.sqrt(jnp.float32(head_dim))
-    attn_weights = jnp.square(dot_product) / (
-        (squared_dist + epsilon) * scale
-    )
+    attn_weights = jnp.square(dot_product) / ((squared_dist + epsilon) * scale)
 
     # All score math stays in float32 — cast alpha / bias accordingly so the
     # shared tail can run in f32 too, then it casts the final softmax /
     # softermax / l1 output back to the caller's `dtype`.
     alpha_val = (
-        jnp.asarray(alpha_val, dtype=jnp.float32)
-        if alpha_val is not None else None
+        jnp.asarray(alpha_val, dtype=jnp.float32) if alpha_val is not None else None
     )
     bias_val = bias_val.astype(jnp.float32) if bias_val is not None else None
 
     return finalize_attention_weights(
         attn_weights,
-        dtype=dtype, key=key,
-        alpha=alpha_val, bias=bias_val, mask=mask,
-        normalization=normalization, use_softermax=use_softermax, power=power,
+        dtype=dtype,
+        key=key,
+        alpha=alpha_val,
+        bias=bias_val,
+        mask=mask,
+        normalization=normalization,
+        use_softermax=use_softermax,
+        power=power,
         epsilon=epsilon,
-        broadcast_dropout=broadcast_dropout, dropout_rng=dropout_rng,
-        dropout_rate=dropout_rate, deterministic=deterministic, module=module,
+        broadcast_dropout=broadcast_dropout,
+        dropout_rng=dropout_rng,
+        dropout_rate=dropout_rate,
+        deterministic=deterministic,
+        module=module,
     )
 
 
@@ -248,9 +249,7 @@ def yat_attention(
     )
 
     # Return weighted sum over values for each query position
-    return jnp.einsum(
-        "...hqk,...khd->...qhd", attn_weights, value, precision=precision
-    )
+    return jnp.einsum("...hqk,...khd->...qhd", attn_weights, value, precision=precision)
 
 
 # =============================================================================
@@ -280,8 +279,8 @@ def normalize_qk(
     Returns:
         Tuple of (normalized_query, normalized_key).
     """
-    q_norm = jnp.sqrt(jnp.sum(query ** 2, axis=-1, keepdims=True) + epsilon)
-    k_norm = jnp.sqrt(jnp.sum(key ** 2, axis=-1, keepdims=True) + epsilon)
+    q_norm = jnp.sqrt(jnp.sum(query**2, axis=-1, keepdims=True) + epsilon)
+    k_norm = jnp.sqrt(jnp.sum(key**2, axis=-1, keepdims=True) + epsilon)
     return query / q_norm, key / k_norm
 
 
@@ -362,17 +361,22 @@ def yat_attention_normalized(
     alpha_val = jnp.asarray(alpha, dtype=dtype) if alpha is not None else None
     attn_weights = finalize_attention_weights(
         attn_weights,
-        dtype=dtype, key=key,
-        alpha=alpha_val, bias=bias, mask=mask,
-        use_softermax=use_softermax, power=power,
-        broadcast_dropout=broadcast_dropout, dropout_rng=dropout_rng,
-        dropout_rate=dropout_rate, deterministic=deterministic, module=module,
+        dtype=dtype,
+        key=key,
+        alpha=alpha_val,
+        bias=bias,
+        mask=mask,
+        use_softermax=use_softermax,
+        power=power,
+        broadcast_dropout=broadcast_dropout,
+        dropout_rng=dropout_rng,
+        dropout_rate=dropout_rate,
+        deterministic=deterministic,
+        module=module,
     )
 
     # Weighted sum
-    return jnp.einsum(
-        "...hqk,...khd->...qhd", attn_weights, value, precision=precision
-    )
+    return jnp.einsum("...hqk,...khd->...qhd", attn_weights, value, precision=precision)
 
 
 def yat_performer_feature_map(
@@ -389,10 +393,10 @@ def yat_performer_feature_map(
     - Designed to produce stable, positive features for linear attention
 
     For the spherical YAT kernel: (q·k)² / (C - 2(q·k)) where C = 2 + ε
-    
+
     We use a simplified FAVOR+ approximation that produces stable gradients:
         φ(x) = |W @ x / sqrt(d)| * exp(W @ x / sqrt(d) - 0.5) / sqrt(m)
-    
+
     The absolute value ensures positivity while the exponential captures
     alignment information.
 
@@ -412,26 +416,26 @@ def yat_performer_feature_map(
     if pre_normalized:
         x_normalized = x
     else:
-        x_norm = jnp.sqrt(jnp.sum(x ** 2, axis=-1, keepdims=True) + epsilon)
+        x_norm = jnp.sqrt(jnp.sum(x**2, axis=-1, keepdims=True) + epsilon)
         x_normalized = x / x_norm
 
     # Project normalized vectors: W @ x / sqrt(d)
     # For orthogonal W with ||w_i|| = sqrt(d): E[(w·q)(w·k)] = q·k
     x_proj = jnp.einsum("...d,md->...m", x_normalized, projection)
     x_proj = x_proj / jnp.sqrt(head_dim).astype(x.dtype)
-    
+
     # FAVOR+ style: exp(wx - ||wx||²/2) = exp(wx - 0.5) for unit x
     # Modified with absolute value for guaranteed positivity
     # This ensures positive attention weights in linear attention
     exp_features = jnp.exp(x_proj - 0.5)
-    
+
     # Use combination of linear and exp for better gradient flow
     # Linear term captures alignment, exp term weights similar vectors higher
     linear_features = jnp.abs(x_proj) + epsilon
-    
+
     # Combine: use product to get positive features that capture alignment
     features = linear_features * exp_features
-    
+
     # Normalize by sqrt(num_features) for proper scaling
     features = features / jnp.sqrt(num_features).astype(x.dtype)
 
@@ -516,18 +520,16 @@ def yat_performer_attention(
     )
 
     if causal:
-        output = _yat_causal_performer(q_features, k_features, value, epsilon, precision)
+        output = _yat_causal_performer(
+            q_features, k_features, value, epsilon, precision
+        )
     else:
         # Non-causal efficient computation
         # Step 1: Compute φ(K)^T @ V
-        kv = jnp.einsum(
-            "...khm,...khd->...hmd", k_features, value, precision=precision
-        )
+        kv = jnp.einsum("...khm,...khd->...hmd", k_features, value, precision=precision)
 
         # Step 2: Compute φ(Q) @ (φ(K)^T @ V)
-        qkv = jnp.einsum(
-            "...qhm,...hmd->...qhd", q_features, kv, precision=precision
-        )
+        qkv = jnp.einsum("...qhm,...hmd->...qhd", q_features, kv, precision=precision)
 
         # Step 3: Normalizer
         k_sum = jnp.sum(k_features, axis=-3)

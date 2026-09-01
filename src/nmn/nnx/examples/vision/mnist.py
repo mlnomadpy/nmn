@@ -8,6 +8,7 @@ or:
 Trains a 2-layer YatNMN MLP for 3 epochs. Uses torchvision to fetch MNIST so
 no tensorflow-datasets dependency is required.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -26,7 +27,13 @@ from nmn.nnx import YatNMN
 
 
 class YatMLP(nnx.Module):
-    def __init__(self, rngs: nnx.Rngs, hidden1: int = 256, hidden2: int = 128, num_classes: int = 10):
+    def __init__(
+        self,
+        rngs: nnx.Rngs,
+        hidden1: int = 256,
+        hidden2: int = 128,
+        num_classes: int = 10,
+    ):
         self.fc1 = YatNMN(in_features=28 * 28, out_features=hidden1, rngs=rngs)
         self.fc2 = YatNMN(in_features=hidden1, out_features=hidden2, rngs=rngs)
         self.out = nnx.Linear(hidden2, num_classes, rngs=rngs)
@@ -44,7 +51,9 @@ def loss_fn(model: YatMLP, x: jax.Array, y: jax.Array) -> jax.Array:
 
 
 @nnx.jit
-def train_step(model: YatMLP, optimizer: nnx.Optimizer, x: jax.Array, y: jax.Array) -> jax.Array:
+def train_step(
+    model: YatMLP, optimizer: nnx.Optimizer, x: jax.Array, y: jax.Array
+) -> jax.Array:
     loss, grads = nnx.value_and_grad(loss_fn)(model, x, y)
     optimizer.update(model, grads)
     return loss
@@ -58,13 +67,19 @@ def eval_step(model: YatMLP, x: jax.Array, y: jax.Array) -> tuple[jax.Array, jax
     return loss, correct
 
 
-def iter_batches(images: np.ndarray, labels: np.ndarray, batch_size: int, shuffle: bool, rng: np.random.Generator):
+def iter_batches(
+    images: np.ndarray,
+    labels: np.ndarray,
+    batch_size: int,
+    shuffle: bool,
+    rng: np.random.Generator,
+):
     n = images.shape[0]
     idx = np.arange(n)
     if shuffle:
         rng.shuffle(idx)
     for start in range(0, n - batch_size + 1, batch_size):
-        b = idx[start:start + batch_size]
+        b = idx[start : start + batch_size]
         yield jnp.asarray(images[b]), jnp.asarray(labels[b])
 
 
@@ -97,7 +112,9 @@ def main() -> None:
     model = YatMLP(rngs=nnx.Rngs(args.seed))
     optimizer = nnx.Optimizer(model, optax.adamw(args.lr), wrt=nnx.Param)
 
-    n_params = sum(p.size for p in jax.tree_util.tree_leaves(nnx.state(model, nnx.Param)))
+    n_params = sum(
+        p.size for p in jax.tree_util.tree_leaves(nnx.state(model, nnx.Param))
+    )
     print(f"params={n_params:,}")
 
     history: list[dict] = []
@@ -128,10 +145,15 @@ def main() -> None:
             f"test_loss={test_loss:.4f} test_acc={test_acc:.4f} "
             f"time={epoch_s:.1f}s"
         )
-        history.append({
-            "epoch": epoch, "train_loss": train_loss,
-            "test_loss": test_loss, "test_acc": test_acc, "epoch_s": epoch_s,
-        })
+        history.append(
+            {
+                "epoch": epoch,
+                "train_loss": train_loss,
+                "test_loss": test_loss,
+                "test_acc": test_acc,
+                "epoch_s": epoch_s,
+            }
+        )
     total_s = time.perf_counter() - wall0
 
     result = {

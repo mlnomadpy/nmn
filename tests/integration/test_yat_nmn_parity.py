@@ -21,11 +21,11 @@ We use a single canonical "logical" weight matrix W of shape
 from __future__ import annotations
 
 import math
+
 import numpy as np
 import pytest
 
 from tests._isolated_backend import mlx_is_usable
-
 
 # ── Logical inputs / parameters used by every framework ───────────────────
 
@@ -69,17 +69,17 @@ def reference_yat(
         # Both x rows and w columns are unit vectors → ||x - W||² = 2 - 2(x·W)
         dist = np.maximum(2.0 - 2.0 * dot, 0.0)
     else:
-        x_sq = np.sum(x ** 2, axis=-1, keepdims=True)
+        x_sq = np.sum(x**2, axis=-1, keepdims=True)
         if weight_normalized:
             w_sq = np.ones((1, w.shape[-1]), dtype=w.dtype)
         else:
-            w_sq = np.sum(w ** 2, axis=0, keepdims=True)
+            w_sq = np.sum(w**2, axis=0, keepdims=True)
         dist = np.maximum(x_sq + w_sq - 2.0 * dot, 0.0)
 
     if b is not None:
         dot = dot + b
 
-    return (dot ** 2) / (dist + epsilon)
+    return (dot**2) / (dist + epsilon)
 
 
 # Parameter matrix: every combination of the 4 booleans + None/value for bias.
@@ -88,7 +88,9 @@ for spherical in [False, True]:
     for weight_normalized in [False, True]:
         for learnable_epsilon in [False, True]:
             for bias_mode in ["learnable", "constant", "none"]:
-                PARAMS.append((spherical, weight_normalized, learnable_epsilon, bias_mode))
+                PARAMS.append(
+                    (spherical, weight_normalized, learnable_epsilon, bias_mode)
+                )
 
 
 def _bias_for(mode: str):
@@ -105,9 +107,10 @@ def _bias_for(mode: str):
 
 def _run_nnx(spherical, weight_normalized, learnable_epsilon, bias_mode):
     pytest.importorskip("flax")
-    from flax import nnx
     import jax
     import jax.numpy as jnp
+    from flax import nnx
+
     from nmn.nnx.layers import YatNMN as NnxYatNMN
 
     bias_arr, const_bias = _bias_for(bias_mode)
@@ -137,6 +140,7 @@ def _run_linen(spherical, weight_normalized, learnable_epsilon, bias_mode):
     pytest.importorskip("flax")
     import jax
     import jax.numpy as jnp
+
     from nmn.linen.nmn import YatNMN as LinenYatNMN
 
     bias_arr, const_bias = _bias_for(bias_mode)
@@ -249,6 +253,7 @@ def _run_mlx(spherical, weight_normalized, learnable_epsilon, bias_mode):
     # The child probe above is the only conditional MLX import: an installed
     # runtime that aborts while initializing Metal must never reach this line.
     import mlx.core as mx
+
     # Pin to CPU: MLX's Metal matmul accumulates at lower precision than
     # numpy fp32, so the < 1e-4 rtol used here is only meaningful on CPU.
     prev_device = mx.default_device()
@@ -310,14 +315,20 @@ def test_yat_nmn_matches_reference(
         b_for_ref = None
 
     expected = reference_yat(
-        X, W_LOGICAL, b_for_ref,
+        X,
+        W_LOGICAL,
+        b_for_ref,
         spherical=spherical,
         weight_normalized=weight_normalized,
         epsilon=EPSILON,
     )
 
     any_ran = False
-    skip_exc = pytest.skip.Exception if hasattr(pytest.skip, "Exception") else type("X", (), {})
+    skip_exc = (
+        pytest.skip.Exception
+        if hasattr(pytest.skip, "Exception")
+        else type("X", (), {})
+    )
     for name, runner in FRAMEWORKS.items():
         try:
             actual = runner(spherical, weight_normalized, learnable_epsilon, bias_mode)
@@ -325,8 +336,10 @@ def test_yat_nmn_matches_reference(
             continue
         any_ran = True
         np.testing.assert_allclose(
-            actual, expected,
-            rtol=2e-4, atol=2e-4,
+            actual,
+            expected,
+            rtol=2e-4,
+            atol=2e-4,
             err_msg=(
                 f"{name} YatNMN disagrees with reference for "
                 f"spherical={spherical}, weight_normalized={weight_normalized}, "

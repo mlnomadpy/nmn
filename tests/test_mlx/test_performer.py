@@ -11,10 +11,9 @@ mx = pytest.importorskip("mlx.core")
 
 from nmn.mlx import (  # noqa: E402
     create_yat_tp_projection,
-    yat_tp_features,
     yat_tp_attention,
+    yat_tp_features,
 )
-
 
 # ---------------------------------------------------------------------------
 # create_yat_tp_projection
@@ -23,8 +22,11 @@ from nmn.mlx import (  # noqa: E402
 
 def test_projection_shapes():
     params = create_yat_tp_projection(
-        head_dim=16, num_prf_features=8, num_quad_nodes=2,
-        num_anchor_features=16, seed=0,
+        head_dim=16,
+        num_prf_features=8,
+        num_quad_nodes=2,
+        num_anchor_features=16,
+        seed=0,
     )
     assert params["projections"].shape == (2, 8, 16)
     assert params["anchors"].shape == (16, 16)
@@ -37,7 +39,10 @@ def test_projection_shapes():
 
 def test_anchors_unit_norm():
     params = create_yat_tp_projection(
-        head_dim=8, num_anchor_features=10, num_prf_features=4, seed=0,
+        head_dim=8,
+        num_anchor_features=10,
+        num_prf_features=4,
+        seed=0,
     )
     anchors = np.array(params["anchors"])
     norms = np.linalg.norm(anchors, axis=-1)
@@ -45,10 +50,12 @@ def test_anchors_unit_norm():
 
 
 def test_seeded_projection_is_deterministic():
-    p1 = create_yat_tp_projection(head_dim=8, num_anchor_features=4,
-                                  num_prf_features=4, seed=42)
-    p2 = create_yat_tp_projection(head_dim=8, num_anchor_features=4,
-                                  num_prf_features=4, seed=42)
+    p1 = create_yat_tp_projection(
+        head_dim=8, num_anchor_features=4, num_prf_features=4, seed=42
+    )
+    p2 = create_yat_tp_projection(
+        head_dim=8, num_anchor_features=4, num_prf_features=4, seed=42
+    )
     assert np.array_equal(np.array(p1["anchors"]), np.array(p2["anchors"]))
     assert np.array_equal(np.array(p1["projections"]), np.array(p2["projections"]))
 
@@ -62,8 +69,11 @@ def test_feature_shape_matches_rpm():
     """Feature dim should equal R·P·M."""
     R, P, M, d = 2, 16, 8, 16
     params = create_yat_tp_projection(
-        head_dim=d, num_quad_nodes=R, num_anchor_features=P,
-        num_prf_features=M, seed=0,
+        head_dim=d,
+        num_quad_nodes=R,
+        num_anchor_features=P,
+        num_prf_features=M,
+        seed=0,
     )
     x = mx.random.normal(shape=(1, 5, 2, d))
     feat = yat_tp_features(x, params)
@@ -73,7 +83,10 @@ def test_feature_shape_matches_rpm():
 def test_feature_non_negative():
     """φ(x) = √w · (a·x)² · exp(...) ≥ 0 always."""
     params = create_yat_tp_projection(
-        head_dim=8, num_anchor_features=8, num_prf_features=4, seed=0,
+        head_dim=8,
+        num_anchor_features=8,
+        num_prf_features=4,
+        seed=0,
     )
     x = mx.random.normal(shape=(1, 4, 2, 8)) * 3.0
     feat = np.array(yat_tp_features(x, params))
@@ -86,7 +99,10 @@ def test_feature_normalization_is_optional():
     """``normalize=False`` should produce different features than the
     default (which L2-normalizes)."""
     params = create_yat_tp_projection(
-        head_dim=8, num_anchor_features=4, num_prf_features=4, seed=0,
+        head_dim=8,
+        num_anchor_features=4,
+        num_prf_features=4,
+        seed=0,
     )
     x = mx.random.normal(shape=(1, 4, 2, 8)) * 5.0
     feat_norm = np.array(yat_tp_features(x, params, normalize=True))
@@ -144,8 +160,11 @@ def test_kernel_approximation_quality_at_dot_zero():
     """When q·k = 0, the exact spherical YAT score is 0; the linearized
     feature inner product should be small too."""
     params = create_yat_tp_projection(
-        head_dim=16, num_anchor_features=32, num_prf_features=8,
-        num_quad_nodes=2, seed=0,
+        head_dim=16,
+        num_anchor_features=32,
+        num_prf_features=8,
+        num_quad_nodes=2,
+        seed=0,
     )
     # Build q and k orthogonal unit vectors.
     rng = np.random.default_rng(0)

@@ -25,54 +25,53 @@ Reference:
 from __future__ import annotations
 
 import functools
-from typing import Optional, Tuple, Callable, Any, Union
+from typing import Any, Callable, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax import random
-
 from flax import nnx
 from flax.nnx import rnglib
 from flax.nnx.module import Module, first_from
 from flax.nnx.nn import initializers
+from flax.nnx.nn.dtypes import promote_dtype
 from flax.nnx.nn.linear import LinearGeneral, default_kernel_init
 from flax.nnx.nn.normalization import LayerNorm
-from flax.nnx.nn.dtypes import promote_dtype
 from flax.typing import (
+    DotGeneralT,
     Dtype,
-    Shape,
     Initializer,
     PrecisionLike,
-    DotGeneralT,
+    Shape,
 )
-from jax import Array
+from jax import Array, random
 
-from .yat_attention import (
-    yat_attention_weights,
-    normalize_qk,
-)
-from .spherical_yat_performer import (
-    yat_tp_attention,
-    create_yat_tp_projection,
-)
+from nmn.nnx.layers.squashers import softermax
+
 from .._numerics import fp32_if_low_precision, inverse_softplus
 from .maclaurin_yat import (
     _validate_linear_attention_mask,
     create_maclaurin_projection,
     maclaurin_yat_attention,
 )
-from .radial_yat import (
-    create_radial_projection,
-    radial_yat_attention,
-)
+from .masks import combine_masks
 from .multi_head import (
     DEFAULT_CONSTANT_ALPHA,
     _check_cache_capacity,
     _validate_decode_mask,
 )
-from .masks import combine_masks
-from nmn.nnx.layers.squashers import softermax
+from .radial_yat import (
+    create_radial_projection,
+    radial_yat_attention,
+)
+from .spherical_yat_performer import (
+    create_yat_tp_projection,
+    yat_tp_attention,
+)
+from .yat_attention import (
+    normalize_qk,
+    yat_attention_weights,
+)
 
 
 def precompute_freqs_cis(
@@ -322,9 +321,7 @@ def rotary_yat_attention(
     )
 
     # Return weighted sum over values
-    return jnp.einsum(
-        "...hqk,...khd->...qhd", attn_weights, value, precision=precision
-    )
+    return jnp.einsum("...hqk,...khd->...qhd", attn_weights, value, precision=precision)
 
 
 def rotary_yat_performer_attention(
@@ -538,7 +535,7 @@ class RotaryYatAttention(Module):
 
         # Handle alpha configuration (same logic as MultiHeadAttention)
         self.alpha: nnx.Param[Array] | None
-        
+
         if constant_alpha is not None and constant_alpha is not False:
             # Use constant alpha (no learnable parameter)
             if constant_alpha is True:
@@ -556,7 +553,7 @@ class RotaryYatAttention(Module):
             else:
                 # No alpha scaling
                 self.alpha = None
-        
+
         self.use_alpha = use_alpha
         self.constant_alpha = constant_alpha
         self.normalization = normalization
@@ -568,9 +565,7 @@ class RotaryYatAttention(Module):
             )
 
         if self.head_dim % 2 != 0:
-            raise ValueError(
-                f"head_dim ({self.head_dim}) must be even for RoPE."
-            )
+            raise ValueError(f"head_dim ({self.head_dim}) must be even for RoPE.")
 
         # Precompute RoPE frequencies
         freqs_cos, freqs_sin = precompute_freqs_cis(
@@ -596,7 +591,9 @@ class RotaryYatAttention(Module):
             self.num_features_per_scale = num_prf_features
 
             if performer_kind == "slay":
-                self.num_features = num_quad_nodes * num_anchor_features * num_prf_features
+                self.num_features = (
+                    num_quad_nodes * num_anchor_features * num_prf_features
+                )
 
                 params = create_yat_tp_projection(
                     rngs.params(),
@@ -607,11 +604,11 @@ class RotaryYatAttention(Module):
                     dtype=param_dtype,
                 )
 
-                self.perf_projections = nnx.Cache(params['projections'])
-                self.perf_anchors = nnx.Cache(params['anchors'])
-                self.perf_quad_nodes = nnx.Cache(params['quad_nodes'])
-                self.perf_quad_weights = nnx.Cache(params['quad_weights'])
-                self.perf_head_dim = params['head_dim']
+                self.perf_projections = nnx.Cache(params["projections"])
+                self.perf_anchors = nnx.Cache(params["anchors"])
+                self.perf_quad_nodes = nnx.Cache(params["quad_nodes"])
+                self.perf_quad_weights = nnx.Cache(params["quad_weights"])
+                self.perf_head_dim = params["head_dim"]
             else:
                 # MAY / RAY: store the whole param dict generically.
                 self.perf_projections = None
@@ -775,16 +772,17 @@ class RotaryYatAttention(Module):
                 or self.cached_value is None
                 or self.cache_index is None
             ):
-                raise ValueError(
-                    "Cache not initialized. Call init_cache first."
-                )
+                raise ValueError("Cache not initialized. Call init_cache first.")
 
             if seq_len != 1:
                 raise ValueError(
                     f"Autoregressive decode expects one token, got seq_len={seq_len}."
                 )
             expected_shape = (
-                self.cached_key.shape[0], 1, self.num_heads, self.head_dim
+                self.cached_key.shape[0],
+                1,
+                self.num_heads,
+                self.head_dim,
             )
             for name, tensor in (("query", q), ("key", k), ("value", v)):
                 if tensor.shape != expected_shape:
@@ -804,12 +802,8 @@ class RotaryYatAttention(Module):
             cur_index = self.cache_index[...]
             _check_cache_capacity(cur_index, max_length)
             indices = (0, cur_index, 0, 0)
-            k_cached = jax.lax.dynamic_update_slice(
-                self.cached_key[...], k, indices
-            )
-            v_cached = jax.lax.dynamic_update_slice(
-                self.cached_value[...], v, indices
-            )
+            k_cached = jax.lax.dynamic_update_slice(self.cached_key[...], k, indices)
+            v_cached = jax.lax.dynamic_update_slice(self.cached_value[...], v, indices)
             k = k_cached
             v = v_cached
 
@@ -871,14 +865,14 @@ class RotaryYatAttention(Module):
 
             # Reconstruct params dict
             performer_params = {
-                'projections': jax.device_put(self.perf_projections[...]),
-                'anchors': jax.device_put(self.perf_anchors[...]),
-                'quad_nodes': jax.device_put(self.perf_quad_nodes[...]),
-                'quad_weights': jax.device_put(self.perf_quad_weights[...]),
-                'head_dim': self.perf_head_dim,
-                'num_prf_features': self.num_prf_features_per_node,
-                'num_anchor_features': self.num_anchor_features,
-                'num_scales': self.num_scales,
+                "projections": jax.device_put(self.perf_projections[...]),
+                "anchors": jax.device_put(self.perf_anchors[...]),
+                "quad_nodes": jax.device_put(self.perf_quad_nodes[...]),
+                "quad_weights": jax.device_put(self.perf_quad_weights[...]),
+                "head_dim": self.perf_head_dim,
+                "num_prf_features": self.num_prf_features_per_node,
+                "num_anchor_features": self.num_anchor_features,
+                "num_scales": self.num_scales,
             }
 
             output = rotary_yat_performer_attention(
@@ -917,14 +911,20 @@ class RotaryYatAttention(Module):
 
             if self.performer_kind == "maclaurin":
                 output = maclaurin_yat_attention(
-                    q_rot, k_rot, v, performer_params,
+                    q_rot,
+                    k_rot,
+                    v,
+                    performer_params,
                     causal=self.causal,
                     precision=self.precision,
                     mask=mask,
                 )
             else:  # radial
                 output = radial_yat_attention(
-                    q_rot, k_rot, v, performer_params,
+                    q_rot,
+                    k_rot,
+                    v,
+                    performer_params,
                     causal=self.causal,
                     precision=self.precision,
                     mask=mask,
@@ -976,9 +976,7 @@ class RotaryYatAttention(Module):
 
         if effective_mask is not None:
             query_has_key = jnp.any(effective_mask, axis=(-3, -1))
-            output = jnp.where(
-                query_has_key[..., None], output, jnp.zeros_like(output)
-            )
+            output = jnp.where(query_has_key[..., None], output, jnp.zeros_like(output))
 
         if pending_cache is not None:
             assert self.cached_key is not None

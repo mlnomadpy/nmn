@@ -1,11 +1,11 @@
 """Tests for Keras squasher functions."""
 
-import pytest
 import numpy as np
+import pytest
 
 keras = pytest.importorskip("keras")
 
-from nmn.keras.squashers import softermax, softer_sigmoid, soft_tanh
+from nmn.keras.squashers import soft_tanh, softer_sigmoid, softermax
 
 to_numpy = keras.ops.convert_to_numpy
 

@@ -16,7 +16,6 @@ from nmn.linen import (
     YatNMN,
 )
 
-
 EPSILONS = (1e-20, 1e-5, 1000.0)
 FAMILIES = (
     (YatNMN, None, (1, 2)),
@@ -41,9 +40,7 @@ def _make(layer_cls, kernel_size, epsilon, dtype=None):
         kwargs.update(
             dtype=dtype,
             param_dtype=dtype,
-            kernel_init=lambda key, shape, init_dtype: jnp.zeros(
-                shape, init_dtype
-            ),
+            kernel_init=lambda key, shape, init_dtype: jnp.zeros(shape, init_dtype),
         )
     if kernel_size is not None:
         kwargs["kernel_size"] = kernel_size
@@ -70,9 +67,7 @@ def test_learnable_epsilon_jit_forward_and_gradients(
     )(params, inputs)
 
     effective = jax.nn.softplus(params["epsilon_param"])
-    np.testing.assert_allclose(
-        np.asarray(effective), epsilon, rtol=2e-6, atol=0.0
-    )
+    np.testing.assert_allclose(np.asarray(effective), epsilon, rtol=2e-6, atol=0.0)
     assert jnp.isfinite(output).all()
     assert jnp.isfinite(input_grads).all()
     assert jnp.isfinite(param_grads["kernel"]).all()
@@ -154,7 +149,7 @@ def test_float32_rejects_unrepresentable_epsilon(
 
 
 @pytest.mark.parametrize("layer_cls,kernel_size,input_shape", FAMILIES[:2])
-@pytest.mark.parametrize("epsilon", [2.0 ** -1022, 1e150])
+@pytest.mark.parametrize("epsilon", [2.0**-1022, 1e150])
 def test_float64_extreme_epsilon_is_effective_and_differentiable(
     layer_cls, kernel_size, input_shape, epsilon
 ):
@@ -184,9 +179,7 @@ def test_float64_extreme_epsilon_is_effective_and_differentiable(
 
 
 @pytest.mark.parametrize("layer_cls,kernel_size,input_shape", FAMILIES[:2])
-def test_float64_rejects_softplus_underflow(
-    layer_cls, kernel_size, input_shape
-):
+def test_float64_rejects_softplus_underflow(layer_cls, kernel_size, input_shape):
     with jax.enable_x64():
         layer = _make(layer_cls, kernel_size, 5e-324, jnp.float64)
         with pytest.raises(ValueError, match="not representable"):

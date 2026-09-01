@@ -51,7 +51,6 @@ from typing import Any, Optional
 import mlx.core as mx
 import numpy as np
 
-
 __all__ = [
     "maclaurin_coeffs",
     "create_maclaurin_projection",
@@ -127,8 +126,8 @@ def create_maclaurin_projection(
     ).astype(np.float32)
 
     return {
-        "omegas": mx.array(omegas_np).astype(dtype),   # (M, nmax, d)
-        "degrees": mx.array(degrees_np),               # (M,) int32
+        "omegas": mx.array(omegas_np).astype(dtype),  # (M, nmax, d)
+        "degrees": mx.array(degrees_np),  # (M,) int32
         "Z": Z,
         "head_dim": head_dim,
         "num_features": num_features,
@@ -161,8 +160,8 @@ def maclaurin_features(
         x_norm = mx.sqrt(mx.sum(x * x, axis=-1, keepdims=True) + epsilon)
         x = x / x_norm
 
-    omegas = params["omegas"]        # (M, nmax, d)
-    degrees = params["degrees"]      # (M,)
+    omegas = params["omegas"]  # (M, nmax, d)
+    degrees = params["degrees"]  # (M,)
     Z = params["Z"]
     M = params["num_features"]
     nmax = params["nmax"]
@@ -171,11 +170,11 @@ def maclaurin_features(
     proj = mx.einsum("...d,mld->...ml", x, omegas)
 
     # mask[r, l] = (l < N_r)  →  neutralize unused factors to 1.
-    l = mx.arange(nmax).reshape((1, nmax))                 # (1, nmax)
-    mask = l < degrees.reshape((M, 1))                     # (M, nmax) bool
+    l = mx.arange(nmax).reshape((1, nmax))  # (1, nmax)
+    mask = l < degrees.reshape((M, 1))  # (M, nmax) bool
     proj = mx.where(mask, proj, mx.array(1.0, dtype=proj.dtype))
 
-    feat = mx.prod(proj, axis=-1)                          # (..., M)
+    feat = mx.prod(proj, axis=-1)  # (..., M)
     return math.sqrt(Z / M) * feat
 
 

@@ -1,7 +1,7 @@
 """Tests for Keras YatEmbed."""
 
-import pytest
 import numpy as np
+import pytest
 
 keras = pytest.importorskip("keras")
 

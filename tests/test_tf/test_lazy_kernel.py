@@ -22,7 +22,9 @@ def _build(layer, in_dim=8):
 
 
 def test_lazy_kernel_non_trainable():
-    layer = YatNMN(features=6, lazy=True, use_bias=True, use_alpha=True, learnable_epsilon=True)
+    layer = YatNMN(
+        features=6, lazy=True, use_bias=True, use_alpha=True, learnable_epsilon=True
+    )
     _build(layer)
     assert layer.kernel.trainable is False
     trainable_names = [v.name for v in layer.trainable_variables]
@@ -31,7 +33,9 @@ def test_lazy_kernel_non_trainable():
 
 
 def test_lazy_bias_alpha_epsilon_trainable():
-    layer = YatNMN(features=6, lazy=True, use_bias=True, use_alpha=True, learnable_epsilon=True)
+    layer = YatNMN(
+        features=6, lazy=True, use_bias=True, use_alpha=True, learnable_epsilon=True
+    )
     _build(layer)
     assert layer.bias.trainable is True
     assert layer.alpha.trainable is True
@@ -59,12 +63,16 @@ def test_lazy_false_backward_compatible():
 
 
 def test_lazy_gradients_kernel_none_others_present():
-    layer = YatNMN(features=6, lazy=True, use_bias=True, use_alpha=True, learnable_epsilon=True)
+    layer = YatNMN(
+        features=6, lazy=True, use_bias=True, use_alpha=True, learnable_epsilon=True
+    )
     x = _build(layer)
 
     with tf.GradientTape() as tape:
         loss = tf.reduce_sum(tf.square(layer(x)))
-    grads = tape.gradient(loss, [layer.kernel, layer.bias, layer.alpha, layer.epsilon_param])
+    grads = tape.gradient(
+        loss, [layer.kernel, layer.bias, layer.alpha, layer.epsilon_param]
+    )
     g_kernel, g_bias, g_alpha, g_eps = grads
     # Frozen kernel: no gradient flows to it through the trainable-variable path.
     # (It is excluded from trainable_variables; explicit gradient is None.)
@@ -76,7 +84,9 @@ def test_lazy_gradients_kernel_none_others_present():
 
 def test_lazy_training_step_kernel_unchanged():
     """1-2 step smoke test: kernel stays fixed, bias/alpha/epsilon move."""
-    layer = YatNMN(features=6, lazy=True, use_bias=True, use_alpha=True, learnable_epsilon=True)
+    layer = YatNMN(
+        features=6, lazy=True, use_bias=True, use_alpha=True, learnable_epsilon=True
+    )
     x = _build(layer)
 
     kernel0 = layer.kernel.numpy().copy()

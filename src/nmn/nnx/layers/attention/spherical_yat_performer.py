@@ -55,13 +55,14 @@ Parameter Tuning Guide:
 """
 
 from __future__ import annotations
+
 import math
+
 import jax
 import jax.numpy as jnp
-from jax import random, lax
 from flax.nnx.nn.dtypes import promote_dtype
 from flax.typing import Dtype, PrecisionLike
-from jax import Array
+from jax import Array, lax, random
 
 
 def create_orthogonal_features(key, num_features, dim, dtype=jnp.float32):
@@ -111,14 +112,15 @@ def create_yat_tp_projection(
     # Gauss-Laguerre quadrature nodes and weights
     # After change of variables t = Cs: s_r = t_r/C, w_r = alpha_r/C
     import numpy as np
+
     nodes_np, weights_np = np.polynomial.laguerre.laggauss(num_quad_nodes)
-    nodes = jnp.array(nodes_np / C, dtype=dtype)     # s_r = t_r / C
+    nodes = jnp.array(nodes_np / C, dtype=dtype)  # s_r = t_r / C
     weights = jnp.array(weights_np / C, dtype=dtype)  # w_r = alpha_r / C
 
     # Anchor vectors on unit sphere for polynomial kernel (q·k)²
     key, subkey = random.split(key)
     anchors = random.normal(subkey, (num_anchor_features, head_dim), dtype=dtype)
-    anchors = anchors / jnp.sqrt(jnp.sum(anchors ** 2, axis=-1, keepdims=True) + 1e-8)
+    anchors = anchors / jnp.sqrt(jnp.sum(anchors**2, axis=-1, keepdims=True) + 1e-8)
 
     # PRF random projections: one set of M features per quadrature node
     # Standard normal ω ~ N(0, I) matching slay implementation
@@ -130,14 +132,14 @@ def create_yat_tp_projection(
     projections = jnp.stack(projections)  # [R, M, d]
 
     return {
-        'projections': projections,       # [R, M, d] - PRF projections
-        'anchors': anchors,               # [P, d] - anchor vectors on unit sphere
-        'quad_nodes': nodes,              # [R] - quadrature nodes (s_r)
-        'quad_weights': weights,          # [R] - quadrature weights (w_r)
-        'head_dim': head_dim,
-        'num_prf_features': num_prf_features,
-        'num_anchor_features': num_anchor_features,
-        'num_scales': num_quad_nodes,
+        "projections": projections,  # [R, M, d] - PRF projections
+        "anchors": anchors,  # [P, d] - anchor vectors on unit sphere
+        "quad_nodes": nodes,  # [R] - quadrature nodes (s_r)
+        "quad_weights": weights,  # [R] - quadrature weights (w_r)
+        "head_dim": head_dim,
+        "num_prf_features": num_prf_features,
+        "num_anchor_features": num_anchor_features,
+        "num_scales": num_quad_nodes,
     }
 
 
@@ -161,7 +163,7 @@ def _anchor_poly_features(
         Anchor features [..., P].
     """
     dots = jnp.einsum("...d,pd->...p", x, anchors)
-    return (dots ** 2) / math.sqrt(num_anchor_features)
+    return (dots**2) / math.sqrt(num_anchor_features)
 
 
 def _prf_features(
@@ -221,15 +223,15 @@ def yat_tp_features(
         Feature tensor [..., seq_len, num_heads, R*P*M].
     """
     if normalize:
-        x_norm = jnp.sqrt(jnp.sum(x ** 2, axis=-1, keepdims=True) + epsilon)
+        x_norm = jnp.sqrt(jnp.sum(x**2, axis=-1, keepdims=True) + epsilon)
         x = x / x_norm
 
-    projections = params['projections']       # [R, M, d]
-    anchors = params['anchors']               # [P, d]
-    quad_nodes = params['quad_nodes']         # [R]
-    quad_weights = params['quad_weights']     # [R]
-    M = params['num_prf_features']
-    P = params['num_anchor_features']
+    projections = params["projections"]  # [R, M, d]
+    anchors = params["anchors"]  # [P, d]
+    quad_nodes = params["quad_nodes"]  # [R]
+    quad_weights = params["quad_weights"]  # [R]
+    M = params["num_prf_features"]
+    P = params["num_anchor_features"]
 
     # Polynomial features (shared across all quadrature nodes)
     poly_feat = _anchor_poly_features(x, anchors, P)  # [..., P]
@@ -252,8 +254,8 @@ def yat_tp_features(
     # We need to scan over axis -2 of prf_all which is R
     # Reshape for scan: move R to front
     # prf_all: [..., R, M] -> [R, ..., M]
-    prf_scan = jnp.moveaxis(prf_all, -2, 0)        # [R, ..., M]
-    sq_w_scan = sq_weights[:, 0]                     # [R]
+    prf_scan = jnp.moveaxis(prf_all, -2, 0)  # [R, ..., M]
+    sq_w_scan = sq_weights[:, 0]  # [R]
 
     def scan_fn(carry, r_inputs):
         prf_feat, sq_w = r_inputs  # prf: [..., M], sq_w: scalar
@@ -371,12 +373,13 @@ def test_yat_tp_approximation():
 
     key = random.PRNGKey(42)
     head_dim = 64
-    P = 64   # anchor features
-    M = 8    # PRF features per quadrature node
-    R = 2    # quadrature nodes
+    P = 64  # anchor features
+    M = 8  # PRF features per quadrature node
+    R = 2  # quadrature nodes
 
     params = create_yat_tp_projection(
-        key, head_dim,
+        key,
+        head_dim,
         num_prf_features=M,
         num_quad_nodes=R,
         num_anchor_features=P,
@@ -391,7 +394,9 @@ def test_yat_tp_approximation():
 
     C = 2.0 + 1e-5
 
-    print(f"\n{'dot':>6} | {'exact_YAT':>10} | {'approx':>10} | {'ratio':>8} | {'scaled':>10}")
+    print(
+        f"\n{'dot':>6} | {'exact_YAT':>10} | {'approx':>10} | {'ratio':>8} | {'scaled':>10}"
+    )
     print("-" * 60)
 
     # Collect all values first to compute scaling factor
@@ -401,11 +406,11 @@ def test_yat_tp_approximation():
         k_orth = k_orth - jnp.dot(k_orth, q) * q
         k_orth = k_orth / jnp.linalg.norm(k_orth)
 
-        k = target_dot * q + jnp.sqrt(max(0, 1 - target_dot ** 2)) * k_orth
+        k = target_dot * q + jnp.sqrt(max(0, 1 - target_dot**2)) * k_orth
         k = k / jnp.linalg.norm(k)
 
         dot = float(jnp.dot(q, k))
-        exact = (dot ** 2) / (C - 2 * dot)
+        exact = (dot**2) / (C - 2 * dot)
 
         # Approx via anchor tensor-product features
         q_r = q.reshape(1, 1, 1, head_dim)
@@ -425,9 +430,13 @@ def test_yat_tp_approximation():
     for dot, exact, approx in results:
         ratio = approx / exact if abs(exact) > 1e-4 else 0
         scaled = approx * scale
-        print(f"{dot:+6.2f} | {exact:10.4f} | {approx:10.4f} | {ratio:7.2f} | {scaled:10.4f}")
+        print(
+            f"{dot:+6.2f} | {exact:10.4f} | {approx:10.4f} | {ratio:7.2f} | {scaled:10.4f}"
+        )
 
-    print(f"\n(Scale factor: {scale:.2f} — applied to 'scaled' column to match at dot=0.9)")
+    print(
+        f"\n(Scale factor: {scale:.2f} — applied to 'scaled' column to match at dot=0.9)"
+    )
 
     print("\n" + "=" * 60)
 

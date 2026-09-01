@@ -250,6 +250,7 @@ Full guide: {guides}/mlx.md
 # Rendering helpers
 # ---------------------------------------------------------------------------
 
+
 def _render_info() -> str:
     lines: List[str] = []
     lines.append(f"nmn {_version()}")
@@ -257,9 +258,7 @@ def _render_info() -> str:
     lines.append("")
     lines.append("Frameworks (install only the one you need):")
     for key, meta in FRAMEWORKS.items():
-        lines.append(
-            f"  {key:<6} {meta['label']:<20} pip install {meta['extra']}"
-        )
+        lines.append(f"  {key:<6} {meta['label']:<20} pip install {meta['extra']}")
     lines.append("")
     lines.append("Get a self-contained quickstart for a framework with:")
     lines.append("  nmn guide <framework>      e.g. nmn guide torch")
@@ -424,6 +423,7 @@ For a per-framework quickstart run:  nmn guide <framework>
 # ---------------------------------------------------------------------------
 # argparse wiring
 # ---------------------------------------------------------------------------
+
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(

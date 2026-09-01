@@ -1,16 +1,16 @@
 """Tests for Keras YAT attention."""
 
-import pytest
 import numpy as np
+import pytest
 
 keras = pytest.importorskip("keras")
 
 from nmn.keras.attention import (
+    MultiHeadYatAttention,
     normalize_qk,
-    yat_attention_weights,
     yat_attention,
     yat_attention_normalized,
-    MultiHeadYatAttention,
+    yat_attention_weights,
 )
 
 to_numpy = keras.ops.convert_to_numpy

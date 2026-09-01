@@ -19,7 +19,6 @@ from jax import Array
 from jax.extend import core
 from jax.interpreters import ad, batching, mlir
 
-
 __all__ = [
     "reduction_safe_upcast",
     "safe_kernel_init",
@@ -55,9 +54,7 @@ def _saturating_tangent_upcast_transpose(cotangent, *, target_dtype):
     return (cotangent.astype(target_dtype),)
 
 
-ad.deflinear(
-    _saturating_tangent_upcast_p, _saturating_tangent_upcast_transpose
-)
+ad.deflinear(_saturating_tangent_upcast_p, _saturating_tangent_upcast_transpose)
 
 
 def _saturating_tangent_upcast_batch(args, dimensions, **params):
@@ -110,6 +107,7 @@ def safe_kernel_init(initializer):
     JAX's CPU QR kernel does not accept float16, which made the default
     orthogonal convolution initializer fail before the layer could run.
     """
+
     def init(key, shape, dtype):
         if dtype in (jnp.float16, jnp.bfloat16):
             return initializer(key, shape, jnp.float32).astype(dtype)
@@ -163,7 +161,7 @@ def yat_score(
     # Squared distances are non-negative; clamp cancellation noise while
     # retaining NaNs from genuinely invalid inputs.
     distance_sq = jnp.maximum(distance_sq, 0.0)
-    y = dot_prod_map ** 2 / (distance_sq + eps)
+    y = dot_prod_map**2 / (distance_sq + eps)
 
     if alpha is not None:
         y = y * alpha

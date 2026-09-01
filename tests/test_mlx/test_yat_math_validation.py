@@ -43,22 +43,24 @@ def _numpy_yat(
     if spherical:
         dist = np.maximum(2.0 - 2.0 * dot, 0.0)
     else:
-        x_sq = (x ** 2).sum(axis=-1, keepdims=True)
+        x_sq = (x**2).sum(axis=-1, keepdims=True)
         if weight_normalized:
             w_sq = np.ones(W.shape[0], dtype=W.dtype)
         else:
-            w_sq = (W ** 2).sum(axis=-1)
+            w_sq = (W**2).sum(axis=-1)
         w_sq = w_sq.reshape((1,) * (dot.ndim - 1) + (W.shape[0],))
         dist = np.maximum(x_sq + w_sq - 2 * dot, 0.0)
 
     num = dot if b is None else dot + b
-    y = (num ** 2) / (dist + epsilon)
+    y = (num**2) / (dist + epsilon)
     if alpha is not None:
         y = y * alpha
     return y
 
 
-def _extract(layer: YatNMN) -> tuple[np.ndarray, np.ndarray | float | None, float | None]:
+def _extract(
+    layer: YatNMN,
+) -> tuple[np.ndarray, np.ndarray | float | None, float | None]:
     W = np.array(layer.kernel)
     if layer.use_bias:
         if layer._constant_bias_value is not None:
@@ -105,7 +107,9 @@ def test_yat_math_all_modes(use_bias, use_alpha, constant_bias, constant_alpha):
     assert diff < 1e-5, f"max diff {diff} exceeds tolerance"
 
 
-@pytest.mark.parametrize("spherical,weight_normalized", list(product([False, True], repeat=2)))
+@pytest.mark.parametrize(
+    "spherical,weight_normalized", list(product([False, True], repeat=2))
+)
 def test_yat_math_geometry_modes(spherical, weight_normalized):
     if spherical and weight_normalized:
         pytest.skip("spherical implies its own normalization; combination is redundant")
@@ -119,9 +123,13 @@ def test_yat_math_geometry_modes(spherical, weight_normalized):
     y = np.array(layer(x))
     W, b, a = _extract(layer)
     ref = _numpy_yat(
-        np.array(x), W,
-        b=b, alpha=a, epsilon=1e-5,
-        spherical=spherical, weight_normalized=weight_normalized,
+        np.array(x),
+        W,
+        b=b,
+        alpha=a,
+        epsilon=1e-5,
+        spherical=spherical,
+        weight_normalized=weight_normalized,
     )
     diff = np.max(np.abs(y - ref))
     assert diff < 1e-5, f"max diff {diff} exceeds tolerance"

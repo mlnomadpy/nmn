@@ -7,7 +7,7 @@ import pytest
 
 mx = pytest.importorskip("mlx.core")
 
-from nmn.mlx.squashers import softermax, softer_sigmoid, soft_tanh  # noqa: E402
+from nmn.mlx.squashers import soft_tanh, softer_sigmoid, softermax  # noqa: E402
 
 
 def test_softermax_sums_to_one():

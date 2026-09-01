@@ -58,7 +58,6 @@ import numpy as np
 import torch
 from torch import Tensor
 
-
 __all__ = [
     "maclaurin_coeffs",
     "create_maclaurin_projection",
@@ -156,8 +155,8 @@ def create_maclaurin_projection(
     degrees = torch.as_tensor(degrees_np, dtype=torch.int64, device=device)
 
     return {
-        "omegas": omegas,              # (M, nmax+1, d)
-        "degrees": degrees,            # (M,)
+        "omegas": omegas,  # (M, nmax+1, d)
+        "degrees": degrees,  # (M,)
         "Z": Z,
         "num_features": num_features,
         "nmax": nmax,
@@ -192,7 +191,7 @@ def maclaurin_features(
         x = _normalize(x, epsilon)
 
     omegas = params["omegas"].to(device=x.device, dtype=x.dtype)  # (M, L, d)
-    degrees = params["degrees"].to(device=x.device)              # (M,)
+    degrees = params["degrees"].to(device=x.device)  # (M,)
     M = params["num_features"]
     Z = params["Z"]
     L = omegas.shape[1]
@@ -201,11 +200,11 @@ def maclaurin_features(
     proj = torch.einsum("...d,mld->...ml", x, omegas)
 
     # mask[r, l] = (l < N_r); neutralize unused factors to 1.0
-    l_idx = torch.arange(L, device=x.device)               # (L,)
-    mask = l_idx[None, :] < degrees[:, None]                # (M, L)
+    l_idx = torch.arange(L, device=x.device)  # (L,)
+    mask = l_idx[None, :] < degrees[:, None]  # (M, L)
     proj = torch.where(mask, proj, torch.ones_like(proj))
 
-    feat = proj.prod(dim=-1)                                # (..., M)
+    feat = proj.prod(dim=-1)  # (..., M)
     return math.sqrt(Z / M) * feat
 
 
@@ -287,8 +286,8 @@ def create_radial_projection(
     # radial RFF for 1/(eps + ‖z - z'‖²) via Gauss-Laguerre over
     # 1/(eps + r²) = ∫_0^∞ e^{−t(eps + r²)} dt, substitution t = tau/eps.
     tau, wq = np.polynomial.laguerre.laggauss(num_radial)
-    t_nodes = tau / epsilon              # t_j = tau_j / epsilon
-    coef = (1.0 / epsilon) * wq          # (1/epsilon) w_j
+    t_nodes = tau / epsilon  # t_j = tau_j / epsilon
+    coef = (1.0 / epsilon) * wq  # (1/epsilon) w_j
     omegas, phases = [], []
     for tj in t_nodes:
         omegas.append(
@@ -300,11 +299,11 @@ def create_radial_projection(
         return torch.as_tensor(np.asarray(arr), dtype=dtype, device=device)
 
     return {
-        "W1": _t(W1),                                  # (m, da)
-        "W2": _t(W2),                                  # (m, da)
-        "omegas": _t(np.stack(omegas)),                # (num_radial, radial_dim, da)
-        "phases": _t(np.stack(phases)),                # (num_radial, radial_dim)
-        "coef": _t(coef.astype(np.float32)),           # (num_radial,)
+        "W1": _t(W1),  # (m, da)
+        "W2": _t(W2),  # (m, da)
+        "omegas": _t(np.stack(omegas)),  # (num_radial, radial_dim, da)
+        "phases": _t(np.stack(phases)),  # (num_radial, radial_dim)
+        "coef": _t(coef.astype(np.float32)),  # (num_radial,)
         "b": bias,
         "eps": epsilon,
         "sketch_m": sketch_m,
@@ -337,9 +336,9 @@ def radial_features(
 
     W1 = params["W1"].to(device=x.device, dtype=x.dtype)
     W2 = params["W2"].to(device=x.device, dtype=x.dtype)
-    omegas = params["omegas"].to(device=x.device, dtype=x.dtype)   # (J, radial_dim, da)
-    phases = params["phases"].to(device=x.device, dtype=x.dtype)   # (J, radial_dim)
-    coef = params["coef"].to(device=x.device, dtype=x.dtype)       # (J,)
+    omegas = params["omegas"].to(device=x.device, dtype=x.dtype)  # (J, radial_dim, da)
+    phases = params["phases"].to(device=x.device, dtype=x.dtype)  # (J, radial_dim)
+    coef = params["coef"].to(device=x.device, dtype=x.dtype)  # (J,)
     sketch_m = params["sketch_m"]
     radial_dim = params["radial_dim"]
     b = params["b"]
@@ -347,26 +346,23 @@ def radial_features(
     leading = x.shape[:-1]
 
     # z = [x̂, sqrt(b)]  ->  (..., da)
-    sqrt_b = torch.full(
-        leading + (1,), math.sqrt(b), dtype=x.dtype, device=x.device
-    )
+    sqrt_b = torch.full(leading + (1,), math.sqrt(b), dtype=x.dtype, device=x.device)
     z = torch.cat([x, sqrt_b], dim=-1)
 
     # degree-2 sketch psi(z): (..., sketch_m), approximates (z·z')²
     psi = (
-        torch.einsum("...d,md->...m", z, W1)
-        * torch.einsum("...d,md->...m", z, W2)
+        torch.einsum("...d,md->...m", z, W1) * torch.einsum("...d,md->...m", z, W2)
     ) / math.sqrt(sketch_m)
 
     # radial RFF per node: (..., J, radial_dim)
     proj = torch.einsum("...d,jrd->...jr", z, omegas) + phases  # (..., J, radial_dim)
     rff = math.sqrt(2.0 / radial_dim) * torch.cos(proj)
-    sqrt_coef = torch.sqrt(torch.clamp(coef, min=0.0))          # (J,)
+    sqrt_coef = torch.sqrt(torch.clamp(coef, min=0.0))  # (J,)
     rff = rff * sqrt_coef[..., :, None]
-    phi_rad = rff.reshape(leading + (-1,))                      # (..., J*radial_dim)
+    phi_rad = rff.reshape(leading + (-1,))  # (..., J*radial_dim)
 
     # tensor product psi(z) ⊗ φ_rad(z)  ->  (..., sketch_m * J*radial_dim)
-    out = psi[..., :, None] * phi_rad[..., None, :]             # (..., m, J*radial_dim)
+    out = psi[..., :, None] * phi_rad[..., None, :]  # (..., m, J*radial_dim)
     return out.reshape(leading + (-1,))
 
 

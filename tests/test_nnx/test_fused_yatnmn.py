@@ -5,15 +5,17 @@ and numerically close gradients compared to YatNMN(fused=False),
 across all configurations: alpha variants, bias modes, learnable epsilon.
 """
 
-import pytest
 import numpy as np
+import pytest
 
 try:
     import jax
     import jax.numpy as jnp
-    from jax._src.test_util import check_grads as _check_grads
     from flax import nnx
+    from jax._src.test_util import check_grads as _check_grads
+
     from nmn.nnx.layers import YatNMN
+
     HAS_JAX = True
 except ImportError:
     HAS_JAX = False
@@ -23,20 +25,35 @@ pytestmark = pytest.mark.skipif(not HAS_JAX, reason="JAX/Flax not available")
 
 # ── Helpers ──
 
-def _make_pair(in_f, out_f, *, use_alpha=True, constant_alpha=None,
-               use_bias=False, constant_bias=None, softplus_bias=False,
-               scalar_bias=False, learnable_epsilon=False, epsilon=0.001):
+
+def _make_pair(
+    in_f,
+    out_f,
+    *,
+    use_alpha=True,
+    constant_alpha=None,
+    use_bias=False,
+    constant_bias=None,
+    softplus_bias=False,
+    scalar_bias=False,
+    learnable_epsilon=False,
+    epsilon=0.001,
+):
     """Create matching fused and unfused YatNMN layers with shared weights."""
     common = dict(
-        use_alpha=use_alpha, constant_alpha=constant_alpha,
-        use_bias=use_bias, constant_bias=constant_bias,
-        softplus_bias=softplus_bias, scalar_bias=scalar_bias,
-        learnable_epsilon=learnable_epsilon, epsilon=epsilon,
+        use_alpha=use_alpha,
+        constant_alpha=constant_alpha,
+        use_bias=use_bias,
+        constant_bias=constant_bias,
+        softplus_bias=softplus_bias,
+        scalar_bias=scalar_bias,
+        learnable_epsilon=learnable_epsilon,
+        epsilon=epsilon,
     )
     ref = YatNMN(in_f, out_f, fused=False, rngs=nnx.Rngs(42), **common)
     fused = YatNMN(in_f, out_f, fused=True, rngs=nnx.Rngs(42), **common)
 
-    for name in ('kernel', 'bias', 'alpha', 'epsilon_param'):
+    for name in ("kernel", "bias", "alpha", "epsilon_param"):
         r = getattr(ref, name, None)
         f = getattr(fused, name, None)
         if r is not None and f is not None:
@@ -50,25 +67,29 @@ def _compare_forward(ref, fused, x, atol=1e-5):
     out_ref = ref(x)
     out_fused = fused(x)
     max_err = float(jnp.abs(out_ref - out_fused).max())
-    assert out_ref.shape == out_fused.shape, f"Shape mismatch: {out_ref.shape} vs {out_fused.shape}"
+    assert (
+        out_ref.shape == out_fused.shape
+    ), f"Shape mismatch: {out_ref.shape} vs {out_fused.shape}"
     assert max_err < atol, f"Forward max abs error {max_err:.2e} > {atol}"
     return out_ref, out_fused
 
 
 def _compare_grads(ref, fused, x, atol=1e-3, rtol=1e-3):
     """Assert gradients match for all learnable parameters."""
+
     def loss_fn(model, x):
         return jnp.mean(model(x) ** 2)
 
     loss_ref, grad_ref = jax.value_and_grad(loss_fn)(ref, x)
     loss_fused, grad_fused = jax.value_and_grad(loss_fn)(fused, x)
 
-    for name in ('kernel', 'bias', 'alpha', 'epsilon_param'):
+    for name in ("kernel", "bias", "alpha", "epsilon_param"):
         gr = getattr(grad_ref, name, None)
         gf = getattr(grad_fused, name, None)
         if gr is not None and gf is not None:
-            assert jnp.allclose(gr[...], gf[...], atol=atol, rtol=rtol), \
-                f"{name} grad max err {float(jnp.abs(gr[...] - gf[...]).max()):.2e}"
+            assert jnp.allclose(
+                gr[...], gf[...], atol=atol, rtol=rtol
+            ), f"{name} grad max err {float(jnp.abs(gr[...] - gf[...]).max()):.2e}"
 
     return loss_ref, loss_fused
 
@@ -78,6 +99,7 @@ def _rand(shape, key=0):
 
 
 # ── Forward tests ──
+
 
 class TestFusedForward:
 
@@ -164,15 +186,20 @@ class TestFusedForwardCombined:
         _compare_forward(ref, fused, _rand((4, 16, 64)))
 
     def test_bias_and_learnable_eps_no_alpha(self):
-        ref, fused = _make_pair(64, 128, use_bias=True, use_alpha=False, learnable_epsilon=True)
+        ref, fused = _make_pair(
+            64, 128, use_bias=True, use_alpha=False, learnable_epsilon=True
+        )
         _compare_forward(ref, fused, _rand((4, 16, 64)))
 
     def test_scalar_softplus_bias_and_learnable_eps(self):
-        ref, fused = _make_pair(64, 128, scalar_bias=True, softplus_bias=True, learnable_epsilon=True)
+        ref, fused = _make_pair(
+            64, 128, scalar_bias=True, softplus_bias=True, learnable_epsilon=True
+        )
         _compare_forward(ref, fused, _rand((4, 16, 64)))
 
 
 # ── Backward tests ──
+
 
 class TestFusedBackward:
 
@@ -194,11 +221,13 @@ class TestFusedBackward:
 
     def test_grad_finite(self):
         _, fused = _make_pair(64, 128, use_alpha=True)
+
         def loss_fn(model, x):
             return jnp.mean(model(x) ** 2)
+
         _, grads = jax.value_and_grad(loss_fn)(fused, _rand((4, 16, 64)))
         for leaf in jax.tree_util.tree_leaves(grads):
-            if hasattr(leaf, 'shape'):
+            if hasattr(leaf, "shape"):
                 assert jnp.isfinite(leaf).all(), "Non-finite gradient found"
 
 
@@ -247,24 +276,34 @@ class TestFusedBackwardLearnableEps:
 class TestFusedBackwardCombined:
 
     def test_grad_all_learnable(self):
-        ref, fused = _make_pair(64, 128, use_bias=True, learnable_epsilon=True, use_alpha=True)
+        ref, fused = _make_pair(
+            64, 128, use_bias=True, learnable_epsilon=True, use_alpha=True
+        )
         _compare_grads(ref, fused, _rand((4, 16, 64)))
 
     def test_grad_bias_and_learnable_eps_no_alpha(self):
-        ref, fused = _make_pair(64, 128, use_bias=True, use_alpha=False, learnable_epsilon=True)
+        ref, fused = _make_pair(
+            64, 128, use_bias=True, use_alpha=False, learnable_epsilon=True
+        )
         _compare_grads(ref, fused, _rand((4, 16, 64)))
 
     def test_grad_scalar_softplus_bias_and_learnable_eps(self):
-        ref, fused = _make_pair(64, 128, scalar_bias=True, softplus_bias=True, learnable_epsilon=True)
+        ref, fused = _make_pair(
+            64, 128, scalar_bias=True, softplus_bias=True, learnable_epsilon=True
+        )
         _compare_grads(ref, fused, _rand((4, 16, 64)), atol=2e-3)
 
     def test_grad_finite_all_learnable(self):
-        _, fused = _make_pair(64, 128, use_bias=True, learnable_epsilon=True, use_alpha=True)
+        _, fused = _make_pair(
+            64, 128, use_bias=True, learnable_epsilon=True, use_alpha=True
+        )
+
         def loss_fn(model, x):
             return jnp.mean(model(x) ** 2)
+
         _, grads = jax.value_and_grad(loss_fn)(fused, _rand((4, 16, 64)))
         for leaf in jax.tree_util.tree_leaves(grads):
-            if hasattr(leaf, 'shape'):
+            if hasattr(leaf, "shape"):
                 assert jnp.isfinite(leaf).all(), "Non-finite gradient found"
 
 
@@ -300,6 +339,7 @@ class TestFusedJIT:
         def train_step(model, x):
             def loss_fn(m):
                 return jnp.mean(m(x) ** 2)
+
             loss, grads = jax.value_and_grad(loss_fn)(model)
             return loss
 
@@ -314,6 +354,7 @@ class TestFusedJIT:
         def train_step(model, x):
             def loss_fn(m):
                 return jnp.mean(m(x) ** 2)
+
             loss, grads = jax.value_and_grad(loss_fn)(model)
             return loss
 
@@ -332,7 +373,7 @@ class TestFusedGradFlow:
             return jnp.mean(model(x) ** 2)
 
         _, grads = jax.value_and_grad(loss_fn)(fused, x)
-        for name in ('kernel', 'bias', 'alpha', 'epsilon_param'):
+        for name in ("kernel", "bias", "alpha", "epsilon_param"):
             g = getattr(grads, name, None)
             if g is not None:
                 val = g[...]
@@ -349,4 +390,6 @@ class TestFusedGradFlow:
         self._check_nonzero_grads(use_bias=True, learnable_epsilon=True)
 
     def test_grad_flow_scalar_softplus_bias(self):
-        self._check_nonzero_grads(scalar_bias=True, softplus_bias=True, learnable_epsilon=True)
+        self._check_nonzero_grads(
+            scalar_bias=True, softplus_bias=True, learnable_epsilon=True
+        )

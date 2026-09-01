@@ -7,8 +7,7 @@ import pytest
 
 mx = pytest.importorskip("mlx.core")
 
-from nmn.mlx import YatNMN, YatConv2D, YatConvTranspose2D  # noqa: E402
-
+from nmn.mlx import YatConv2D, YatConvTranspose2D, YatNMN  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # YatNMN DropConnect
@@ -77,7 +76,7 @@ def _numpy_conv2d_yat(x, W, b, a, eps=1e-5):
     for f in range(F):
         for i in range(out_h):
             for j in range(out_w):
-                patch = x[0, i:i + KH, j:j + KW, :]
+                patch = x[0, i : i + KH, j : j + KW, :]
                 kf = W[f]
                 dot = (patch * kf).sum()
                 dist = ((patch - kf) ** 2).sum()
@@ -94,7 +93,7 @@ def test_conv2d_weight_normalized_math_parity():
     y = np.array(layer(x))
 
     W = np.array(layer.kernel)
-    norm = np.sqrt((W ** 2).sum(axis=(1, 2, 3), keepdims=True))
+    norm = np.sqrt((W**2).sum(axis=(1, 2, 3), keepdims=True))
     Wn = W / (norm + 1e-8)
     b = np.array(layer.bias)
     a = float(np.array(layer.alpha)[0])
@@ -109,17 +108,18 @@ def test_conv2d_weight_normalized_filter_norms_after_forward():
     W = np.array(layer.kernel)
     # Re-apply the same normalization the forward pass does — this is the
     # post-norm receipt.
-    norm = np.sqrt((W ** 2).sum(axis=(1, 2, 3), keepdims=True))
+    norm = np.sqrt((W**2).sum(axis=(1, 2, 3), keepdims=True))
     Wn = W / (norm + 1e-8)
-    Wn_norms = np.sqrt((Wn ** 2).sum(axis=(1, 2, 3)))
+    Wn_norms = np.sqrt((Wn**2).sum(axis=(1, 2, 3)))
     assert np.max(np.abs(Wn_norms - 1.0)) < 1e-5
 
 
 def test_conv2d_dropconnect_deterministic_unchanged():
     """DropConnect in deterministic mode must equal plain conv."""
     mx.random.seed(7)
-    layer_dc = YatConv2D(filters=4, kernel_size=3,
-                         use_dropconnect=True, drop_rate=0.3, padding="valid")
+    layer_dc = YatConv2D(
+        filters=4, kernel_size=3, use_dropconnect=True, drop_rate=0.3, padding="valid"
+    )
     _ = layer_dc(mx.zeros((1, 6, 6, 2)))  # build to populate kernel
     layer_plain = YatConv2D(filters=4, kernel_size=3, padding="valid")
     layer_plain.build(2)
@@ -134,8 +134,9 @@ def test_conv2d_dropconnect_deterministic_unchanged():
 
 
 def test_conv2d_dropconnect_stochastic_differs():
-    layer = YatConv2D(filters=4, kernel_size=3,
-                      use_dropconnect=True, drop_rate=0.5, padding="same")
+    layer = YatConv2D(
+        filters=4, kernel_size=3, use_dropconnect=True, drop_rate=0.5, padding="same"
+    )
     x = mx.random.normal(shape=(1, 8, 8, 3))
     _ = layer(x)
     mx.random.seed(0)
@@ -152,9 +153,11 @@ def test_conv2d_dropconnect_invalid_rate_rejected():
 def test_conv2d_weight_normalized_and_dropconnect_combine():
     """Both flags should compose without raising — and stochastic still differs."""
     layer = YatConv2D(
-        filters=4, kernel_size=3,
+        filters=4,
+        kernel_size=3,
         weight_normalized=True,
-        use_dropconnect=True, drop_rate=0.3,
+        use_dropconnect=True,
+        drop_rate=0.3,
         padding="same",
     )
     x = mx.random.normal(shape=(1, 6, 6, 2))
@@ -172,8 +175,9 @@ def test_conv2d_weight_normalized_and_dropconnect_combine():
 
 def test_conv_transpose2d_dropconnect_deterministic_unchanged():
     mx.random.seed(3)
-    layer_dc = YatConvTranspose2D(filters=2, kernel_size=2, strides=2,
-                                  use_dropconnect=True, drop_rate=0.5)
+    layer_dc = YatConvTranspose2D(
+        filters=2, kernel_size=2, strides=2, use_dropconnect=True, drop_rate=0.5
+    )
     _ = layer_dc(mx.zeros((1, 3, 3, 2)))
     layer_plain = YatConvTranspose2D(filters=2, kernel_size=2, strides=2)
     layer_plain.build(2)
@@ -188,8 +192,9 @@ def test_conv_transpose2d_dropconnect_deterministic_unchanged():
 
 
 def test_conv_transpose2d_dropconnect_stochastic_differs():
-    layer = YatConvTranspose2D(filters=2, kernel_size=3, strides=2,
-                               use_dropconnect=True, drop_rate=0.4)
+    layer = YatConvTranspose2D(
+        filters=2, kernel_size=3, strides=2, use_dropconnect=True, drop_rate=0.4
+    )
     x = mx.random.normal(shape=(1, 4, 4, 2))
     _ = layer(x)
     mx.random.seed(11)

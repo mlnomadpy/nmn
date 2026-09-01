@@ -20,7 +20,6 @@ from typing import Optional, Tuple, Union
 import mlx.core as mx
 import mlx.nn as nn
 
-
 __all__ = [
     "normalize_qk",
     "yat_attention_weights",
@@ -74,7 +73,7 @@ def yat_attention_weights(
         dot_product = mx.einsum("bqhd,bkhd->bhqk", query, key)
         squared_dot = dot_product * dot_product
         q_sq = mx.sum(query * query, axis=-1)  # (B, Q, H)
-        k_sq = mx.sum(key * key, axis=-1)      # (B, K, H)
+        k_sq = mx.sum(key * key, axis=-1)  # (B, K, H)
         q_sq = mx.transpose(q_sq, (0, 2, 1))[..., :, None]  # (B, H, Q, 1)
         k_sq = mx.transpose(k_sq, (0, 2, 1))[..., None, :]  # (B, H, 1, K)
         dist_sq = mx.maximum(q_sq + k_sq - 2.0 * dot_product, 0.0)
@@ -121,7 +120,8 @@ def yat_attention(
 ) -> mx.array:
     """Softmax(YAT score) @ V. See ``yat_attention_weights`` for conventions."""
     weights = yat_attention_weights(
-        query, key,
+        query,
+        key,
         mask=mask,
         dropout_rate=dropout_rate,
         training=training,
@@ -146,7 +146,9 @@ def yat_attention_normalized(
 ) -> mx.array:
     """``yat_attention`` with the QK normalization shortcut (``spherical=True``)."""
     return yat_attention(
-        query, key, value,
+        query,
+        key,
+        value,
         mask=mask,
         dropout_rate=dropout_rate,
         training=training,
@@ -259,7 +261,9 @@ class MultiHeadYatAttention(nn.Module):
 
         self.is_built = True
 
-    def _linear(self, x: mx.array, kernel: mx.array, bias: Optional[mx.array]) -> mx.array:
+    def _linear(
+        self, x: mx.array, kernel: mx.array, bias: Optional[mx.array]
+    ) -> mx.array:
         y = x @ kernel
         if bias is not None:
             y = y + bias
@@ -318,7 +322,9 @@ class MultiHeadYatAttention(nn.Module):
             )
 
         x = yat_attention(
-            q, k, v,
+            q,
+            k,
+            v,
             mask=effective_mask,
             dropout_rate=self.dropout if training else 0.0,
             training=training,

@@ -1,8 +1,9 @@
 """YAT dense layer for TensorFlow (tf.Module-based, eager and graph compatible)."""
 
-import tensorflow as tf
 import math
-from typing import Optional, Tuple, Union, List
+from typing import List, Optional, Tuple, Union
+
+import tensorflow as tf
 
 from nmn._epsilon import (
     epsilon_parameter_dtype,
@@ -11,8 +12,8 @@ from nmn._epsilon import (
     validate_epsilon_for_dtype,
 )
 
-from .saved_model import SingleInputSavedModelMixin
 from ._precision import reduction_safe_upcast, saturating_downcast
+from .saved_model import SingleInputSavedModelMixin
 
 # Default constant alpha value (sqrt(2))
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
@@ -73,6 +74,7 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
         x = tf.random.normal([32, 256])
         y = layer(x)  # shape (32, 128) — no activation needed
     """
+
     def __init__(
         self,
         features: int,
@@ -89,7 +91,7 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
         return_weights: bool = False,
         lazy: bool = False,
         freeze_kernel: bool = False,
-        name: Optional[str] = None
+        name: Optional[str] = None,
     ):
         super().__init__(name=name)
         self.features = features
@@ -133,7 +135,7 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
     @tf.Module.with_name_scope
     def build(self, input_shape: Union[List[int], tf.TensorShape]) -> None:
         """Builds the layer weights based on input shape.
-        
+
         Args:
             input_shape: Shape of the input tensor.
         """
@@ -156,26 +158,19 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
         # (it will not appear in self.trainable_variables). bias/alpha/epsilon
         # below stay trainable.
         self.kernel = tf.Variable(
-            initial_kernel,
-            trainable=not self.lazy,
-            name='kernel',
-            dtype=self.dtype
+            initial_kernel, trainable=not self.lazy, name="kernel", dtype=self.dtype
         )
 
         # Initialize alpha (only if learnable)
         if self.use_alpha and self._constant_alpha_value is None:
             self.alpha = tf.Variable(
-                tf.ones([1], dtype=self.dtype),
-                trainable=True,
-                name='alpha'
+                tf.ones([1], dtype=self.dtype), trainable=True, name="alpha"
             )
 
         # Initialize bias if needed (learnable only; constant bias has no Variable)
         if self.use_bias and self._constant_bias_value is None:
             self.bias = tf.Variable(
-                tf.zeros([self.features], dtype=self.dtype),
-                trainable=True,
-                name='bias'
+                tf.zeros([self.features], dtype=self.dtype), trainable=True, name="bias"
             )
 
         # Learnable epsilon parameter (softplus-constrained)
@@ -186,7 +181,7 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
             self.epsilon_param = tf.Variable(
                 tf.constant(raw_eps, shape=[1], dtype=epsilon_dtype),
                 trainable=True,
-                name='epsilon_param',
+                name="epsilon_param",
             )
 
         self.is_built = True
@@ -196,16 +191,20 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
         if not self.is_built:
             self.build(inputs.shape)
         elif self.input_dim != inputs.shape[-1]:
-            raise ValueError(f'Input shape changed: expected last dimension '
-                           f'{self.input_dim}, got {inputs.shape[-1]}')
+            raise ValueError(
+                f"Input shape changed: expected last dimension "
+                f"{self.input_dim}, got {inputs.shape[-1]}"
+            )
 
     @tf.Module.with_name_scope
-    def __call__(self, inputs: tf.Tensor) -> Union[tf.Tensor, Tuple[tf.Tensor, tf.Tensor]]:
+    def __call__(
+        self, inputs: tf.Tensor
+    ) -> Union[tf.Tensor, Tuple[tf.Tensor, tf.Tensor]]:
         """Forward pass of the layer.
-        
+
         Args:
             inputs: Input tensor.
-            
+
         Returns:
             Output tensor or tuple of (output tensor, kernel weights) if return_weights is True.
         """
@@ -248,7 +247,9 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
             # Both x and each W_row are unit vectors → ||x - W||² = 2 - 2(x·W)
             distances = tf.maximum(2.0 - 2.0 * y, 0.0)
         else:
-            inputs_squared_sum = tf.reduce_sum(tf.square(inputs), axis=-1, keepdims=True)
+            inputs_squared_sum = tf.reduce_sum(
+                tf.square(inputs), axis=-1, keepdims=True
+            )
             if self.weight_normalized:
                 # ||W_row||² = 1 for each neuron
                 kernel_squared_sum = tf.ones([self.features], dtype=kernel.dtype)
@@ -257,8 +258,7 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
 
             # Reshape kernel_squared_sum for broadcasting
             kernel_squared_sum = tf.reshape(
-                kernel_squared_sum,
-                [1] * (len(inputs.shape) - 1) + [self.features]
+                kernel_squared_sum, [1] * (len(inputs.shape) - 1) + [self.features]
             )
 
             distances = tf.maximum(inputs_squared_sum + kernel_squared_sum - 2 * y, 0.0)

@@ -25,7 +25,6 @@ import numpy as np
 
 from .attention import yat_attention_weights
 
-
 __all__ = [
     "precompute_freqs_cis",
     "apply_rotary_emb",
@@ -48,7 +47,7 @@ def _splice(cache: mx.array, new: mx.array, start: int) -> mx.array:
     """
     L = new.shape[1]
     prefix = cache[:, :start]
-    suffix = cache[:, start + L:]
+    suffix = cache[:, start + L :]
     return mx.concatenate([prefix, new, suffix], axis=1)
 
 
@@ -100,8 +99,8 @@ def apply_rotary_emb(
             f"exceeds it."
         )
 
-    cos = freqs_cos[position_offset:position_offset + seq_len]
-    sin = freqs_sin[position_offset:position_offset + seq_len]
+    cos = freqs_cos[position_offset : position_offset + seq_len]
+    sin = freqs_sin[position_offset : position_offset + seq_len]
 
     x_even = x[..., 0::2]
     x_odd = x[..., 1::2]
@@ -137,7 +136,8 @@ def rotary_yat_attention_weights(
     q_rot = apply_rotary_emb(query, freqs_cos, freqs_sin, position_offset)
     k_rot = apply_rotary_emb(key, freqs_cos, freqs_sin, position_offset)
     return yat_attention_weights(
-        q_rot, k_rot,
+        q_rot,
+        k_rot,
         mask=mask,
         dropout_rate=dropout_rate,
         training=training,
@@ -164,8 +164,10 @@ def rotary_yat_attention(
 ) -> mx.array:
     """RoPE → YAT attention → V."""
     weights = rotary_yat_attention_weights(
-        query, key,
-        freqs_cos, freqs_sin,
+        query,
+        key,
+        freqs_cos,
+        freqs_sin,
         mask=mask,
         dropout_rate=dropout_rate,
         training=training,
@@ -226,9 +228,7 @@ class RotaryYatAttention(nn.Module):
             )
         head_dim = embed_dim // num_heads
         if head_dim % 2 != 0:
-            raise ValueError(
-                f"head_dim ({head_dim}) must be even for RoPE."
-            )
+            raise ValueError(f"head_dim ({head_dim}) must be even for RoPE.")
         if epsilon <= 0:
             raise ValueError(f"epsilon must be positive, got {epsilon}")
 
@@ -401,9 +401,7 @@ class RotaryYatAttention(nn.Module):
 
             # Rotate Q by the new tokens' positions (cache_old..cache_old+L-1)
             # and the *full* cached K by absolute positions 0..cache_new-1.
-            q_rot = apply_rotary_emb(
-                q, self.freqs_cos, self.freqs_sin, cache_old
-            )
+            q_rot = apply_rotary_emb(q, self.freqs_cos, self.freqs_sin, cache_old)
             k_full = self.cached_key[:, :cache_new]
             v_full = self.cached_value[:, :cache_new]
             k_rot = apply_rotary_emb(k_full, self.freqs_cos, self.freqs_sin, 0)
@@ -413,8 +411,8 @@ class RotaryYatAttention(nn.Module):
             # token decode (L=1) collapses to "see everything" which is
             # already correct.
             if L > 1:
-                i_idx = np.arange(L)[:, None]                 # (L, 1)
-                j_idx = np.arange(cache_new)[None, :]         # (1, K)
+                i_idx = np.arange(L)[:, None]  # (L, 1)
+                j_idx = np.arange(cache_new)[None, :]  # (1, K)
                 causal = (j_idx <= cache_old + i_idx)[None, None]
                 user_mask_np = None if mask is None else np.array(mask)
                 if user_mask_np is None:
@@ -431,7 +429,8 @@ class RotaryYatAttention(nn.Module):
             from .attention import yat_attention_weights as _yaw
 
             weights = _yaw(
-                q_rot, k_rot,
+                q_rot,
+                k_rot,
                 mask=full_mask,
                 dropout_rate=self.dropout if training else 0.0,
                 training=training,
@@ -444,8 +443,11 @@ class RotaryYatAttention(nn.Module):
         else:
             alpha_val, scale_val = self._alpha_pair()
             out = rotary_yat_attention(
-                q, k, v,
-                self.freqs_cos, self.freqs_sin,
+                q,
+                k,
+                v,
+                self.freqs_cos,
+                self.freqs_sin,
                 mask=mask,
                 dropout_rate=self.dropout if training else 0.0,
                 training=training,
@@ -465,9 +467,7 @@ class RotaryYatAttention(nn.Module):
                 effective_mask.astype(mx.bool_),
                 (B, self.num_heads, L, attention_k_len),
             )
-            query_has_key = mx.any(
-                effective_mask, axis=(-3, -1)
-            )
+            query_has_key = mx.any(effective_mask, axis=(-3, -1))
             out = mx.where(query_has_key[..., None], out, mx.zeros_like(out))
         return out
 

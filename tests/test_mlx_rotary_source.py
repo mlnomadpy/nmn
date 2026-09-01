@@ -3,7 +3,6 @@
 import ast
 from pathlib import Path
 
-
 ROTARY_SOURCE = Path(__file__).parents[1] / "src" / "nmn" / "mlx" / "rotary.py"
 
 

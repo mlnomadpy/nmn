@@ -27,8 +27,11 @@ def _build(model, in_dim=8):
 
 
 def test_lazy_excludes_kernel_keeps_rest_trainable():
-    m = _build(YatNMN(features=6, use_bias=True, use_alpha=True,
-                      learnable_epsilon=True, lazy=True))
+    m = _build(
+        YatNMN(
+            features=6, use_bias=True, use_alpha=True, learnable_epsilon=True, lazy=True
+        )
+    )
     keys = _trainable_keys(m)
     assert not any("kernel" in k for k in keys)
     assert any("bias" in k for k in keys)
@@ -44,8 +47,9 @@ def test_freeze_kernel_alias():
 
 
 def test_lazy_false_is_backward_compatible():
-    m = _build(YatNMN(features=6, use_bias=True, use_alpha=True,
-                      learnable_epsilon=True))
+    m = _build(
+        YatNMN(features=6, use_bias=True, use_alpha=True, learnable_epsilon=True)
+    )
     keys = _trainable_keys(m)
     # Default: everything trainable, including the kernel.
     assert any("kernel" in k for k in keys)
@@ -92,8 +96,16 @@ def test_lazy_training_step_kernel_unchanged_others_change():
 
     # Start epsilon away from the tiny 1e-5 default so softplus has a usable
     # slope and the epsilon gradient is non-negligible for the smoke test.
-    m = _build(YatNMN(features=6, use_bias=True, use_alpha=True,
-                      learnable_epsilon=True, epsilon=1.0, lazy=True))
+    m = _build(
+        YatNMN(
+            features=6,
+            use_bias=True,
+            use_alpha=True,
+            learnable_epsilon=True,
+            epsilon=1.0,
+            lazy=True,
+        )
+    )
     x = mx.random.normal(shape=(8, 8))
     target = mx.random.normal(shape=(8, 6))
 

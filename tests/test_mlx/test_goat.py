@@ -60,7 +60,9 @@ def test_mask_zeroes_disallowed_positions():
     b, eps = _pos_scalars(H)
     # forbid the last key for every query (True = attend)
     mask = mx.concatenate([mx.ones((B, H, L, L - 1)), mx.zeros((B, H, L, 1))], axis=-1)
-    w = np.array(goat_yat_attention_weights(q, q, b, eps, mask=mask, self_mask=True))[0, 0]
+    w = np.array(goat_yat_attention_weights(q, q, b, eps, mask=mask, self_mask=True))[
+        0, 0
+    ]
     np.testing.assert_allclose(w[:, -1], 0.0, atol=1e-7)
 
 

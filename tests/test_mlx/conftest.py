@@ -6,12 +6,12 @@ matmuls accumulate at a lower precision than numpy CPU fp32, so the
 meaningful on the CPU device. End-users on GPU should expect ~1e-3
 drift — that is a property of Metal's matmul kernel, not the layer.
 """
+
 from __future__ import annotations
 
 import pytest
 
 from tests._isolated_backend import mlx_is_usable
-
 
 # A plain ``pytest.importorskip`` cannot catch a native abort.  Ignore the MLX
 # modules before collection unless a child process can both import MLX and

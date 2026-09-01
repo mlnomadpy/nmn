@@ -13,6 +13,7 @@ framework's feature maps are then evaluated against that shared ground truth.
 Run:  python3 tests/scripts/benchmark_may_ray.py
 Frameworks that are not installed are skipped automatically.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -71,7 +72,9 @@ def adapter_nnx():
     try:
         import jax.numpy as jnp
         from jax import random
-        from nmn.nnx.layers.attention import maclaurin_yat as m, radial_yat as r
+
+        from nmn.nnx.layers.attention import maclaurin_yat as m
+        from nmn.nnx.layers.attention import radial_yat as r
         from nmn.nnx.layers.attention import spherical_yat_performer as s
     except Exception:
         return None
@@ -80,15 +83,32 @@ def adapter_nnx():
         return jnp.asarray(_reshape_in(x))
 
     def may(q, k, v, b, eps, seed):
-        p = m.create_maclaurin_projection(random.PRNGKey(seed), D, num_features=F, bias=b, epsilon=eps)
+        p = m.create_maclaurin_projection(
+            random.PRNGKey(seed), D, num_features=F, bias=b, epsilon=eps
+        )
         return _reshape_out(m.maclaurin_yat_attention(to(q), to(k), to(v), p))
 
     def ray(q, k, v, b, eps, seed):
-        p = r.create_radial_projection(random.PRNGKey(seed), D, sketch_m=8, num_radial=4, radial_dim=8, bias=b, epsilon=eps)
+        p = r.create_radial_projection(
+            random.PRNGKey(seed),
+            D,
+            sketch_m=8,
+            num_radial=4,
+            radial_dim=8,
+            bias=b,
+            epsilon=eps,
+        )
         return _reshape_out(r.radial_yat_attention(to(q), to(k), to(v), p))
 
     def slay(q, k, v, b, eps, seed):
-        p = s.create_yat_tp_projection(random.PRNGKey(seed), D, num_prf_features=8, num_quad_nodes=1, num_anchor_features=32, epsilon=eps)
+        p = s.create_yat_tp_projection(
+            random.PRNGKey(seed),
+            D,
+            num_prf_features=8,
+            num_quad_nodes=1,
+            num_anchor_features=32,
+            epsilon=eps,
+        )
         return _reshape_out(s.yat_tp_attention(to(q), to(k), to(v), p))
 
     return {"MAY": may, "RAY": ray, "SLAY": slay}
@@ -98,6 +118,7 @@ def adapter_linen():
     try:
         import jax.numpy as jnp
         from jax import random
+
         from nmn.linen import performer_yat as p
     except Exception:
         return None
@@ -106,11 +127,21 @@ def adapter_linen():
         return jnp.asarray(_reshape_in(x))
 
     def may(q, k, v, b, eps, seed):
-        pr = p.create_maclaurin_projection(random.PRNGKey(seed), D, num_features=F, bias=b, epsilon=eps)
+        pr = p.create_maclaurin_projection(
+            random.PRNGKey(seed), D, num_features=F, bias=b, epsilon=eps
+        )
         return _reshape_out(p.maclaurin_yat_attention(to(q), to(k), to(v), pr))
 
     def ray(q, k, v, b, eps, seed):
-        pr = p.create_radial_projection(random.PRNGKey(seed), D, sketch_m=8, num_radial=4, radial_dim=8, bias=b, epsilon=eps)
+        pr = p.create_radial_projection(
+            random.PRNGKey(seed),
+            D,
+            sketch_m=8,
+            num_radial=4,
+            radial_dim=8,
+            bias=b,
+            epsilon=eps,
+        )
         return _reshape_out(p.radial_yat_attention(to(q), to(k), to(v), pr))
 
     return {"MAY": may, "RAY": ray}
@@ -119,6 +150,7 @@ def adapter_linen():
 def adapter_torch():
     try:
         import torch
+
         from nmn.torch.attention import performer_yat as p
     except Exception:
         return None
@@ -128,11 +160,15 @@ def adapter_torch():
 
     def may(q, k, v, b, eps, seed):
         torch.manual_seed(seed)
-        pr = p.create_maclaurin_projection(D, num_features=F, bias=b, epsilon=eps, seed=seed)
+        pr = p.create_maclaurin_projection(
+            D, num_features=F, bias=b, epsilon=eps, seed=seed
+        )
         return _reshape_out(p.maclaurin_yat_attention(to(q), to(k), to(v), pr).detach())
 
     def ray(q, k, v, b, eps, seed):
-        pr = p.create_radial_projection(D, sketch_m=8, num_radial=4, radial_dim=8, bias=b, epsilon=eps, seed=seed)
+        pr = p.create_radial_projection(
+            D, sketch_m=8, num_radial=4, radial_dim=8, bias=b, epsilon=eps, seed=seed
+        )
         return _reshape_out(p.radial_yat_attention(to(q), to(k), to(v), pr).detach())
 
     return {"MAY": may, "RAY": ray}
@@ -141,7 +177,10 @@ def adapter_torch():
 def adapter_mlx():
     try:
         import mlx.core as mx
-        from nmn.mlx import may as mmay, ray as mray, performer as mslay
+
+        from nmn.mlx import may as mmay
+        from nmn.mlx import performer as mslay
+        from nmn.mlx import ray as mray
     except Exception:
         return None
 
@@ -149,15 +188,26 @@ def adapter_mlx():
         return mx.array(_reshape_in(x).astype(np.float32))
 
     def may(q, k, v, b, eps, seed):
-        pr = mmay.create_maclaurin_projection(D, num_features=F, bias=b, epsilon=eps, seed=seed)
+        pr = mmay.create_maclaurin_projection(
+            D, num_features=F, bias=b, epsilon=eps, seed=seed
+        )
         return _reshape_out(mmay.maclaurin_yat_attention(to(q), to(k), to(v), pr))
 
     def ray(q, k, v, b, eps, seed):
-        pr = mray.create_radial_projection(D, sketch_m=8, num_radial=4, radial_dim=8, bias=b, epsilon=eps, seed=seed)
+        pr = mray.create_radial_projection(
+            D, sketch_m=8, num_radial=4, radial_dim=8, bias=b, epsilon=eps, seed=seed
+        )
         return _reshape_out(mray.radial_yat_attention(to(q), to(k), to(v), pr))
 
     def slay(q, k, v, b, eps, seed):
-        pr = mslay.create_yat_tp_projection(D, num_prf_features=8, num_quad_nodes=1, num_anchor_features=32, epsilon=eps, seed=seed)
+        pr = mslay.create_yat_tp_projection(
+            D,
+            num_prf_features=8,
+            num_quad_nodes=1,
+            num_anchor_features=32,
+            epsilon=eps,
+            seed=seed,
+        )
         return _reshape_out(mslay.yat_tp_attention(to(q), to(k), to(v), pr))
 
     return {"MAY": may, "RAY": ray, "SLAY": slay}

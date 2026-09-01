@@ -13,11 +13,10 @@ mlx_optim = pytest.importorskip("mlx.optimizers")
 
 from nmn.mlx import (  # noqa: E402
     MultiHeadYatAttention,
+    normalize_qk,
     yat_attention,
     yat_attention_weights,
-    normalize_qk,
 )
-
 
 # ---------------------------------------------------------------------------
 # Functional helpers
@@ -103,9 +102,7 @@ def test_yat_attention_spherical_shape():
 def test_negative_scale_cannot_make_masked_key_win_softmax():
     q = mx.ones((1, 1, 1, 4))
     k = mx.ones((1, 2, 1, 4))
-    weights = yat_attention_weights(
-        q, k, mask=mx.array([True, False]), scale=-1.0
-    )
+    weights = yat_attention_weights(q, k, mask=mx.array([True, False]), scale=-1.0)
     mx.eval(weights)
     np.testing.assert_array_equal(np.asarray(weights), [[[[1.0, 0.0]]]])
 
@@ -163,14 +160,18 @@ def test_mha_fully_masked_rows_stay_zero_after_biased_projection(
     mask_np = np.ones(shape, dtype=bool)
     mask_np[..., 0, :] = False
     mask = mx.array(mask_np)
-    output = mha(query, context, context, mask=mask) if cross_attention else mha(query, mask=mask)
+    output = (
+        mha(query, context, context, mask=mask)
+        if cross_attention
+        else mha(query, mask=mask)
+    )
     mx.eval(output)
     np.testing.assert_array_equal(np.asarray(output[:, 0]), 0.0)
     assert np.all(np.isfinite(np.asarray(output)))
     if cross_attention:
-        grads = mx.grad(
-            lambda q, c: mx.sum(mha(q, c, c, mask=mask)), argnums=(0, 1)
-        )(query, context)
+        grads = mx.grad(lambda q, c: mx.sum(mha(q, c, c, mask=mask)), argnums=(0, 1))(
+            query, context
+        )
     else:
         grads = (mx.grad(lambda q: mx.sum(mha(q, mask=mask)))(query),)
     mx.eval(*grads)
@@ -208,7 +209,9 @@ def test_mha_gradient_reduces_loss():
     grad_fn = mlx_nn.value_and_grad(mha, loss_fn)
     loss, grads = grad_fn(mha, x, y)
     # Should have grads for at least the four projection kernels and alpha.
-    assert {"q_kernel", "k_kernel", "v_kernel", "out_kernel", "alpha"} <= set(grads.keys())
+    assert {"q_kernel", "k_kernel", "v_kernel", "out_kernel", "alpha"} <= set(
+        grads.keys()
+    )
 
     opt = mlx_optim.AdamW(learning_rate=1e-2)
     opt.update(mha, grads)

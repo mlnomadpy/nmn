@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 try:
@@ -242,16 +242,20 @@ def test_dilation_aware_output_shape_matches_runtime(
     effective_kernel = dilation_value * 2 + 1
     if is_transpose:
         expected_spatial = tuple(
-            size * stride_value
-            if padding == "same"
-            else (size - 1) * stride_value + effective_kernel
+            (
+                size * stride_value
+                if padding == "same"
+                else (size - 1) * stride_value + effective_kernel
+            )
             for size in input_shape[1:-1]
         )
     else:
         expected_spatial = tuple(
-            (size + stride_value - 1) // stride_value
-            if padding == "same"
-            else (size - effective_kernel) // stride_value + 1
+            (
+                (size + stride_value - 1) // stride_value
+                if padding == "same"
+                else (size - effective_kernel) // stride_value + 1
+            )
             for size in input_shape[1:-1]
         )
     computed = tuple(layer.compute_output_shape(input_shape))
@@ -337,7 +341,9 @@ def test_kernel_bank_capacity_smaller_than_filters_is_rejected_before_state(laye
     assert not layer_cls._KERNEL_BANKS
 
 
-def test_tied_kernel_bank_functional_save_load_preserves_sharing_and_optimizer(tmp_path):
+def test_tied_kernel_bank_functional_save_load_preserves_sharing_and_optimizer(
+    tmp_path,
+):
     YatConv1D._KERNEL_BANKS.clear()
     inputs = keras.Input((5, 1))
     common = dict(
@@ -367,10 +373,7 @@ def test_tied_kernel_bank_functional_save_load_preserves_sharing_and_optimizer(t
 
     clone = keras.models.clone_model(model)
     clone.set_weights(model.get_weights())
-    assert (
-        clone.get_layer("bank_first").kernel
-        is clone.get_layer("bank_second").kernel
-    )
+    assert clone.get_layer("bank_first").kernel is clone.get_layer("bank_second").kernel
     np.testing.assert_allclose(to_numpy(clone(sample)), reference, rtol=1e-6)
 
     path = tmp_path / "tied-bank.keras"
@@ -461,9 +464,7 @@ def test_tied_kernel_banks_are_separated_by_effective_dtype_policy(dtype):
     ],
 )
 @pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
-def test_low_precision_exact_matches_are_finite_for_every_conv_family(
-    layer_cls, dtype
-):
+def test_low_precision_exact_matches_are_finite_for_every_conv_family(layer_cls, dtype):
     rank = 1 if "1D" in layer_cls.__name__ else 2 if "2D" in layer_cls.__name__ else 3
     input_shape = (1,) + (1,) * rank + (1,)
     value = tensor(np.full(input_shape, 0.5), dtype)
@@ -718,5 +719,7 @@ def test_keras_extra_declares_keras3_without_tensorflow():
     )["project"]["optional-dependencies"]
 
     assert metadata["keras"] == ["keras>=3.0.0"]
-    assert all("tensorflow" not in requirement.lower() for requirement in metadata["keras"])
+    assert all(
+        "tensorflow" not in requirement.lower() for requirement in metadata["keras"]
+    )
     assert any("tensorflow" in requirement.lower() for requirement in metadata["tf"])

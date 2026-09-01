@@ -29,9 +29,7 @@ def _assert_tree_allclose(actual, expected, *, rtol=2e-5, atol=2e-6):
 
 
 def test_attention_normalization_preserves_positional_epsilon_abi_and_validates():
-    layer = MultiHeadAttention(
-        2, None, None, 0.0, True, True, None, False, False, 1e-4
-    )
+    layer = MultiHeadAttention(2, None, None, 0.0, True, True, None, False, False, 1e-4)
     assert layer.epsilon == 1e-4
     assert layer.normalization == "softmax"
 
@@ -61,9 +59,7 @@ def test_attention_constant_and_matched_learnable_alpha_have_same_stage_and_vjp(
     q = jax.random.normal(jax.random.key(1), (2, 3, 6))
     k = jax.random.normal(jax.random.key(2), (2, 4, 6))
     v = jax.random.normal(jax.random.key(3), (2, 4, 6))
-    learnable_params = unfreeze(
-        learnable.init(jax.random.key(0), q, k, v)["params"]
-    )
+    learnable_params = unfreeze(learnable.init(jax.random.key(0), q, k, v)["params"])
     learnable_params["alpha"] = jnp.asarray([alpha], dtype=jnp.float32)
 
     # Synchronize every shared projection parameter.  The constant model must
@@ -143,9 +139,7 @@ def _grouped_reference(params, inputs, kernel_size, dimension_spec, groups):
             channel_start = group * input_channels_per_group
             channel_stop = channel_start + input_channels_per_group
             patch = inputs[
-                (slice(None),)
-                + spatial_slices
-                + (slice(channel_start, channel_stop),)
+                (slice(None),) + spatial_slices + (slice(channel_start, channel_stop),)
             ]
             filter_kernel = kernel[..., output_channel]
             reduction_axes = tuple(range(1, patch.ndim))
@@ -160,9 +154,7 @@ def _grouped_reference(params, inputs, kernel_size, dimension_spec, groups):
         positions.append(jnp.stack(channels, axis=-1))
 
     scores = jnp.stack(positions, axis=1)
-    scores = scores.reshape(
-        (inputs.shape[0],) + output_spatial + (kernel.shape[-1],)
-    )
+    scores = scores.reshape((inputs.shape[0],) + output_spatial + (kernel.shape[-1],))
     return scores * params["alpha"]
 
 
@@ -183,9 +175,7 @@ def test_grouped_convolution_matches_synchronized_reference_forward_and_vjp(
     params = layer.init(jax.random.key(20), inputs)["params"]
 
     actual = layer.apply({"params": params}, inputs)
-    expected = _grouped_reference(
-        params, inputs, kernel_size, dimension_spec, groups
-    )
+    expected = _grouped_reference(params, inputs, kernel_size, dimension_spec, groups)
     np.testing.assert_allclose(actual, expected, rtol=2e-5, atol=2e-6)
 
     cotangent = jnp.linspace(-0.8, 0.6, actual.size).reshape(actual.shape)

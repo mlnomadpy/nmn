@@ -17,11 +17,11 @@ pytest.importorskip("tensorflow")
 keras = pytest.importorskip("keras")
 
 from nmn.keras.performer_yat import (
-    maclaurin_coeffs,
     create_maclaurin_projection,
+    create_radial_projection,
+    maclaurin_coeffs,
     maclaurin_features,
     maclaurin_yat_attention,
-    create_radial_projection,
     radial_features,
     radial_yat_attention,
 )
@@ -105,7 +105,9 @@ def test_maclaurin_coeffs_nonnegative():
 # --------------------------------------------------------------------------
 def test_may_feature_shape():
     d, M = 16, 64
-    params = create_maclaurin_projection(d, num_features=M, bias=1.0, epsilon=0.05, seed=0)
+    params = create_maclaurin_projection(
+        d, num_features=M, bias=1.0, epsilon=0.05, seed=0
+    )
     x = np.random.randn(2, 5, 4, d).astype(np.float32)
     feat = np.array(maclaurin_features(x, params))
     assert feat.shape == (2, 5, 4, M)
@@ -113,7 +115,9 @@ def test_may_feature_shape():
 
 def test_may_no_nan_inf():
     d, M = 16, 64
-    params = create_maclaurin_projection(d, num_features=M, bias=1.0, epsilon=0.05, seed=0)
+    params = create_maclaurin_projection(
+        d, num_features=M, bias=1.0, epsilon=0.05, seed=0
+    )
     x = np.random.randn(2, 5, 4, d).astype(np.float32)
     feat = np.array(maclaurin_features(x, params))
     assert np.all(np.isfinite(feat))
@@ -131,7 +135,9 @@ def test_may_determinism():
 
 def test_may_attention_shape_and_finite():
     d, M = 16, 128
-    params = create_maclaurin_projection(d, num_features=M, bias=1.0, epsilon=0.05, seed=0)
+    params = create_maclaurin_projection(
+        d, num_features=M, bias=1.0, epsilon=0.05, seed=0
+    )
     q = np.random.randn(2, 6, 3, d).astype(np.float32)
     k = np.random.randn(2, 8, 3, d).astype(np.float32)
     v = np.random.randn(2, 8, 3, 10).astype(np.float32)
@@ -142,7 +148,9 @@ def test_may_attention_shape_and_finite():
 
 def test_may_causal_shape():
     d, M = 16, 64
-    params = create_maclaurin_projection(d, num_features=M, bias=1.0, epsilon=0.05, seed=0)
+    params = create_maclaurin_projection(
+        d, num_features=M, bias=1.0, epsilon=0.05, seed=0
+    )
     q = np.random.randn(2, 7, 2, d).astype(np.float32)
     v = np.random.randn(2, 7, 2, d).astype(np.float32)
     out = np.array(maclaurin_yat_attention(q, q, v, params, causal=True))
@@ -165,7 +173,9 @@ def test_may_inner_product_tracks_kappa():
     # Average the (high-variance, unbiased) inner product over several seeds.
     ips = []
     for seed in range(40):
-        params = create_maclaurin_projection(d, num_features=M, bias=b, epsilon=eps, seed=seed)
+        params = create_maclaurin_projection(
+            d, num_features=M, bias=b, epsilon=eps, seed=seed
+        )
         qf = np.array(maclaurin_features(q, params))
         kf = np.array(maclaurin_features(k, params))
         ips.append((qf * kf).sum(-1))
@@ -189,7 +199,9 @@ def test_may_more_features_better():
         # average over seeds to reduce variance of the estimate
         cs = []
         for seed in range(5):
-            p = create_maclaurin_projection(d, num_features=M, bias=b, epsilon=eps, seed=seed)
+            p = create_maclaurin_projection(
+                d, num_features=M, bias=b, epsilon=eps, seed=seed
+            )
             qf = np.array(maclaurin_features(q, p))
             kf = np.array(maclaurin_features(k, p))
             out = _linear_attention_np(qf, kf, v)
@@ -213,7 +225,9 @@ def test_may_beats_slay_at_b1():
         eps = _median_sq_distance(_normalize_rows(q), _normalize_rows(k))
         exact = _exact_attention(q, k, v, b, eps)
 
-        mp = create_maclaurin_projection(d, num_features=F, bias=b, epsilon=eps, seed=seed)
+        mp = create_maclaurin_projection(
+            d, num_features=F, bias=b, epsilon=eps, seed=seed
+        )
         qf = np.array(maclaurin_features(q, mp))
         kf = np.array(maclaurin_features(k, mp))
         may_out = _linear_attention_np(qf, kf, v)
@@ -243,8 +257,12 @@ def test_ray_feature_shape():
 def test_ray_determinism():
     d = 16
     x = np.random.randn(2, 5, 3, d).astype(np.float32)
-    p1 = create_radial_projection(d, sketch_m=8, num_radial=4, radial_dim=8, bias=1.0, epsilon=0.05, seed=1)
-    p2 = create_radial_projection(d, sketch_m=8, num_radial=4, radial_dim=8, bias=1.0, epsilon=0.05, seed=1)
+    p1 = create_radial_projection(
+        d, sketch_m=8, num_radial=4, radial_dim=8, bias=1.0, epsilon=0.05, seed=1
+    )
+    p2 = create_radial_projection(
+        d, sketch_m=8, num_radial=4, radial_dim=8, bias=1.0, epsilon=0.05, seed=1
+    )
     np.testing.assert_allclose(
         np.array(radial_features(x, p1)), np.array(radial_features(x, p2)), atol=1e-6
     )

@@ -6,10 +6,10 @@ from typing import Optional, Union
 import torch
 import torch.nn as nn
 from torch import Tensor
+from torch.nn import Conv1d
 from torch.nn import functional as F
 from torch.nn.common_types import _size_1_t
 from torch.nn.parameter import Parameter
-from torch.nn import Conv1d
 
 from ._yat_conv_core import (
     apply_preserving_epsilon_dtype,
@@ -42,7 +42,7 @@ class YatConv1D(Conv1d):
         param_dtype: dtype for parameter initialization (default: None, uses
             PyTorch Conv1d default). Separate from computation dtype.
     """
-    
+
     # Class-level shared kernel banks
     _KERNEL_BANKS = {}
     _KERNEL_BANK_USED = {}
@@ -72,14 +72,14 @@ class YatConv1D(Conv1d):
         weight_normalized: bool = False,
         tie_kernel_bank: bool = False,
         kernel_bank_size: Optional[int] = None,
-        kernel_bank_id: str = 'default',
+        kernel_bank_id: str = "default",
         device=None,
         dtype=None,
         param_dtype=None,
     ) -> None:
         # param_dtype controls parameter storage; dtype controls computation
         storage_dtype = param_dtype if param_dtype is not None else dtype
-        
+
         # Handle shared kernel bank
         if tie_kernel_bank:
             bank_out_channels = kernel_bank_size or out_channels
@@ -93,7 +93,9 @@ class YatConv1D(Conv1d):
 
         # If constant_bias or scalar_bias is set, don't allocate a per-channel
         # learnable bias in the parent — we handle bias ourselves.
-        parent_bias = not (tie_kernel_bank or constant_bias is not None or scalar_bias) and bias
+        parent_bias = (
+            not (tie_kernel_bank or constant_bias is not None or scalar_bias) and bias
+        )
 
         super().__init__(
             in_channels,
@@ -116,18 +118,24 @@ class YatConv1D(Conv1d):
         self.kernel_bank_id = kernel_bank_id
         self._kernel_slice = slice(None, out_channels)
         self._actual_out_channels = out_channels
-        
+
         # Normalize kernel if requested
         if self.weight_normalized:
             reduce_dims = tuple(range(1, self.weight.dim()))
-            kernel_norm = torch.sqrt(torch.sum(self.weight**2, dim=reduce_dims, keepdim=True))
+            kernel_norm = torch.sqrt(
+                torch.sum(self.weight**2, dim=reduce_dims, keepdim=True)
+            )
             self.weight.data = self.weight.data / (kernel_norm + 1e-8)
-        
+
         # Handle auto-expanding shared kernel bank
         if tie_kernel_bank:
             bank_key = (
-                kernel_bank_id, in_channels, tuple(self.kernel_size), groups,
-                self.weight.dtype, self.weight.device,
+                kernel_bank_id,
+                in_channels,
+                tuple(self.kernel_size),
+                groups,
+                self.weight.dtype,
+                self.weight.device,
             )
             with YatConv1D._KERNEL_BANKS_LOCK:
                 shared_weight = YatConv1D._KERNEL_BANKS.get(bank_key)
@@ -135,9 +143,13 @@ class YatConv1D(Conv1d):
                     YatConv1D._KERNEL_BANKS[bank_key] = self.weight
                     YatConv1D._KERNEL_BANK_USED[bank_key] = False
                 else:
-                    if (shared_weight.device != self.weight.device
-                            or shared_weight.dtype != self.weight.dtype):
-                        raise RuntimeError("shared kernel bank device/dtype registry is stale")
+                    if (
+                        shared_weight.device != self.weight.device
+                        or shared_weight.dtype != self.weight.dtype
+                    ):
+                        raise RuntimeError(
+                            "shared kernel bank device/dtype registry is stale"
+                        )
                     existing_channels = shared_weight.shape[0]
                     if bank_out_channels > existing_channels:
                         if YatConv1D._KERNEL_BANK_USED.get(bank_key, False):
@@ -170,12 +182,20 @@ class YatConv1D(Conv1d):
 
         setup_yat_attrs(
             self,
-            bias=bias, constant_bias=constant_bias,
-            softplus_bias=softplus_bias, scalar_bias=scalar_bias,
-            use_alpha=use_alpha, constant_alpha=constant_alpha,
-            use_dropconnect=use_dropconnect, drop_rate=drop_rate, mask=mask,
-            epsilon=epsilon, learnable_epsilon=learnable_epsilon,
-            storage_dtype=storage_dtype, compute_dtype=dtype, device=device,
+            bias=bias,
+            constant_bias=constant_bias,
+            softplus_bias=softplus_bias,
+            scalar_bias=scalar_bias,
+            use_alpha=use_alpha,
+            constant_alpha=constant_alpha,
+            use_dropconnect=use_dropconnect,
+            drop_rate=drop_rate,
+            mask=mask,
+            epsilon=epsilon,
+            learnable_epsilon=learnable_epsilon,
+            storage_dtype=storage_dtype,
+            compute_dtype=dtype,
+            device=device,
         )
 
     def forward(self, input: Tensor, *, deterministic: bool = False) -> Tensor:
@@ -184,13 +204,17 @@ class YatConv1D(Conv1d):
             with YatConv1D._KERNEL_BANKS_LOCK:
                 YatConv1D._KERNEL_BANK_USED[self._kernel_bank_key] = True
             return yat_conv_forward(
-                self, input, F.conv1d,
+                self,
+                input,
+                F.conv1d,
                 out_channels=out_channels,
                 deterministic=deterministic,
                 weight_override=self.weight[self._kernel_slice],
             )
         return yat_conv_forward(
-            self, input, F.conv1d,
+            self,
+            input,
+            F.conv1d,
             out_channels=out_channels,
             deterministic=deterministic,
         )
@@ -201,6 +225,4 @@ class YatConv1D(Conv1d):
                 "device/dtype migration is unsupported for tied kernel-bank "
                 "consumers; construct them with the target device and dtype"
             )
-        return apply_preserving_epsilon_dtype(
-            self, fn, super()._apply, recurse=recurse
-        )
+        return apply_preserving_epsilon_dtype(self, fn, super()._apply, recurse=recurse)

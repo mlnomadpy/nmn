@@ -53,10 +53,9 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax import random
 from flax.nnx.nn.dtypes import promote_dtype
 from flax.typing import Dtype, PrecisionLike
-from jax import Array
+from jax import Array, random
 
 from .maclaurin_yat import _linear_readout
 
@@ -105,31 +104,34 @@ def create_radial_projection(
     # Radial RFF via Gauss-Laguerre over the exponential-integral representation
     # 1/(eps + r^2) = int_0^inf e^{-t(eps + r^2)} dt.
     tau, wq = np.polynomial.laguerre.laggauss(num_radial)
-    t_nodes = tau / epsilon                 # t_j = tau_j / eps
-    coef = (1.0 / epsilon) * wq             # (1/eps) w_j
+    t_nodes = tau / epsilon  # t_j = tau_j / eps
+    coef = (1.0 / epsilon) * wq  # (1/eps) w_j
 
     omegas_list, phases_list = [], []
     for tj in t_nodes:
         key, ko, kp = random.split(key, 3)
         omegas_list.append(
-            random.normal(ko, (radial_dim, da), dtype=dtype) * jnp.sqrt(2.0 * tj).astype(dtype)
+            random.normal(ko, (radial_dim, da), dtype=dtype)
+            * jnp.sqrt(2.0 * tj).astype(dtype)
         )
         phases_list.append(
-            random.uniform(kp, (radial_dim,), dtype=dtype, minval=0.0, maxval=2.0 * np.pi)
+            random.uniform(
+                kp, (radial_dim,), dtype=dtype, minval=0.0, maxval=2.0 * np.pi
+            )
         )
 
     return {
-        'W1': W1,
-        'W2': W2,
-        'omegas': jnp.stack(omegas_list),     # [num_radial, D, d+1]
-        'phases': jnp.stack(phases_list),     # [num_radial, D]
-        'coef': jnp.asarray(coef, dtype=dtype),
-        'bias': bias,
-        'sketch_m': sketch_m,
-        'radial_dim': radial_dim,
-        'num_radial': num_radial,
-        'head_dim': head_dim,
-        'epsilon': epsilon,
+        "W1": W1,
+        "W2": W2,
+        "omegas": jnp.stack(omegas_list),  # [num_radial, D, d+1]
+        "phases": jnp.stack(phases_list),  # [num_radial, D]
+        "coef": jnp.asarray(coef, dtype=dtype),
+        "bias": bias,
+        "sketch_m": sketch_m,
+        "radial_dim": radial_dim,
+        "num_radial": num_radial,
+        "head_dim": head_dim,
+        "epsilon": epsilon,
     }
 
 
@@ -151,32 +153,32 @@ def radial_features(
         Feature tensor ``[..., sketch_m * num_radial * radial_dim]``.
     """
     if normalize:
-        x = x / jnp.sqrt(jnp.sum(x ** 2, axis=-1, keepdims=True) + epsilon)
+        x = x / jnp.sqrt(jnp.sum(x**2, axis=-1, keepdims=True) + epsilon)
 
-    W1 = params['W1']
+    W1 = params["W1"]
     dtype = W1.dtype
     x = x.astype(dtype)
 
     # Augment z = [x_hat, sqrt(b)]: append a constant sqrt(b) channel.
-    sqrt_b = jnp.sqrt(jnp.array(params['bias'], dtype=dtype))
+    sqrt_b = jnp.sqrt(jnp.array(params["bias"], dtype=dtype))
     pad = jnp.broadcast_to(sqrt_b, x.shape[:-1] + (1,))
-    z = jnp.concatenate([x, pad], axis=-1)          # [..., d+1]
+    z = jnp.concatenate([x, pad], axis=-1)  # [..., d+1]
 
-    sketch_m = params['sketch_m']
-    radial_dim = params['radial_dim']
+    sketch_m = params["sketch_m"]
+    radial_dim = params["radial_dim"]
 
     # Degree-2 sketch psi(z): [..., sketch_m], E[psi·psi'] = (z·z')^2.
     p1 = jnp.einsum("...a,ma->...m", z, W1)
-    p2 = jnp.einsum("...a,ma->...m", z, params['W2'])
-    psi = (p1 * p2) / jnp.sqrt(jnp.array(sketch_m, dtype=dtype))   # [..., m]
+    p2 = jnp.einsum("...a,ma->...m", z, params["W2"])
+    psi = (p1 * p2) / jnp.sqrt(jnp.array(sketch_m, dtype=dtype))  # [..., m]
 
     # Radial RFF per node: [..., num_radial, D].
-    proj = jnp.einsum("...a,jDa->...jD", z, params['omegas'])      # [..., num_radial, D]
-    proj = proj + params['phases']                                # broadcast [num_radial, D]
+    proj = jnp.einsum("...a,jDa->...jD", z, params["omegas"])  # [..., num_radial, D]
+    proj = proj + params["phases"]  # broadcast [num_radial, D]
     rff = jnp.sqrt(jnp.array(2.0 / radial_dim, dtype=dtype)) * jnp.cos(proj)
-    coef = jnp.sqrt(jnp.maximum(params['coef'], 0.0))             # [num_radial]
-    rff = rff * coef[:, None]                                      # scale each node
-    phi_rad = rff.reshape(rff.shape[:-2] + (params['num_radial'] * radial_dim,))
+    coef = jnp.sqrt(jnp.maximum(params["coef"], 0.0))  # [num_radial]
+    rff = rff * coef[:, None]  # scale each node
+    phi_rad = rff.reshape(rff.shape[:-2] + (params["num_radial"] * radial_dim,))
 
     # Tensor product psi ⊗ phi_rad -> [..., sketch_m * num_radial * radial_dim].
     out = jnp.einsum("...s,...r->...sr", psi, phi_rad)

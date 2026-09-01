@@ -5,55 +5,60 @@ These tests verify that the YAT formula is consistently implemented
 across all frameworks (PyTorch, TensorFlow, Keras, Linen, NNX).
 """
 
-import pytest
 import numpy as np
+import pytest
 
 from tests._isolated_backend import mlx_is_usable
-
 
 # ============================================================================
 # Framework Availability Checks
 # ============================================================================
 
+
 def get_available_frameworks():
     """Get list of available frameworks."""
     frameworks = []
-    
+
     try:
         import torch
-        frameworks.append('torch')
+
+        frameworks.append("torch")
     except ImportError:
         pass
-    
+
     try:
         import tensorflow as tf
-        frameworks.append('tensorflow')
+
+        frameworks.append("tensorflow")
     except ImportError:
         pass
-    
+
     try:
         import keras
-        if keras.backend.backend() == 'tensorflow':
-            frameworks.append('keras')
+
+        if keras.backend.backend() == "tensorflow":
+            frameworks.append("keras")
     except ImportError:
         pass
-    
+
     try:
         import jax
         from flax import linen
-        frameworks.append('linen')
+
+        frameworks.append("linen")
     except ImportError:
         pass
-    
+
     try:
         import jax
         from flax import nnx
-        frameworks.append('nnx')
+
+        frameworks.append("nnx")
     except ImportError:
         pass
 
     if mlx_is_usable():
-        frameworks.append('mlx')
+        frameworks.append("mlx")
 
     return frameworks
 
@@ -65,17 +70,18 @@ AVAILABLE_FRAMEWORKS = get_available_frameworks()
 # Reference YAT Implementation
 # ============================================================================
 
+
 def yat_reference_numpy(inputs, weights, bias=None, alpha=None, epsilon=1e-6):
     """
     Reference YAT implementation in pure NumPy.
-    
+
     Args:
         inputs: (batch, in_features) numpy array
         weights: (in_features, out_features) numpy array
         bias: (out_features,) numpy array or None
         alpha: scalar or None
         epsilon: small constant
-        
+
     Returns:
         output: (batch, out_features) numpy array
     """
@@ -91,7 +97,7 @@ def yat_reference_numpy(inputs, weights, bias=None, alpha=None, epsilon=1e-6):
 
     # YAT transformation: bias goes INSIDE the square
     if bias is not None:
-        y = (dot_prod + bias)**2 / (distance_sq + epsilon)
+        y = (dot_prod + bias) ** 2 / (distance_sq + epsilon)
     else:
         y = dot_prod**2 / (distance_sq + epsilon)
 
@@ -106,20 +112,22 @@ def yat_reference_numpy(inputs, weights, bias=None, alpha=None, epsilon=1e-6):
 # PyTorch Implementation Helper
 # ============================================================================
 
+
 def get_torch_output(inputs_np, weights_np, bias_np=None, alpha_np=None, epsilon=1e-6):
     """Get YAT output from PyTorch implementation."""
     import torch
+
     from nmn.torch.nmn import YatNMN
-    
+
     in_features, out_features = weights_np.shape
     layer = YatNMN(
-        in_features=in_features, 
+        in_features=in_features,
         out_features=out_features,
         bias=(bias_np is not None),
         alpha=(alpha_np is not None),
-        epsilon=epsilon
+        epsilon=epsilon,
     )
-    
+
     # Set weights
     with torch.no_grad():
         layer.weight.data = torch.tensor(weights_np.T, dtype=torch.float32)
@@ -127,38 +135,39 @@ def get_torch_output(inputs_np, weights_np, bias_np=None, alpha_np=None, epsilon
             layer.bias.data = torch.tensor(bias_np, dtype=torch.float32)
         if alpha_np is not None:
             layer.alpha.data = torch.tensor([alpha_np], dtype=torch.float32)
-    
+
     x = torch.tensor(inputs_np, dtype=torch.float32)
     with torch.no_grad():
         output = layer(x)
-    
+
     return output.numpy()
 
 
 def get_tf_output(inputs_np, weights_np, bias_np=None, alpha_np=None, epsilon=1e-6):
     """Get YAT output from TensorFlow implementation."""
     import tensorflow as tf
+
     from nmn.tf import YatNMN
-    
+
     in_features, out_features = weights_np.shape
     layer = YatNMN(
         features=out_features,  # TF YatNMN uses 'features' not 'in_features'
         use_bias=(bias_np is not None),
         use_alpha=(alpha_np is not None),
-        epsilon=epsilon
+        epsilon=epsilon,
     )
-    
+
     # Build layer
     x = tf.constant(inputs_np, dtype=tf.float32)
     _ = layer(x)
-    
+
     # Set weights - TF YatNMN kernel is (out_features, in_features)
     layer.kernel.assign(weights_np.T)
     if bias_np is not None:
         layer.bias.assign(bias_np)
     if alpha_np is not None:
         layer.alpha.assign([alpha_np])
-    
+
     output = layer(x)
     return output.numpy()
 
@@ -166,6 +175,7 @@ def get_tf_output(inputs_np, weights_np, bias_np=None, alpha_np=None, epsilon=1e
 def get_keras_output(inputs_np, weights_np, bias_np=None, alpha_np=None, epsilon=1e-6):
     """Get YAT output from Keras implementation."""
     import keras
+
     from nmn.keras import YatNMN
 
     in_features, out_features = weights_np.shape
@@ -173,7 +183,7 @@ def get_keras_output(inputs_np, weights_np, bias_np=None, alpha_np=None, epsilon
         units=out_features,
         use_bias=(bias_np is not None),
         use_alpha=(alpha_np is not None),
-        epsilon=epsilon
+        epsilon=epsilon,
     )
 
     # Build layer
@@ -195,27 +205,28 @@ def get_linen_output(inputs_np, weights_np, bias_np=None, alpha_np=None, epsilon
     """Get YAT output from Linen implementation."""
     import jax
     import jax.numpy as jnp
+
     from nmn.linen import YatNMN
-    
+
     in_features, out_features = weights_np.shape
     layer = YatNMN(
         features=out_features,
         use_bias=(bias_np is not None),
         use_alpha=(alpha_np is not None),
-        epsilon=epsilon
+        epsilon=epsilon,
     )
-    
+
     key = jax.random.PRNGKey(0)
     x = jnp.array(inputs_np)
     params = layer.init(key, x)
-    
+
     # Create new params dict - Linen kernel is (features, in_features)
-    new_params = {'params': {'kernel': jnp.array(weights_np.T)}}
+    new_params = {"params": {"kernel": jnp.array(weights_np.T)}}
     if bias_np is not None:
-        new_params['params']['bias'] = jnp.array(bias_np)
+        new_params["params"]["bias"] = jnp.array(bias_np)
     if alpha_np is not None:
-        new_params['params']['alpha'] = jnp.array([alpha_np])
-    
+        new_params["params"]["alpha"] = jnp.array([alpha_np])
+
     output = layer.apply(new_params, x)
     return np.array(output)
 
@@ -223,6 +234,7 @@ def get_linen_output(inputs_np, weights_np, bias_np=None, alpha_np=None, epsilon
 def get_mlx_output(inputs_np, weights_np, bias_np=None, alpha_np=None, epsilon=1e-6):
     """Get YAT output from MLX implementation."""
     import mlx.core as mx
+
     from nmn.mlx.nmn import YatNMN as MlxYatNMN
 
     # Pin to CPU so the 1e-3 rtol below stays meaningful — Metal matmul
@@ -254,8 +266,9 @@ def get_nnx_output(inputs_np, weights_np, bias_np=None, alpha_np=None, epsilon=1
     """Get YAT output from NNX implementation."""
     import jax.numpy as jnp
     from flax import nnx
+
     from nmn.nnx.layers.nmn import YatNMN
-    
+
     in_features, out_features = weights_np.shape
     rngs = nnx.Rngs(0)
     layer = YatNMN(
@@ -264,16 +277,16 @@ def get_nnx_output(inputs_np, weights_np, bias_np=None, alpha_np=None, epsilon=1
         use_bias=(bias_np is not None),
         use_alpha=(alpha_np is not None),
         epsilon=epsilon,
-        rngs=rngs
+        rngs=rngs,
     )
-    
+
     # Set weights
     layer.kernel.value = jnp.array(weights_np)
     if bias_np is not None:
         layer.bias.value = jnp.array(bias_np)
     if alpha_np is not None:
         layer.alpha.value = jnp.array([alpha_np])
-    
+
     x = jnp.array(inputs_np)
     output = layer(x)
     return np.array(output)
@@ -283,157 +296,191 @@ def get_nnx_output(inputs_np, weights_np, bias_np=None, alpha_np=None, epsilon=1
 # Cross-Framework Tests
 # ============================================================================
 
+
 @pytest.mark.skipif(len(AVAILABLE_FRAMEWORKS) < 2, reason="Need at least 2 frameworks")
 class TestCrossFrameworkConsistency:
     """Test that all frameworks produce consistent results."""
-    
+
     @pytest.fixture
     def test_data(self):
         """Generate test data."""
         np.random.seed(42)
         return {
-            'inputs': np.random.randn(4, 8).astype(np.float32),
-            'weights': np.random.randn(8, 16).astype(np.float32),
-            'bias': np.random.randn(16).astype(np.float32),
-            'alpha': 1.0,
-            'epsilon': 1e-6
+            "inputs": np.random.randn(4, 8).astype(np.float32),
+            "weights": np.random.randn(8, 16).astype(np.float32),
+            "bias": np.random.randn(16).astype(np.float32),
+            "alpha": 1.0,
+            "epsilon": 1e-6,
         }
-    
+
     def test_basic_yat_no_bias_no_alpha(self, test_data):
         """Test basic YAT (no bias, no alpha) across frameworks."""
-        inputs = test_data['inputs']
-        weights = test_data['weights']
-        epsilon = test_data['epsilon']
-        
+        inputs = test_data["inputs"]
+        weights = test_data["weights"]
+        epsilon = test_data["epsilon"]
+
         # Reference output
         ref_output = yat_reference_numpy(inputs, weights, epsilon=epsilon)
-        
+
         outputs = {}
-        
-        if 'torch' in AVAILABLE_FRAMEWORKS:
-            outputs['torch'] = get_torch_output(inputs, weights, epsilon=epsilon)
-        
-        if 'linen' in AVAILABLE_FRAMEWORKS:
-            outputs['linen'] = get_linen_output(inputs, weights, epsilon=epsilon)
-        
-        if 'nnx' in AVAILABLE_FRAMEWORKS:
-            outputs['nnx'] = get_nnx_output(inputs, weights, epsilon=epsilon)
 
-        if 'tensorflow' in AVAILABLE_FRAMEWORKS:
-            outputs['tensorflow'] = get_tf_output(inputs, weights, epsilon=epsilon)
+        if "torch" in AVAILABLE_FRAMEWORKS:
+            outputs["torch"] = get_torch_output(inputs, weights, epsilon=epsilon)
 
-        if 'keras' in AVAILABLE_FRAMEWORKS:
-            outputs['keras'] = get_keras_output(inputs, weights, epsilon=epsilon)
+        if "linen" in AVAILABLE_FRAMEWORKS:
+            outputs["linen"] = get_linen_output(inputs, weights, epsilon=epsilon)
 
-        if 'mlx' in AVAILABLE_FRAMEWORKS:
-            outputs['mlx'] = get_mlx_output(inputs, weights, epsilon=epsilon)
+        if "nnx" in AVAILABLE_FRAMEWORKS:
+            outputs["nnx"] = get_nnx_output(inputs, weights, epsilon=epsilon)
+
+        if "tensorflow" in AVAILABLE_FRAMEWORKS:
+            outputs["tensorflow"] = get_tf_output(inputs, weights, epsilon=epsilon)
+
+        if "keras" in AVAILABLE_FRAMEWORKS:
+            outputs["keras"] = get_keras_output(inputs, weights, epsilon=epsilon)
+
+        if "mlx" in AVAILABLE_FRAMEWORKS:
+            outputs["mlx"] = get_mlx_output(inputs, weights, epsilon=epsilon)
 
         # Compare all frameworks to reference
         for name, output in outputs.items():
             np.testing.assert_allclose(
-                output, ref_output, rtol=1e-3, atol=1e-3,
-                err_msg=f"{name} output differs from reference"
+                output,
+                ref_output,
+                rtol=1e-3,
+                atol=1e-3,
+                err_msg=f"{name} output differs from reference",
             )
 
     def test_yat_with_bias(self, test_data):
         """Test YAT with bias across frameworks."""
-        inputs = test_data['inputs']
-        weights = test_data['weights']
-        bias = test_data['bias']
-        epsilon = test_data['epsilon']
-        
+        inputs = test_data["inputs"]
+        weights = test_data["weights"]
+        bias = test_data["bias"]
+        epsilon = test_data["epsilon"]
+
         # Reference output
         ref_output = yat_reference_numpy(inputs, weights, bias=bias, epsilon=epsilon)
-        
+
         outputs = {}
-        
-        if 'torch' in AVAILABLE_FRAMEWORKS:
-            outputs['torch'] = get_torch_output(inputs, weights, bias_np=bias, epsilon=epsilon)
-        
-        if 'linen' in AVAILABLE_FRAMEWORKS:
-            outputs['linen'] = get_linen_output(inputs, weights, bias_np=bias, epsilon=epsilon)
-        
-        if 'nnx' in AVAILABLE_FRAMEWORKS:
-            outputs['nnx'] = get_nnx_output(inputs, weights, bias_np=bias, epsilon=epsilon)
 
-        if 'tensorflow' in AVAILABLE_FRAMEWORKS:
-            outputs['tensorflow'] = get_tf_output(inputs, weights, bias_np=bias, epsilon=epsilon)
+        if "torch" in AVAILABLE_FRAMEWORKS:
+            outputs["torch"] = get_torch_output(
+                inputs, weights, bias_np=bias, epsilon=epsilon
+            )
 
-        if 'keras' in AVAILABLE_FRAMEWORKS:
-            outputs['keras'] = get_keras_output(inputs, weights, bias_np=bias, epsilon=epsilon)
+        if "linen" in AVAILABLE_FRAMEWORKS:
+            outputs["linen"] = get_linen_output(
+                inputs, weights, bias_np=bias, epsilon=epsilon
+            )
 
-        if 'mlx' in AVAILABLE_FRAMEWORKS:
-            outputs['mlx'] = get_mlx_output(inputs, weights, bias_np=bias, epsilon=epsilon)
+        if "nnx" in AVAILABLE_FRAMEWORKS:
+            outputs["nnx"] = get_nnx_output(
+                inputs, weights, bias_np=bias, epsilon=epsilon
+            )
+
+        if "tensorflow" in AVAILABLE_FRAMEWORKS:
+            outputs["tensorflow"] = get_tf_output(
+                inputs, weights, bias_np=bias, epsilon=epsilon
+            )
+
+        if "keras" in AVAILABLE_FRAMEWORKS:
+            outputs["keras"] = get_keras_output(
+                inputs, weights, bias_np=bias, epsilon=epsilon
+            )
+
+        if "mlx" in AVAILABLE_FRAMEWORKS:
+            outputs["mlx"] = get_mlx_output(
+                inputs, weights, bias_np=bias, epsilon=epsilon
+            )
 
         for name, output in outputs.items():
             np.testing.assert_allclose(
-                output, ref_output, rtol=1e-3, atol=1e-3,
-                err_msg=f"{name} output with bias differs from reference"
+                output,
+                ref_output,
+                rtol=1e-3,
+                atol=1e-3,
+                err_msg=f"{name} output with bias differs from reference",
             )
 
     def test_yat_with_alpha(self, test_data):
         """Test YAT with alpha scaling across frameworks."""
-        inputs = test_data['inputs']
-        weights = test_data['weights']
-        alpha = test_data['alpha']
-        epsilon = test_data['epsilon']
-        
+        inputs = test_data["inputs"]
+        weights = test_data["weights"]
+        alpha = test_data["alpha"]
+        epsilon = test_data["epsilon"]
+
         # Reference output
         ref_output = yat_reference_numpy(inputs, weights, alpha=alpha, epsilon=epsilon)
-        
+
         outputs = {}
-        
-        if 'torch' in AVAILABLE_FRAMEWORKS:
-            outputs['torch'] = get_torch_output(inputs, weights, alpha_np=alpha, epsilon=epsilon)
-        
-        if 'linen' in AVAILABLE_FRAMEWORKS:
-            outputs['linen'] = get_linen_output(inputs, weights, alpha_np=alpha, epsilon=epsilon)
-        
-        if 'nnx' in AVAILABLE_FRAMEWORKS:
-            outputs['nnx'] = get_nnx_output(inputs, weights, alpha_np=alpha, epsilon=epsilon)
 
-        if 'tensorflow' in AVAILABLE_FRAMEWORKS:
-            outputs['tensorflow'] = get_tf_output(inputs, weights, alpha_np=alpha, epsilon=epsilon)
+        if "torch" in AVAILABLE_FRAMEWORKS:
+            outputs["torch"] = get_torch_output(
+                inputs, weights, alpha_np=alpha, epsilon=epsilon
+            )
 
-        if 'keras' in AVAILABLE_FRAMEWORKS:
-            outputs['keras'] = get_keras_output(inputs, weights, alpha_np=alpha, epsilon=epsilon)
+        if "linen" in AVAILABLE_FRAMEWORKS:
+            outputs["linen"] = get_linen_output(
+                inputs, weights, alpha_np=alpha, epsilon=epsilon
+            )
 
-        if 'mlx' in AVAILABLE_FRAMEWORKS:
-            outputs['mlx'] = get_mlx_output(inputs, weights, alpha_np=alpha, epsilon=epsilon)
+        if "nnx" in AVAILABLE_FRAMEWORKS:
+            outputs["nnx"] = get_nnx_output(
+                inputs, weights, alpha_np=alpha, epsilon=epsilon
+            )
+
+        if "tensorflow" in AVAILABLE_FRAMEWORKS:
+            outputs["tensorflow"] = get_tf_output(
+                inputs, weights, alpha_np=alpha, epsilon=epsilon
+            )
+
+        if "keras" in AVAILABLE_FRAMEWORKS:
+            outputs["keras"] = get_keras_output(
+                inputs, weights, alpha_np=alpha, epsilon=epsilon
+            )
+
+        if "mlx" in AVAILABLE_FRAMEWORKS:
+            outputs["mlx"] = get_mlx_output(
+                inputs, weights, alpha_np=alpha, epsilon=epsilon
+            )
 
         for name, output in outputs.items():
             np.testing.assert_allclose(
-                output, ref_output, rtol=1e-3, atol=1e-3,
-                err_msg=f"{name} output with alpha differs from reference"
+                output,
+                ref_output,
+                rtol=1e-3,
+                atol=1e-3,
+                err_msg=f"{name} output with alpha differs from reference",
             )
-    
+
     def test_positive_outputs_all_frameworks(self, test_data):
         """Test that all frameworks produce non-negative outputs (no bias)."""
-        inputs = test_data['inputs']
-        weights = test_data['weights']
-        epsilon = test_data['epsilon']
-        
-        if 'torch' in AVAILABLE_FRAMEWORKS:
+        inputs = test_data["inputs"]
+        weights = test_data["weights"]
+        epsilon = test_data["epsilon"]
+
+        if "torch" in AVAILABLE_FRAMEWORKS:
             output = get_torch_output(inputs, weights, epsilon=epsilon)
             assert np.all(output >= 0), "PyTorch produced negative values"
-        
-        if 'linen' in AVAILABLE_FRAMEWORKS:
+
+        if "linen" in AVAILABLE_FRAMEWORKS:
             output = get_linen_output(inputs, weights, epsilon=epsilon)
             assert np.all(output >= 0), "Linen produced negative values"
-        
-        if 'nnx' in AVAILABLE_FRAMEWORKS:
+
+        if "nnx" in AVAILABLE_FRAMEWORKS:
             output = get_nnx_output(inputs, weights, epsilon=epsilon)
             assert np.all(output >= 0), "NNX produced negative values"
 
-        if 'tensorflow' in AVAILABLE_FRAMEWORKS:
+        if "tensorflow" in AVAILABLE_FRAMEWORKS:
             output = get_tf_output(inputs, weights, epsilon=epsilon)
             assert np.all(output >= 0), "TensorFlow produced negative values"
 
-        if 'keras' in AVAILABLE_FRAMEWORKS:
+        if "keras" in AVAILABLE_FRAMEWORKS:
             output = get_keras_output(inputs, weights, epsilon=epsilon)
             assert np.all(output >= 0), "Keras produced negative values"
 
-        if 'mlx' in AVAILABLE_FRAMEWORKS:
+        if "mlx" in AVAILABLE_FRAMEWORKS:
             output = get_mlx_output(inputs, weights, epsilon=epsilon)
             assert np.all(output >= 0), "MLX produced negative values"
 
@@ -442,25 +489,30 @@ class TestCrossFrameworkConsistency:
 # Pairwise Framework Comparison
 # ============================================================================
 
-@pytest.mark.skipif('torch' not in AVAILABLE_FRAMEWORKS or 'linen' not in AVAILABLE_FRAMEWORKS,
-                    reason="Need both PyTorch and Linen")
+
+@pytest.mark.skipif(
+    "torch" not in AVAILABLE_FRAMEWORKS or "linen" not in AVAILABLE_FRAMEWORKS,
+    reason="Need both PyTorch and Linen",
+)
 class TestTorchVsLinen:
     """Direct comparison between PyTorch and Linen."""
-    
+
     def test_dense_layer_match(self):
         """Test that dense layers match between frameworks."""
         np.random.seed(42)
         inputs = np.random.randn(4, 8).astype(np.float32)
         weights = np.random.randn(8, 16).astype(np.float32)
-        
+
         torch_out = get_torch_output(inputs, weights)
         linen_out = get_linen_output(inputs, weights)
-        
+
         np.testing.assert_allclose(torch_out, linen_out, rtol=1e-3, atol=1e-3)
 
 
-@pytest.mark.skipif('linen' not in AVAILABLE_FRAMEWORKS or 'nnx' not in AVAILABLE_FRAMEWORKS,
-                    reason="Need both Linen and NNX")
+@pytest.mark.skipif(
+    "linen" not in AVAILABLE_FRAMEWORKS or "nnx" not in AVAILABLE_FRAMEWORKS,
+    reason="Need both Linen and NNX",
+)
 class TestLinenVsNNX:
     """Direct comparison between Linen and NNX."""
 
@@ -476,8 +528,10 @@ class TestLinenVsNNX:
         np.testing.assert_allclose(linen_out, nnx_out, rtol=1e-3, atol=1e-3)
 
 
-@pytest.mark.skipif('mlx' not in AVAILABLE_FRAMEWORKS or 'torch' not in AVAILABLE_FRAMEWORKS,
-                    reason="Need both MLX and PyTorch")
+@pytest.mark.skipif(
+    "mlx" not in AVAILABLE_FRAMEWORKS or "torch" not in AVAILABLE_FRAMEWORKS,
+    reason="Need both MLX and PyTorch",
+)
 class TestMlxVsTorch:
     """Direct comparison between MLX and PyTorch."""
 
@@ -508,42 +562,43 @@ class TestMlxVsTorch:
 # Numerical Stability Tests
 # ============================================================================
 
+
 @pytest.mark.skipif(len(AVAILABLE_FRAMEWORKS) < 1, reason="Need at least 1 framework")
 class TestNumericalStabilityAllFrameworks:
     """Test numerical stability across frameworks."""
-    
+
     def test_large_values(self):
         """Test with large input values."""
         np.random.seed(42)
         inputs = np.random.randn(4, 8).astype(np.float32) * 1000
         weights = np.random.randn(8, 16).astype(np.float32)
-        
-        if 'torch' in AVAILABLE_FRAMEWORKS:
+
+        if "torch" in AVAILABLE_FRAMEWORKS:
             output = get_torch_output(inputs, weights)
             assert not np.isnan(output).any(), "PyTorch NaN with large values"
             assert not np.isinf(output).any(), "PyTorch Inf with large values"
-        
-        if 'linen' in AVAILABLE_FRAMEWORKS:
+
+        if "linen" in AVAILABLE_FRAMEWORKS:
             output = get_linen_output(inputs, weights)
             assert not np.isnan(output).any(), "Linen NaN with large values"
             assert not np.isinf(output).any(), "Linen Inf with large values"
 
-        if 'nnx' in AVAILABLE_FRAMEWORKS:
+        if "nnx" in AVAILABLE_FRAMEWORKS:
             output = get_nnx_output(inputs, weights)
             assert not np.isnan(output).any(), "NNX NaN with large values"
             assert not np.isinf(output).any(), "NNX Inf with large values"
 
-        if 'tensorflow' in AVAILABLE_FRAMEWORKS:
+        if "tensorflow" in AVAILABLE_FRAMEWORKS:
             output = get_tf_output(inputs, weights)
             assert not np.isnan(output).any(), "TensorFlow NaN with large values"
             assert not np.isinf(output).any(), "TensorFlow Inf with large values"
 
-        if 'keras' in AVAILABLE_FRAMEWORKS:
+        if "keras" in AVAILABLE_FRAMEWORKS:
             output = get_keras_output(inputs, weights)
             assert not np.isnan(output).any(), "Keras NaN with large values"
             assert not np.isinf(output).any(), "Keras Inf with large values"
 
-        if 'mlx' in AVAILABLE_FRAMEWORKS:
+        if "mlx" in AVAILABLE_FRAMEWORKS:
             output = get_mlx_output(inputs, weights)
             assert not np.isnan(output).any(), "MLX NaN with large values"
             assert not np.isinf(output).any(), "MLX Inf with large values"
@@ -553,28 +608,28 @@ class TestNumericalStabilityAllFrameworks:
         np.random.seed(42)
         inputs = np.random.randn(4, 8).astype(np.float32) * 1e-6
         weights = np.random.randn(8, 16).astype(np.float32)
-        
-        if 'torch' in AVAILABLE_FRAMEWORKS:
+
+        if "torch" in AVAILABLE_FRAMEWORKS:
             output = get_torch_output(inputs, weights)
             assert not np.isnan(output).any(), "PyTorch NaN with small values"
-        
-        if 'linen' in AVAILABLE_FRAMEWORKS:
+
+        if "linen" in AVAILABLE_FRAMEWORKS:
             output = get_linen_output(inputs, weights)
             assert not np.isnan(output).any(), "Linen NaN with small values"
 
-        if 'nnx' in AVAILABLE_FRAMEWORKS:
+        if "nnx" in AVAILABLE_FRAMEWORKS:
             output = get_nnx_output(inputs, weights)
             assert not np.isnan(output).any(), "NNX NaN with small values"
 
-        if 'tensorflow' in AVAILABLE_FRAMEWORKS:
+        if "tensorflow" in AVAILABLE_FRAMEWORKS:
             output = get_tf_output(inputs, weights)
             assert not np.isnan(output).any(), "TensorFlow NaN with small values"
 
-        if 'keras' in AVAILABLE_FRAMEWORKS:
+        if "keras" in AVAILABLE_FRAMEWORKS:
             output = get_keras_output(inputs, weights)
             assert not np.isnan(output).any(), "Keras NaN with small values"
 
-        if 'mlx' in AVAILABLE_FRAMEWORKS:
+        if "mlx" in AVAILABLE_FRAMEWORKS:
             output = get_mlx_output(inputs, weights)
             assert not np.isnan(output).any(), "MLX NaN with small values"
 
@@ -584,27 +639,27 @@ class TestNumericalStabilityAllFrameworks:
         weights = np.random.randn(8, 16).astype(np.float32)
         # Use first weight column as input
         inputs = weights[:, 0:1].T  # Shape: (1, 8)
-        
-        if 'torch' in AVAILABLE_FRAMEWORKS:
+
+        if "torch" in AVAILABLE_FRAMEWORKS:
             output = get_torch_output(inputs, weights)
             assert not np.isnan(output).any(), "PyTorch NaN with matching vectors"
-        
-        if 'linen' in AVAILABLE_FRAMEWORKS:
+
+        if "linen" in AVAILABLE_FRAMEWORKS:
             output = get_linen_output(inputs, weights)
             assert not np.isnan(output).any(), "Linen NaN with matching vectors"
 
-        if 'nnx' in AVAILABLE_FRAMEWORKS:
+        if "nnx" in AVAILABLE_FRAMEWORKS:
             output = get_nnx_output(inputs, weights)
             assert not np.isnan(output).any(), "NNX NaN with matching vectors"
 
-        if 'tensorflow' in AVAILABLE_FRAMEWORKS:
+        if "tensorflow" in AVAILABLE_FRAMEWORKS:
             output = get_tf_output(inputs, weights)
             assert not np.isnan(output).any(), "TensorFlow NaN with matching vectors"
 
-        if 'keras' in AVAILABLE_FRAMEWORKS:
+        if "keras" in AVAILABLE_FRAMEWORKS:
             output = get_keras_output(inputs, weights)
             assert not np.isnan(output).any(), "Keras NaN with matching vectors"
 
-        if 'mlx' in AVAILABLE_FRAMEWORKS:
+        if "mlx" in AVAILABLE_FRAMEWORKS:
             output = get_mlx_output(inputs, weights)
             assert not np.isnan(output).any(), "MLX NaN with matching vectors"

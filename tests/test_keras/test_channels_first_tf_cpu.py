@@ -5,7 +5,6 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-
 tf = pytest.importorskip("tensorflow")
 import keras  # noqa: E402
 
@@ -17,7 +16,6 @@ from nmn.keras import (  # noqa: E402
     YatConvTranspose2D,
     YatConvTranspose3D,
 )
-
 
 pytestmark = pytest.mark.skipif(
     keras.backend.backend() != "tensorflow",

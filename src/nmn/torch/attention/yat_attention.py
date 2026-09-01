@@ -50,8 +50,8 @@ def normalize_qk(
     Returns:
         Tuple of (normalized_query, normalized_key).
     """
-    q_norm = torch.sqrt(torch.sum(query ** 2, dim=-1, keepdim=True) + epsilon)
-    k_norm = torch.sqrt(torch.sum(key ** 2, dim=-1, keepdim=True) + epsilon)
+    q_norm = torch.sqrt(torch.sum(query**2, dim=-1, keepdim=True) + epsilon)
+    k_norm = torch.sqrt(torch.sum(key**2, dim=-1, keepdim=True) + epsilon)
     return query / q_norm, key / k_norm
 
 
@@ -100,7 +100,7 @@ def yat_attention_weights(
     # Scale by 1/√head_dim to match standard attention's score growth profile.
     # Without this, scores blow up as norms grow, causing softmax saturation
     # and gradient death.
-    dim_scale = head_dim ** 0.5
+    dim_scale = head_dim**0.5
 
     if spherical:
         # Spherical YAT: normalize Q/K to unit vectors, simplified formula
@@ -138,9 +138,7 @@ def yat_attention_weights(
 
     # Apply mask
     if mask is not None:
-        mask = torch.broadcast_to(
-            mask.to(dtype=torch.bool), attn_weights.shape
-        )
+        mask = torch.broadcast_to(mask.to(dtype=torch.bool), attn_weights.shape)
         row_has_key = mask.any(dim=-1, keepdim=True)
         attn_weights = attn_weights.masked_fill(~mask, float("-inf"))
         # Softmax(all -inf) is NaN.  Replace only fully masked rows with a
@@ -154,9 +152,7 @@ def yat_attention_weights(
     # Softmax normalization
     attn_weights = F.softmax(attn_weights, dim=-1)
     if mask is not None:
-        attn_weights = torch.where(
-            mask, attn_weights, torch.zeros_like(attn_weights)
-        )
+        attn_weights = torch.where(mask, attn_weights, torch.zeros_like(attn_weights))
 
     # Dropout
     if dropout_p > 0.0 and training:
@@ -195,7 +191,8 @@ def yat_attention(
         Output of shape (batch, q_len, num_heads, v_dim)
     """
     attn_weights = yat_attention_weights(
-        query, key,
+        query,
+        key,
         mask=mask,
         dropout_p=dropout_p,
         training=training,
@@ -251,7 +248,7 @@ def yat_attention_normalized(
 
     # Simplified: (q·k)² / ((2(1 - q·k) + ε) * √d)
     # Clamp distance: bf16 rounding can make q·k > 1 after normalization
-    dim_scale = head_dim ** 0.5
+    dim_scale = head_dim**0.5
     squared_dot = dot_product.square()
     distance_sq = (2.0 - 2.0 * dot_product).clamp(min=0.0)
 
@@ -266,9 +263,7 @@ def yat_attention_normalized(
 
     # Mask
     if mask is not None:
-        mask = torch.broadcast_to(
-            mask.to(dtype=torch.bool), attn_weights.shape
-        )
+        mask = torch.broadcast_to(mask.to(dtype=torch.bool), attn_weights.shape)
         row_has_key = mask.any(dim=-1, keepdim=True)
         attn_weights = attn_weights.masked_fill(~mask, float("-inf"))
         attn_weights = torch.where(
@@ -278,9 +273,7 @@ def yat_attention_normalized(
     # Softmax
     attn_weights = F.softmax(attn_weights, dim=-1)
     if mask is not None:
-        attn_weights = torch.where(
-            mask, attn_weights, torch.zeros_like(attn_weights)
-        )
+        attn_weights = torch.where(mask, attn_weights, torch.zeros_like(attn_weights))
 
     # Dropout
     if dropout_p > 0.0 and training:

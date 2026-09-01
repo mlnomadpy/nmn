@@ -24,7 +24,6 @@ from typing import Any, Optional
 import mlx.core as mx
 import numpy as np
 
-
 __all__ = [
     "create_yat_tp_projection",
     "yat_tp_features",
@@ -69,7 +68,7 @@ def create_yat_tp_projection(
     # Anchor vectors on the unit sphere.
     anchors_np = rng.standard_normal((num_anchor_features, head_dim)).astype(np.float32)
     anchors_np = anchors_np / (
-        np.sqrt((anchors_np ** 2).sum(axis=-1, keepdims=True)) + 1e-8
+        np.sqrt((anchors_np**2).sum(axis=-1, keepdims=True)) + 1e-8
     )
     anchors = mx.array(anchors_np).astype(dtype)
 
@@ -80,10 +79,10 @@ def create_yat_tp_projection(
     projections = mx.array(projections_np).astype(dtype)
 
     return {
-        "projections": projections,        # (R, M, d)
-        "anchors": anchors,                # (P, d)
-        "quad_nodes": quad_nodes,          # (R,)
-        "quad_weights": quad_weights,      # (R,)
+        "projections": projections,  # (R, M, d)
+        "anchors": anchors,  # (P, d)
+        "quad_nodes": quad_nodes,  # (R,)
+        "quad_weights": quad_weights,  # (R,)
         "head_dim": head_dim,
         "num_prf_features": num_prf_features,
         "num_anchor_features": num_anchor_features,
@@ -112,10 +111,10 @@ def yat_tp_features(
         x_norm = mx.sqrt(mx.sum(x * x, axis=-1, keepdims=True) + epsilon)
         x = x / x_norm
 
-    projections = params["projections"]       # (R, M, d)
-    anchors = params["anchors"]               # (P, d)
-    quad_nodes = params["quad_nodes"]         # (R,)
-    quad_weights = params["quad_weights"]     # (R,)
+    projections = params["projections"]  # (R, M, d)
+    anchors = params["anchors"]  # (P, d)
+    quad_nodes = params["quad_nodes"]  # (R,)
+    quad_weights = params["quad_weights"]  # (R,)
     M = params["num_prf_features"]
     P = params["num_anchor_features"]
     R = params["num_scales"]
@@ -142,8 +141,8 @@ def yat_tp_features(
     leading_shape = poly_feat.shape[:-1]
     fused_per_r = []
     for r in range(R):
-        prf_r = prf_all[..., r, :]                       # (..., M)
-        outer = poly_feat[..., :, None] * prf_r[..., None, :]   # (..., P, M)
+        prf_r = prf_all[..., r, :]  # (..., M)
+        outer = poly_feat[..., :, None] * prf_r[..., None, :]  # (..., P, M)
         fused = mx.reshape(outer, leading_shape + (P * M,)) * sq_w[r]
         fused_per_r.append(fused)
 

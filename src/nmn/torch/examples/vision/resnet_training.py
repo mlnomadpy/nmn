@@ -33,31 +33,33 @@
 
 import argparse
 import time
+
+# Suppress warning from the datasets library
+import warnings
+from io import BytesIO
+
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.utils.data import DataLoader
-from torchvision import datasets as torchvision_datasets, transforms
+import wandb
 from datasets import load_dataset
 from PIL import Image
-from io import BytesIO
-import numpy as np
-import matplotlib.pyplot as plt
-import wandb
 from sklearn.metrics import confusion_matrix
-import seaborn as sns
+from torch.utils.data import DataLoader
+from torchvision import datasets as torchvision_datasets
+from torchvision import transforms
 
-# Suppress warning from the datasets library
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning, module='datasets.builder')
+warnings.filterwarnings("ignore", category=UserWarning, module="datasets.builder")
 
 
 # ---------- YAT convolution imports ----------
 # Ensure you have the nmn-pytorch library installed: pip install nmn-pytorch
 try:
-    from nmn.torch import YatConv2D
-    from nmn.torch import YatNMN
+    from nmn.torch import YatConv2D, YatNMN
 except ImportError:
     print("Please install nmn-pytorch: pip install nmn-pytorch")
     exit()
@@ -66,53 +68,67 @@ except ImportError:
 # ---------- Dataset Handling ----------
 class HuggingFaceDataset(torch.utils.data.IterableDataset):
     """Generic wrapper for streaming image classification datasets from Hugging Face Hub."""
+
     def __init__(self, dataset_name, split, transform=None, shuffle_buffer_size=50000):
         self.dataset = load_dataset(dataset_name, split=split, streaming=True)
-        if split == 'train':
+        if split == "train":
             # Shuffle the training data with a large buffer for better randomness
-            self.dataset = self.dataset.shuffle(buffer_size=shuffle_buffer_size, seed=int(time.time()))
+            self.dataset = self.dataset.shuffle(
+                buffer_size=shuffle_buffer_size, seed=int(time.time())
+            )
         self.transform = transform
         self.info = load_dataset(dataset_name, split=split).info
 
     def __iter__(self):
         for sample in self.dataset:
             # Common column names for image and label in HF datasets
-            image_key = 'image' if 'image' in sample else 'img'
-            label_key = 'label' if 'label' in sample else 'labels'
+            image_key = "image" if "image" in sample else "img"
+            label_key = "label" if "label" in sample else "labels"
 
             if image_key not in sample or label_key not in sample:
-                raise KeyError(f"Dataset sample missing required key. Found: {list(sample.keys())}")
+                raise KeyError(
+                    f"Dataset sample missing required key. Found: {list(sample.keys())}"
+                )
 
             img_data = sample[image_key]
             if not isinstance(img_data, Image.Image):
-                 img = img_data.convert("RGB")
+                img = img_data.convert("RGB")
             else:
-                 img = img_data
+                img = img_data
 
             if self.transform:
                 img = self.transform(img)
 
             yield img, sample[label_key]
 
-def get_data_loaders(dataset_name, hf_dataset, batch_size, image_size, data_dir='./data'):
+
+def get_data_loaders(
+    dataset_name, hf_dataset, batch_size, image_size, data_dir="./data"
+):
     """Creates train and validation data loaders for specified dataset."""
 
     # Define more powerful data augmentations
-    train_transform = transforms.Compose([
-        transforms.RandomResizedCrop(image_size),
-        transforms.RandomHorizontalFlip(),
-        transforms.TrivialAugmentWide(), # More advanced augmentation
-        transforms.ToTensor(),
-        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)), # ImageNet stats as a general default
-        transforms.RandomErasing(p=0.1, scale=(0.02, 0.2)),
-    ])
+    train_transform = transforms.Compose(
+        [
+            transforms.RandomResizedCrop(image_size),
+            transforms.RandomHorizontalFlip(),
+            transforms.TrivialAugmentWide(),  # More advanced augmentation
+            transforms.ToTensor(),
+            transforms.Normalize(
+                (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
+            ),  # ImageNet stats as a general default
+            transforms.RandomErasing(p=0.1, scale=(0.02, 0.2)),
+        ]
+    )
 
-    val_transform = transforms.Compose([
-        transforms.Resize(image_size + 32), # Resize to a slightly larger size
-        transforms.CenterCrop(image_size),
-        transforms.ToTensor(),
-        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-    ])
+    val_transform = transforms.Compose(
+        [
+            transforms.Resize(image_size + 32),  # Resize to a slightly larger size
+            transforms.CenterCrop(image_size),
+            transforms.ToTensor(),
+            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+        ]
+    )
 
     if hf_dataset:
         print(f"Using Hugging Face dataset: {hf_dataset}")
@@ -124,74 +140,118 @@ def get_data_loaders(dataset_name, hf_dataset, batch_size, image_size, data_dir=
             try:
                 val_dataset = HuggingFaceDataset(hf_dataset, "test", val_transform)
             except Exception as e:
-                raise ValueError(f"Could not load 'validation' or 'test' split for {hf_dataset}: {e}")
+                raise ValueError(
+                    f"Could not load 'validation' or 'test' split for {hf_dataset}: {e}"
+                )
 
-        num_classes = train_dataset.info.features['label'].num_classes
+        num_classes = train_dataset.info.features["label"].num_classes
         train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=2)
         val_loader = DataLoader(val_dataset, batch_size=batch_size, num_workers=2)
         return train_loader, val_loader, num_classes
 
     # Adjust transforms for specific well-known datasets if needed
-    if 'CIFAR' in dataset_name:
+    if "CIFAR" in dataset_name:
         # Use specific normalization stats for CIFAR
-        if dataset_name == 'CIFAR10':
+        if dataset_name == "CIFAR10":
             norm_mean, norm_std = (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
-        else: # CIFAR100
+        else:  # CIFAR100
             norm_mean, norm_std = (0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)
 
-        train_transform = transforms.Compose([
-            transforms.RandomCrop(image_size, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.AutoAugment(transforms.AutoAugmentPolicy.CIFAR10),
-            transforms.ToTensor(),
-            transforms.Normalize(norm_mean, norm_std),
-            transforms.RandomErasing(),
-        ])
-        val_transform = transforms.Compose([
-            transforms.Resize(image_size),
-            transforms.ToTensor(),
-            transforms.Normalize(norm_mean, norm_std),
-        ])
+        train_transform = transforms.Compose(
+            [
+                transforms.RandomCrop(image_size, padding=4),
+                transforms.RandomHorizontalFlip(),
+                transforms.AutoAugment(transforms.AutoAugmentPolicy.CIFAR10),
+                transforms.ToTensor(),
+                transforms.Normalize(norm_mean, norm_std),
+                transforms.RandomErasing(),
+            ]
+        )
+        val_transform = transforms.Compose(
+            [
+                transforms.Resize(image_size),
+                transforms.ToTensor(),
+                transforms.Normalize(norm_mean, norm_std),
+            ]
+        )
 
-    if dataset_name == 'CIFAR10':
-        train_dataset = torchvision_datasets.CIFAR10(root=data_dir, train=True, download=True, transform=train_transform)
-        val_dataset = torchvision_datasets.CIFAR10(root=data_dir, train=False, download=True, transform=val_transform)
+    if dataset_name == "CIFAR10":
+        train_dataset = torchvision_datasets.CIFAR10(
+            root=data_dir, train=True, download=True, transform=train_transform
+        )
+        val_dataset = torchvision_datasets.CIFAR10(
+            root=data_dir, train=False, download=True, transform=val_transform
+        )
         num_classes = 10
-    elif dataset_name == 'CIFAR100':
-        train_dataset = torchvision_datasets.CIFAR100(root=data_dir, train=True, download=True, transform=train_transform)
-        val_dataset = torchvision_datasets.CIFAR100(root=data_dir, train=False, download=True, transform=val_transform)
+    elif dataset_name == "CIFAR100":
+        train_dataset = torchvision_datasets.CIFAR100(
+            root=data_dir, train=True, download=True, transform=train_transform
+        )
+        val_dataset = torchvision_datasets.CIFAR100(
+            root=data_dir, train=False, download=True, transform=val_transform
+        )
         num_classes = 100
-    elif dataset_name == 'TinyImageNet':
-         train_dataset = HuggingFaceDataset("zh-plus/tiny-imagenet", "train", train_transform)
-         val_dataset = HuggingFaceDataset("zh-plus/tiny-imagenet", "valid", val_transform)
-         num_classes = 200
+    elif dataset_name == "TinyImageNet":
+        train_dataset = HuggingFaceDataset(
+            "zh-plus/tiny-imagenet", "train", train_transform
+        )
+        val_dataset = HuggingFaceDataset(
+            "zh-plus/tiny-imagenet", "valid", val_transform
+        )
+        num_classes = 200
     else:
-        raise ValueError(f"Unknown dataset: {dataset_name}. Use --hf-dataset for Hugging Face datasets.")
+        raise ValueError(
+            f"Unknown dataset: {dataset_name}. Use --hf-dataset for Hugging Face datasets."
+        )
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True,
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True,
+    )
 
     return train_loader, val_loader, num_classes
 
 
 # ---------- Models (Refactored with ResNet-style blocks) ----------
 
+
 class BasicStandardBlock(nn.Module):
     """A basic residual block for the StandardConvNet, inspired by ResNet."""
+
     expansion = 1
 
     def __init__(self, in_planes, planes, stride=1):
         super(BasicStandardBlock, self).__init__()
-        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(
+            in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False
+        )
         self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv2 = nn.Conv2d(
+            planes, planes, kernel_size=3, stride=1, padding=1, bias=False
+        )
         self.bn2 = nn.BatchNorm2d(planes)
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != self.expansion * planes:
             self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, self.expansion * planes, kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(self.expansion * planes)
+                nn.Conv2d(
+                    in_planes,
+                    self.expansion * planes,
+                    kernel_size=1,
+                    stride=stride,
+                    bias=False,
+                ),
+                nn.BatchNorm2d(self.expansion * planes),
             )
 
     def forward(self, x):
@@ -201,19 +261,35 @@ class BasicStandardBlock(nn.Module):
         out = F.relu(out)
         return out
 
+
 class BasicYATBlock(nn.Module):
     """A basic residual block for the YATConvNet, inspired by ResNet.
 
     Supports weight normalization, weight tying, and constant alpha for efficient training.
     """
+
     expansion = 1
 
-    def __init__(self, in_planes, planes, stride=1, use_alpha=True, constant_alpha=None,
-                 use_dropconnect=False, drop_rate=0.1, weight_normalized=False,
-                 tie_kernel_bank=False, kernel_bank_id='conv-layers'):
+    def __init__(
+        self,
+        in_planes,
+        planes,
+        stride=1,
+        use_alpha=True,
+        constant_alpha=None,
+        use_dropconnect=False,
+        drop_rate=0.1,
+        weight_normalized=False,
+        tie_kernel_bank=False,
+        kernel_bank_id="conv-layers",
+    ):
         super(BasicYATBlock, self).__init__()
         self.yat_conv = YatConv2D(
-            in_planes, planes, kernel_size=3, stride=stride, padding=1,
+            in_planes,
+            planes,
+            kernel_size=3,
+            stride=stride,
+            padding=1,
             use_alpha=use_alpha,
             constant_alpha=constant_alpha,
             use_dropconnect=use_dropconnect,
@@ -222,14 +298,22 @@ class BasicYATBlock(nn.Module):
             tie_kernel_bank=tie_kernel_bank,
             kernel_bank_id=kernel_bank_id,
             bias=False,
-            epsilon=0.007
+            epsilon=0.007,
         )
-        self.lin_conv = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
+        self.lin_conv = nn.Conv2d(
+            planes, planes, kernel_size=3, stride=1, padding=1, bias=False
+        )
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != self.expansion * planes:
             self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, self.expansion * planes, kernel_size=1, stride=stride, bias=False),
+                nn.Conv2d(
+                    in_planes,
+                    self.expansion * planes,
+                    kernel_size=1,
+                    stride=stride,
+                    bias=False,
+                ),
             )
 
     def forward(self, x):
@@ -239,8 +323,10 @@ class BasicYATBlock(nn.Module):
         out += identity
         return out
 
+
 class StandardConvNet(nn.Module):
     """A standard CNN with a ResNet-like architecture."""
+
     def __init__(self, block, num_blocks, num_classes=10):
         super(StandardConvNet, self).__init__()
         self.in_planes = 64
@@ -272,15 +358,27 @@ class StandardConvNet(nn.Module):
         out = self.linear(out)
         return out
 
+
 class YATConvNet(nn.Module):
     """A YAT-based CNN with a ResNet-like architecture.
 
     Supports weight normalization, weight tying for efficient parameter sharing,
     and constant alpha scaling.
     """
-    def __init__(self, block, num_blocks, num_classes=200, use_alpha=True, constant_alpha=None,
-                 use_dropconnect=False, drop_rate=0.1, weight_normalized=False,
-                 tie_kernel_bank=False, tie_output_bank=False):
+
+    def __init__(
+        self,
+        block,
+        num_blocks,
+        num_classes=200,
+        use_alpha=True,
+        constant_alpha=None,
+        use_dropconnect=False,
+        drop_rate=0.1,
+        weight_normalized=False,
+        tie_kernel_bank=False,
+        tie_output_bank=False,
+    ):
         super(YATConvNet, self).__init__()
         self.in_planes = 64
         self.use_alpha = use_alpha
@@ -300,29 +398,34 @@ class YATConvNet(nn.Module):
 
         # YatNMN head with optional weight tying
         self.fc_yat = YatNMN(
-            256, num_classes,
+            256,
+            num_classes,
             epsilon=0.007,
             bias=False,
             constant_alpha=constant_alpha,
             weight_normalized=weight_normalized,
             tie_kernel_bank=tie_output_bank,
-            kernel_bank_id='output-layer'
+            kernel_bank_id="output-layer",
         )
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1] * (num_blocks - 1)
         layers = []
         for s in strides:
-            layers.append(block(
-                self.in_planes, planes, s,
-                use_alpha=self.use_alpha,
-                constant_alpha=self.constant_alpha,
-                use_dropconnect=self.use_dropconnect,
-                drop_rate=self.drop_rate,
-                weight_normalized=self.weight_normalized,
-                tie_kernel_bank=self.tie_kernel_bank,
-                kernel_bank_id='conv-layers'
-            ))
+            layers.append(
+                block(
+                    self.in_planes,
+                    planes,
+                    s,
+                    use_alpha=self.use_alpha,
+                    constant_alpha=self.constant_alpha,
+                    use_dropconnect=self.use_dropconnect,
+                    drop_rate=self.drop_rate,
+                    weight_normalized=self.weight_normalized,
+                    tie_kernel_bank=self.tie_kernel_bank,
+                    kernel_bank_id="conv-layers",
+                )
+            )
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
 
@@ -349,8 +452,9 @@ def log_weight_histograms(model, epoch, use_wandb=False):
     histograms = {}
     for name, param in actual_model.named_parameters():
         if param.requires_grad:
-            histograms[f'weights/{name}'] = wandb.Histogram(param.data.cpu())
+            histograms[f"weights/{name}"] = wandb.Histogram(param.data.cpu())
     wandb.log(histograms, step=epoch)
+
 
 def plot_confusion_matrix(all_preds, all_targets, class_names, use_wandb=False):
     """Plots and logs a confusion matrix."""
@@ -359,16 +463,25 @@ def plot_confusion_matrix(all_preds, all_targets, class_names, use_wandb=False):
 
     cm = confusion_matrix(all_targets, all_preds)
     plt.figure(figsize=(15, 15))
-    sns.heatmap(cm, annot=True, fmt='d', xticklabels=class_names, yticklabels=class_names, cmap='Blues')
-    plt.xlabel('Predicted')
-    plt.ylabel('True')
-    plt.title('Confusion Matrix')
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt="d",
+        xticklabels=class_names,
+        yticklabels=class_names,
+        cmap="Blues",
+    )
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    plt.title("Confusion Matrix")
     wandb.log({"confusion_matrix": wandb.Image(plt)})
     plt.close()
 
 
 # ---------- Training and Validation ----------
-def train_epoch(model, trainloader, optimizer, criterion, device, use_wandb, global_step):
+def train_epoch(
+    model, trainloader, optimizer, criterion, device, use_wandb, global_step
+):
     model.train()
     running_loss = 0.0
     total_correct = 0
@@ -390,20 +503,26 @@ def train_epoch(model, trainloader, optimizer, criterion, device, use_wandb, glo
 
         if batch_idx > 0 and batch_idx % 100 == 0:
             batch_loss = running_loss / 100
-            batch_acc = 100. * total_correct / total_samples
-            print(f'  Batch {batch_idx}/{len(trainloader)} | Loss: {batch_loss:.4f} | Acc: {batch_acc:.2f}%')
+            batch_acc = 100.0 * total_correct / total_samples
+            print(
+                f"  Batch {batch_idx}/{len(trainloader)} | Loss: {batch_loss:.4f} | Acc: {batch_acc:.2f}%"
+            )
             if use_wandb:
-                wandb.log({
-                    'train/batch_loss': batch_loss,
-                    'train/batch_acc': batch_acc,
-                }, step=global_step)
+                wandb.log(
+                    {
+                        "train/batch_loss": batch_loss,
+                        "train/batch_acc": batch_acc,
+                    },
+                    step=global_step,
+                )
             running_loss = 0.0
 
         global_step += 1
 
     epoch_loss = running_loss / len(trainloader) if len(trainloader) > 0 else 0.0
-    epoch_acc = 100. * total_correct / total_samples if total_samples > 0 else 0.0
+    epoch_acc = 100.0 * total_correct / total_samples if total_samples > 0 else 0.0
     return epoch_loss, epoch_acc, global_step
+
 
 def validate(model, valloader, criterion, device):
     model.eval()
@@ -428,51 +547,122 @@ def validate(model, valloader, criterion, device):
             all_targets.extend(targets.cpu().numpy())
 
     avg_loss = test_loss / len(valloader) if len(valloader) > 0 else 0.0
-    acc = 100. * correct / total if total > 0 else 0.0
+    acc = 100.0 * correct / total if total > 0 else 0.0
     return avg_loss, acc, all_preds, all_targets
 
 
 # ---------- Main Execution ----------
 def main():
-    parser = argparse.ArgumentParser(description='YAT/Standard ConvNet Training')
+    parser = argparse.ArgumentParser(description="YAT/Standard ConvNet Training")
     # Model and Data
-    parser.add_argument('--model', type=str, choices=['yat', 'standard'], default='yat', help='Model architecture')
-    parser.add_argument('--dataset', type=str, choices=['CIFAR10', 'CIFAR100', 'TinyImageNet'], default='CIFAR10', help='Built-in dataset to use')
-    parser.add_argument('--hf-dataset', type=str, default=None, help='Hugging Face dataset name (e.g., "food101", "beans")')
-    parser.add_argument('--num-blocks', type=int, nargs='+', default=[2, 2, 2, 2], help='Number of blocks in each of the 4 ResNet stages')
-    parser.add_argument('--image-size', type=int, default=32, help='Input image size')
+    parser.add_argument(
+        "--model",
+        type=str,
+        choices=["yat", "standard"],
+        default="yat",
+        help="Model architecture",
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        choices=["CIFAR10", "CIFAR100", "TinyImageNet"],
+        default="CIFAR10",
+        help="Built-in dataset to use",
+    )
+    parser.add_argument(
+        "--hf-dataset",
+        type=str,
+        default=None,
+        help='Hugging Face dataset name (e.g., "food101", "beans")',
+    )
+    parser.add_argument(
+        "--num-blocks",
+        type=int,
+        nargs="+",
+        default=[2, 2, 2, 2],
+        help="Number of blocks in each of the 4 ResNet stages",
+    )
+    parser.add_argument("--image-size", type=int, default=32, help="Input image size")
     # Training
-    parser.add_argument('--batch-size', type=int, default=128, help='Input batch size for training')
-    parser.add_argument('--epochs', type=int, default=50, help='Number of epochs to train')
-    parser.add_argument('--lr', type=float, default=0.003, help='Learning rate')
+    parser.add_argument(
+        "--batch-size", type=int, default=128, help="Input batch size for training"
+    )
+    parser.add_argument(
+        "--epochs", type=int, default=50, help="Number of epochs to train"
+    )
+    parser.add_argument("--lr", type=float, default=0.003, help="Learning rate")
     # YAT Specific
-    parser.add_argument('--no-alpha', action='store_false', dest='use_alpha', help='Disable alpha in YATConv')
-    parser.add_argument('--constant-alpha', action='store_true', default=False, help='Use constant alpha (sqrt(2)) instead of learnable')
-    parser.add_argument('--use-dropconnect', action='store_true', default=False, help='Use DropConnect in YATConv')
-    parser.add_argument('--drop-rate', type=float, default=0.1, help='DropConnect rate')
-    parser.add_argument('--weight-normalized', action='store_true', default=False, help='Enable weight normalization for each filter')
-    parser.add_argument('--tie-kernel-bank', action='store_true', default=False, help='Enable weight tying across conv layers')
-    parser.add_argument('--tie-output-bank', action='store_true', default=False, help='Enable weight tying for output YatNMN layer')
+    parser.add_argument(
+        "--no-alpha",
+        action="store_false",
+        dest="use_alpha",
+        help="Disable alpha in YATConv",
+    )
+    parser.add_argument(
+        "--constant-alpha",
+        action="store_true",
+        default=False,
+        help="Use constant alpha (sqrt(2)) instead of learnable",
+    )
+    parser.add_argument(
+        "--use-dropconnect",
+        action="store_true",
+        default=False,
+        help="Use DropConnect in YATConv",
+    )
+    parser.add_argument("--drop-rate", type=float, default=0.1, help="DropConnect rate")
+    parser.add_argument(
+        "--weight-normalized",
+        action="store_true",
+        default=False,
+        help="Enable weight normalization for each filter",
+    )
+    parser.add_argument(
+        "--tie-kernel-bank",
+        action="store_true",
+        default=False,
+        help="Enable weight tying across conv layers",
+    )
+    parser.add_argument(
+        "--tie-output-bank",
+        action="store_true",
+        default=False,
+        help="Enable weight tying for output YatNMN layer",
+    )
     # System
-    parser.add_argument('--no-cuda', action='store_true', default=False, help='Disables CUDA training')
-    parser.add_argument('--seed', type=int, default=42, help='Random seed')
-    parser.add_argument('--data-dir', type=str, default='./data', help='Directory for datasets')
+    parser.add_argument(
+        "--no-cuda", action="store_true", default=False, help="Disables CUDA training"
+    )
+    parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument(
+        "--data-dir", type=str, default="./data", help="Directory for datasets"
+    )
     # W&B
-    parser.add_argument('--use-wandb', action='store_true', default=False, help='Enable Weights & Biases logging')
-    parser.add_argument('--wandb-project', type=str, default='yat-experiments', help='W&B project name')
-    parser.add_argument('--wandb-entity', type=str, default=None, help='W&B entity (username or team)')
+    parser.add_argument(
+        "--use-wandb",
+        action="store_true",
+        default=False,
+        help="Enable Weights & Biases logging",
+    )
+    parser.add_argument(
+        "--wandb-project", type=str, default="yat-experiments", help="W&B project name"
+    )
+    parser.add_argument(
+        "--wandb-entity", type=str, default=None, help="W&B entity (username or team)"
+    )
 
     args = parser.parse_args()
 
-    if args.hf_dataset and args.dataset != 'CIFAR10':
-        print(f"Warning: --hf-dataset ('{args.hf_dataset}') is provided, ignoring --dataset ('{args.dataset}').")
+    if args.hf_dataset and args.dataset != "CIFAR10":
+        print(
+            f"Warning: --hf-dataset ('{args.hf_dataset}') is provided, ignoring --dataset ('{args.dataset}')."
+        )
         args.dataset = None
-
 
     torch.manual_seed(args.seed)
     use_cuda = not args.no_cuda and torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
-    print(f'Using device: {device}')
+    print(f"Using device: {device}")
 
     # --- W&B Setup ---
     if args.use_wandb:
@@ -481,44 +671,50 @@ def main():
             project=args.wandb_project,
             entity=args.wandb_entity,
             config=args,
-            name=run_name
+            name=run_name,
         )
 
     # --- Data Loading ---
-    print(f'Loading data...')
+    print(f"Loading data...")
     train_loader, val_loader, num_classes = get_data_loaders(
         dataset_name=args.dataset,
         hf_dataset=args.hf_dataset,
         batch_size=args.batch_size,
         image_size=args.image_size,
-        data_dir=args.data_dir
+        data_dir=args.data_dir,
     )
-    print(f'Dataset loaded. Num classes: {num_classes}')
+    print(f"Dataset loaded. Num classes: {num_classes}")
 
     # --- Model Initialization ---
     if len(args.num_blocks) != 4:
-        raise ValueError("The --num-blocks argument must have 4 integers for the 4 stages.")
+        raise ValueError(
+            "The --num-blocks argument must have 4 integers for the 4 stages."
+        )
 
-    if args.model == 'yat':
+    if args.model == "yat":
         constant_alpha_value = True if args.constant_alpha else None
-        print(f'Creating YAT ResNet with blocks: {args.num_blocks}')
-        print(f'  - Weight Normalization: {args.weight_normalized}')
-        print(f'  - Weight Tying (Conv): {args.tie_kernel_bank}')
-        print(f'  - Weight Tying (Output): {args.tie_output_bank}')
-        print(f'  - Constant Alpha: {args.constant_alpha}')
+        print(f"Creating YAT ResNet with blocks: {args.num_blocks}")
+        print(f"  - Weight Normalization: {args.weight_normalized}")
+        print(f"  - Weight Tying (Conv): {args.tie_kernel_bank}")
+        print(f"  - Weight Tying (Output): {args.tie_output_bank}")
+        print(f"  - Constant Alpha: {args.constant_alpha}")
         model = YATConvNet(
-            BasicYATBlock, args.num_blocks, num_classes=num_classes,
+            BasicYATBlock,
+            args.num_blocks,
+            num_classes=num_classes,
             use_alpha=args.use_alpha,
             constant_alpha=constant_alpha_value,
             use_dropconnect=args.use_dropconnect,
             drop_rate=args.drop_rate,
             weight_normalized=args.weight_normalized,
             tie_kernel_bank=args.tie_kernel_bank,
-            tie_output_bank=args.tie_output_bank
+            tie_output_bank=args.tie_output_bank,
         )
     else:
-        print(f'Creating Standard ResNet with blocks: {args.num_blocks}')
-        model = StandardConvNet(BasicStandardBlock, args.num_blocks, num_classes=num_classes)
+        print(f"Creating Standard ResNet with blocks: {args.num_blocks}")
+        model = StandardConvNet(
+            BasicStandardBlock, args.num_blocks, num_classes=num_classes
+        )
 
     if use_cuda and torch.cuda.device_count() > 1:
         print(f"Using {torch.cuda.device_count()} GPUs!")
@@ -526,10 +722,10 @@ def main():
     model = model.to(device)
 
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f'Model parameters: {num_params:,}')
+    print(f"Model parameters: {num_params:,}")
 
     if args.use_wandb:
-        wandb.watch(model, log='all', log_freq=100)
+        wandb.watch(model, log="all", log_freq=100)
 
     # --- Optimizer, Scheduler, Criterion ---
     optimizer = optim.AdamW(model.parameters(), lr=args.lr)
@@ -541,40 +737,63 @@ def main():
     global_step = 0
     for epoch in range(args.epochs):
         start_time = time.time()
-        print(f'\nEpoch {epoch+1}/{args.epochs} | LR: {scheduler.get_last_lr()[0]:.6f}')
+        print(f"\nEpoch {epoch+1}/{args.epochs} | LR: {scheduler.get_last_lr()[0]:.6f}")
 
-        train_loss, train_acc, global_step = train_epoch(model, train_loader, optimizer, criterion, device, args.use_wandb, global_step)
-        val_loss, val_acc, all_preds, all_targets = validate(model, val_loader, criterion, device)
+        train_loss, train_acc, global_step = train_epoch(
+            model,
+            train_loader,
+            optimizer,
+            criterion,
+            device,
+            args.use_wandb,
+            global_step,
+        )
+        val_loss, val_acc, all_preds, all_targets = validate(
+            model, val_loader, criterion, device
+        )
         scheduler.step()
 
-        print(f'Epoch Summary: Train Acc: {train_acc:.2f}% | Val Acc: {val_acc:.2f}% | Val Loss: {val_loss:.4f}')
+        print(
+            f"Epoch Summary: Train Acc: {train_acc:.2f}% | Val Acc: {val_acc:.2f}% | Val Loss: {val_loss:.4f}"
+        )
 
         if args.use_wandb:
-            wandb.log({
-                'epoch': epoch + 1,
-                'train/epoch_acc': train_acc,
-                'train/epoch_loss': train_loss,
-                'val/acc': val_acc,
-                'val/loss': val_loss,
-                'learning_rate': scheduler.get_last_lr()[0]
-            }, step=global_step)
+            wandb.log(
+                {
+                    "epoch": epoch + 1,
+                    "train/epoch_acc": train_acc,
+                    "train/epoch_loss": train_loss,
+                    "val/acc": val_acc,
+                    "val/loss": val_loss,
+                    "learning_rate": scheduler.get_last_lr()[0],
+                },
+                step=global_step,
+            )
             log_weight_histograms(model, epoch, args.use_wandb)
 
         if val_acc > best_acc:
             best_acc = val_acc
-            print(f'  -> New best validation accuracy: {best_acc:.2f}%. Saving model...')
-            model_path = f'best_{args.model}_{args.hf_dataset or args.dataset}.pth'
-            state_to_save = model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict()
+            print(
+                f"  -> New best validation accuracy: {best_acc:.2f}%. Saving model..."
+            )
+            model_path = f"best_{args.model}_{args.hf_dataset or args.dataset}.pth"
+            state_to_save = (
+                model.module.state_dict()
+                if isinstance(model, nn.DataParallel)
+                else model.state_dict()
+            )
             torch.save(state_to_save, model_path)
             if args.use_wandb:
                 wandb.save(model_path)
 
-        print(f'Epoch time: {time.time()-start_time:.1f}s | Best Val Acc: {best_acc:.2f}%')
+        print(
+            f"Epoch time: {time.time()-start_time:.1f}s | Best Val Acc: {best_acc:.2f}%"
+        )
 
     # --- Final Evaluation and Logging ---
-    print('\nTraining completed!')
+    print("\nTraining completed!")
     if args.use_wandb:
-        model_path = f'best_{args.model}_{args.hf_dataset or args.dataset}.pth'
+        model_path = f"best_{args.model}_{args.hf_dataset or args.dataset}.pth"
         state_dict = torch.load(model_path, map_location=device)
         model_to_load = model.module if isinstance(model, nn.DataParallel) else model
         model_to_load.load_state_dict(state_dict)
@@ -582,10 +801,10 @@ def main():
         _, _, all_preds, all_targets = validate(model, val_loader, criterion, device)
 
         # Get class names for confusion matrix
-        if hasattr(train_loader.dataset, 'classes'):
+        if hasattr(train_loader.dataset, "classes"):
             class_names = train_loader.dataset.classes
-        elif hasattr(train_loader.dataset, 'info'):
-             class_names = train_loader.dataset.info.features['label'].names
+        elif hasattr(train_loader.dataset, "info"):
+            class_names = train_loader.dataset.info.features["label"].names
         else:
             class_names = [str(i) for i in range(num_classes)]
 
@@ -593,5 +812,6 @@ def main():
 
         wandb.finish()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
