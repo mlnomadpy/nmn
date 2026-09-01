@@ -7,6 +7,7 @@ The suite is organized by the boundary it verifies:
 - `benchmarks/` — small performance assertions that are safe in CI;
 - `test_cli.py` — import-light command-line behavior;
 - `test_collection_policy.py` — optional-backend and collection isolation;
+- `test_documentation_policy.py` — installation and release-metadata invariants;
 - `test_workflow_policy.py` — CI/CD configuration invariants.
 
 Exploratory programs, reports, and long-running benchmarks belong in the
@@ -19,7 +20,10 @@ Useful commands:
 python -m pytest -q -m "not slow"
 python -m pytest tests/test_nnx -q
 python -m pytest tests/integration -q
-python -m pytest tests/test_workflow_policy.py tests/test_collection_policy.py -q
+python -m pytest \
+  tests/test_workflow_policy.py \
+  tests/test_collection_policy.py \
+  tests/test_documentation_policy.py -q
 ```
 
 Tests for unavailable optional backends are skipped before importing that

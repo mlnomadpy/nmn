@@ -29,7 +29,9 @@ differences and gotchas below.
 `YatNMN` is a drop-in replacement for `Linear + activation`. The non-linearity is
 intrinsic: `y = (x·W)² / (||x − W||² + ε) · alpha`. The same layer family
 (`YatNMN`, YAT conv, YAT embedding, YAT multi-head attention) ships across six
-frameworks with numerically equivalent outputs. Current release: 0.3.2.
+frameworks with numerically equivalent outputs. Release information is maintained
+on [PyPI](https://pypi.org/project/nmn/) and
+[GitHub Releases](https://github.com/azettaai/nmn/releases).
 
 ## Pick a framework
 

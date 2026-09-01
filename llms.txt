@@ -6,7 +6,9 @@
 > same `YatNMN` layer (plus YAT conv, embedding, and attention) ships across six
 > frameworks — PyTorch, Flax NNX, Flax Linen, Keras 3, TensorFlow, and MLX (Apple
 > Silicon) — with numerically equivalent outputs. Each backend is an independent
-> optional install (`pip install nmn[<framework>]`). Current release: 0.3.2.
+> optional install (`pip install nmn[<framework>]`). Release information is
+> maintained on [PyPI](https://pypi.org/project/nmn/) and
+> [GitHub Releases](https://github.com/azettaai/nmn/releases).
 
 ## Docs
 
