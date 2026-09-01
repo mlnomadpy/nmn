@@ -162,9 +162,12 @@ tests/
 ├── test_linen/      Flax Linen (JAX)
 ├── test_mlx/        MLX (Apple Silicon)
 ├── integration/     Cross-framework numerical consistency
-├── benchmarks/      Performance benchmarks
-└── scripts/         One-off validation scripts
+└── benchmarks/      Small performance assertions safe for CI
 ```
+
+Exploratory reports and long-running programs live in the repository-level
+`benchmarks/` directory and are run directly, not collected by pytest. See
+[`tests/README.md`](tests/README.md) and [`benchmarks/README.md`](benchmarks/README.md).
 
 The quickest way to run a backend's tests is the matching `make` target —
 `make test-torch`, `make test-nnx`, `make test-linen`, `make test-keras`,

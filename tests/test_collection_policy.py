@@ -4,6 +4,8 @@ from pathlib import Path
 
 import tests.conftest as shared_config
 
+ROOT = Path(__file__).parents[1]
+
 
 def test_mlx_availability_uses_native_safe_probe(monkeypatch):
     calls = []
@@ -41,3 +43,11 @@ def test_missing_keras_runtime_is_ignored(monkeypatch):
     path = Path("/checkout/tests/test_keras/test_attention.py")
 
     assert shared_config.pytest_ignore_collect(path, object()) is True
+
+
+def test_diagnostics_and_benchmarks_stay_outside_pytest_tree():
+    """Prevent import-time experiments from becoming accidental CI tests."""
+    assert not (ROOT / "tests" / "scripts").exists()
+    assert not list((ROOT / "benchmarks").rglob("test_*.py"))
+    assert (ROOT / "benchmarks" / "README.md").is_file()
+    assert (ROOT / "tests" / "README.md").is_file()

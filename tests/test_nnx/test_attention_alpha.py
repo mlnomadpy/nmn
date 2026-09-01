@@ -172,7 +172,7 @@ class TestMultiHeadAttentionAlpha:
         # Should have learnable alpha parameter
         assert attn.use_alpha is True
         assert attn.alpha is not None
-        assert hasattr(attn.alpha, "value")
+        assert isinstance(attn.alpha, nnx.Param)
 
         # Test forward pass
         batch_size, seq_len = 2, 10
@@ -362,10 +362,8 @@ class TestAlphaGradients:
 
         # Alpha should have gradients
         assert grads.alpha is not None
-        assert grads.alpha.value is not None
-        assert not jnp.allclose(grads.alpha.value, 0.0)
-
-        print(f"  [OK] Alpha gradients: {grads.alpha.value}")
+        assert jnp.isfinite(grads.alpha[...]).all()
+        assert not jnp.allclose(grads.alpha[...], 0.0)
 
     def test_constant_alpha_no_gradients(self):
         """Test that constant alpha has no gradients (as expected)."""

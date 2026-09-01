@@ -43,6 +43,48 @@ def test_codecov_uses_current_files_input():
     assert workflow.count("        files: ./coverage.xml") == 3
 
 
+def test_jax_ci_covers_minimum_and_latest_dependency_sets():
+    workflow = (WORKFLOWS / "test.yml").read_text()
+    jax_job = workflow.split("  test-jax:", 1)[1].split("  test-torch:", 1)[0]
+
+    assert jax_job.count("dependencies:") == 2
+    assert "dependencies: minimum" in jax_job
+    assert "dependencies: latest" in jax_job
+    assert '"jax==0.9.1"' in jax_job
+    assert 'pip install -e ".[dev,nnx,linen]" optax' in jax_job
+    assert "tests/scripts" not in jax_job
+    assert "Run minimum-version JAX tests with coverage" in jax_job
+    assert "Run latest-version JAX backend tests" in jax_job
+    assert jax_job.count("--cov=nmn") == 1
+
+
+def test_clean_checkout_jobs_do_not_delete_python_caches():
+    workflow = (WORKFLOWS / "test.yml").read_text()
+
+    assert "Clear pycache" not in workflow
+    assert 'find . -name "*.pyc"' not in workflow
+
+
+def test_lint_toolchain_is_reproducible_and_skips_generated_version_file():
+    workflow = (WORKFLOWS / "test.yml").read_text()
+    project = (WORKFLOWS.parents[1] / "pyproject.toml").read_text()
+
+    assert '"flake8==7.3.0"' in workflow
+    assert '"black==26.5.1"' in workflow
+    assert '"isort==9.0.1"' in workflow
+    assert "extend-exclude = 'src/nmn/_version\\.py'" in project
+
+
+def test_mirror_fails_and_verifies_when_sync_is_unavailable():
+    workflow = (WORKFLOWS / "mirror.yml").read_text()
+
+    assert 'if [ -z "${MIRROR_PAT}" ]; then' in workflow
+    assert "exit 0" not in workflow
+    assert "exit 1" in workflow
+    assert "git ls-remote" in workflow
+    assert "mirrored_head" in workflow
+
+
 def test_website_is_built_on_pull_requests_with_node24():
     workflow = (WORKFLOWS / "website.yml").read_text()
 
