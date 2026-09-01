@@ -13,7 +13,6 @@ from flax import nnx
 
 from nmn.nnx import Embed, YatConv, YatNMN
 
-
 ROOT = Path(__file__).resolve().parents[2]
 DEPRECATED_SETTER = "'.value' setter is now deprecated"
 
