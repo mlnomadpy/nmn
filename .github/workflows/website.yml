@@ -4,12 +4,12 @@ on:
   push:
     branches: [ main, master, develop ]
     paths:
-      - 'website/docusaurus/**'
+      - 'website/**'
       - '.github/workflows/website.yml'
   pull_request:
     branches: [ main, master, develop ]
     paths:
-      - 'website/docusaurus/**'
+      - 'website/**'
       - '.github/workflows/website.yml'
   workflow_dispatch:
 

@@ -6,6 +6,7 @@ from pathlib import Path
 
 WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
 DOCUSAURUS = WORKFLOWS.parents[1] / "website" / "docusaurus"
+CHECKOUT_REF = re.compile(r"actions/checkout@([^\s'\"#]+)")
 
 
 def test_publish_uploads_only_version_tags():
@@ -24,9 +25,10 @@ def test_ci_actions_use_node24_compatible_releases():
     ]
     workflows = "\n".join(path.read_text() for path in workflow_paths)
 
-    checkout_versions = re.findall(r"actions/checkout@(v\d+)", workflows)
+    checkout_versions = CHECKOUT_REF.findall(workflows)
     assert checkout_versions
     assert set(checkout_versions) == {"v7"}
+    assert CHECKOUT_REF.findall("uses: actions/checkout@main") == ["main"]
     assert "actions/setup-python@v5" not in workflows
     assert "codecov/codecov-action@v4" not in workflows
     assert "codecov/codecov-action@v5" not in workflows
@@ -45,7 +47,7 @@ def test_website_is_built_on_pull_requests_with_node24():
     workflow = (WORKFLOWS / "website.yml").read_text()
 
     assert "pull_request:" in workflow
-    assert "website/docusaurus/**" in workflow
+    assert workflow.count("website/**") == 2
     assert "node-version: '24'" in workflow
     assert "npm ci" in workflow
     assert "bash website/prepare-docusaurus-static.sh" in workflow
