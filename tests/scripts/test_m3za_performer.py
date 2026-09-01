@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 # Mock heavy/problematic dependencies
 sys.modules["mteb"] = MagicMock()
 sys.modules["datasets"] = MagicMock()
+sys.modules["wandb"] = MagicMock()
 
 import jax
 import jax.numpy as jnp
