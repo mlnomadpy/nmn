@@ -1,6 +1,7 @@
 # mypy: allow-untyped-defs
 import math
-from typing import Optional, Union
+from collections.abc import Callable
+from typing import Optional, Union, cast
 
 import torch
 from torch import Tensor
@@ -83,7 +84,7 @@ class _ConvNd(Module):
     ]
     __annotations__ = {"bias": Optional[torch.Tensor]}
 
-    def _conv_forward(  # type: ignore[empty-body]
+    def _conv_forward(
         self, input: Tensor, weight: Tensor, bias: Optional[Tensor]
     ) -> Tensor: ...
 
@@ -317,7 +318,7 @@ class _ConvTransposeNd(_ConvNd):
                 res.append(output_size[d] - min_sizes[d])
 
             ret = res
-        return ret
+        return cast(list[int], ret)
 
 
 class _ConvTransposeMixin(_ConvTransposeNd):
@@ -393,7 +394,10 @@ class YatConvNd(_ConvNd):
             self.register_buffer("mask", None)
 
     def _yat_forward(
-        self, input: Tensor, conv_fn: callable, deterministic: bool = False
+        self,
+        input: Tensor,
+        conv_fn: Callable[..., Tensor],
+        deterministic: bool = False,
     ) -> Tensor:
         # Apply DropConnect and masking to weights
         weight = self.weight
@@ -513,16 +517,16 @@ class _LazyConvXdMixin(LazyModuleMixin):
 
     def reset_parameters(self) -> None:
         # has_uninitialized_params is defined in parent class and it is using a protocol on self
-        if not self.has_uninitialized_params() and self.in_channels != 0:  # type: ignore[misc]
+        if not self.has_uninitialized_params() and self.in_channels != 0:
             # "type:ignore[..]" is required because mypy thinks that "reset_parameters" is undefined
             # in super class. Turns out that it is defined in _ConvND which is inherited by any class
             # that also inherits _LazyConvXdMixin
-            super().reset_parameters()  # type: ignore[misc]
+            super().reset_parameters()
 
     # Signature of "initialize_parameters" is incompatible with the definition in supertype LazyModuleMixin
-    def initialize_parameters(self, input: Tensor, *args, **kwargs) -> None:  # type: ignore[override]
+    def initialize_parameters(self, input: Tensor, *args, **kwargs) -> None:
         # defined by parent class but using a protocol
-        if self.has_uninitialized_params():  # type: ignore[misc]
+        if self.has_uninitialized_params():
             self.in_channels = self._get_in_channels(input)
             if self.in_channels % self.groups != 0:
                 raise ValueError("in_channels must be divisible by groups")
@@ -559,7 +563,7 @@ class _LazyConvXdMixin(LazyModuleMixin):
                 f"to {self.__class__.__name__}, but "
                 f"got input of size: {input.shape}"
             )
-        return input.shape[1] if input.dim() == num_dims_batch else input.shape[0]
+        return int(input.shape[1] if input.dim() == num_dims_batch else input.shape[0])
 
     # Function to return the number of spatial dims expected for inputs to the module.
     # This is expected to be implemented by subclasses.
@@ -576,7 +580,7 @@ class YatConvTransposeNd(YatConvNd):
     def _yat_transpose_forward(
         self,
         input: Tensor,
-        conv_transpose_fn: callable,
+        conv_transpose_fn: Callable[..., Tensor],
         deterministic: bool = False,
         output_size: Optional[list[int]] = None,
     ) -> Tensor:

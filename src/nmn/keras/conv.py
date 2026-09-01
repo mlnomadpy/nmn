@@ -1,7 +1,10 @@
 """YAT convolution layers for Keras/TensorFlow."""
 
+from __future__ import annotations
+
 import threading
 import weakref
+from typing import Any, ClassVar
 
 from keras.src import constraints, initializers, ops, regularizers
 from keras.src.api_export import keras_export
@@ -297,7 +300,9 @@ def _build_transpose_kernel(layer, input_dim):
 @keras_export("keras.layers.YatConv1D")
 class YatConv1D(_KernelBankSerializationMixin, Layer):
     # Class-level shared kernel banks (guarded by a lock for thread safety)
-    _KERNEL_BANKS = weakref.WeakValueDictionary()
+    _KERNEL_BANKS: ClassVar[weakref.WeakValueDictionary[Any, Any]] = (
+        weakref.WeakValueDictionary()
+    )
     _KERNEL_BANKS_LOCK = threading.Lock()
 
     """1D YAT convolution layer (e.g. temporal convolution).
@@ -648,7 +653,9 @@ class YatConv1D(_KernelBankSerializationMixin, Layer):
 @keras_export("keras.layers.YatConv2D")
 class YatConv2D(_KernelBankSerializationMixin, Layer):
     # Class-level shared kernel banks (guarded by a lock for thread safety)
-    _KERNEL_BANKS = weakref.WeakValueDictionary()
+    _KERNEL_BANKS: ClassVar[weakref.WeakValueDictionary[Any, Any]] = (
+        weakref.WeakValueDictionary()
+    )
     _KERNEL_BANKS_LOCK = threading.Lock()
 
     """2D YAT convolution layer (e.g. spatial convolution over images).
@@ -996,7 +1003,9 @@ class YatConv2D(_KernelBankSerializationMixin, Layer):
 @keras_export("keras.layers.YatConv3D")
 class YatConv3D(_KernelBankSerializationMixin, Layer):
     # Class-level shared kernel banks (guarded by a lock for thread safety)
-    _KERNEL_BANKS = weakref.WeakValueDictionary()
+    _KERNEL_BANKS: ClassVar[weakref.WeakValueDictionary[Any, Any]] = (
+        weakref.WeakValueDictionary()
+    )
     _KERNEL_BANKS_LOCK = threading.Lock()
 
     """3D YAT convolution layer (e.g. spatial convolution over volumes).
@@ -1313,7 +1322,9 @@ class YatConv3D(_KernelBankSerializationMixin, Layer):
 @keras_export("keras.layers.YatConvTranspose1D")
 class YatConvTranspose1D(_KernelBankSerializationMixin, Layer):
     # Class-level shared kernel banks (guarded by a lock for thread safety)
-    _KERNEL_BANKS = weakref.WeakValueDictionary()
+    _KERNEL_BANKS: ClassVar[weakref.WeakValueDictionary[Any, Any]] = (
+        weakref.WeakValueDictionary()
+    )
     _KERNEL_BANKS_LOCK = threading.Lock()
 
     """1D YAT transposed convolution layer (deconvolution).
@@ -1603,7 +1614,9 @@ class YatConvTranspose1D(_KernelBankSerializationMixin, Layer):
 @keras_export("keras.layers.YatConvTranspose2D")
 class YatConvTranspose2D(_KernelBankSerializationMixin, Layer):
     # Class-level shared kernel banks (guarded by a lock for thread safety)
-    _KERNEL_BANKS = weakref.WeakValueDictionary()
+    _KERNEL_BANKS: ClassVar[weakref.WeakValueDictionary[Any, Any]] = (
+        weakref.WeakValueDictionary()
+    )
     _KERNEL_BANKS_LOCK = threading.Lock()
 
     """2D YAT transposed convolution layer (deconvolution).
@@ -1897,7 +1910,9 @@ class YatConvTranspose2D(_KernelBankSerializationMixin, Layer):
 @keras_export("keras.layers.YatConvTranspose3D")
 class YatConvTranspose3D(_KernelBankSerializationMixin, Layer):
     # Class-level shared kernel banks (guarded by a lock for thread safety)
-    _KERNEL_BANKS = weakref.WeakValueDictionary()
+    _KERNEL_BANKS: ClassVar[weakref.WeakValueDictionary[Any, Any]] = (
+        weakref.WeakValueDictionary()
+    )
     _KERNEL_BANKS_LOCK = threading.Lock()
 
     """3D YAT transposed convolution layer (deconvolution).

@@ -2,6 +2,7 @@ import json
 import os
 import time
 from dataclasses import dataclass
+from typing import Any
 
 import flax.nnx as nnx
 import jax
@@ -420,8 +421,10 @@ class MiniBERTForMTEB:
         def process_batch_texts(text_batch):
             encoded_batch = self.tokenizer.encode_batch(text_batch)
 
-            ids = np.full((len(text_batch), self.maxlen), pad_id, dtype=np.int32)
-            mask = np.zeros((len(text_batch), self.maxlen), dtype=np.int32)
+            ids: np.ndarray = np.full(
+                (len(text_batch), self.maxlen), pad_id, dtype=np.int32
+            )
+            mask: np.ndarray = np.zeros((len(text_batch), self.maxlen), dtype=np.int32)
 
             for j, enc in enumerate(encoded_batch):
                 seq = enc.ids[: self.maxlen]
@@ -459,7 +462,7 @@ class MiniBERTForMTEB:
 # --- Main Functions ---
 def main_pretrain():
     """Runs the MLM pre-training loop."""
-    config = {
+    config: dict[str, Any] = {
         "num_transformer_blocks": 12,
         "maxlen": 1024,
         "embed_dim": 768,

@@ -16,7 +16,7 @@ Use via the convenience helper :func:`fused_yat_score`, or pass
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import Any, Optional, Union, cast
 
 import mlx.core as mx
 
@@ -46,10 +46,10 @@ _METAL_SOURCE = """
 # Lazily-compiled kernel handle. ``mx.fast.metal_kernel`` is cheap to
 # construct but we still cache the handle so the JIT compile only fires
 # once per process.
-_kernel_cache: Optional[object] = None
+_kernel_cache: Optional[Any] = None
 
 
-def _get_kernel() -> object:
+def _get_kernel() -> Any:
     global _kernel_cache
     if _kernel_cache is None:
         _kernel_cache = mx.fast.metal_kernel(
@@ -97,7 +97,7 @@ def _metal_forward(
         output_shapes=[(B, Out)],
         output_dtypes=[x.dtype],
     )
-    return outputs[0]
+    return cast(mx.array, outputs[0])
 
 
 def _standard_forward(
@@ -213,15 +213,17 @@ def fused_yat_score(
     # Reshape/cast are differentiable MLX operations, so gradients from the
     # custom VJP continue through softplus to ``epsilon_param``.
     if hasattr(epsilon, "shape"):
-        if epsilon.size != 1:
+        epsilon_array = cast(mx.array, epsilon)
+        if epsilon_array.size != 1:
             raise ValueError(
-                f"epsilon must be scalar or have one element, got shape {epsilon.shape}"
+                "epsilon must be scalar or have one element, got shape "
+                f"{epsilon_array.shape}"
             )
-        eps_arr = mx.reshape(epsilon, (1,)).astype(x.dtype)
+        eps_arr = mx.reshape(epsilon_array, (1,)).astype(x.dtype)
     else:
         eps_arr = mx.array([epsilon], dtype=x.dtype)
 
-    out_flat = _fused_yat_core(flat_x, w, bias, alpha, eps_arr)
+    out_flat = cast(mx.array, _fused_yat_core(flat_x, w, bias, alpha, eps_arr))
     return mx.reshape(out_flat, leading + (out_features,))
 
 

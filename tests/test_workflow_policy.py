@@ -86,33 +86,12 @@ def test_mypy_checks_the_package_from_one_drift_resistant_config():
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())
     config = project["tool"]["mypy"]
     package_files = sorted((ROOT / "src" / "nmn").rglob("*.py"))
-    excluded_patterns = [re.compile(pattern) for pattern in config["exclude"]]
-    relative_files = [path.relative_to(ROOT).as_posix() for path in package_files]
-    excluded_files = [
-        path
-        for path in relative_files
-        if any(pattern.search(path) for pattern in excluded_patterns)
-    ]
 
     assert config["files"] == ["src/nmn"]
-    assert config["follow_imports"] == "skip"
+    assert "follow_imports" not in config
+    assert "exclude" not in config
     assert "mypy==2.3.1" in project["project"]["optional-dependencies"]["dev"]
-    assert len(excluded_patterns) == 19
-    assert len(excluded_files) == len(excluded_patterns)
-    assert len(package_files) - len(excluded_files) >= 80
-    assert all(
-        sum(bool(pattern.search(path)) for path in relative_files) == 1
-        for pattern in excluded_patterns
-    )
-    assert not any(pattern.search("src/nmn/cli.py") for pattern in excluded_patterns)
-    assert not any(
-        pattern.search("src/nmn/torch/attention/yat_attention.py")
-        for pattern in excluded_patterns
-    )
-    assert not any(
-        pattern.search("src/nmn/nnx/layers/attention/pallas_yat_attention.py")
-        for pattern in excluded_patterns
-    )
+    assert len(package_files) >= 99
     assert workflow.count("mypy --no-error-summary") == 1
     mypy_job = workflow.split("  mypy:", 1)[1]
     assert 'pip install -e ".[dev]" "numpy<2.3"' in mypy_job

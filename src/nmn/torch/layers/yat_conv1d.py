@@ -1,7 +1,7 @@
 # mypy: allow-untyped-defs
 import math
 import threading
-from typing import Optional, Union
+from typing import ClassVar, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -44,8 +44,9 @@ class YatConv1D(Conv1d):
     """
 
     # Class-level shared kernel banks
-    _KERNEL_BANKS = {}
-    _KERNEL_BANK_USED = {}
+    weight: Parameter
+    _KERNEL_BANKS: ClassVar[dict[tuple[object, ...], Parameter]] = {}
+    _KERNEL_BANK_USED: ClassVar[dict[tuple[object, ...], bool]] = {}
     _KERNEL_BANKS_LOCK = threading.Lock()
 
     def __init__(

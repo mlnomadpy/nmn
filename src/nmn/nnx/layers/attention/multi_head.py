@@ -317,6 +317,7 @@ class MultiHeadAttention(Module):
         #   3. use_alpha=True (default) -> learnable alpha parameter
         #   4. use_alpha=False -> no alpha scaling
         self.alpha: nnx.Param[Array] | None
+        self._constant_alpha_value: float | None
 
         if constant_alpha is not None and constant_alpha is not False:
             # Use constant alpha (no learnable parameter)

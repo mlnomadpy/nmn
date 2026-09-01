@@ -85,6 +85,12 @@ class YatConv1D(SingleInputSavedModelMixin, tf.Module):
         name: Name of the module.
     """
 
+    input_channels: Optional[int]
+    kernel: Optional[tf.Variable]
+    bias: Optional[tf.Variable]
+    alpha: Optional[tf.Variable]
+    epsilon_param: Optional[tf.Variable]
+
     def __init__(
         self,
         filters: int,
@@ -203,6 +209,7 @@ class YatConv1D(SingleInputSavedModelMixin, tf.Module):
         """
         inputs = tf.convert_to_tensor(inputs, dtype=self.dtype)
         self._maybe_build(inputs)
+        assert self.input_channels is not None
         inputs, kernel = _upcast_yat_operands(inputs, self.kernel)
 
         # Compute dot product using standard convolution
@@ -274,6 +281,12 @@ class YatConv2D(SingleInputSavedModelMixin, tf.Module):
         dtype: The dtype of the computation. Defaults to tf.float32.
         name: Name of the module.
     """
+
+    input_channels: Optional[int]
+    kernel: Optional[tf.Variable]
+    bias: Optional[tf.Variable]
+    alpha: Optional[tf.Variable]
+    epsilon_param: Optional[tf.Variable]
 
     def __init__(
         self,
@@ -406,6 +419,7 @@ class YatConv2D(SingleInputSavedModelMixin, tf.Module):
         """
         inputs = tf.convert_to_tensor(inputs, dtype=self.dtype)
         self._maybe_build(inputs)
+        assert self.input_channels is not None
         inputs, kernel = _upcast_yat_operands(inputs, self.kernel)
 
         # Compute dot product using standard convolution
@@ -477,6 +491,12 @@ class YatConv3D(SingleInputSavedModelMixin, tf.Module):
         dtype: The dtype of the computation. Defaults to tf.float32.
         name: Name of the module.
     """
+
+    input_channels: Optional[int]
+    kernel: Optional[tf.Variable]
+    bias: Optional[tf.Variable]
+    alpha: Optional[tf.Variable]
+    epsilon_param: Optional[tf.Variable]
 
     def __init__(
         self,
@@ -612,6 +632,7 @@ class YatConv3D(SingleInputSavedModelMixin, tf.Module):
         """
         inputs = tf.convert_to_tensor(inputs, dtype=self.dtype)
         self._maybe_build(inputs)
+        assert self.input_channels is not None
         inputs, kernel = _upcast_yat_operands(inputs, self.kernel)
 
         # Compute dot product using standard convolution
@@ -677,6 +698,12 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
         dtype: The dtype of the computation. Defaults to tf.float32.
         name: Name of the module.
     """
+
+    input_channels: Optional[int]
+    kernel: Optional[tf.Variable]
+    bias: Optional[tf.Variable]
+    alpha: Optional[tf.Variable]
+    epsilon_param: Optional[tf.Variable]
 
     def __init__(
         self,
@@ -868,6 +895,12 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
         name: Name of the module.
     """
 
+    input_channels: Optional[int]
+    kernel: Optional[tf.Variable]
+    bias: Optional[tf.Variable]
+    alpha: Optional[tf.Variable]
+    epsilon_param: Optional[tf.Variable]
+
     def __init__(
         self,
         filters: int,
@@ -1046,6 +1079,12 @@ class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
         dtype: The dtype of the computation. Defaults to tf.float32.
         name: Name of the module.
     """
+
+    input_channels: Optional[int]
+    kernel: Optional[tf.Variable]
+    bias: Optional[tf.Variable]
+    alpha: Optional[tf.Variable]
+    epsilon_param: Optional[tf.Variable]
 
     def __init__(
         self,

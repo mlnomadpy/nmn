@@ -45,7 +45,7 @@ from .utils import (
     default_kernel_init,
 )
 
-Array = jax.Array
+Array: tp.TypeAlias = jax.Array
 
 
 class YatConv(Module):

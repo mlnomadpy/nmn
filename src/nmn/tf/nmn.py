@@ -75,6 +75,12 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
         y = layer(x)  # shape (32, 128) — no activation needed
     """
 
+    input_dim: Optional[int]
+    kernel: Optional[tf.Variable]
+    bias: Optional[tf.Variable]
+    alpha: Optional[tf.Variable]
+    epsilon_param: Optional[tf.Variable]
+
     def __init__(
         self,
         features: int,
@@ -213,6 +219,7 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
 
         # Build if necessary
         self._maybe_build(inputs)
+        assert self.kernel is not None
 
         output_dtype = self.dtype
         kernel = self.kernel
@@ -272,6 +279,7 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
                 )
                 y = y + tf.reshape(bias_const, bias_shape)
             else:
+                assert self.bias is not None
                 y = y + tf.reshape(reduction_safe_upcast(self.bias), bias_shape)
 
         # Resolve effective epsilon (learnable via softplus, or constant)
@@ -333,6 +341,7 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
                 f"Expected {len(expected)} weight tensors, got {len(weights)}"
             )
 
+        assert self.kernel is not None
         self.kernel.assign(weights[0])
         idx = 1
         if self.use_bias and self.bias is not None:

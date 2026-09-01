@@ -15,7 +15,7 @@ Mirrors the surface of ``nmn.tf.nmn.YatNMN`` (Tier-0 feature set):
 from __future__ import annotations
 
 import math
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, cast
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -312,7 +312,7 @@ class YatNMN(nn.Module):
 
         if self.return_weights:
             return y, self.kernel
-        return y
+        return cast(mx.array, y)
 
     # -----------------------------------------------------------------
     # Weight accessors — kept symmetric with nmn.tf.nmn.YatNMN.
