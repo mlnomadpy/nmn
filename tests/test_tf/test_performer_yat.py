@@ -11,11 +11,11 @@ import pytest
 tf = pytest.importorskip("tensorflow")
 
 from nmn.tf.performer_yat import (
-    maclaurin_coeffs,
     create_maclaurin_projection,
+    create_radial_projection,
+    maclaurin_coeffs,
     maclaurin_features,
     maclaurin_yat_attention,
-    create_radial_projection,
     radial_features,
     radial_yat_attention,
 )
@@ -104,22 +104,30 @@ def test_maclaurin_coeffs_nonnegative():
 # MAY -- shapes, finiteness, determinism
 # --------------------------------------------------------------------------
 def test_may_features_shape():
-    params = create_maclaurin_projection(head_dim=16, num_features=64, bias=1.0, epsilon=0.5, seed=0)
+    params = create_maclaurin_projection(
+        head_dim=16, num_features=64, bias=1.0, epsilon=0.5, seed=0
+    )
     x = tf.random.normal((2, 10, 4, 16))
     feat = maclaurin_features(x, params)
     assert feat.shape == (2, 10, 4, 64)
 
 
 def test_may_features_finite():
-    params = create_maclaurin_projection(head_dim=16, num_features=128, bias=1.0, epsilon=0.5, seed=0)
+    params = create_maclaurin_projection(
+        head_dim=16, num_features=128, bias=1.0, epsilon=0.5, seed=0
+    )
     x = tf.random.normal((2, 10, 4, 16))
     feat = maclaurin_features(x, params).numpy()
     assert np.all(np.isfinite(feat))
 
 
 def test_may_features_deterministic():
-    p0 = create_maclaurin_projection(head_dim=16, num_features=64, bias=1.0, epsilon=0.5, seed=7)
-    p1 = create_maclaurin_projection(head_dim=16, num_features=64, bias=1.0, epsilon=0.5, seed=7)
+    p0 = create_maclaurin_projection(
+        head_dim=16, num_features=64, bias=1.0, epsilon=0.5, seed=7
+    )
+    p1 = create_maclaurin_projection(
+        head_dim=16, num_features=64, bias=1.0, epsilon=0.5, seed=7
+    )
     np.testing.assert_array_equal(p0["omegas"].numpy(), p1["omegas"].numpy())
     np.testing.assert_array_equal(p0["degrees"].numpy(), p1["degrees"].numpy())
     x = tf.random.normal((3, 5, 2, 16))
@@ -129,7 +137,9 @@ def test_may_features_deterministic():
 
 
 def test_may_attention_shape_and_finite():
-    params = create_maclaurin_projection(head_dim=16, num_features=128, bias=1.0, epsilon=0.5, seed=0)
+    params = create_maclaurin_projection(
+        head_dim=16, num_features=128, bias=1.0, epsilon=0.5, seed=0
+    )
     q = tf.random.normal((2, 6, 4, 16))
     k = tf.random.normal((2, 8, 4, 16))
     v = tf.random.normal((2, 8, 4, 16))
@@ -139,7 +149,9 @@ def test_may_attention_shape_and_finite():
 
 
 def test_may_attention_causal_shape():
-    params = create_maclaurin_projection(head_dim=16, num_features=64, bias=1.0, epsilon=0.5, seed=0)
+    params = create_maclaurin_projection(
+        head_dim=16, num_features=64, bias=1.0, epsilon=0.5, seed=0
+    )
     q = tf.random.normal((2, 7, 4, 16))
     k = tf.random.normal((2, 7, 4, 16))
     v = tf.random.normal((2, 7, 4, 16))
@@ -156,7 +168,9 @@ def test_may_inner_product_tracks_kappa():
     strongly with the exact kernel and rise with s."""
     d, b, eps = 32, 1.0, 0.5
     M = 20000  # many features -> tight Monte-Carlo estimate
-    params = create_maclaurin_projection(head_dim=d, num_features=M, bias=b, epsilon=eps, seed=1)
+    params = create_maclaurin_projection(
+        head_dim=d, num_features=M, bias=b, epsilon=eps, seed=1
+    )
 
     rng = np.random.default_rng(0)
     x = _normalize_rows(rng.standard_normal((8, d)))
@@ -187,8 +201,12 @@ def test_may_more_features_better():
     exact = _exact_attention(q, k, v, b, eps)
 
     def cos_for(M):
-        params = create_maclaurin_projection(head_dim=d, num_features=M, bias=b, epsilon=eps, seed=0)
-        out = maclaurin_yat_attention(_bhd(q), _bhd(k), _bhd(v), params).numpy()[0, :, 0, :]
+        params = create_maclaurin_projection(
+            head_dim=d, num_features=M, bias=b, epsilon=eps, seed=0
+        )
+        out = maclaurin_yat_attention(_bhd(q), _bhd(k), _bhd(v), params).numpy()[
+            0, :, 0, :
+        ]
         return _per_token_cos(out, exact)
 
     assert cos_for(512) > cos_for(32)
@@ -208,17 +226,21 @@ def test_may_beats_slay_at_high_bias():
             eps = _median_sq_distance(_normalize_rows(q), _normalize_rows(k))
             exact = _exact_attention(q, k, v, b, eps)
 
-            mp = create_maclaurin_projection(head_dim=d, num_features=F, bias=b, epsilon=eps, seed=seed)
-            ma = maclaurin_yat_attention(_bhd(q), _bhd(k), _bhd(v), mp).numpy()[0, :, 0, :]
+            mp = create_maclaurin_projection(
+                head_dim=d, num_features=F, bias=b, epsilon=eps, seed=seed
+            )
+            ma = maclaurin_yat_attention(_bhd(q), _bhd(k), _bhd(v), mp).numpy()[
+                0, :, 0, :
+            ]
             may_cos.append(_per_token_cos(ma, exact))
 
             sp = _slay_create(d, P=32, M=8, R=1, eps=eps, seed=seed)
             sa = _linear_attention_np(_slay_features(q, sp), _slay_features(k, sp), v)
             slay_cos.append(_per_token_cos(sa, exact))
 
-        assert np.mean(may_cos) > np.mean(slay_cos), (
-            f"b={b}: MAY {np.mean(may_cos):.3f} <= SLAY {np.mean(slay_cos):.3f}"
-        )
+        assert np.mean(may_cos) > np.mean(
+            slay_cos
+        ), f"b={b}: MAY {np.mean(may_cos):.3f} <= SLAY {np.mean(slay_cos):.3f}"
 
 
 # --------------------------------------------------------------------------
@@ -226,7 +248,13 @@ def test_may_beats_slay_at_high_bias():
 # --------------------------------------------------------------------------
 def test_ray_features_shape():
     params = create_radial_projection(
-        head_dim=16, sketch_m=8, num_radial=4, radial_dim=8, bias=1.0, epsilon=0.5, seed=0
+        head_dim=16,
+        sketch_m=8,
+        num_radial=4,
+        radial_dim=8,
+        bias=1.0,
+        epsilon=0.5,
+        seed=0,
     )
     x = tf.random.normal((2, 10, 4, 16))
     feat = radial_features(x, params)
@@ -235,10 +263,22 @@ def test_ray_features_shape():
 
 def test_ray_features_finite_and_deterministic():
     p0 = create_radial_projection(
-        head_dim=16, sketch_m=8, num_radial=4, radial_dim=8, bias=1.0, epsilon=0.5, seed=5
+        head_dim=16,
+        sketch_m=8,
+        num_radial=4,
+        radial_dim=8,
+        bias=1.0,
+        epsilon=0.5,
+        seed=5,
     )
     p1 = create_radial_projection(
-        head_dim=16, sketch_m=8, num_radial=4, radial_dim=8, bias=1.0, epsilon=0.5, seed=5
+        head_dim=16,
+        sketch_m=8,
+        num_radial=4,
+        radial_dim=8,
+        bias=1.0,
+        epsilon=0.5,
+        seed=5,
     )
     x = tf.random.normal((2, 6, 2, 16))
     f0 = radial_features(x, p0).numpy()
@@ -249,7 +289,13 @@ def test_ray_features_finite_and_deterministic():
 
 def test_ray_attention_shape_and_finite():
     params = create_radial_projection(
-        head_dim=16, sketch_m=8, num_radial=4, radial_dim=8, bias=1.0, epsilon=0.5, seed=0
+        head_dim=16,
+        sketch_m=8,
+        num_radial=4,
+        radial_dim=8,
+        bias=1.0,
+        epsilon=0.5,
+        seed=0,
     )
     q = tf.random.normal((2, 6, 4, 16))
     k = tf.random.normal((2, 8, 4, 16))

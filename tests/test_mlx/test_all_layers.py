@@ -21,8 +21,12 @@ mlx_nn = pytest.importorskip("mlx.nn")
 mlx_optim = pytest.importorskip("mlx.optimizers")
 
 from nmn.mlx import (  # noqa: E402
-    YatConv1D, YatConv2D, YatConv3D,
-    YatConvTranspose1D, YatConvTranspose2D, YatConvTranspose3D,
+    YatConv1D,
+    YatConv2D,
+    YatConv3D,
+    YatConvTranspose1D,
+    YatConvTranspose2D,
+    YatConvTranspose3D,
 )
 
 
@@ -73,9 +77,7 @@ def _explicit_same_transpose_reference(
                     continue
                 kernel_value = kernel[(slice(None), *kernel_coord, slice(None))]
                 dot = dot + x_value @ kernel_value.T
-                patch_sq = patch_sq + mx.sum(
-                    x_value * x_value, axis=-1, keepdims=True
-                )
+                patch_sq = patch_sq + mx.sum(x_value * x_value, axis=-1, keepdims=True)
         distance = mx.maximum(patch_sq + kernel_sq - 2.0 * dot, 0.0)
         output_values.append(alpha * (dot + bias) ** 2 / (distance + epsilon))
     flat = mx.stack(output_values, axis=1)
@@ -203,7 +205,7 @@ def test_conv2d_math_parity():
     for f in range(4):
         for i in range(out_h):
             for j in range(out_w):
-                patch = xn[0, i:i + 3, j:j + 3, :]
+                patch = xn[0, i : i + 3, j : j + 3, :]
                 kf = W[f]
                 dot = (patch * kf).sum()
                 dist = ((patch - kf) ** 2).sum()
@@ -246,7 +248,9 @@ def test_conv_transpose1d_math_parity():
     assert np.max(np.abs(y - ref)) < 1e-5
 
 
-@pytest.mark.parametrize("kernel_size,stride,dilation", [(3, 2, 1), (4, 1, 1), (2, 2, 2)])
+@pytest.mark.parametrize(
+    "kernel_size,stride,dilation", [(3, 2, 1), (4, 1, 1), (2, 2, 2)]
+)
 def test_conv_transpose1d_same_math_parity(kernel_size, stride, dilation):
     """SAME uses a symmetric native transpose followed by a high-side
     adjustment; compare its complete YAT result to that definition."""
@@ -378,9 +382,7 @@ def _assert_same_multidim_forward_and_gradient_parity(
         return mx.sum(model(value) * cotangent)
 
     _, layer_grads = mlx_nn.value_and_grad(layer, layer_loss)(layer, inputs)
-    actual_input_grad = mx.grad(
-        lambda value: mx.sum(layer(value) * cotangent)
-    )(inputs)
+    actual_input_grad = mx.grad(lambda value: mx.sum(layer(value) * cotangent))(inputs)
 
     def reference_loss(value, kernel):
         return mx.sum(reference(value, kernel) * cotangent)

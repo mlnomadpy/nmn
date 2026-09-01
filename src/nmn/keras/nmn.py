@@ -1,11 +1,11 @@
-from keras.src import activations, constraints, initializers, regularizers
+import math
+
+import numpy as np
+from keras.src import activations, constraints, initializers, ops, regularizers
 from keras.src.api_export import keras_export
+from keras.src.backend import backend, standardize_dtype
 from keras.src.layers.input_spec import InputSpec
 from keras.src.layers.layer import Layer
-from keras.src import ops
-from keras.src.backend import backend, standardize_dtype
-import math
-import numpy as np
 
 from nmn._epsilon import (
     epsilon_parameter_dtype,
@@ -47,6 +47,7 @@ def _epsilon_weight_dtype(layer):
                 "the JAX backend would otherwise store it as float32"
             )
     return dtype
+
 
 @keras_export("keras.layers.YatNMN")
 class YatNMN(Layer):
@@ -213,7 +214,9 @@ class YatNMN(Layer):
         # Normalize each kernel column (neuron) to unit norm if weight_normalized.
         # Kernel shape is (input_dim, units) → each neuron is a column → axis=0.
         if self.weight_normalized:
-            weight_norm = ops.sqrt(ops.sum(ops.square(self.kernel), axis=0, keepdims=True))
+            weight_norm = ops.sqrt(
+                ops.sum(ops.square(self.kernel), axis=0, keepdims=True)
+            )
             self.kernel.assign(self.kernel / (weight_norm + 1e-8))
 
         self.input_spec = InputSpec(min_ndim=2, axes={-1: input_dim})
@@ -227,13 +230,19 @@ class YatNMN(Layer):
         # Spherical mode: normalize inputs and kernel columns (each neuron) to unit norm
         # Kernel shape is (input_dim, units), so each neuron is a column → axis=0
         if self.spherical:
-            inputs = inputs / (ops.sqrt(ops.sum(ops.square(inputs), axis=-1, keepdims=True)) + 1e-8)
-            kernel = kernel / (ops.sqrt(ops.sum(ops.square(kernel), axis=0, keepdims=True)) + 1e-8)
+            inputs = inputs / (
+                ops.sqrt(ops.sum(ops.square(inputs), axis=-1, keepdims=True)) + 1e-8
+            )
+            kernel = kernel / (
+                ops.sqrt(ops.sum(ops.square(kernel), axis=0, keepdims=True)) + 1e-8
+            )
 
         # Weight normalization: normalize each kernel column (neuron) at forward time.
         # Kernel shape is (input_dim, units) → axis=0 to normalize per neuron.
         if self.weight_normalized:
-            kernel = kernel / (ops.sqrt(ops.sum(ops.square(kernel), axis=0, keepdims=True)) + 1e-8)
+            kernel = kernel / (
+                ops.sqrt(ops.sum(ops.square(kernel), axis=0, keepdims=True)) + 1e-8
+            )
 
         # Compute dot product
         dot_product = ops.matmul(inputs, kernel)
@@ -249,7 +258,9 @@ class YatNMN(Layer):
                 kernel_squared_sum = ops.ones((self.units,), dtype=inputs.dtype)
             else:
                 kernel_squared_sum = ops.sum(ops.square(kernel), axis=0)
-            distances = ops.maximum(inputs_squared_sum + kernel_squared_sum - 2 * dot_product, 0.0)
+            distances = ops.maximum(
+                inputs_squared_sum + kernel_squared_sum - 2 * dot_product, 0.0
+            )
 
         # Add bias inside the numerator square: (dot + bias)^2 / dist
         if self.use_bias:
@@ -270,9 +281,7 @@ class YatNMN(Layer):
         # Compute the ratio in fp32 for low-precision policies.  Both dot^2 and
         # the expanded distance can overflow before their finite ratio forms.
         ratio_dtype = (
-            "float32"
-            if output_dtype in ("float16", "bfloat16")
-            else output_dtype
+            "float32" if output_dtype in ("float16", "bfloat16") else output_dtype
         )
         outputs = stable_yat_ratio(
             dot_product, distances, eps, output_dtype=ratio_dtype
@@ -294,27 +303,31 @@ class YatNMN(Layer):
 
     def get_config(self):
         config = super().get_config()
-        config.update({
-            "units": self.units,
-            "use_bias": self.use_bias,
-            "constant_bias": self.constant_bias,
-            "use_alpha": self.use_alpha,
-            "constant_alpha": self.constant_alpha,
-            "positive_init": self.positive_init,
-            "epsilon": self.epsilon,
-            "learnable_epsilon": self.learnable_epsilon,
-            "spherical": self.spherical,
-            "weight_normalized": self.weight_normalized,
-            "lazy": self.lazy,
-            "freeze_kernel": self.freeze_kernel,
-            "kernel_initializer": initializers.serialize(self.kernel_initializer),
-            "bias_initializer": initializers.serialize(self.bias_initializer),
-            "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
-            "bias_regularizer": regularizers.serialize(self.bias_regularizer),
-            "activity_regularizer": regularizers.serialize(self.activity_regularizer),
-            "kernel_constraint": constraints.serialize(self.kernel_constraint),
-            "bias_constraint": constraints.serialize(self.bias_constraint),
-        })
+        config.update(
+            {
+                "units": self.units,
+                "use_bias": self.use_bias,
+                "constant_bias": self.constant_bias,
+                "use_alpha": self.use_alpha,
+                "constant_alpha": self.constant_alpha,
+                "positive_init": self.positive_init,
+                "epsilon": self.epsilon,
+                "learnable_epsilon": self.learnable_epsilon,
+                "spherical": self.spherical,
+                "weight_normalized": self.weight_normalized,
+                "lazy": self.lazy,
+                "freeze_kernel": self.freeze_kernel,
+                "kernel_initializer": initializers.serialize(self.kernel_initializer),
+                "bias_initializer": initializers.serialize(self.bias_initializer),
+                "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
+                "bias_regularizer": regularizers.serialize(self.bias_regularizer),
+                "activity_regularizer": regularizers.serialize(
+                    self.activity_regularizer
+                ),
+                "kernel_constraint": constraints.serialize(self.kernel_constraint),
+                "bias_constraint": constraints.serialize(self.bias_constraint),
+            }
+        )
         return config
 
 

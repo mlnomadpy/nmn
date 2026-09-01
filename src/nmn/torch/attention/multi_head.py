@@ -153,9 +153,7 @@ class MultiHeadYatAttention(nn.Module):
                     break
             if target is None:
                 target = torch.float32
-        return tuple(
-            t.to(target) if t is not None else None for t in tensors
-        )
+        return tuple(t.to(target) if t is not None else None for t in tensors)
 
     def _linear(self, input: Tensor, projection: nn.Linear) -> Tensor:
         """Run a projection in compute dtype while retaining stored parameters."""
@@ -223,7 +221,7 @@ class MultiHeadYatAttention(nn.Module):
                 alpha = self.alpha
 
         # Promote dtypes
-        (q, k, v, alpha) = self._promote_dtype(q, k, v, alpha)
+        q, k, v, alpha = self._promote_dtype(q, k, v, alpha)
 
         # Apply YAT attention
         effective_mask = None
@@ -234,7 +232,9 @@ class MultiHeadYatAttention(nn.Module):
             )
         dropout_p = self.dropout if self.training and not deterministic else 0.0
         x = yat_attention(
-            q, k, v,
+            q,
+            k,
+            v,
             mask=effective_mask,
             dropout_p=dropout_p,
             training=self.training and not deterministic,

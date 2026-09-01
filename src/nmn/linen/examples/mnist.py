@@ -7,6 +7,7 @@ or:
 
 Uses torchvision to fetch MNIST so no tensorflow-datasets dependency is required.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -14,11 +15,11 @@ import json
 import time
 from pathlib import Path
 
+import flax.linen as nn
 import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
-import flax.linen as nn
 from flax.training import train_state
 from torchvision import datasets, transforms
 
@@ -63,7 +64,7 @@ def iter_batches(images, labels, batch_size, shuffle, rng):
     if shuffle:
         rng.shuffle(idx)
     for start in range(0, n - batch_size + 1, batch_size):
-        b = idx[start:start + batch_size]
+        b = idx[start : start + batch_size]
         yield jnp.asarray(images[b]), jnp.asarray(labels[b])
 
 
@@ -98,7 +99,9 @@ def main() -> None:
     dummy = jnp.zeros((1, 28, 28, 1))
     params = model.init(key, dummy)
     state = train_state.TrainState.create(
-        apply_fn=model.apply, params=params, tx=optax.adamw(args.lr),
+        apply_fn=model.apply,
+        params=params,
+        tx=optax.adamw(args.lr),
     )
 
     n_params = sum(p.size for p in jax.tree_util.tree_leaves(params))
@@ -132,10 +135,15 @@ def main() -> None:
             f"test_loss={test_loss:.4f} test_acc={test_acc:.4f} "
             f"time={epoch_s:.1f}s"
         )
-        history.append({
-            "epoch": epoch, "train_loss": train_loss,
-            "test_loss": test_loss, "test_acc": test_acc, "epoch_s": epoch_s,
-        })
+        history.append(
+            {
+                "epoch": epoch,
+                "train_loss": train_loss,
+                "test_loss": test_loss,
+                "test_acc": test_acc,
+                "epoch_s": epoch_s,
+            }
+        )
     total_s = time.perf_counter() - wall0
 
     result = {

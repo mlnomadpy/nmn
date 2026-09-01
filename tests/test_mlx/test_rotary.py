@@ -13,13 +13,12 @@ mlx_optim = pytest.importorskip("mlx.optimizers")
 
 from nmn.mlx import (  # noqa: E402
     RotaryYatAttention,
-    precompute_freqs_cis,
     apply_rotary_emb,
+    precompute_freqs_cis,
     rotary_yat_attention,
     rotary_yat_attention_weights,
     yat_attention_weights,
 )
-
 
 # ---------------------------------------------------------------------------
 # precompute_freqs_cis
@@ -238,14 +237,23 @@ def test_module_causal_mask_zeroes_upper_triangle():
     causal = np.tril(np.ones((6, 6), dtype=bool))[None, None, :, :]
     mask = mx.array(np.broadcast_to(causal, (1, 2, 6, 6)))
     # Use the functional helpers directly to inspect attention weights.
-    q = mx.reshape(mha._linear(x, mha.q_kernel, getattr(mha, "q_bias", None)),
-                   (1, 6, 2, 16)) if mha.is_built else None
+    q = (
+        mx.reshape(
+            mha._linear(x, mha.q_kernel, getattr(mha, "q_bias", None)), (1, 6, 2, 16)
+        )
+        if mha.is_built
+        else None
+    )
     if q is None:
         _ = mha(x)
-        q = mx.reshape(mha._linear(x, mha.q_kernel, getattr(mha, "q_bias", None)),
-                       (1, 6, 2, 16))
-    k = mx.reshape(mha._linear(x, mha.k_kernel, getattr(mha, "k_bias", None)),
-                   (1, 6, 2, 16))
-    w = np.array(rotary_yat_attention_weights(q, k, mha.freqs_cos, mha.freqs_sin, mask=mask))
+        q = mx.reshape(
+            mha._linear(x, mha.q_kernel, getattr(mha, "q_bias", None)), (1, 6, 2, 16)
+        )
+    k = mx.reshape(
+        mha._linear(x, mha.k_kernel, getattr(mha, "k_bias", None)), (1, 6, 2, 16)
+    )
+    w = np.array(
+        rotary_yat_attention_weights(q, k, mha.freqs_cos, mha.freqs_sin, mask=mask)
+    )
     upper = np.triu(np.ones_like(w[0, 0]), k=1).astype(bool)
     assert float(np.max(np.abs(w[..., upper]))) < 1e-5

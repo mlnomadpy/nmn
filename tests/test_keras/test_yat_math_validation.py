@@ -4,14 +4,15 @@ Validates that Keras implementations compute the correct YAT formula:
     y = (x·W + b)² / (‖x - W‖² + ε)
 """
 
-import pytest
 import numpy as np
+import pytest
 
 
 def test_keras_yat_nmn_formula_no_bias():
     """YatNMN (Keras) computes (x·W)² / (‖x-W‖² + ε) when use_bias=False."""
     try:
         import tensorflow as tf
+
         from nmn.keras.nmn import YatNMN
     except ImportError:
         pytest.skip("Keras/TF not available")
@@ -21,12 +22,12 @@ def test_keras_yat_nmn_formula_no_bias():
     layer = YatNMN(units=3, use_bias=False, use_alpha=False, epsilon=1e-5)
     out = layer(x_np).numpy()
 
-    w = layer.kernel.numpy()   # (4, 3)
-    dot = x_np @ w             # (2, 3)
-    x_sq = np.sum(x_np ** 2, axis=-1, keepdims=True)
-    w_sq = np.sum(w ** 2, axis=0)   # (3,)
+    w = layer.kernel.numpy()  # (4, 3)
+    dot = x_np @ w  # (2, 3)
+    x_sq = np.sum(x_np**2, axis=-1, keepdims=True)
+    w_sq = np.sum(w**2, axis=0)  # (3,)
     dist = x_sq + w_sq - 2 * dot
-    expected = dot ** 2 / (dist + 1e-5)
+    expected = dot**2 / (dist + 1e-5)
 
     np.testing.assert_allclose(out, expected, rtol=1e-5, atol=1e-5)
 
@@ -34,9 +35,10 @@ def test_keras_yat_nmn_formula_no_bias():
 def test_keras_yat_nmn_formula_with_bias():
     """YatNMN (Keras) puts bias INSIDE the square: (x·W + b)² / dist."""
     try:
-        import tensorflow as tf
-        from nmn.keras.nmn import YatNMN
         import keras
+        import tensorflow as tf
+
+        from nmn.keras.nmn import YatNMN
     except ImportError:
         pytest.skip("Keras/TF not available")
 
@@ -53,19 +55,25 @@ def test_keras_yat_nmn_formula_with_bias():
     out = layer(x_np).numpy()
 
     dot = x_np @ w_val
-    x_sq = np.sum(x_np ** 2, axis=-1, keepdims=True)
-    w_sq = np.sum(w_val ** 2, axis=0)
+    x_sq = np.sum(x_np**2, axis=-1, keepdims=True)
+    w_sq = np.sum(w_val**2, axis=0)
     dist = x_sq + w_sq - 2 * dot
     expected = (dot + b_val) ** 2 / (dist + 1e-5)
 
-    np.testing.assert_allclose(out, expected, rtol=1e-5, atol=1e-5,
-                                err_msg="Keras bias must be inside the numerator square")
+    np.testing.assert_allclose(
+        out,
+        expected,
+        rtol=1e-5,
+        atol=1e-5,
+        err_msg="Keras bias must be inside the numerator square",
+    )
 
 
 def test_keras_yat_nmn_bias_not_added_after():
     """Confirm output with bias ≠ output_no_bias + bias (wrong formula check)."""
     try:
         import tensorflow as tf
+
         from nmn.keras.nmn import YatNMN
     except ImportError:
         pytest.skip("Keras/TF not available")
@@ -88,23 +96,27 @@ def test_keras_yat_nmn_bias_not_added_after():
     out_bias = layer_bias(x_np).numpy()
 
     wrong_formula = out_no_bias + b_val
-    assert not np.allclose(out_bias, wrong_formula, atol=1e-4), \
-        "Keras bias appears to be added AFTER squaring (wrong formula)"
+    assert not np.allclose(
+        out_bias, wrong_formula, atol=1e-4
+    ), "Keras bias appears to be added AFTER squaring (wrong formula)"
 
 
 def test_keras_yat_nmn_constant_alpha():
     """constant_alpha=True applies sqrt(2) scaling."""
     try:
-        import tensorflow as tf
-        from nmn.keras.nmn import YatNMN
         import math
+
+        import tensorflow as tf
+
+        from nmn.keras.nmn import YatNMN
     except ImportError:
         pytest.skip("Keras/TF not available")
 
     np.random.seed(1)
     x_np = np.random.randn(2, 4).astype(np.float32)
-    layer = YatNMN(units=3, use_bias=False, use_alpha=False,
-                   constant_alpha=True, epsilon=1e-5)
+    layer = YatNMN(
+        units=3, use_bias=False, use_alpha=False, constant_alpha=True, epsilon=1e-5
+    )
     layer_no_alpha = YatNMN(units=3, use_bias=False, use_alpha=False, epsilon=1e-5)
     _ = layer(x_np)
     _ = layer_no_alpha(x_np)
@@ -123,6 +135,7 @@ def test_keras_yat_nmn_spherical_distance_correct():
     """Spherical mode: inputs and kernel normalized per-row, distance = 2 - 2*(x·W)."""
     try:
         import tensorflow as tf
+
         from nmn.keras.nmn import YatNMN
     except ImportError:
         pytest.skip("Keras/TF not available")
@@ -130,8 +143,9 @@ def test_keras_yat_nmn_spherical_distance_correct():
     np.random.seed(11)
     x_np = np.random.randn(2, 4).astype(np.float32)
 
-    layer = YatNMN(units=3, use_bias=True, use_alpha=False,
-                   spherical=True, epsilon=1e-5)
+    layer = YatNMN(
+        units=3, use_bias=True, use_alpha=False, spherical=True, epsilon=1e-5
+    )
     _ = layer(x_np)
 
     w_val = np.random.randn(4, 3).astype(np.float32)
@@ -150,8 +164,13 @@ def test_keras_yat_nmn_spherical_distance_correct():
     dist = np.maximum(2 - 2 * dot, 0.0)
     expected = (dot + b_val) ** 2 / (dist + 1e-5)
 
-    np.testing.assert_allclose(out, expected, rtol=1e-4, atol=1e-4,
-                                err_msg="Spherical mode computation mismatch")
+    np.testing.assert_allclose(
+        out,
+        expected,
+        rtol=1e-4,
+        atol=1e-4,
+        err_msg="Spherical mode computation mismatch",
+    )
 
 
 def test_keras_yat_nmn_epsilon_positive_validation():

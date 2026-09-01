@@ -102,8 +102,8 @@ import keras
 from nmn.keras import YatNMN
 
 model = keras.Sequential([
-    YatNMN(features=256),
-    YatNMN(features=128),
+    YatNMN(units=256),
+    YatNMN(units=128),
     keras.layers.Dense(10),  # keep linear for logits
 ])
 ```

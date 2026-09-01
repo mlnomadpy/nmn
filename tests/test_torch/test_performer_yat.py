@@ -14,14 +14,14 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from nmn.torch.attention.performer_yat import (
-    maclaurin_coeffs,
     create_maclaurin_projection,
+    create_radial_projection,
+    linear_attention_readout,
+    maclaurin_coeffs,
     maclaurin_features,
     maclaurin_yat_attention,
-    create_radial_projection,
     radial_features,
     radial_yat_attention,
-    linear_attention_readout,
 )
 from nmn.torch.attention.yat_attention import yat_attention_normalized
 
@@ -100,7 +100,7 @@ def test_maclaurin_coeffs_nonneg_and_reconstruct():
     # Series reconstructs kappa(s) for |s| < C/2.
     C = 2.0 + eps
     for s in [-0.5, 0.0, 0.3, 0.7]:
-        approx = sum(a[n] * s ** n for n in range(nmax + 1))
+        approx = sum(a[n] * s**n for n in range(nmax + 1))
         exact = (s + b) ** 2 / (C - 2.0 * s)
         assert abs(approx - exact) < 1e-6
 
@@ -110,7 +110,9 @@ def test_maclaurin_coeffs_nonneg_and_reconstruct():
 # --------------------------------------------------------------------------
 def test_may_feature_shape():
     d, M = 16, 64
-    params = create_maclaurin_projection(head_dim=d, num_features=M, bias=1.0, epsilon=0.2, seed=0)
+    params = create_maclaurin_projection(
+        head_dim=d, num_features=M, bias=1.0, epsilon=0.2, seed=0
+    )
     x = torch.randn(2, 5, 4, d)
     feat = maclaurin_features(x, params)
     assert feat.shape == (2, 5, 4, M)
@@ -118,7 +120,9 @@ def test_may_feature_shape():
 
 def test_may_attention_shape_and_finite():
     d, M = 16, 64
-    params = create_maclaurin_projection(head_dim=d, num_features=M, bias=1.0, epsilon=0.2, seed=0)
+    params = create_maclaurin_projection(
+        head_dim=d, num_features=M, bias=1.0, epsilon=0.2, seed=0
+    )
     q = torch.randn(2, 5, 4, d)
     k = torch.randn(2, 7, 4, d)
     v = torch.randn(2, 7, 4, 8)
@@ -129,7 +133,9 @@ def test_may_attention_shape_and_finite():
 
 def test_may_causal_shape_and_finite():
     d, M = 16, 64
-    params = create_maclaurin_projection(head_dim=d, num_features=M, bias=1.0, epsilon=0.2, seed=1)
+    params = create_maclaurin_projection(
+        head_dim=d, num_features=M, bias=1.0, epsilon=0.2, seed=1
+    )
     q = torch.randn(2, 6, 3, d)
     v = torch.randn(2, 6, 3, 8)
     out = maclaurin_yat_attention(q, q, v, params, causal=True)
@@ -140,8 +146,12 @@ def test_may_causal_shape_and_finite():
 def test_may_determinism():
     d, M = 16, 64
     x = torch.randn(3, 4, 2, d)
-    p1 = create_maclaurin_projection(head_dim=d, num_features=M, bias=1.0, epsilon=0.2, seed=42)
-    p2 = create_maclaurin_projection(head_dim=d, num_features=M, bias=1.0, epsilon=0.2, seed=42)
+    p1 = create_maclaurin_projection(
+        head_dim=d, num_features=M, bias=1.0, epsilon=0.2, seed=42
+    )
+    p2 = create_maclaurin_projection(
+        head_dim=d, num_features=M, bias=1.0, epsilon=0.2, seed=42
+    )
     f1 = maclaurin_features(x, p1)
     f2 = maclaurin_features(x, p2)
     assert torch.allclose(f1, f2)
@@ -149,7 +159,9 @@ def test_may_determinism():
 
 def test_may_causal_matches_full_at_last_query():
     d, M = 16, 64
-    params = create_maclaurin_projection(head_dim=d, num_features=M, bias=1.0, epsilon=0.2, seed=3)
+    params = create_maclaurin_projection(
+        head_dim=d, num_features=M, bias=1.0, epsilon=0.2, seed=3
+    )
     x = torch.randn(1, 5, 2, d)
     v = torch.randn(1, 5, 2, 6)
     causal = maclaurin_yat_attention(x, x, v, params, causal=True)
@@ -206,7 +218,9 @@ def test_may_more_features_better_attention_fit():
     exact = _exact_attention(q, k, v, b, eps)
 
     def fit(M):
-        p = create_maclaurin_projection(head_dim=d, num_features=M, bias=b, epsilon=eps, seed=0)
+        p = create_maclaurin_projection(
+            head_dim=d, num_features=M, bias=b, epsilon=eps, seed=0
+        )
         qf = maclaurin_features(torch.as_tensor(q), p).numpy()
         kf = maclaurin_features(torch.as_tensor(k), p).numpy()
         out = _linear_attention_np(qf, kf, v)
@@ -233,7 +247,9 @@ def test_may_beats_slay_at_high_bias(b):
         eps = _median_sq_distance(_normalize_rows(q), _normalize_rows(k))
         exact = _exact_attention(q, k, v, b, eps)
 
-        mp = create_maclaurin_projection(head_dim=d, num_features=F, bias=b, epsilon=eps, seed=seed)
+        mp = create_maclaurin_projection(
+            head_dim=d, num_features=F, bias=b, epsilon=eps, seed=seed
+        )
         qf = maclaurin_features(torch.as_tensor(q), mp).numpy()
         kf = maclaurin_features(torch.as_tensor(k), mp).numpy()
         cos_may.append(_per_token_cos(_linear_attention_np(qf, kf, v), exact))
@@ -252,7 +268,13 @@ def test_may_beats_slay_at_high_bias(b):
 def test_ray_feature_shape_and_finite():
     d = 16
     params = create_radial_projection(
-        head_dim=d, sketch_m=8, num_radial=4, radial_dim=8, bias=1.0, epsilon=0.3, seed=0
+        head_dim=d,
+        sketch_m=8,
+        num_radial=4,
+        radial_dim=8,
+        bias=1.0,
+        epsilon=0.3,
+        seed=0,
     )
     x = torch.randn(2, 5, 3, d)
     feat = radial_features(x, params)
@@ -264,7 +286,13 @@ def test_ray_feature_shape_and_finite():
 def test_ray_attention_shape_and_finite():
     d = 16
     params = create_radial_projection(
-        head_dim=d, sketch_m=8, num_radial=4, radial_dim=8, bias=1.0, epsilon=0.3, seed=0
+        head_dim=d,
+        sketch_m=8,
+        num_radial=4,
+        radial_dim=8,
+        bias=1.0,
+        epsilon=0.3,
+        seed=0,
     )
     q = torch.randn(2, 5, 3, d)
     k = torch.randn(2, 7, 3, d)
@@ -277,8 +305,24 @@ def test_ray_attention_shape_and_finite():
 def test_ray_determinism():
     d = 16
     x = torch.randn(2, 4, 2, d)
-    p1 = create_radial_projection(head_dim=d, sketch_m=8, num_radial=4, radial_dim=8, bias=1.0, epsilon=0.3, seed=5)
-    p2 = create_radial_projection(head_dim=d, sketch_m=8, num_radial=4, radial_dim=8, bias=1.0, epsilon=0.3, seed=5)
+    p1 = create_radial_projection(
+        head_dim=d,
+        sketch_m=8,
+        num_radial=4,
+        radial_dim=8,
+        bias=1.0,
+        epsilon=0.3,
+        seed=5,
+    )
+    p2 = create_radial_projection(
+        head_dim=d,
+        sketch_m=8,
+        num_radial=4,
+        radial_dim=8,
+        bias=1.0,
+        epsilon=0.3,
+        seed=5,
+    )
     assert torch.allclose(radial_features(x, p1), radial_features(x, p2))
 
 

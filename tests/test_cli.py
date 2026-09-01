@@ -15,10 +15,10 @@ import pytest
 from nmn import cli
 from tests import _isolated_backend
 
-
 # ---------------------------------------------------------------------------
 # Import-lightness: importing nmn.cli must not pull in any heavy framework.
 # ---------------------------------------------------------------------------
+
 
 def test_cli_import_is_light():
     # Force a clean (re)import of nmn.cli in a subprocess-free way: drop it and
@@ -41,6 +41,7 @@ def test_cli_import_is_light():
 # ---------------------------------------------------------------------------
 # Exit codes
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "argv",
@@ -73,12 +74,20 @@ def test_unknown_guide_framework_exits_two():
 # Content: key substrings
 # ---------------------------------------------------------------------------
 
+
 def test_info_default_banner(capsys):
     assert cli.main([]) == 0
     out = capsys.readouterr().out
     assert "nmn" in out
     # All six framework extras advertised.
-    for extra in ("nmn[torch]", "nmn[nnx]", "nmn[keras]", "nmn[tf]", "nmn[linen]", "nmn[mlx]"):
+    for extra in (
+        "nmn[torch]",
+        "nmn[nnx]",
+        "nmn[keras]",
+        "nmn[tf]",
+        "nmn[linen]",
+        "nmn[mlx]",
+    ):
         assert extra in out
     assert "nmn guide" in out
 
@@ -178,11 +187,7 @@ def test_guide_yatnmn_ctor_kwargs_match_signatures(capsys):
 
 def _extract_lines(text, prefix_token):
     """Return source lines (dedented) from a guide containing ``prefix_token``."""
-    return [
-        line.strip()
-        for line in text.splitlines()
-        if prefix_token in line
-    ]
+    return [line.strip() for line in text.splitlines() if prefix_token in line]
 
 
 def test_torch_guide_snippets_construct(capsys):
@@ -196,7 +201,7 @@ def test_torch_guide_snippets_construct(capsys):
     assert cli.main(["guide", "torch"]) == 0
     text = capsys.readouterr().out
 
-    from nmn.torch import YatNMN, MultiHeadYatAttention
+    from nmn.torch import MultiHeadYatAttention, YatNMN
 
     # Exec the YatNMN ctor lines verbatim from the guide.
     for line in _extract_lines(text, "YatNMN(in_features="):
@@ -227,13 +232,16 @@ def test_guide_attention_ctor_constructs_for_importable(fw, capsys):
 
     if fw == "nnx":
         from flax import nnx
+
         from nmn.nnx import MultiHeadAttention
+
         rngs = nnx.Rngs(0)
         line = _extract_lines(text, "MultiHeadAttention(num_heads=")[0]
         expr = line.split("=", 1)[1].strip()
         eval(expr, {"MultiHeadAttention": MultiHeadAttention, "rngs": rngs, "nnx": nnx})
     elif fw == "linen":
         from nmn.linen import MultiHeadAttention
+
         line = _extract_lines(text, "MultiHeadAttention(num_heads=")[0]
         expr = line.split("=", 1)[1].strip()
         eval(expr, {"MultiHeadAttention": MultiHeadAttention})
@@ -248,10 +256,7 @@ def test_mlx_guide_attention_ctor_constructs_in_isolated_process(capsys):
     text = capsys.readouterr().out
     line = _extract_lines(text, "MultiHeadYatAttention(embed_dim=")[0]
     expr = line.split("=", 1)[1].strip()
-    script = (
-        "from nmn.mlx import MultiHeadYatAttention\n"
-        f"{expr}\n"
-    )
+    script = "from nmn.mlx import MultiHeadYatAttention\n" f"{expr}\n"
     completed = subprocess.run(
         [sys.executable, "-c", script],
         capture_output=True,
@@ -286,6 +291,7 @@ def test_doctor_lists_all_backends(capsys):
 # Doctor isolation: optional backends cannot crash or hang the caller.
 # ---------------------------------------------------------------------------
 
+
 def _probe_result(*, returncode=0, stdout="", stderr=""):
     return subprocess.CompletedProcess(
         args=[sys.executable],
@@ -319,9 +325,7 @@ def _patch_fake_windows_job(monkeypatch):
 
 def test_optional_backend_probe_success(monkeypatch):
     _patch_fake_windows_job(monkeypatch)
-    process = _FakeProbeProcess(
-        stdout=_isolated_backend._PROBE_MARKER_BYTES + b"\n"
-    )
+    process = _FakeProbeProcess(stdout=_isolated_backend._PROBE_MARKER_BYTES + b"\n")
     calls = []
 
     def fake_popen(command, **kwargs):
@@ -330,9 +334,7 @@ def test_optional_backend_probe_success(monkeypatch):
 
     monkeypatch.setattr(_isolated_backend.subprocess, "Popen", fake_popen)
 
-    assert _isolated_backend.isolated_import_succeeds(
-        ["mlx.core"], readiness="mlx"
-    )
+    assert _isolated_backend.isolated_import_succeeds(["mlx.core"], readiness="mlx")
     command, kwargs = calls[0]
     assert command[:3] == [sys.executable, "-c", _isolated_backend._PROBE_SCRIPT]
     request = json.loads(command[3])
@@ -349,14 +351,16 @@ def test_optional_backend_probe_success(monkeypatch):
 
 def test_optional_backend_probe_handles_none_and_malformed_output(monkeypatch):
     _patch_fake_windows_job(monkeypatch)
-    processes = iter([
-        _FakeProbeProcess(stdout=None, stderr=None),
-        _FakeProbeProcess(stdout=_isolated_backend._PROBE_MARKER),
-        _FakeProbeProcess(
-            stdout=b"\xff\xfe\n" + _isolated_backend._PROBE_MARKER_BYTES + b"\n",
-            stderr=b"\x80",
-        ),
-    ])
+    processes = iter(
+        [
+            _FakeProbeProcess(stdout=None, stderr=None),
+            _FakeProbeProcess(stdout=_isolated_backend._PROBE_MARKER),
+            _FakeProbeProcess(
+                stdout=b"\xff\xfe\n" + _isolated_backend._PROBE_MARKER_BYTES + b"\n",
+                stderr=b"\x80",
+            ),
+        ]
+    )
     monkeypatch.setattr(
         _isolated_backend.subprocess, "Popen", lambda *args, **kwargs: next(processes)
     )
@@ -381,9 +385,7 @@ def test_optional_backend_probe_python_failure_is_unavailable(monkeypatch):
 
 
 @pytest.mark.parametrize("returncode", [-signal.SIGABRT, 128 + signal.SIGABRT])
-def test_optional_backend_probe_native_failure_is_unavailable(
-    monkeypatch, returncode
-):
+def test_optional_backend_probe_native_failure_is_unavailable(monkeypatch, returncode):
     _patch_fake_windows_job(monkeypatch)
     monkeypatch.setattr(
         _isolated_backend.subprocess,
@@ -409,51 +411,36 @@ def test_optional_backend_probe_really_imports_in_child(tmp_path, monkeypatch):
     assert _isolated_backend.isolated_import_succeeds(["healthy_backend"])
 
 
-def test_optional_backend_probe_really_contains_python_failure(
-    tmp_path, monkeypatch
-):
+def test_optional_backend_probe_really_contains_python_failure(tmp_path, monkeypatch):
     (tmp_path / "python_failure_backend.py").write_text(
         "raise RuntimeError('initialization failed')\n", encoding="utf-8"
     )
     _prepend_pythonpath(monkeypatch, tmp_path)
 
-    assert not _isolated_backend.isolated_import_succeeds(
-        ["python_failure_backend"]
-    )
+    assert not _isolated_backend.isolated_import_succeeds(["python_failure_backend"])
 
 
-def test_optional_backend_probe_really_contains_native_abort(
-    tmp_path, monkeypatch
-):
+def test_optional_backend_probe_really_contains_native_abort(tmp_path, monkeypatch):
     (tmp_path / "native_abort_backend.py").write_text(
         "import os\nos.abort()\n", encoding="utf-8"
     )
     _prepend_pythonpath(monkeypatch, tmp_path)
 
-    assert not _isolated_backend.isolated_import_succeeds(
-        ["native_abort_backend"]
-    )
+    assert not _isolated_backend.isolated_import_succeeds(["native_abort_backend"])
 
 
-def test_optional_backend_probe_really_handles_invalid_bytes(
-    tmp_path, monkeypatch
-):
+def test_optional_backend_probe_really_handles_invalid_bytes(tmp_path, monkeypatch):
     (tmp_path / "invalid_bytes_backend.py").write_text(
-        "import os\nos.write(1, b'\\xff\\xfe\\n')\n"
-        "os.write(2, b'\\x80\\n')\n",
+        "import os\nos.write(1, b'\\xff\\xfe\\n')\n" "os.write(2, b'\\x80\\n')\n",
         encoding="utf-8",
     )
     _prepend_pythonpath(monkeypatch, tmp_path)
 
-    assert _isolated_backend.isolated_import_succeeds(
-        ["invalid_bytes_backend"]
-    )
+    assert _isolated_backend.isolated_import_succeeds(["invalid_bytes_backend"])
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX process-group assertion")
-def test_optional_backend_probe_timeout_kills_descendant_group(
-    tmp_path, monkeypatch
-):
+def test_optional_backend_probe_timeout_kills_descendant_group(tmp_path, monkeypatch):
     pid_file = tmp_path / "descendant.pid"
     (tmp_path / "descendant_backend.py").write_text(
         "import pathlib, signal, subprocess, sys, time\n"
@@ -471,9 +458,7 @@ def test_optional_backend_probe_timeout_kills_descendant_group(
     monkeypatch.setattr(_isolated_backend, "_PROBE_TIMEOUT_SECONDS", 1.0)
     monkeypatch.setattr(_isolated_backend, "_PROBE_REAP_SECONDS", 0.5)
 
-    assert not _isolated_backend.isolated_import_succeeds(
-        ["descendant_backend"]
-    )
+    assert not _isolated_backend.isolated_import_succeeds(["descendant_backend"])
     descendant_pid = int(pid_file.read_text(encoding="utf-8"))
 
     deadline = time.monotonic() + 3.0
@@ -663,6 +648,7 @@ def test_examples_points_to_examples_md(capsys):
 # ---------------------------------------------------------------------------
 # Programmatic API in nmn/__init__.py
 # ---------------------------------------------------------------------------
+
 
 def test_nmn_help(capsys):
     import nmn

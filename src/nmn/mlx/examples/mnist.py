@@ -9,6 +9,7 @@ Trains a 2-layer YatNMN MLP for 3 epochs on Apple Silicon (Metal GPU by
 default). Uses ``torchvision`` to fetch MNIST so no tensorflow-datasets
 dependency is required.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -26,8 +27,13 @@ from nmn.mlx import YatNMN
 
 
 class YatMLP(nn.Module):
-    def __init__(self, in_features: int = 28 * 28, hidden1: int = 256,
-                 hidden2: int = 128, num_classes: int = 10):
+    def __init__(
+        self,
+        in_features: int = 28 * 28,
+        hidden1: int = 256,
+        hidden2: int = 128,
+        num_classes: int = 10,
+    ):
         super().__init__()
         self.fc1 = YatNMN(features=hidden1)
         self.fc2 = YatNMN(features=hidden2)
@@ -50,28 +56,34 @@ def loss_fn(model: YatMLP, x: mx.array, y: mx.array) -> mx.array:
     return mx.mean(nn.losses.cross_entropy(logits, y))
 
 
-def eval_batches(model: YatMLP, images: np.ndarray, labels: np.ndarray,
-                 batch_size: int = 512) -> tuple[float, float]:
+def eval_batches(
+    model: YatMLP, images: np.ndarray, labels: np.ndarray, batch_size: int = 512
+) -> tuple[float, float]:
     n = images.shape[0]
     total_loss = 0.0
     correct = 0
     for start in range(0, n, batch_size):
-        x = mx.array(images[start:start + batch_size])
-        y = mx.array(labels[start:start + batch_size])
+        x = mx.array(images[start : start + batch_size])
+        y = mx.array(labels[start : start + batch_size])
         logits = model(x)
         total_loss += float(mx.sum(nn.losses.cross_entropy(logits, y)))
         correct += int(mx.sum(mx.argmax(logits, axis=1) == y))
     return total_loss / n, correct / n
 
 
-def iter_batches(images: np.ndarray, labels: np.ndarray, batch_size: int,
-                 shuffle: bool, rng: np.random.Generator):
+def iter_batches(
+    images: np.ndarray,
+    labels: np.ndarray,
+    batch_size: int,
+    shuffle: bool,
+    rng: np.random.Generator,
+):
     n = images.shape[0]
     idx = np.arange(n)
     if shuffle:
         rng.shuffle(idx)
     for start in range(0, n - batch_size + 1, batch_size):
-        b = idx[start:start + batch_size]
+        b = idx[start : start + batch_size]
         yield mx.array(images[b]), mx.array(labels[b])
 
 
@@ -102,6 +114,7 @@ def _count_params(params) -> int:
             elif isinstance(p, (list, tuple)):
                 for v in p:
                     walk(v)
+
         walk(params)
     return total
 
@@ -113,10 +126,15 @@ def main() -> None:
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--data-root", type=str, default=".data")
-    parser.add_argument("--device", choices=["gpu", "cpu"], default="gpu",
-                        help="MLX device (default: gpu / Metal)")
-    parser.add_argument("--report", type=str, default=None,
-                        help="optional path to write JSON results")
+    parser.add_argument(
+        "--device",
+        choices=["gpu", "cpu"],
+        default="gpu",
+        help="MLX device (default: gpu / Metal)",
+    )
+    parser.add_argument(
+        "--report", type=str, default=None, help="optional path to write JSON results"
+    )
     args = parser.parse_args()
 
     if args.device == "cpu":
@@ -158,10 +176,15 @@ def main() -> None:
             f"test_loss={test_loss:.4f} test_acc={test_acc:.4f} "
             f"time={epoch_s:.1f}s"
         )
-        history.append({
-            "epoch": epoch, "train_loss": train_loss,
-            "test_loss": test_loss, "test_acc": test_acc, "epoch_s": epoch_s,
-        })
+        history.append(
+            {
+                "epoch": epoch,
+                "train_loss": train_loss,
+                "test_loss": test_loss,
+                "test_acc": test_acc,
+                "epoch_s": epoch_s,
+            }
+        )
     total_s = time.perf_counter() - wall0
 
     result = {

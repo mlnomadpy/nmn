@@ -10,7 +10,6 @@ mx = pytest.importorskip("mlx.core")
 from nmn.mlx import YatConv1D, YatConv2D  # noqa: E402
 from nmn.mlx.conv import _prepad_input  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # _prepad_input — bit-for-bit numpy parity
 # ---------------------------------------------------------------------------
@@ -158,15 +157,15 @@ def test_conv1d_circular_yat_math_parity():
     W = np.array(layer.kernel)  # (3, 3, 2)
     b = np.array(layer.bias)
     a = float(np.array(layer.alpha)[0])
-    xn = np.array(x)[0]                                  # (6, 2)
-    xn_padded = np.pad(xn, ((1, 1), (0, 0)), "wrap")     # (8, 2)
+    xn = np.array(x)[0]  # (6, 2)
+    xn_padded = np.pad(xn, ((1, 1), (0, 0)), "wrap")  # (8, 2)
 
     out_len = 6
     ref = np.zeros((1, out_len, 3))
     for f in range(3):
         for t in range(out_len):
-            patch = xn_padded[t:t + 3]                   # (3, 2)
-            kf = W[f]                                    # (3, 2) per MLX (C_out, K, C_in)
+            patch = xn_padded[t : t + 3]  # (3, 2)
+            kf = W[f]  # (3, 2) per MLX (C_out, K, C_in)
             dot = (patch * kf).sum()
             dist = ((patch - kf) ** 2).sum()
             ref[0, t, f] = a * (dot + b[f]) ** 2 / (dist + 1e-5)

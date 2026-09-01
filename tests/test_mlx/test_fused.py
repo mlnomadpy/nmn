@@ -11,7 +11,6 @@ mlx_optim = pytest.importorskip("mlx.optimizers")
 
 from nmn.mlx import YatNMN, fused_yat_score, is_gpu_available  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Functional fused_yat_score
 # ---------------------------------------------------------------------------
@@ -19,11 +18,11 @@ from nmn.mlx import YatNMN, fused_yat_score, is_gpu_available  # noqa: E402
 
 def _ref_yat(x_np, w_np, b_np, alpha, eps=1e-5):
     dot = x_np @ w_np.T
-    x_sq = (x_np ** 2).sum(axis=-1, keepdims=True)
-    w_sq = (w_np ** 2).sum(axis=-1)[None, :]
+    x_sq = (x_np**2).sum(axis=-1, keepdims=True)
+    w_sq = (w_np**2).sum(axis=-1)[None, :]
     dist = x_sq + w_sq - 2 * dot
     num = dot + b_np
-    return alpha * (num ** 2) / (dist + eps)
+    return alpha * (num**2) / (dist + eps)
 
 
 def test_fused_yat_score_executes_metal_kernel_on_gpu(mlx_gpu):
@@ -37,9 +36,7 @@ def test_fused_yat_score_executes_metal_kernel_on_gpu(mlx_gpu):
     actual = fused_yat_score(x, w, bias=bias, alpha=alpha, epsilon=0.07)
     mx.eval(actual)
 
-    expected = _ref_yat(
-        np.array(x), np.array(w), np.array(bias), 1.25, eps=0.07
-    )
+    expected = _ref_yat(np.array(x), np.array(w), np.array(bias), 1.25, eps=0.07)
     assert np.allclose(np.array(actual), expected, rtol=3e-3, atol=3e-4)
 
 
@@ -75,12 +72,12 @@ def test_gpu_array_epsilon_all_vjps_compile_and_softplus_chain(mlx_gpu):
         )
 
     argnums = (0, 1, 2, 3, 4)
-    expected_value, expected_grads = mx.value_and_grad(
-        reference_loss, argnums=argnums
-    )(x, w, bias, alpha, epsilon_param)
-    actual_value, actual_grads = mx.value_and_grad(
-        fused_loss, argnums=argnums
-    )(x, w, bias, alpha, epsilon_param)
+    expected_value, expected_grads = mx.value_and_grad(reference_loss, argnums=argnums)(
+        x, w, bias, alpha, epsilon_param
+    )
+    actual_value, actual_grads = mx.value_and_grad(fused_loss, argnums=argnums)(
+        x, w, bias, alpha, epsilon_param
+    )
     compiled_value, compiled_grads = mx.compile(
         mx.value_and_grad(fused_loss, argnums=argnums)
     )(x, w, bias, alpha, epsilon_param)
@@ -100,15 +97,9 @@ def test_gpu_array_epsilon_all_vjps_compile_and_softplus_chain(mlx_gpu):
     assert np.allclose(
         np.array(compiled_value), np.array(expected_value), rtol=3e-3, atol=3e-4
     )
-    for expected, actual, compiled in zip(
-        expected_grads, actual_grads, compiled_grads
-    ):
-        assert np.allclose(
-            np.array(actual), np.array(expected), rtol=6e-3, atol=6e-4
-        )
-        assert np.allclose(
-            np.array(compiled), np.array(expected), rtol=6e-3, atol=6e-4
-        )
+    for expected, actual, compiled in zip(expected_grads, actual_grads, compiled_grads):
+        assert np.allclose(np.array(actual), np.array(expected), rtol=6e-3, atol=6e-4)
+        assert np.allclose(np.array(compiled), np.array(expected), rtol=6e-3, atol=6e-4)
     epsilon_grad = np.array(compiled_grads[-1])
     assert np.all(np.isfinite(epsilon_grad))
     assert np.any(epsilon_grad != 0.0)
@@ -255,8 +246,10 @@ def test_fused_yat_gradient_matches_finite_difference():
         xn, wn, bn, an = (np.array(t).copy() for t in (x, w, b, alpha))
 
         def fd(arr, idx):
-            arr_p = arr.copy(); arr_m = arr.copy()
-            arr_p.flat[idx] += h; arr_m.flat[idx] -= h
+            arr_p = arr.copy()
+            arr_m = arr.copy()
+            arr_p.flat[idx] += h
+            arr_m.flat[idx] -= h
             return arr_p, arr_m
 
         gx_np = np.array(gx)
@@ -311,17 +304,15 @@ def test_fused_yat_array_epsilon_all_gradients_match_eager_and_compile():
             return mx.sum(alpha * (dot + b) ** 2 / (dist + eps))
 
         def fused_loss(x, w, b, alpha, eps):
-            return mx.sum(
-                fused_yat_score(x, w, bias=b, alpha=alpha, epsilon=eps)
-            )
+            return mx.sum(fused_yat_score(x, w, bias=b, alpha=alpha, epsilon=eps))
 
         argnums = (0, 1, 2, 3, 4)
-        eager_value, eager_grads = mx.value_and_grad(
-            eager_loss, argnums=argnums
-        )(x, w, b, alpha, eps)
-        fused_value, fused_grads = mx.value_and_grad(
-            fused_loss, argnums=argnums
-        )(x, w, b, alpha, eps)
+        eager_value, eager_grads = mx.value_and_grad(eager_loss, argnums=argnums)(
+            x, w, b, alpha, eps
+        )
+        fused_value, fused_grads = mx.value_and_grad(fused_loss, argnums=argnums)(
+            x, w, b, alpha, eps
+        )
         compiled_value, compiled_grads = mx.compile(
             mx.value_and_grad(fused_loss, argnums=argnums)
         )(x, w, b, alpha, eps)
@@ -363,9 +354,7 @@ def test_fused_yat_scalar_array_epsilon_vjp_matches_eager():
             return mx.sum(alpha * (dot + b) ** 2 / (dist + value))
 
         def fused_loss(value):
-            return mx.sum(
-                fused_yat_score(x, w, bias=b, alpha=alpha, epsilon=value)
-            )
+            return mx.sum(fused_yat_score(x, w, bias=b, alpha=alpha, epsilon=value))
 
         expected = mx.grad(eager_loss)(eps)
         actual = mx.grad(fused_loss)(eps)
@@ -494,12 +483,13 @@ def test_yat_nmn_fused_learnable_epsilon_gradient_parity(lazy):
 
     mx.set_default_device(mx.cpu)
     try:
-        plain = YatNMN(
-            features=2, learnable_epsilon=True, epsilon=0.07, lazy=lazy
-        )
+        plain = YatNMN(features=2, learnable_epsilon=True, epsilon=0.07, lazy=lazy)
         fused = YatNMN(
-            features=2, learnable_epsilon=True, epsilon=0.07,
-            fused=True, lazy=lazy,
+            features=2,
+            learnable_epsilon=True,
+            epsilon=0.07,
+            fused=True,
+            lazy=lazy,
         )
         plain.build(3)
         fused.build(3)

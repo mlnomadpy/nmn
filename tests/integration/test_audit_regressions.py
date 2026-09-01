@@ -11,7 +11,6 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-
 # =============================================================================
 # #19 — NNX YatNMN spherical guard against zero-norm inputs / columns
 # =============================================================================
@@ -51,7 +50,9 @@ def test_linen_yat_embed_attend_finite_when_query_near_embedding() -> None:
     # can flip the denominator sign. Verify finiteness for both that pathological
     # case and a random query.
     scores_near = embed.apply(params, embedding[0], method=embed.attend)
-    scores_far = embed.apply(params, jax.random.normal(jax.random.key(1), (16,)), method=embed.attend)
+    scores_far = embed.apply(
+        params, jax.random.normal(jax.random.key(1), (16,)), method=embed.attend
+    )
     assert bool(jnp.isfinite(scores_near).all()), "attend NaN'd on near-zero distance"
     assert bool(jnp.isfinite(scores_far).all()), "attend NaN'd on random query"
 
@@ -73,7 +74,9 @@ CHANNELS_FIRST_CASES = [
 
 
 @pytest.mark.parametrize("cls_name,in_shape_last,perm", CHANNELS_FIRST_CASES)
-def test_keras_conv_channels_first_matches_channels_last(cls_name, in_shape_last, perm) -> None:
+def test_keras_conv_channels_first_matches_channels_last(
+    cls_name, in_shape_last, perm
+) -> None:
     keras = pytest.importorskip("keras")
     from nmn.keras import conv as kconv
 
@@ -82,9 +85,13 @@ def test_keras_conv_channels_first_matches_channels_last(cls_name, in_shape_last
     x_first = np.transpose(x_last, perm)
 
     keras.utils.set_random_seed(42)
-    y_last = np.asarray(cls(filters=4, kernel_size=3, data_format="channels_last")(x_last))
+    y_last = np.asarray(
+        cls(filters=4, kernel_size=3, data_format="channels_last")(x_last)
+    )
     keras.utils.set_random_seed(42)
-    y_first = np.asarray(cls(filters=4, kernel_size=3, data_format="channels_first")(x_first))
+    y_first = np.asarray(
+        cls(filters=4, kernel_size=3, data_format="channels_first")(x_first)
+    )
     inv_perm = [0] + list(range(2, y_first.ndim)) + [1]
     np.testing.assert_allclose(y_last, np.transpose(y_first, inv_perm), atol=1e-5)
 
@@ -128,7 +135,11 @@ GROUP_CASES = [
 @pytest.mark.parametrize("cls_name,in_shape,groups", GROUP_CASES)
 def test_torch_yat_conv_transpose_supports_groups(cls_name, in_shape, groups) -> None:
     torch = pytest.importorskip("torch")
-    from nmn.torch.layers import yat_conv_transpose1d, yat_conv_transpose2d, yat_conv_transpose3d
+    from nmn.torch.layers import (
+        yat_conv_transpose1d,
+        yat_conv_transpose2d,
+        yat_conv_transpose3d,
+    )
 
     module = {
         "YatConvTranspose1D": yat_conv_transpose1d.YatConvTranspose1D,
@@ -159,7 +170,9 @@ def test_rotary_yat_raises_when_seq_len_exceeds_max() -> None:
     with pytest.raises(ValueError, match="max_seq_len"):
         apply_rotary_emb(jnp.ones((1, 200, 4, 64)), freqs_cos, freqs_sin)
     with pytest.raises(ValueError, match="max_seq_len"):
-        apply_rotary_emb(jnp.ones((1, 100, 4, 64)), freqs_cos, freqs_sin, position_offset=100)
+        apply_rotary_emb(
+            jnp.ones((1, 100, 4, 64)), freqs_cos, freqs_sin, position_offset=100
+        )
 
 
 # =============================================================================

@@ -71,10 +71,9 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax import random, lax
 from flax.nnx.nn.dtypes import promote_dtype
 from flax.typing import Dtype, PrecisionLike
-from jax import Array
+from jax import Array, lax, random
 
 
 def maclaurin_coeffs(b: float, epsilon: float, nmax: int) -> np.ndarray:
@@ -152,14 +151,14 @@ def create_maclaurin_projection(
     )
 
     return {
-        'omegas': omegas,              # [M, nmax, d]
-        'degrees': degrees,            # [M]
-        'Z': jnp.asarray(Z, dtype=dtype),
-        'num_features': num_features,
-        'nmax': nmax,
-        'head_dim': head_dim,
-        'bias': bias,
-        'epsilon': epsilon,
+        "omegas": omegas,  # [M, nmax, d]
+        "degrees": degrees,  # [M]
+        "Z": jnp.asarray(Z, dtype=dtype),
+        "num_features": num_features,
+        "nmax": nmax,
+        "head_dim": head_dim,
+        "bias": bias,
+        "epsilon": epsilon,
     }
 
 
@@ -190,23 +189,23 @@ def maclaurin_features(
         Feature tensor ``[..., M]``.
     """
     if normalize:
-        x = x / jnp.sqrt(jnp.sum(x ** 2, axis=-1, keepdims=True) + epsilon)
+        x = x / jnp.sqrt(jnp.sum(x**2, axis=-1, keepdims=True) + epsilon)
 
-    omegas = params['omegas']          # [M, nmax, d]
-    degrees = params['degrees']        # [M]
-    Z = params['Z']
-    M = params['num_features']
+    omegas = params["omegas"]  # [M, nmax, d]
+    degrees = params["degrees"]  # [M]
+    Z = params["Z"]
+    M = params["num_features"]
 
     x = x.astype(omegas.dtype)
     # proj[..., m, l] = sum_d x[..., d] * omega[m, l, d]
-    proj = jnp.einsum("...d,mld->...ml", x, omegas)   # [..., M, nmax]
+    proj = jnp.einsum("...d,mld->...ml", x, omegas)  # [..., M, nmax]
 
     nmax = omegas.shape[1]
-    l = jnp.arange(nmax)                               # [nmax]
-    mask = l[None, :] < degrees[:, None]               # [M, nmax]
+    l = jnp.arange(nmax)  # [nmax]
+    mask = l[None, :] < degrees[:, None]  # [M, nmax]
     proj = jnp.where(mask, proj, jnp.array(1.0, dtype=proj.dtype))  # neutralize l>=N_r
 
-    feat = jnp.prod(proj, axis=-1)                     # [..., M]  product over factors
+    feat = jnp.prod(proj, axis=-1)  # [..., M]  product over factors
     scale = jnp.sqrt(Z / M).astype(feat.dtype)
     return scale * feat
 
@@ -227,8 +226,7 @@ def _validate_linear_attention_mask(
         broadcast_shape = jnp.broadcast_shapes(tuple(mask.shape), expected_shape)
     except ValueError as exc:
         raise ValueError(
-            f"Mask shape {mask.shape} is not broadcastable to "
-            f"{expected_shape}."
+            f"Mask shape {mask.shape} is not broadcastable to " f"{expected_shape}."
         ) from exc
     if broadcast_shape != expected_shape:
         raise ValueError(

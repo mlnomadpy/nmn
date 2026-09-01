@@ -3,9 +3,9 @@
 from contextlib import nullcontext
 
 import keras
-from keras import ops
 import numpy as np
 import pytest
+from keras import ops
 
 from nmn.keras import (
     YatConv1D,
@@ -16,7 +16,6 @@ from nmn.keras import (
     YatConvTranspose3D,
     YatNMN,
 )
-
 
 BACKEND = keras.backend.backend()
 EPSILONS = (1e-20, 1e-5, 1000.0)
@@ -48,7 +47,9 @@ def _make(layer_cls, kernel_size, epsilon, dtype=None):
 
 def _value_and_gradients(layer, inputs):
     variables = list(layer.trainable_variables)
-    kernel_index = next(i for i, variable in enumerate(variables) if variable is layer.kernel)
+    kernel_index = next(
+        i for i, variable in enumerate(variables) if variable is layer.kernel
+    )
     epsilon_index = next(
         i for i, variable in enumerate(variables) if variable is layer.epsilon_param
     )
@@ -191,7 +192,7 @@ def test_float32_rejects_unrepresentable_epsilon(
 
 
 @pytest.mark.parametrize("layer_cls,kernel_size,input_shape", FAMILIES[:2])
-@pytest.mark.parametrize("epsilon", [2.0 ** -1022, 1e150])
+@pytest.mark.parametrize("epsilon", [2.0**-1022, 1e150])
 def test_float64_extreme_epsilon_is_effective_and_differentiable(
     layer_cls, kernel_size, input_shape, epsilon
 ):
@@ -219,18 +220,14 @@ def test_float64_extreme_epsilon_is_effective_and_differentiable(
 
 
 @pytest.mark.parametrize("layer_cls,kernel_size,input_shape", FAMILIES[:2])
-def test_float64_rejects_softplus_underflow(
-    layer_cls, kernel_size, input_shape
-):
+def test_float64_rejects_softplus_underflow(layer_cls, kernel_size, input_shape):
     layer = _make(layer_cls, kernel_size, 5e-324, "float64")
     with pytest.raises(ValueError, match="not representable"):
         layer(ops.ones(input_shape, dtype="float64"))
 
 
 @pytest.mark.parametrize("layer_cls,kernel_size,input_shape", FAMILIES)
-def test_jax_float64_requires_x64_backing_storage(
-    layer_cls, kernel_size, input_shape
-):
+def test_jax_float64_requires_x64_backing_storage(layer_cls, kernel_size, input_shape):
     if BACKEND != "jax":
         pytest.skip("JAX-specific backing dtype guard")
     import jax

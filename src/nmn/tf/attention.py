@@ -13,8 +13,8 @@ from typing import Optional, Tuple, Union
 
 import tensorflow as tf
 
-from .saved_model import ExportPath, export_attention
 from ._precision import reduction_safe_upcast
+from .saved_model import ExportPath, export_attention
 
 __all__ = [
     "normalize_qk",
@@ -117,9 +117,7 @@ def yat_attention_weights(
             attn_weights,
             tf.constant(-float("inf"), dtype=attn_weights.dtype),
         )
-        attn_weights = tf.where(
-            row_has_key, attn_weights, tf.zeros_like(attn_weights)
-        )
+        attn_weights = tf.where(row_has_key, attn_weights, tf.zeros_like(attn_weights))
 
     # Softmax
     attn_weights = tf.nn.softmax(attn_weights, axis=-1)
@@ -163,7 +161,8 @@ def yat_attention(
         Output (batch, q_len, num_heads, v_dim).
     """
     weights = yat_attention_weights(
-        query, key,
+        query,
+        key,
         mask=mask,
         dropout_rate=dropout_rate,
         training=training,
@@ -206,7 +205,9 @@ def yat_attention_normalized(
         Output (batch, q_len, num_heads, v_dim).
     """
     return yat_attention(
-        query, key, value,
+        query,
+        key,
+        value,
         mask=mask,
         dropout_rate=dropout_rate,
         training=training,
@@ -415,7 +416,9 @@ class MultiHeadYatAttention(tf.Module):
         # Apply YAT attention
         dropout_rate = self.dropout if training else 0.0
         x = yat_attention(
-            q, k, v,
+            q,
+            k,
+            v,
             mask=effective_mask,
             dropout_rate=dropout_rate,
             training=training,
@@ -434,9 +437,7 @@ class MultiHeadYatAttention(tf.Module):
 
         if effective_mask is not None:
             query_has_key = tf.reduce_any(effective_mask, axis=(-3, -1))
-            x = tf.where(
-                tf.expand_dims(query_has_key, -1), x, tf.zeros_like(x)
-            )
+            x = tf.where(tf.expand_dims(query_has_key, -1), x, tf.zeros_like(x))
 
         return x
 

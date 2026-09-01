@@ -13,12 +13,12 @@ involved and out of scope for this PR.
 Use via the convenience helper :func:`fused_yat_score`, or pass
 ``fused=True`` to :class:`nmn.mlx.YatNMN`.
 """
+
 from __future__ import annotations
 
 from typing import Optional, Union
 
 import mlx.core as mx
-
 
 __all__ = ["fused_yat_score", "is_gpu_available"]
 

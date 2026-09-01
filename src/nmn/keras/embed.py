@@ -82,9 +82,7 @@ class YatEmbed(Layer):
         )
 
         if self.weight_normalized:
-            norms = ops.sqrt(
-                ops.sum(ops.square(self.embedding), axis=1, keepdims=True)
-            )
+            norms = ops.sqrt(ops.sum(ops.square(self.embedding), axis=1, keepdims=True))
             self.embedding.assign(self.embedding / (norms + 1e-8))
 
         if self.use_alpha and self._constant_alpha_value is None:

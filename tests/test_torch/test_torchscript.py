@@ -11,6 +11,7 @@ def test_torchscript_trace_yat_nmn():
     """YatNMN can be traced with torch.jit.trace."""
     try:
         import torch
+
         from nmn.torch.nmn import YatNMN
     except ImportError:
         pytest.skip("PyTorch dependencies not available")
@@ -23,15 +24,16 @@ def test_torchscript_trace_yat_nmn():
 
     out_eager = layer(example)
     out_traced = traced(example)
-    assert torch.allclose(out_eager, out_traced, atol=1e-5), (
-        "Traced output differs from eager output"
-    )
+    assert torch.allclose(
+        out_eager, out_traced, atol=1e-5
+    ), "Traced output differs from eager output"
 
 
 def test_torchscript_trace_yat_nmn_no_bias():
     """YatNMN without bias can be traced."""
     try:
         import torch
+
         from nmn.torch.nmn import YatNMN
     except ImportError:
         pytest.skip("PyTorch dependencies not available")
@@ -51,6 +53,7 @@ def test_torchscript_trace_yat_nmn_batched():
     """Traced YatNMN handles different batch sizes at runtime."""
     try:
         import torch
+
         from nmn.torch.nmn import YatNMN
     except ImportError:
         pytest.skip("PyTorch dependencies not available")
@@ -72,6 +75,7 @@ def test_torchscript_trace_yat_conv2d():
     """YatConv2D can be traced with torch.jit.trace."""
     try:
         import torch
+
         from nmn.torch.layers import YatConv2D
     except ImportError:
         pytest.skip("PyTorch dependencies not available")
@@ -91,6 +95,7 @@ def test_torchscript_trace_yat_conv1d():
     """YatConv1D can be traced with torch.jit.trace."""
     try:
         import torch
+
         from nmn.torch.layers import YatConv1D
     except ImportError:
         pytest.skip("PyTorch dependencies not available")
@@ -110,6 +115,7 @@ def test_torchscript_trace_yat_conv3d():
     """YatConv3D can be traced with torch.jit.trace."""
     try:
         import torch
+
         from nmn.torch.layers import YatConv3D
     except ImportError:
         pytest.skip("PyTorch dependencies not available")
@@ -129,13 +135,12 @@ def test_torchscript_trace_yat_conv_transpose2d():
     """YatConvTranspose2D can be traced with torch.jit.trace."""
     try:
         import torch
+
         from nmn.torch.layers import YatConvTranspose2D
     except ImportError:
         pytest.skip("PyTorch dependencies not available")
 
-    layer = YatConvTranspose2D(
-        in_channels=8, out_channels=4, kernel_size=2, stride=2
-    )
+    layer = YatConvTranspose2D(in_channels=8, out_channels=4, kernel_size=2, stride=2)
     layer.eval()
 
     example = torch.randn(2, 8, 8, 8)
@@ -150,6 +155,7 @@ def test_torchscript_save_load(tmp_path):
     """Traced YatNMN model can be saved and loaded."""
     try:
         import torch
+
         from nmn.torch.nmn import YatNMN
     except ImportError:
         pytest.skip("PyTorch dependencies not available")
@@ -166,9 +172,9 @@ def test_torchscript_save_load(tmp_path):
     loaded = torch.jit.load(str(model_path))
     out_original = traced(example)
     out_loaded = loaded(example)
-    assert torch.allclose(out_original, out_loaded, atol=1e-6), (
-        "Loaded model output differs from saved model output"
-    )
+    assert torch.allclose(
+        out_original, out_loaded, atol=1e-6
+    ), "Loaded model output differs from saved model output"
 
 
 def test_torchscript_multilayer_model():
@@ -176,6 +182,7 @@ def test_torchscript_multilayer_model():
     try:
         import torch
         import torch.nn as nn
+
         from nmn.torch.nmn import YatNMN
     except ImportError:
         pytest.skip("PyTorch dependencies not available")

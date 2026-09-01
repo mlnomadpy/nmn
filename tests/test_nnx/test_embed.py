@@ -1,13 +1,14 @@
 """Tests for NNX Embed layer."""
 
-import pytest
 import numpy as np
+import pytest
 
 jax = pytest.importorskip("jax")
 flax = pytest.importorskip("flax")
 jnp = jax.numpy
 
 from flax import nnx
+
 from nmn.nnx.layers.embed import Embed
 
 
@@ -58,24 +59,18 @@ class TestEmbed:
         assert not np.any(np.isnan(out))
 
     def test_no_alpha(self):
-        embed = Embed(
-            num_embeddings=50, features=16, use_alpha=False, rngs=nnx.Rngs(0)
-        )
+        embed = Embed(num_embeddings=50, features=16, use_alpha=False, rngs=nnx.Rngs(0))
         assert embed.alpha is None
         query = jax.random.normal(jax.random.PRNGKey(1), (4, 16))
         out = np.array(embed.attend(query))
         assert not np.any(np.isnan(out))
 
     def test_learnable_alpha(self):
-        embed = Embed(
-            num_embeddings=50, features=16, use_alpha=True, rngs=nnx.Rngs(0)
-        )
+        embed = Embed(num_embeddings=50, features=16, use_alpha=True, rngs=nnx.Rngs(0))
         assert embed.alpha is not None
 
     def test_spherical_mode(self):
-        embed = Embed(
-            num_embeddings=50, features=16, spherical=True, rngs=nnx.Rngs(0)
-        )
+        embed = Embed(num_embeddings=50, features=16, spherical=True, rngs=nnx.Rngs(0))
         query = jax.random.normal(jax.random.PRNGKey(1), (4, 16))
         out = embed.attend(query)
         assert out.shape == (4, 50)

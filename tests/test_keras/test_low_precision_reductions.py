@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import keras
-from keras import ops
 import numpy as np
 import pytest
+from keras import ops
 
 from nmn.keras import (
     YatConv1D,
@@ -19,7 +19,6 @@ from nmn.keras import (
     yat_attention,
 )
 from nmn.keras._yat_core import reduction_safe_upcast, stable_yat_ratio
-
 
 BACKEND = keras.backend.backend()
 SUPPORTED_GRADIENT_BACKENDS = {"jax", "torch", "tensorflow"}
@@ -402,8 +401,12 @@ def test_large_magnitude_dense_matches_fp32_forward_and_gradients(dtype):
     def make(layer_dtype):
         inputs = ops.full((1, 2), 100.0, dtype=layer_dtype)
         layer = YatNMN(
-            1, use_bias=False, use_alpha=False, epsilon=1.0,
-            kernel_initializer="zeros", dtype=layer_dtype,
+            1,
+            use_bias=False,
+            use_alpha=False,
+            epsilon=1.0,
+            kernel_initializer="zeros",
+            dtype=layer_dtype,
         )
         layer(inputs)
         layer.kernel.assign(
@@ -418,13 +421,17 @@ def test_large_magnitude_dense_matches_fp32_forward_and_gradients(dtype):
     )
     output, gradients = keras_dense_value_and_gradients(lowp, lowp_inputs)
     np.testing.assert_allclose(
-        to_numpy(ops.cast(output, "float32")), to_numpy(reference_output),
-        rtol=5e-3, atol=0.15,
+        to_numpy(ops.cast(output, "float32")),
+        to_numpy(reference_output),
+        rtol=5e-3,
+        atol=0.15,
     )
     for actual, expected in zip(gradients, reference_gradients):
         np.testing.assert_allclose(
-            to_numpy(ops.cast(actual, "float32")), to_numpy(expected),
-            rtol=5e-3, atol=0.15,
+            to_numpy(ops.cast(actual, "float32")),
+            to_numpy(expected),
+            rtol=5e-3,
+            atol=0.15,
         )
 
 
@@ -436,8 +443,12 @@ def test_fp16_dense_aggregate_cotangents_match_saturated_fp32_reference():
     def make(layer_dtype):
         inputs = ops.full((4096, 2), 100.0, dtype=layer_dtype)
         layer = YatNMN(
-            1, use_bias=False, use_alpha=False, epsilon=1.0,
-            kernel_initializer="zeros", dtype=layer_dtype,
+            1,
+            use_bias=False,
+            use_alpha=False,
+            epsilon=1.0,
+            kernel_initializer="zeros",
+            dtype=layer_dtype,
         )
         layer(inputs)
         layer.kernel.assign(
@@ -452,8 +463,10 @@ def test_fp16_dense_aggregate_cotangents_match_saturated_fp32_reference():
     )
     output, gradients = keras_dense_value_and_gradients(lowp, lowp_inputs)
     np.testing.assert_allclose(
-        to_numpy(ops.cast(output, "float32")), to_numpy(reference_output),
-        rtol=5e-3, atol=2.0,
+        to_numpy(ops.cast(output, "float32")),
+        to_numpy(reference_output),
+        rtol=5e-3,
+        atol=2.0,
     )
     limit = np.finfo(np.float16)
     for actual, expected in zip(gradients, reference_gradients):
@@ -475,15 +488,20 @@ def test_large_magnitude_attention_matches_fp32_forward_and_gradients(dtype):
     )
     for actual, expected in zip(gradients, ref_gradients):
         np.testing.assert_allclose(
-            to_numpy(ops.cast(actual, "float32")), to_numpy(expected),
-            rtol=7e-3, atol=8.0,
+            to_numpy(ops.cast(actual, "float32")),
+            to_numpy(expected),
+            rtol=7e-3,
+            atol=8.0,
         )
 
 
 def test_dense_and_attention_preserve_genuine_nan():
     inputs = ops.convert_to_tensor([[np.nan, 1.0]], dtype="float16")
     layer = YatNMN(
-        1, use_bias=False, use_alpha=False, kernel_initializer="ones",
+        1,
+        use_bias=False,
+        use_alpha=False,
+        kernel_initializer="ones",
         dtype="float16",
     )
     assert np.isnan(to_numpy(layer(inputs))).all()
@@ -498,9 +516,7 @@ def test_low_precision_attention_accepts_python_scalar_alpha():
     query = ops.full((1, 1, 1, 2), 100.0, dtype="float16")
     key = ops.full((1, 2, 1, 2), 99.0, dtype="float16")
     value = ops.convert_to_tensor([[[[0.0]], [[1.0]]]], dtype="float16")
-    output = yat_attention(
-        query, key, value, alpha=1.0, training=False, epsilon=1.0
-    )
+    output = yat_attention(query, key, value, alpha=1.0, training=False, epsilon=1.0)
     assert np.isfinite(to_numpy(output)).all()
 
 

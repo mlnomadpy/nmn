@@ -24,10 +24,41 @@ concurrency:
   group: tests-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
+  test-base-collection:
+    name: Test base install and optional-backend collection
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+
+    - name: Install base package and test runner
+      run: |
+        python -m pip install --upgrade pip
+        pip install numpy pytest
+        pip install -e .
+        pip check
+
+    - name: Collect without optional ML frameworks
+      run: pytest --collect-only -q
+
+    - name: Run import-light CLI tests
+      run: pytest tests/test_cli.py -q
+
   test-jax:
     name: Test JAX/Flax
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -45,7 +76,7 @@ jobs:
         df -h
     
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
@@ -56,6 +87,7 @@ jobs:
         pip install pytest pytest-cov
         pip install -e ".[dev]"
         pip install "jax==0.9.1" "jaxlib==0.9.1" "flax==0.12.5" optax
+        pip check
     
     - name: Clear pycache
       run: |
@@ -67,12 +99,18 @@ jobs:
         pytest tests/test_nnx/ tests/test_linen/ tests/integration/ tests/benchmarks/ -v -m "not slow" --cov=nmn --cov-report=xml
       env:
         JAX_PLATFORM_NAME: cpu
+
+    - name: Run executable JAX regression scripts
+      if: matrix.python-version == '3.11'
+      run: pytest tests/scripts/ -v -m "not slow"
+      env:
+        JAX_PLATFORM_NAME: cpu
     
     - name: Upload coverage
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v7
       if: matrix.python-version == '3.11'
       with:
-        file: ./coverage.xml
+        files: ./coverage.xml
         flags: jax
         token: ${{ secrets.CODECOV_TOKEN }}
       continue-on-error: true
@@ -80,6 +118,7 @@ jobs:
   test-torch:
     name: Test PyTorch (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -105,7 +144,7 @@ jobs:
         df -h
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
@@ -117,6 +156,7 @@ jobs:
         pip install pytest pytest-cov
         pip install -e ".[dev]"
         pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+        pip check
 
     - name: Install dependencies (Windows)
       if: runner.os == 'Windows'
@@ -126,6 +166,7 @@ jobs:
         pip install pytest pytest-cov
         pip install -e ".[dev]"
         pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+        pip check
 
     - name: Clear pycache (Linux/macOS)
       if: runner.os != 'Windows'
@@ -143,10 +184,10 @@ jobs:
         -k "optional_backend_probe_windows_job_kills_descendants"
 
     - name: Upload coverage
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v7
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
       with:
-        file: ./coverage.xml
+        files: ./coverage.xml
         flags: torch
         token: ${{ secrets.CODECOV_TOKEN }}
       continue-on-error: true
@@ -154,6 +195,7 @@ jobs:
   test-keras:
     name: Test Keras/TF (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -178,7 +220,7 @@ jobs:
         df -h
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
@@ -189,6 +231,7 @@ jobs:
         pip install pytest pytest-cov
         pip install -e ".[dev]"
         pip install tensorflow
+        pip check
 
     - name: Clear pycache
       run: |
@@ -200,10 +243,10 @@ jobs:
         pytest tests/test_keras/ tests/test_tf/ -v --cov=nmn --cov-report=xml
 
     - name: Upload coverage
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v7
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
       with:
-        file: ./coverage.xml
+        files: ./coverage.xml
         flags: keras
         token: ${{ secrets.CODECOV_TOKEN }}
       continue-on-error: true
@@ -211,6 +254,7 @@ jobs:
   test-keras-multibackend:
     name: Test Keras (${{ matrix.backend }} backend)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -223,7 +267,7 @@ jobs:
     - uses: actions/checkout@v6
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: "3.11"
         cache: 'pip'
@@ -244,6 +288,7 @@ jobs:
 
     - name: Verify isolated backend import
       run: |
+        pip check
         python -c "import keras; import nmn.keras; assert keras.backend.backend() == '${{ matrix.backend }}'"
 
     - name: Run Keras backend suite
@@ -252,12 +297,13 @@ jobs:
   test-mlx:
     name: Test MLX (Apple Silicon)
     runs-on: macos-15
+    timeout-minutes: 30
 
     steps:
     - uses: actions/checkout@v6
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: "3.11"
         cache: 'pip'
@@ -273,6 +319,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install numpy pytest pytest-cov
         pip install -e ".[mlx]"
+        pip check
 
     - name: Verify MLX Metal device
       run: |
@@ -313,11 +360,12 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
     - uses: actions/checkout@v6
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: "3.11"
 
@@ -335,34 +383,46 @@ jobs:
 
     - name: Check formatting with black
       run: black --check --diff src/nmn tests
-      continue-on-error: true  # style only — warn, don't fail
 
     - name: Check imports with isort
       run: isort --check-only --diff src/nmn tests
-      continue-on-error: true  # style only — warn, don't fail
 
   mypy:
-    name: Type Check (MyPy)
+    name: Type Check (MyPy, typed core)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
     - uses: actions/checkout@v6
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: "3.11"
 
     - name: Install dependencies
       run: |
-        pip install mypy
+        pip install "mypy==2.3.1" "numpy<2.3"
         pip install -e ".[dev]"
         pip install torch --index-url https://download.pytorch.org/whl/cpu
         pip install "jax==0.9.1" "jaxlib==0.9.1" "flax==0.12.5"
+        # NumPy 2.5 stubs use Python 3.12 syntax, while NMN's MyPy target is 3.10.
+        pip install "numpy<2.3"
 
-    - name: Run MyPy on torch module
-      run: mypy src/nmn/torch --ignore-missing-imports --no-error-summary
-      continue-on-error: true  # informational for now — tighten over time
+    - name: Run MyPy on the PyTorch typed core
+      run: |
+        mypy \
+          src/nmn/torch/squashers.py \
+          src/nmn/torch/attention/yat_attention.py \
+          src/nmn/torch/attention/performer_yat.py \
+          --ignore-missing-imports --no-error-summary
 
-    - name: Run MyPy on nnx module
-      run: mypy src/nmn/nnx --ignore-missing-imports --no-error-summary
-      continue-on-error: true
+    - name: Run MyPy on the NNX typed core
+      run: |
+        mypy \
+          src/nmn/nnx/layers/_numerics.py \
+          src/nmn/nnx/layers/conv/utils.py \
+          src/nmn/nnx/layers/attention/masks.py \
+          src/nmn/nnx/layers/attention/dot_product.py \
+          src/nmn/nnx/layers/attention/maclaurin_yat.py \
+          src/nmn/nnx/layers/attention/radial_yat.py \
+          --ignore-missing-imports --no-error-summary

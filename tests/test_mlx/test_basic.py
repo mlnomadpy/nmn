@@ -11,7 +11,7 @@ mx = pytest.importorskip("mlx.core")
 mlx_nn = pytest.importorskip("mlx.nn")
 mlx_optim = pytest.importorskip("mlx.optimizers")
 
-from nmn.mlx import YatNMN, YatDense  # noqa: E402
+from nmn.mlx import YatDense, YatNMN  # noqa: E402
 
 
 def test_module_imports():

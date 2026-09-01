@@ -37,12 +37,11 @@ from typing import Optional
 
 import jax
 import jax.numpy as jnp
-from jax import Array, random
 from flax import nnx
 from flax.nnx.module import Module
+from jax import Array, random
 
 from nmn.nnx.layers.squashers import softermax
-
 
 __all__ = ["finalize_attention_weights"]
 

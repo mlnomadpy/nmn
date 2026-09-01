@@ -16,7 +16,6 @@ from nmn.torch import (
     YatNMN,
 )
 
-
 EPSILONS = (1e-20, 1e-5, 1000.0)
 FAMILIES = (
     (YatNMN, (2, 1), (1, 2)),
@@ -95,21 +94,15 @@ def test_default_epsilon_remains_backward_compatible():
 
 @pytest.mark.parametrize("layer_cls,args,input_shape", FAMILIES)
 @pytest.mark.parametrize("epsilon", [1e-8, 1e-20, 1e5])
-def test_float16_uses_fp32_epsilon_storage(
-    layer_cls, args, input_shape, epsilon
-):
+def test_float16_uses_fp32_epsilon_storage(layer_cls, args, input_shape, epsilon):
     layer = _make(layer_cls, args, epsilon, torch.float16)
     with torch.no_grad():
         layer.weight.fill_(0.3)
     inputs = torch.full(input_shape, 0.2, dtype=torch.float16, requires_grad=True)
     output = layer(inputs)
-    (epsilon_grad,) = torch.autograd.grad(
-        output.float().sum(), (layer.epsilon_param,)
-    )
+    (epsilon_grad,) = torch.autograd.grad(output.float().sum(), (layer.epsilon_param,))
     assert layer.epsilon_param.dtype == torch.float32
-    assert F.softplus(layer.epsilon_param).item() == pytest.approx(
-        epsilon, rel=2e-6
-    )
+    assert F.softplus(layer.epsilon_param).item() == pytest.approx(epsilon, rel=2e-6)
     assert output.dtype == torch.float16 and output.isfinite().all()
     assert epsilon_grad.isfinite().all() and epsilon_grad.abs().max() > 0
 
@@ -122,7 +115,7 @@ def test_float32_rejects_unrepresentable_epsilon(layer_cls, args, _, epsilon):
 
 
 @pytest.mark.parametrize("layer_cls,args,input_shape", [FAMILIES[0], FAMILIES[1]])
-@pytest.mark.parametrize("epsilon", [2.0 ** -1022, 1e150])
+@pytest.mark.parametrize("epsilon", [2.0**-1022, 1e150])
 def test_float64_extreme_epsilon_is_effective_and_differentiable(
     layer_cls, args, input_shape, epsilon
 ):
@@ -132,9 +125,7 @@ def test_float64_extreme_epsilon_is_effective_and_differentiable(
     inputs = torch.full(input_shape, 0.2, dtype=torch.float64, requires_grad=True)
     output = layer(inputs)
     (epsilon_grad,) = torch.autograd.grad(output.sum(), (layer.epsilon_param,))
-    assert F.softplus(layer.epsilon_param).item() == pytest.approx(
-        epsilon, rel=2e-14
-    )
+    assert F.softplus(layer.epsilon_param).item() == pytest.approx(epsilon, rel=2e-14)
     assert output.isfinite().all() and epsilon_grad.isfinite().all()
     assert epsilon_grad.abs().max() > 0
 
@@ -174,9 +165,7 @@ def test_module_dtype_migration_preserves_epsilon_storage_identity_and_gradient(
         layer.weight.fill_(0.3)
     inputs = torch.full(input_shape, 0.2, dtype=target_dtype)
     output = layer(inputs)
-    (epsilon_grad,) = torch.autograd.grad(
-        output.float().sum(), (layer.epsilon_param,)
-    )
+    (epsilon_grad,) = torch.autograd.grad(output.float().sum(), (layer.epsilon_param,))
     assert output.isfinite().all()
     assert epsilon_grad.isfinite().all() and epsilon_grad.abs().max() > 0
 

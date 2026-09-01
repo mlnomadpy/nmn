@@ -1,7 +1,8 @@
 """YAT convolution layers for TensorFlow."""
 
+from typing import Any, Callable, List, Optional, Tuple, Union
+
 import tensorflow as tf
-from typing import Optional, Any, Tuple, Union, List, Callable
 
 from nmn._epsilon import (
     epsilon_parameter_dtype,
@@ -10,8 +11,8 @@ from nmn._epsilon import (
     validate_epsilon_for_dtype,
 )
 
-from ._yat_core import yat_score
 from ._precision import reduction_safe_upcast
+from ._yat_core import yat_score
 from .saved_model import SingleInputSavedModelMixin
 
 
@@ -26,9 +27,7 @@ def _validate_groups(filters: int, groups: int) -> None:
     if groups <= 0:
         raise ValueError(f"groups must be a positive integer, got {groups}")
     if filters % groups != 0:
-        raise ValueError(
-            f"Filters ({filters}) must be divisible by groups ({groups})"
-        )
+        raise ValueError(f"Filters ({filters}) must be divisible by groups ({groups})")
 
 
 def _patch_norm_kernel(kernel_size, channels_per_group, groups, dtype):
@@ -68,10 +67,10 @@ def _upcast_yat_operands(inputs, kernel):
 
 class YatConv1D(SingleInputSavedModelMixin, tf.Module):
     """1D YAT convolution module using TensorFlow operations.
-    
+
     This module implements 1D convolution using the YAT  algorithm,
     which computes (dot_product)^2 / (squared_euclidean_distance + epsilon).
-    
+
     Args:
         filters: Integer, the dimensionality of the output space.
         kernel_size: Integer, specifying the length of the 1D convolution window.
@@ -85,7 +84,7 @@ class YatConv1D(SingleInputSavedModelMixin, tf.Module):
         dtype: The dtype of the computation. Defaults to tf.float32.
         name: Name of the module.
     """
-    
+
     def __init__(
         self,
         filters: int,
@@ -100,7 +99,7 @@ class YatConv1D(SingleInputSavedModelMixin, tf.Module):
         epsilon: float = 1e-5,
         learnable_epsilon: bool = False,
         dtype: tf.DType = tf.float32,
-        name: Optional[str] = None
+        name: Optional[str] = None,
     ):
         super().__init__(name=name)
         self.filters = filters
@@ -134,7 +133,7 @@ class YatConv1D(SingleInputSavedModelMixin, tf.Module):
     @tf.Module.with_name_scope
     def build(self, input_shape: Union[List[int], tf.TensorShape]) -> None:
         """Builds the layer weights based on input shape.
-        
+
         Args:
             input_shape: Shape of the input tensor [batch, length, channels].
         """
@@ -143,42 +142,37 @@ class YatConv1D(SingleInputSavedModelMixin, tf.Module):
 
         input_channels = int(input_shape[-1])
         self.input_channels = input_channels
-        
+
         if input_channels % self.groups != 0:
             raise ValueError(
                 f"Input channels ({input_channels}) must be divisible by groups ({self.groups})"
             )
-        
+
         # Kernel shape: [kernel_size, input_channels_per_group, filters]
         channels_per_group = input_channels // self.groups
         kernel_shape = (self.kernel_size, channels_per_group, self.filters)
-        
+
         # Initialize kernel using orthogonal initialization
         kernel_init = tf.random.normal(kernel_shape, dtype=self.dtype)
         # Simple orthogonal-like initialization by normalizing
-        kernel_init = kernel_init / tf.sqrt(tf.cast(channels_per_group * self.kernel_size, self.dtype))
-        
+        kernel_init = kernel_init / tf.sqrt(
+            tf.cast(channels_per_group * self.kernel_size, self.dtype)
+        )
+
         self.kernel = tf.Variable(
-            kernel_init,
-            trainable=True,
-            name='kernel',
-            dtype=self.dtype
+            kernel_init, trainable=True, name="kernel", dtype=self.dtype
         )
 
         # Initialize bias (learnable only; constant bias has no Variable)
         if self.use_bias and self._constant_bias_value is None:
             self.bias = tf.Variable(
-                tf.zeros([self.filters], dtype=self.dtype),
-                trainable=True,
-                name='bias'
+                tf.zeros([self.filters], dtype=self.dtype), trainable=True, name="bias"
             )
 
         # Initialize alpha
         if self.use_alpha:
             self.alpha = tf.Variable(
-                tf.ones([1], dtype=self.dtype),
-                trainable=True,
-                name='alpha'
+                tf.ones([1], dtype=self.dtype), trainable=True, name="alpha"
             )
 
         # Learnable epsilon parameter (softplus-constrained)
@@ -187,7 +181,7 @@ class YatConv1D(SingleInputSavedModelMixin, tf.Module):
             self.epsilon_param = tf.Variable(
                 tf.constant(raw_eps, shape=[1], dtype=_epsilon_variable_dtype(self)),
                 trainable=True,
-                name='epsilon_param',
+                name="epsilon_param",
             )
 
         self.is_built = True
@@ -200,10 +194,10 @@ class YatConv1D(SingleInputSavedModelMixin, tf.Module):
     @tf.Module.with_name_scope
     def __call__(self, inputs: tf.Tensor) -> tf.Tensor:
         """Forward pass of the 1D YAT convolution.
-        
+
         Args:
             inputs: Input tensor of shape [batch, length, channels].
-            
+
         Returns:
             Output tensor after YAT convolution.
         """
@@ -219,13 +213,11 @@ class YatConv1D(SingleInputSavedModelMixin, tf.Module):
             padding=self.padding,
             dilations=self.dilation_rate,
         )
-        dot_prod_map = _grouped_convolution(
-            inputs, kernel, self.groups, convolution
-        )
+        dot_prod_map = _grouped_convolution(inputs, kernel, self.groups, convolution)
 
         # Compute ||input_patches||^2 using convolution with ones kernel
         inputs_squared = inputs * inputs
-        
+
         # Create ones kernel for computing patch squared sums
         ones_kernel = _patch_norm_kernel(
             (self.kernel_size,),
@@ -233,7 +225,7 @@ class YatConv1D(SingleInputSavedModelMixin, tf.Module):
             self.groups,
             inputs.dtype,
         )
-        
+
         patch_sq_sum_map_raw = _grouped_convolution(
             inputs_squared,
             ones_kernel,
@@ -248,7 +240,9 @@ class YatConv1D(SingleInputSavedModelMixin, tf.Module):
         )
 
         # Compute ||kernel||^2 per filter
-        kernel_sq_sum_per_filter = tf.reduce_sum(kernel**2, axis=[0, 1])  # Sum over spatial and input channel dims
+        kernel_sq_sum_per_filter = tf.reduce_sum(
+            kernel**2, axis=[0, 1]
+        )  # Sum over spatial and input channel dims
 
         # Reshape for broadcasting: [1, 1, filters]
         kernel_sq_sum_reshaped = tf.reshape(kernel_sq_sum_per_filter, [1, 1, -1])
@@ -260,10 +254,10 @@ class YatConv1D(SingleInputSavedModelMixin, tf.Module):
 
 class YatConv2D(SingleInputSavedModelMixin, tf.Module):
     """2D YAT convolution module using TensorFlow operations.
-    
+
     This module implements 2D convolution using the YAT  algorithm,
     which computes (dot_product)^2 / (squared_euclidean_distance + epsilon).
-    
+
     Args:
         filters: Integer, the dimensionality of the output space.
         kernel_size: Integer or tuple/list of 2 integers, specifying the height and width
@@ -280,7 +274,7 @@ class YatConv2D(SingleInputSavedModelMixin, tf.Module):
         dtype: The dtype of the computation. Defaults to tf.float32.
         name: Name of the module.
     """
-    
+
     def __init__(
         self,
         filters: int,
@@ -295,14 +289,24 @@ class YatConv2D(SingleInputSavedModelMixin, tf.Module):
         epsilon: float = 1e-5,
         learnable_epsilon: bool = False,
         dtype: tf.DType = tf.float32,
-        name: Optional[str] = None
+        name: Optional[str] = None,
     ):
         super().__init__(name=name)
         self.filters = filters
-        self.kernel_size = kernel_size if isinstance(kernel_size, (list, tuple)) else (kernel_size, kernel_size)
-        self.strides = strides if isinstance(strides, (list, tuple)) else (strides, strides)
+        self.kernel_size = (
+            kernel_size
+            if isinstance(kernel_size, (list, tuple))
+            else (kernel_size, kernel_size)
+        )
+        self.strides = (
+            strides if isinstance(strides, (list, tuple)) else (strides, strides)
+        )
         self.padding = padding.upper()
-        self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate)
+        self.dilation_rate = (
+            dilation_rate
+            if isinstance(dilation_rate, (list, tuple))
+            else (dilation_rate, dilation_rate)
+        )
         _validate_groups(filters, groups)
         self.groups = groups
         self.use_alpha = use_alpha
@@ -317,7 +321,7 @@ class YatConv2D(SingleInputSavedModelMixin, tf.Module):
             use_bias = True  # Bias is applied (but constant)
         self.use_bias = use_bias
         self.constant_bias = constant_bias
-        
+
         # Variables will be created in build
         self.is_built = False
         self.input_channels = None
@@ -329,7 +333,7 @@ class YatConv2D(SingleInputSavedModelMixin, tf.Module):
     @tf.Module.with_name_scope
     def build(self, input_shape: Union[List[int], tf.TensorShape]) -> None:
         """Builds the layer weights based on input shape.
-        
+
         Args:
             input_shape: Shape of the input tensor [batch, height, width, channels].
         """
@@ -338,42 +342,40 @@ class YatConv2D(SingleInputSavedModelMixin, tf.Module):
 
         input_channels = int(input_shape[-1])
         self.input_channels = input_channels
-        
+
         if input_channels % self.groups != 0:
             raise ValueError(
                 f"Input channels ({input_channels}) must be divisible by groups ({self.groups})"
             )
-        
+
         # Kernel shape: [kernel_height, kernel_width, input_channels_per_group, filters]
         channels_per_group = input_channels // self.groups
         kernel_shape = self.kernel_size + (channels_per_group, self.filters)
-        
+
         # Initialize kernel using orthogonal initialization
         kernel_init = tf.random.normal(kernel_shape, dtype=self.dtype)
         # Simple orthogonal-like initialization by normalizing
-        kernel_init = kernel_init / tf.sqrt(tf.cast(channels_per_group * self.kernel_size[0] * self.kernel_size[1], self.dtype))
-        
+        kernel_init = kernel_init / tf.sqrt(
+            tf.cast(
+                channels_per_group * self.kernel_size[0] * self.kernel_size[1],
+                self.dtype,
+            )
+        )
+
         self.kernel = tf.Variable(
-            kernel_init,
-            trainable=True,
-            name='kernel',
-            dtype=self.dtype
+            kernel_init, trainable=True, name="kernel", dtype=self.dtype
         )
 
         # Initialize bias (learnable only; constant bias has no Variable)
         if self.use_bias and self._constant_bias_value is None:
             self.bias = tf.Variable(
-                tf.zeros([self.filters], dtype=self.dtype),
-                trainable=True,
-                name='bias'
+                tf.zeros([self.filters], dtype=self.dtype), trainable=True, name="bias"
             )
 
         # Initialize alpha
         if self.use_alpha:
             self.alpha = tf.Variable(
-                tf.ones([1], dtype=self.dtype),
-                trainable=True,
-                name='alpha'
+                tf.ones([1], dtype=self.dtype), trainable=True, name="alpha"
             )
 
         # Learnable epsilon parameter (softplus-constrained)
@@ -382,7 +384,7 @@ class YatConv2D(SingleInputSavedModelMixin, tf.Module):
             self.epsilon_param = tf.Variable(
                 tf.constant(raw_eps, shape=[1], dtype=_epsilon_variable_dtype(self)),
                 trainable=True,
-                name='epsilon_param',
+                name="epsilon_param",
             )
 
         self.is_built = True
@@ -395,10 +397,10 @@ class YatConv2D(SingleInputSavedModelMixin, tf.Module):
     @tf.Module.with_name_scope
     def __call__(self, inputs: tf.Tensor) -> tf.Tensor:
         """Forward pass of the 2D YAT convolution.
-        
+
         Args:
             inputs: Input tensor of shape [batch, height, width, channels].
-            
+
         Returns:
             Output tensor after YAT convolution.
         """
@@ -414,13 +416,11 @@ class YatConv2D(SingleInputSavedModelMixin, tf.Module):
             padding=self.padding,
             dilations=[1] + list(self.dilation_rate) + [1],
         )
-        dot_prod_map = _grouped_convolution(
-            inputs, kernel, self.groups, convolution
-        )
+        dot_prod_map = _grouped_convolution(inputs, kernel, self.groups, convolution)
 
         # Compute ||input_patches||^2 using convolution with ones kernel
         inputs_squared = inputs * inputs
-        
+
         # Create ones kernel for computing patch squared sums
         ones_kernel = _patch_norm_kernel(
             self.kernel_size,
@@ -428,7 +428,7 @@ class YatConv2D(SingleInputSavedModelMixin, tf.Module):
             self.groups,
             inputs.dtype,
         )
-        
+
         patch_sq_sum_map_raw = _grouped_convolution(
             inputs_squared,
             ones_kernel,
@@ -443,7 +443,9 @@ class YatConv2D(SingleInputSavedModelMixin, tf.Module):
         )
 
         # Compute ||kernel||^2 per filter
-        kernel_sq_sum_per_filter = tf.reduce_sum(kernel**2, axis=[0, 1, 2])  # Sum over spatial and input channel dims
+        kernel_sq_sum_per_filter = tf.reduce_sum(
+            kernel**2, axis=[0, 1, 2]
+        )  # Sum over spatial and input channel dims
 
         # Reshape for broadcasting: [1, 1, 1, filters]
         kernel_sq_sum_reshaped = tf.reshape(kernel_sq_sum_per_filter, [1, 1, 1, -1])
@@ -455,10 +457,10 @@ class YatConv2D(SingleInputSavedModelMixin, tf.Module):
 
 class YatConv3D(SingleInputSavedModelMixin, tf.Module):
     """3D YAT convolution module using TensorFlow operations.
-    
+
     This module implements 3D convolution using the YAT algorithm,
     which computes (dot_product)^2 / (squared_euclidean_distance + epsilon).
-    
+
     Args:
         filters: Integer, the dimensionality of the output space.
         kernel_size: Integer or tuple/list of 3 integers, specifying the depth, height and width
@@ -475,7 +477,7 @@ class YatConv3D(SingleInputSavedModelMixin, tf.Module):
         dtype: The dtype of the computation. Defaults to tf.float32.
         name: Name of the module.
     """
-    
+
     def __init__(
         self,
         filters: int,
@@ -490,14 +492,26 @@ class YatConv3D(SingleInputSavedModelMixin, tf.Module):
         epsilon: float = 1e-5,
         learnable_epsilon: bool = False,
         dtype: tf.DType = tf.float32,
-        name: Optional[str] = None
+        name: Optional[str] = None,
     ):
         super().__init__(name=name)
         self.filters = filters
-        self.kernel_size = kernel_size if isinstance(kernel_size, (list, tuple)) else (kernel_size, kernel_size, kernel_size)
-        self.strides = strides if isinstance(strides, (list, tuple)) else (strides, strides, strides)
+        self.kernel_size = (
+            kernel_size
+            if isinstance(kernel_size, (list, tuple))
+            else (kernel_size, kernel_size, kernel_size)
+        )
+        self.strides = (
+            strides
+            if isinstance(strides, (list, tuple))
+            else (strides, strides, strides)
+        )
         self.padding = padding.upper()
-        self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate, dilation_rate)
+        self.dilation_rate = (
+            dilation_rate
+            if isinstance(dilation_rate, (list, tuple))
+            else (dilation_rate, dilation_rate, dilation_rate)
+        )
         _validate_groups(filters, groups)
         self.groups = groups
         self.use_alpha = use_alpha
@@ -512,7 +526,7 @@ class YatConv3D(SingleInputSavedModelMixin, tf.Module):
             use_bias = True  # Bias is applied (but constant)
         self.use_bias = use_bias
         self.constant_bias = constant_bias
-        
+
         # Variables will be created in build
         self.is_built = False
         self.input_channels = None
@@ -524,7 +538,7 @@ class YatConv3D(SingleInputSavedModelMixin, tf.Module):
     @tf.Module.with_name_scope
     def build(self, input_shape: Union[List[int], tf.TensorShape]) -> None:
         """Builds the layer weights based on input shape.
-        
+
         Args:
             input_shape: Shape of the input tensor [batch, depth, height, width, channels].
         """
@@ -533,43 +547,41 @@ class YatConv3D(SingleInputSavedModelMixin, tf.Module):
 
         input_channels = int(input_shape[-1])
         self.input_channels = input_channels
-        
+
         if input_channels % self.groups != 0:
             raise ValueError(
                 f"Input channels ({input_channels}) must be divisible by groups ({self.groups})"
             )
-        
+
         # Kernel shape: [kernel_depth, kernel_height, kernel_width, input_channels_per_group, filters]
         channels_per_group = input_channels // self.groups
         kernel_shape = self.kernel_size + (channels_per_group, self.filters)
-        
+
         # Initialize kernel using orthogonal initialization
         kernel_init = tf.random.normal(kernel_shape, dtype=self.dtype)
         # Simple orthogonal-like initialization by normalizing
-        fan_in = channels_per_group * self.kernel_size[0] * self.kernel_size[1] * self.kernel_size[2]
+        fan_in = (
+            channels_per_group
+            * self.kernel_size[0]
+            * self.kernel_size[1]
+            * self.kernel_size[2]
+        )
         kernel_init = kernel_init / tf.sqrt(tf.cast(fan_in, self.dtype))
-        
+
         self.kernel = tf.Variable(
-            kernel_init,
-            trainable=True,
-            name='kernel',
-            dtype=self.dtype
+            kernel_init, trainable=True, name="kernel", dtype=self.dtype
         )
 
         # Initialize bias (learnable only; constant bias has no Variable)
         if self.use_bias and self._constant_bias_value is None:
             self.bias = tf.Variable(
-                tf.zeros([self.filters], dtype=self.dtype),
-                trainable=True,
-                name='bias'
+                tf.zeros([self.filters], dtype=self.dtype), trainable=True, name="bias"
             )
 
         # Initialize alpha
         if self.use_alpha:
             self.alpha = tf.Variable(
-                tf.ones([1], dtype=self.dtype),
-                trainable=True,
-                name='alpha'
+                tf.ones([1], dtype=self.dtype), trainable=True, name="alpha"
             )
 
         # Learnable epsilon parameter (softplus-constrained)
@@ -578,7 +590,7 @@ class YatConv3D(SingleInputSavedModelMixin, tf.Module):
             self.epsilon_param = tf.Variable(
                 tf.constant(raw_eps, shape=[1], dtype=_epsilon_variable_dtype(self)),
                 trainable=True,
-                name='epsilon_param',
+                name="epsilon_param",
             )
 
         self.is_built = True
@@ -591,10 +603,10 @@ class YatConv3D(SingleInputSavedModelMixin, tf.Module):
     @tf.Module.with_name_scope
     def __call__(self, inputs: tf.Tensor) -> tf.Tensor:
         """Forward pass of the 3D YAT convolution.
-        
+
         Args:
             inputs: Input tensor of shape [batch, depth, height, width, channels].
-            
+
         Returns:
             Output tensor after YAT convolution.
         """
@@ -610,13 +622,11 @@ class YatConv3D(SingleInputSavedModelMixin, tf.Module):
             padding=self.padding,
             dilations=[1] + list(self.dilation_rate) + [1],
         )
-        dot_prod_map = _grouped_convolution(
-            inputs, kernel, self.groups, convolution
-        )
+        dot_prod_map = _grouped_convolution(inputs, kernel, self.groups, convolution)
 
         # Compute ||input_patches||^2 using convolution with ones kernel
         inputs_squared = inputs * inputs
-        
+
         # Create ones kernel for computing patch squared sums
         ones_kernel = _patch_norm_kernel(
             self.kernel_size,
@@ -624,7 +634,7 @@ class YatConv3D(SingleInputSavedModelMixin, tf.Module):
             self.groups,
             inputs.dtype,
         )
-        
+
         patch_sq_sum_map_raw = _grouped_convolution(
             inputs_squared,
             ones_kernel,
@@ -639,7 +649,9 @@ class YatConv3D(SingleInputSavedModelMixin, tf.Module):
         )
 
         # Compute ||kernel||^2 per filter
-        kernel_sq_sum_per_filter = tf.reduce_sum(kernel**2, axis=[0, 1, 2, 3])  # Sum over spatial and input channel dims
+        kernel_sq_sum_per_filter = tf.reduce_sum(
+            kernel**2, axis=[0, 1, 2, 3]
+        )  # Sum over spatial and input channel dims
 
         # Reshape for broadcasting: [1, 1, 1, 1, filters]
         kernel_sq_sum_reshaped = tf.reshape(kernel_sq_sum_per_filter, [1, 1, 1, 1, -1])
@@ -651,9 +663,9 @@ class YatConv3D(SingleInputSavedModelMixin, tf.Module):
 
 class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
     """1D YAT transposed convolution (deconvolution) module using TensorFlow operations.
-    
+
     This module implements 1D transposed convolution using the YAT algorithm.
-    
+
     Args:
         filters: Integer, the dimensionality of the output space.
         kernel_size: Integer, specifying the length of the 1D convolution window.
@@ -665,7 +677,7 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
         dtype: The dtype of the computation. Defaults to tf.float32.
         name: Name of the module.
     """
-    
+
     def __init__(
         self,
         filters: int,
@@ -678,7 +690,7 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
         epsilon: float = 1e-5,
         learnable_epsilon: bool = False,
         dtype: tf.DType = tf.float32,
-        name: Optional[str] = None
+        name: Optional[str] = None,
     ):
         super().__init__(name=name)
         self.filters = filters
@@ -697,7 +709,7 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
             use_bias = True  # Bias is applied (but constant)
         self.use_bias = use_bias
         self.constant_bias = constant_bias
-        
+
         self.is_built = False
         self.input_channels = None
         self.kernel = None
@@ -720,23 +732,25 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
 
         # Kernel shape for transpose conv: [kernel_size, filters, input_channels]
         kernel_shape = (self.kernel_size, self.filters, input_channels)
-        
+
         kernel_init = tf.random.normal(kernel_shape, dtype=self.dtype)
-        kernel_init = kernel_init / tf.sqrt(tf.cast(self.filters * self.kernel_size, self.dtype))
-        
-        self.kernel = tf.Variable(kernel_init, trainable=True, name='kernel', dtype=self.dtype)
+        kernel_init = kernel_init / tf.sqrt(
+            tf.cast(self.filters * self.kernel_size, self.dtype)
+        )
+
+        self.kernel = tf.Variable(
+            kernel_init, trainable=True, name="kernel", dtype=self.dtype
+        )
 
         # Learnable bias variable (skipped when constant_bias is set)
         if self.use_bias and self._constant_bias_value is None:
             self.bias = tf.Variable(
-                tf.zeros([self.filters], dtype=self.dtype),
-                trainable=True, name='bias'
+                tf.zeros([self.filters], dtype=self.dtype), trainable=True, name="bias"
             )
 
         if self.use_alpha:
             self.alpha = tf.Variable(
-                tf.ones([1], dtype=self.dtype),
-                trainable=True, name='alpha'
+                tf.ones([1], dtype=self.dtype), trainable=True, name="alpha"
             )
 
         # Learnable epsilon parameter (softplus-constrained)
@@ -745,7 +759,7 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
             self.epsilon_param = tf.Variable(
                 tf.constant(raw_eps, shape=[1], dtype=_epsilon_variable_dtype(self)),
                 trainable=True,
-                name='epsilon_param',
+                name="epsilon_param",
             )
 
         self.is_built = True
@@ -771,29 +785,37 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
         input_shape = tf.shape(inputs)
         batch_size = input_shape[0]
         input_length = input_shape[1]
-        
+
         # Calculate output length - use Python int for static calculation
         strides = self.strides
         kernel_size = self.kernel_size
-        
+
         if self.padding == "SAME":
             output_length = input_length * strides
         else:
-            output_length = input_length * strides + tf.maximum(kernel_size - strides, 0)
-        
+            output_length = input_length * strides + tf.maximum(
+                kernel_size - strides, 0
+            )
+
         # Build output shape as a 1D tensor
-        output_shape = tf.concat([
-            tf.reshape(batch_size, [1]),
-            tf.reshape(output_length, [1]),
-            tf.constant([self.filters], dtype=tf.int32)
-        ], axis=0)
-        
-        output_shape_ones = tf.concat([
-            tf.reshape(batch_size, [1]),
-            tf.reshape(output_length, [1]),
-            tf.constant([1], dtype=tf.int32)
-        ], axis=0)
-        
+        output_shape = tf.concat(
+            [
+                tf.reshape(batch_size, [1]),
+                tf.reshape(output_length, [1]),
+                tf.constant([self.filters], dtype=tf.int32),
+            ],
+            axis=0,
+        )
+
+        output_shape_ones = tf.concat(
+            [
+                tf.reshape(batch_size, [1]),
+                tf.reshape(output_length, [1]),
+                tf.constant([1], dtype=tf.int32),
+            ],
+            axis=0,
+        )
+
         # Transpose convolution
         dot_prod_map = tf.nn.conv1d_transpose(
             inputs,
@@ -805,11 +827,11 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
 
         # For transpose conv, compute YAT distance calculation
         inputs_squared = inputs * inputs
-        
+
         # Ones kernel for patch norms
         ones_kernel_shape = (kernel_size, 1, self.input_channels)
         ones_kernel = tf.ones(ones_kernel_shape, dtype=inputs.dtype)
-        
+
         patch_sq_sum_map_raw = tf.nn.conv1d_transpose(
             inputs_squared,
             ones_kernel,
@@ -817,7 +839,7 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
             strides=strides,
             padding=self.padding,
         )
-        
+
         patch_sq_sum_map = tf.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
 
         # Compute kernel squared sum
@@ -831,9 +853,9 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
 
 class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
     """2D YAT transposed convolution (deconvolution) module using TensorFlow operations.
-    
+
     This module implements 2D transposed convolution using the YAT algorithm.
-    
+
     Args:
         filters: Integer, the dimensionality of the output space.
         kernel_size: Integer or tuple of 2 integers for kernel dimensions.
@@ -845,7 +867,7 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
         dtype: The dtype of the computation. Defaults to tf.float32.
         name: Name of the module.
     """
-    
+
     def __init__(
         self,
         filters: int,
@@ -858,12 +880,18 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
         epsilon: float = 1e-5,
         learnable_epsilon: bool = False,
         dtype: tf.DType = tf.float32,
-        name: Optional[str] = None
+        name: Optional[str] = None,
     ):
         super().__init__(name=name)
         self.filters = filters
-        self.kernel_size = kernel_size if isinstance(kernel_size, (list, tuple)) else (kernel_size, kernel_size)
-        self.strides = strides if isinstance(strides, (list, tuple)) else (strides, strides)
+        self.kernel_size = (
+            kernel_size
+            if isinstance(kernel_size, (list, tuple))
+            else (kernel_size, kernel_size)
+        )
+        self.strides = (
+            strides if isinstance(strides, (list, tuple)) else (strides, strides)
+        )
         self.padding = padding.upper()
         self.use_alpha = use_alpha
         self.epsilon = validate_epsilon(epsilon)
@@ -877,7 +905,7 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
             use_bias = True  # Bias is applied (but constant)
         self.use_bias = use_bias
         self.constant_bias = constant_bias
-        
+
         self.is_built = False
         self.input_channels = None
         self.kernel = None
@@ -900,24 +928,24 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
 
         # Kernel shape for transpose conv: [height, width, filters, input_channels]
         kernel_shape = self.kernel_size + (self.filters, input_channels)
-        
+
         kernel_init = tf.random.normal(kernel_shape, dtype=self.dtype)
         fan_in = self.filters * self.kernel_size[0] * self.kernel_size[1]
         kernel_init = kernel_init / tf.sqrt(tf.cast(fan_in, self.dtype))
-        
-        self.kernel = tf.Variable(kernel_init, trainable=True, name='kernel', dtype=self.dtype)
+
+        self.kernel = tf.Variable(
+            kernel_init, trainable=True, name="kernel", dtype=self.dtype
+        )
 
         # Learnable bias variable (skipped when constant_bias is set)
         if self.use_bias and self._constant_bias_value is None:
             self.bias = tf.Variable(
-                tf.zeros([self.filters], dtype=self.dtype),
-                trainable=True, name='bias'
+                tf.zeros([self.filters], dtype=self.dtype), trainable=True, name="bias"
             )
 
         if self.use_alpha:
             self.alpha = tf.Variable(
-                tf.ones([1], dtype=self.dtype),
-                trainable=True, name='alpha'
+                tf.ones([1], dtype=self.dtype), trainable=True, name="alpha"
             )
 
         # Learnable epsilon parameter (softplus-constrained)
@@ -926,7 +954,7 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
             self.epsilon_param = tf.Variable(
                 tf.constant(raw_eps, shape=[1], dtype=_epsilon_variable_dtype(self)),
                 trainable=True,
-                name='epsilon_param',
+                name="epsilon_param",
             )
 
         self.is_built = True
@@ -952,17 +980,21 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
         batch_size = tf.shape(inputs)[0]
         input_height = tf.shape(inputs)[1]
         input_width = tf.shape(inputs)[2]
-        
+
         # Calculate output shape
         if self.padding == "SAME":
             output_height = input_height * self.strides[0]
             output_width = input_width * self.strides[1]
         else:
-            output_height = input_height * self.strides[0] + max(self.kernel_size[0] - self.strides[0], 0)
-            output_width = input_width * self.strides[1] + max(self.kernel_size[1] - self.strides[1], 0)
-        
+            output_height = input_height * self.strides[0] + max(
+                self.kernel_size[0] - self.strides[0], 0
+            )
+            output_width = input_width * self.strides[1] + max(
+                self.kernel_size[1] - self.strides[1], 0
+            )
+
         output_shape = [batch_size, output_height, output_width, self.filters]
-        
+
         # Transpose convolution
         dot_prod_map = tf.nn.conv2d_transpose(
             inputs,
@@ -974,11 +1006,11 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
 
         # For transpose conv, compute YAT distance calculation
         inputs_squared = inputs * inputs
-        
+
         # Ones kernel for patch norms
         ones_kernel_shape = self.kernel_size + (1, self.input_channels)
         ones_kernel = tf.ones(ones_kernel_shape, dtype=inputs.dtype)
-        
+
         patch_sq_sum_map_raw = tf.nn.conv2d_transpose(
             inputs_squared,
             ones_kernel,
@@ -986,7 +1018,7 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
             strides=[1] + list(self.strides) + [1],
             padding=self.padding,
         )
-        
+
         patch_sq_sum_map = tf.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
 
         # Compute kernel squared sum
@@ -1000,9 +1032,9 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
 
 class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
     """3D YAT transposed convolution (deconvolution) module using TensorFlow operations.
-    
+
     This module implements 3D transposed convolution using the YAT algorithm.
-    
+
     Args:
         filters: Integer, the dimensionality of the output space.
         kernel_size: Integer or tuple of 3 integers for kernel dimensions.
@@ -1014,7 +1046,7 @@ class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
         dtype: The dtype of the computation. Defaults to tf.float32.
         name: Name of the module.
     """
-    
+
     def __init__(
         self,
         filters: int,
@@ -1027,12 +1059,20 @@ class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
         epsilon: float = 1e-5,
         learnable_epsilon: bool = False,
         dtype: tf.DType = tf.float32,
-        name: Optional[str] = None
+        name: Optional[str] = None,
     ):
         super().__init__(name=name)
         self.filters = filters
-        self.kernel_size = kernel_size if isinstance(kernel_size, (list, tuple)) else (kernel_size, kernel_size, kernel_size)
-        self.strides = strides if isinstance(strides, (list, tuple)) else (strides, strides, strides)
+        self.kernel_size = (
+            kernel_size
+            if isinstance(kernel_size, (list, tuple))
+            else (kernel_size, kernel_size, kernel_size)
+        )
+        self.strides = (
+            strides
+            if isinstance(strides, (list, tuple))
+            else (strides, strides, strides)
+        )
         self.padding = padding.upper()
         self.use_alpha = use_alpha
         self.epsilon = validate_epsilon(epsilon)
@@ -1046,7 +1086,7 @@ class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
             use_bias = True  # Bias is applied (but constant)
         self.use_bias = use_bias
         self.constant_bias = constant_bias
-        
+
         self.is_built = False
         self.input_channels = None
         self.kernel = None
@@ -1070,24 +1110,29 @@ class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
 
         # Kernel shape for transpose conv: [depth, height, width, filters, input_channels]
         kernel_shape = self.kernel_size + (self.filters, input_channels)
-        
+
         kernel_init = tf.random.normal(kernel_shape, dtype=self.dtype)
-        fan_in = self.filters * self.kernel_size[0] * self.kernel_size[1] * self.kernel_size[2]
+        fan_in = (
+            self.filters
+            * self.kernel_size[0]
+            * self.kernel_size[1]
+            * self.kernel_size[2]
+        )
         kernel_init = kernel_init / tf.sqrt(tf.cast(fan_in, self.dtype))
-        
-        self.kernel = tf.Variable(kernel_init, trainable=True, name='kernel', dtype=self.dtype)
+
+        self.kernel = tf.Variable(
+            kernel_init, trainable=True, name="kernel", dtype=self.dtype
+        )
 
         # Learnable bias variable (skipped when constant_bias is set)
         if self.use_bias and self._constant_bias_value is None:
             self.bias = tf.Variable(
-                tf.zeros([self.filters], dtype=self.dtype),
-                trainable=True, name='bias'
+                tf.zeros([self.filters], dtype=self.dtype), trainable=True, name="bias"
             )
 
         if self.use_alpha:
             self.alpha = tf.Variable(
-                tf.ones([1], dtype=self.dtype),
-                trainable=True, name='alpha'
+                tf.ones([1], dtype=self.dtype), trainable=True, name="alpha"
             )
 
         # Learnable epsilon parameter (softplus-constrained)
@@ -1096,7 +1141,7 @@ class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
             self.epsilon_param = tf.Variable(
                 tf.constant(raw_eps, shape=[1], dtype=_epsilon_variable_dtype(self)),
                 trainable=True,
-                name='epsilon_param',
+                name="epsilon_param",
             )
 
         self.is_built = True
@@ -1124,19 +1169,31 @@ class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
         input_depth = tf.shape(inputs)[1]
         input_height = tf.shape(inputs)[2]
         input_width = tf.shape(inputs)[3]
-        
+
         # Calculate output shape
         if self.padding == "SAME":
             output_depth = input_depth * self.strides[0]
             output_height = input_height * self.strides[1]
             output_width = input_width * self.strides[2]
         else:
-            output_depth = input_depth * self.strides[0] + max(self.kernel_size[0] - self.strides[0], 0)
-            output_height = input_height * self.strides[1] + max(self.kernel_size[1] - self.strides[1], 0)
-            output_width = input_width * self.strides[2] + max(self.kernel_size[2] - self.strides[2], 0)
-        
-        output_shape = [batch_size, output_depth, output_height, output_width, self.filters]
-        
+            output_depth = input_depth * self.strides[0] + max(
+                self.kernel_size[0] - self.strides[0], 0
+            )
+            output_height = input_height * self.strides[1] + max(
+                self.kernel_size[1] - self.strides[1], 0
+            )
+            output_width = input_width * self.strides[2] + max(
+                self.kernel_size[2] - self.strides[2], 0
+            )
+
+        output_shape = [
+            batch_size,
+            output_depth,
+            output_height,
+            output_width,
+            self.filters,
+        ]
+
         # Transpose convolution
         dot_prod_map = tf.nn.conv3d_transpose(
             inputs,
@@ -1148,11 +1205,11 @@ class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
 
         # For transpose conv, compute YAT distance calculation
         inputs_squared = inputs * inputs
-        
+
         # Ones kernel for patch norms
         ones_kernel_shape = self.kernel_size + (1, self.input_channels)
         ones_kernel = tf.ones(ones_kernel_shape, dtype=inputs.dtype)
-        
+
         patch_sq_sum_map_raw = tf.nn.conv3d_transpose(
             inputs_squared,
             ones_kernel,
@@ -1160,7 +1217,7 @@ class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
             strides=[1] + list(self.strides) + [1],
             padding=self.padding,
         )
-        
+
         patch_sq_sum_map = tf.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
 
         # Compute kernel squared sum

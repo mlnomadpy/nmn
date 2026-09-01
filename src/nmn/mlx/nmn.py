@@ -20,7 +20,6 @@ from typing import List, Optional, Tuple, Union
 import mlx.core as mx
 import mlx.nn as nn
 
-
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
 
 
@@ -233,21 +232,23 @@ class YatNMN(nn.Module):
             else:
                 bias = mx.zeros((self.features,), dtype=self.dtype)
             if self._constant_alpha_value is not None:
-                alpha_arr = mx.array(
-                    [self._constant_alpha_value], dtype=self.dtype
-                )
+                alpha_arr = mx.array([self._constant_alpha_value], dtype=self.dtype)
             elif self.use_alpha and getattr(self, "alpha", None) is not None:
                 alpha_arr = self.alpha
             else:
                 alpha_arr = mx.ones((1,), dtype=self.dtype)
-            if self.learnable_epsilon and getattr(self, "epsilon_param", None) is not None:
+            if (
+                self.learnable_epsilon
+                and getattr(self, "epsilon_param", None) is not None
+            ):
                 # Keep epsilon as an MLX array. Converting it to ``float``
                 # detaches epsilon_param from autodiff and breaks mx.compile.
                 eps_val = nn.softplus(self.epsilon_param)
             else:
                 eps_val = self.epsilon
-            return fused_yat_score(inputs, kernel, bias=bias, alpha=alpha_arr,
-                                   epsilon=eps_val)
+            return fused_yat_score(
+                inputs, kernel, bias=bias, alpha=alpha_arr, epsilon=eps_val
+            )
 
         # Spherical: normalize inputs and each kernel row to unit norm.
         if self.spherical:

@@ -1,11 +1,11 @@
 """Tests for TensorFlow squasher functions."""
 
-import pytest
 import numpy as np
+import pytest
 
 tf = pytest.importorskip("tensorflow")
 
-from nmn.tf.squashers import softermax, softer_sigmoid, soft_tanh
+from nmn.tf.squashers import soft_tanh, softer_sigmoid, softermax
 
 
 class TestSoftermax:

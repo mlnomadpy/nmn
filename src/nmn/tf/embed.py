@@ -7,7 +7,7 @@ weight-sharing between embedding and output layers in language models.
 from __future__ import annotations
 
 import math
-from typing import Optional, Union, List
+from typing import List, Optional, Union
 
 import tensorflow as tf
 
@@ -59,9 +59,7 @@ class YatEmbed(tf.Module):
 
         # Initialize embedding with variance scaling
         std = 1.0 / math.sqrt(features)
-        initial = tf.random.normal(
-            (num_embeddings, features), stddev=std, dtype=dtype
-        )
+        initial = tf.random.normal((num_embeddings, features), stddev=std, dtype=dtype)
 
         if weight_normalized:
             norms = tf.sqrt(tf.reduce_sum(tf.square(initial), axis=1, keepdims=True))
@@ -156,6 +154,4 @@ class YatEmbed(tf.Module):
             attend_signature = tf.TensorSpec(
                 [None, self.features], self.dtype, name="query"
             )
-        export_embedding(
-            self, export_dir, lookup_signature, attend_signature
-        )
+        export_embedding(self, export_dir, lookup_signature, attend_signature)

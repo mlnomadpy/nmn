@@ -10,9 +10,9 @@ import math
 from typing import Any, Optional, Union
 
 import jax.numpy as jnp
+from flax import linen as nn
 from flax.linen.dtypes import promote_dtype
 from flax.linen.module import Module, compact
-from flax import linen as nn
 
 __all__ = ["YatEmbed"]
 
@@ -73,7 +73,7 @@ class YatEmbed(Module):
         )
 
         if self.weight_normalized:
-            norms = jnp.sqrt(jnp.sum(embedding ** 2, axis=1, keepdims=True))
+            norms = jnp.sqrt(jnp.sum(embedding**2, axis=1, keepdims=True))
             embedding = embedding / (norms + 1e-8)
 
         (embedding,) = promote_dtype(embedding, dtype=self.dtype, inexact=False)
@@ -113,7 +113,7 @@ class YatEmbed(Module):
             alpha = None
 
         if self.weight_normalized:
-            norms = jnp.sqrt(jnp.sum(embedding ** 2, axis=1, keepdims=True))
+            norms = jnp.sqrt(jnp.sum(embedding**2, axis=1, keepdims=True))
             embedding = embedding / (norms + 1e-8)
 
         query, embedding, alpha = promote_dtype(
@@ -134,14 +134,14 @@ class YatEmbed(Module):
         if self.spherical:
             distances = 2.0 - 2.0 * y
         else:
-            query_sq = jnp.sum(query ** 2, axis=-1, keepdims=True)
-            embed_sq = jnp.sum(embedding ** 2, axis=1, keepdims=True).T
+            query_sq = jnp.sum(query**2, axis=-1, keepdims=True)
+            embed_sq = jnp.sum(embedding**2, axis=1, keepdims=True).T
             # Clamp to zero: bf16/fp16 cancellation can make distance slightly
             # negative when query ≈ embedding row.
             distances = jnp.maximum(query_sq + embed_sq - 2.0 * y, 0.0)
 
         # YAT
-        y = y ** 2 / (distances + self.epsilon)
+        y = y**2 / (distances + self.epsilon)
 
         # Alpha scaling
         if _constant_alpha_value is not None:

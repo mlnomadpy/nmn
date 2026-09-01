@@ -7,10 +7,10 @@ standard scaled dot-product attention.
 YAT Attention:
     Uses the formula: softmax((Q·K)² / (||Q-K||² + ε)) · V
     This balances similarity (dot product) with proximity (Euclidean distance).
-    
+
     With optional alpha scaling:
         scaled_attn = attn * (sqrt(head_dim) / log(1 + head_dim))^alpha
-    
+
     Alpha can be learnable, constant (e.g., sqrt(2)), or disabled.
 
 Rotary YAT Attention:
@@ -58,52 +58,39 @@ Modules:
     - masks: Mask utility functions
 """
 
+# Standard Dot-Product Attention
+from .dot_product import (
+    dot_product_attention,
+    dot_product_attention_weights,
+)
+
 # Fused YAT L1 Attention (memory-efficient custom_vjp)
 from .fused_yat_attention import (
     fused_yat_l1_attention,
     fused_yat_l1_self_attention,
 )
 
-# Pallas-fused YAT L1 Attention (tiled, FlashAttention-style)
-from .pallas_yat_attention import pallas_yat_l1_attention
-
-# YAT Attention (with Performer support)
-from .yat_attention import (
-    yat_attention,
-    yat_attention_weights,
-    yat_attention_normalized,
-    yat_performer_attention,
-    yat_performer_feature_map,
-    create_yat_projection,
-    normalize_qk,
-)
-
-# Rotary YAT Attention (with Performer support)
-from .rotary_yat import (
-    RotaryYatAttention,
-    rotary_yat_attention,
-    rotary_yat_attention_weights,
-    rotary_yat_performer_attention,
-    precompute_freqs_cis,
-    apply_rotary_emb,
-)
-
-
-
-# Spherical Yat-Performer (linear complexity YAT attention from paper)
-from .spherical_yat_performer import (
-    yat_tp_attention,
-    yat_tp_features,
-    create_yat_tp_projection,
-)
-
 # MAY — Random Maclaurin features (bias-aware linear YAT attention)
 from .maclaurin_yat import (
     create_maclaurin_projection,
+    maclaurin_coeffs,
     maclaurin_features,
     maclaurin_yat_attention,
-    maclaurin_coeffs,
 )
+
+# Mask Utilities
+from .masks import (
+    causal_attention_mask,
+    combine_masks,
+    make_attention_mask,
+    make_causal_mask,
+)
+
+# Multi-Head Attention Module
+from .multi_head import DEFAULT_CONSTANT_ALPHA, MultiHeadAttention
+
+# Pallas-fused YAT L1 Attention (tiled, FlashAttention-style)
+from .pallas_yat_attention import pallas_yat_l1_attention
 
 # RAY — sketched degree-2 modulation × radial RFF (bias-aware)
 from .radial_yat import (
@@ -112,21 +99,32 @@ from .radial_yat import (
     radial_yat_attention,
 )
 
-# Standard Dot-Product Attention
-from .dot_product import (
-    dot_product_attention,
-    dot_product_attention_weights,
+# Rotary YAT Attention (with Performer support)
+from .rotary_yat import (
+    RotaryYatAttention,
+    apply_rotary_emb,
+    precompute_freqs_cis,
+    rotary_yat_attention,
+    rotary_yat_attention_weights,
+    rotary_yat_performer_attention,
 )
 
-# Multi-Head Attention Module
-from .multi_head import MultiHeadAttention, DEFAULT_CONSTANT_ALPHA
+# Spherical Yat-Performer (linear complexity YAT attention from paper)
+from .spherical_yat_performer import (
+    create_yat_tp_projection,
+    yat_tp_attention,
+    yat_tp_features,
+)
 
-# Mask Utilities
-from .masks import (
-    make_attention_mask,
-    make_causal_mask,
-    combine_masks,
-    causal_attention_mask,
+# YAT Attention (with Performer support)
+from .yat_attention import (
+    create_yat_projection,
+    normalize_qk,
+    yat_attention,
+    yat_attention_normalized,
+    yat_attention_weights,
+    yat_performer_attention,
+    yat_performer_feature_map,
 )
 
 __all__ = [
@@ -149,7 +147,6 @@ __all__ = [
     "rotary_yat_performer_attention",
     "precompute_freqs_cis",
     "apply_rotary_emb",
-
     # Spherical Yat-Performer
     "yat_tp_attention",
     "yat_tp_features",
@@ -175,4 +172,3 @@ __all__ = [
     "combine_masks",
     "causal_attention_mask",
 ]
-

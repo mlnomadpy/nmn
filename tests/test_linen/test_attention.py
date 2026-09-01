@@ -1,17 +1,17 @@
 """Tests for Linen YAT attention."""
 
-import pytest
 import numpy as np
+import pytest
 
 jax = pytest.importorskip("jax")
 flax = pytest.importorskip("flax")
 jnp = jax.numpy
 
 from nmn.linen.attention import (
+    MultiHeadAttention,
     normalize_qk,
     yat_attention,
     yat_attention_normalized,
-    MultiHeadAttention,
 )
 
 
@@ -84,9 +84,9 @@ class TestMultiHeadAttention:
         mask = jnp.ones(shape, dtype=jnp.bool_).at[..., 0, :].set(False)
         args = (query, context, context) if cross_attention else (query,)
         variables = model.init(jax.random.key(75), *args, mask=mask)
-        output = jax.jit(lambda variables, *args: model.apply(variables, *args, mask=mask))(
-            variables, *args
-        )
+        output = jax.jit(
+            lambda variables, *args: model.apply(variables, *args, mask=mask)
+        )(variables, *args)
         np.testing.assert_array_equal(np.asarray(output[:, 0]), 0.0)
         assert np.all(np.isfinite(np.asarray(output)))
         if cross_attention:
@@ -95,9 +95,11 @@ class TestMultiHeadAttention:
                 (0, 1),
             )(query, context)
         else:
-            grads = (jax.grad(
-                lambda q: jnp.sum(model.apply(variables, q, mask=mask))
-            )(query),)
+            grads = (
+                jax.grad(lambda q: jnp.sum(model.apply(variables, q, mask=mask)))(
+                    query
+                ),
+            )
         assert all(np.all(np.isfinite(np.asarray(grad))) for grad in grads)
 
     def test_self_attention(self):

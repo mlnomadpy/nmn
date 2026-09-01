@@ -62,9 +62,9 @@ def _yat_scores(q: mx.array, k: mx.array, b: mx.array, eps: mx.array) -> mx.arra
     """
     b = b.reshape(1, -1, 1, 1)
     eps = eps.reshape(1, -1, 1, 1)
-    dot = q @ mx.swapaxes(k, -1, -2)                       # (B, H, Lq, Lk)
-    qn = mx.sum(q * q, axis=-1, keepdims=True)             # (B, H, Lq, 1)
-    kn = mx.sum(k * k, axis=-1, keepdims=True)             # (B, H, Lk, 1)
+    dot = q @ mx.swapaxes(k, -1, -2)  # (B, H, Lq, Lk)
+    qn = mx.sum(q * q, axis=-1, keepdims=True)  # (B, H, Lq, 1)
+    kn = mx.sum(k * k, axis=-1, keepdims=True)  # (B, H, Lk, 1)
     dist2 = mx.maximum(qn + mx.swapaxes(kn, -1, -2) - 2.0 * dot, 0.0)
     return (dot + b) ** 2 / (dist2 + eps)
 
@@ -94,9 +94,9 @@ def goat_yat_attention_weights(
     Returns:
         ``(B, H, Lq, Lk)`` row-stochastic weights.
     """
-    qh = mx.transpose(q, (0, 2, 1, 3))                     # (B, H, Lq, D)
-    kh = mx.transpose(k, (0, 2, 1, 3))                     # (B, H, Lk, D)
-    scores = _yat_scores(qh, kh, b, eps)                   # (B, H, Lq, Lk) >= 0
+    qh = mx.transpose(q, (0, 2, 1, 3))  # (B, H, Lq, D)
+    kh = mx.transpose(k, (0, 2, 1, 3))  # (B, H, Lk, D)
+    scores = _yat_scores(qh, kh, b, eps)  # (B, H, Lq, Lk) >= 0
     if self_mask and scores.shape[-2] == scores.shape[-1]:
         n = scores.shape[-1]
         scores = scores * (1.0 - mx.eye(n, dtype=scores.dtype))[None, None]
@@ -119,9 +119,9 @@ def goat_yat_attention(
     ``q``/``k``/``v`` are ``(B, L, H, D)``. Returns ``(B, Lq, H, D)``.
     """
     w = goat_yat_attention_weights(q, k, b, eps, mask=mask, self_mask=self_mask)
-    vh = mx.transpose(v, (0, 2, 1, 3))                     # (B, H, Lk, D)
-    out = w @ vh                                           # (B, H, Lq, D)
-    return mx.transpose(out, (0, 2, 1, 3))                 # (B, Lq, H, D)
+    vh = mx.transpose(v, (0, 2, 1, 3))  # (B, H, Lk, D)
+    out = w @ vh  # (B, H, Lq, D)
+    return mx.transpose(out, (0, 2, 1, 3))  # (B, Lq, H, D)
 
 
 class GoatYatAttention(nn.Module):
@@ -175,13 +175,17 @@ class GoatYatAttention(nn.Module):
         self.b_raw = mx.zeros((num_heads,), dtype=dtype)
         self.eps_raw = mx.full((num_heads,), raw_eps, dtype=dtype)
 
-        scale = embed_dim ** -0.5
+        scale = embed_dim**-0.5
         if variant == "v":
-            self.v_kernel = mx.random.normal((embed_dim, embed_dim)).astype(dtype) * scale
+            self.v_kernel = (
+                mx.random.normal((embed_dim, embed_dim)).astype(dtype) * scale
+            )
             if use_bias:
                 self.v_bias = mx.zeros((embed_dim,), dtype=dtype)
         if use_out_proj:
-            self.out_kernel = mx.random.normal((embed_dim, embed_dim)).astype(dtype) * scale
+            self.out_kernel = (
+                mx.random.normal((embed_dim, embed_dim)).astype(dtype) * scale
+            )
             if use_bias:
                 self.out_bias = mx.zeros((embed_dim,), dtype=dtype)
 

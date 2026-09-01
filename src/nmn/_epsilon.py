@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import math
 
-
 _FLOAT_LIMITS = {
-    "float16": (2.0 ** -24, 65504.0),
-    "bfloat16": (2.0 ** -133, float.fromhex("0x1.fep127")),
+    "float16": (2.0**-24, 65504.0),
+    "bfloat16": (2.0**-133, float.fromhex("0x1.fep127")),
     # JAX and TensorFlow flush exp/softplus float32 subnormals.  One exponent
     # above the normal boundary also avoids rounding log(tiny) below it.
-    "float32": (2.0 ** -125, float.fromhex("0x1.fffffep127")),
+    "float32": (2.0**-125, float.fromhex("0x1.fffffep127")),
     "float64": (
         float.fromhex("0x1.0000000000000p-1022"),
         float.fromhex("0x1.fffffffffffffp1023"),

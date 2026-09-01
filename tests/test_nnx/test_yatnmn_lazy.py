@@ -15,10 +15,10 @@ pytest.importorskip("optax")
 
 import jax
 import jax.numpy as jnp
-from flax import nnx
 import optax
+from flax import nnx
 
-from nmn.nnx.layers.nmn import YatNMN, FrozenParam
+from nmn.nnx.layers.nmn import FrozenParam, YatNMN
 
 
 def _param_paths(state):
@@ -34,7 +34,9 @@ class TestLazyStateFiltering:
         assert "('kernel',)" in _param_paths(frozen)
 
     def test_bias_alpha_epsilon_are_trainable(self):
-        m = YatNMN(8, 4, lazy=True, use_alpha=True, learnable_epsilon=True, rngs=nnx.Rngs(0))
+        m = YatNMN(
+            8, 4, lazy=True, use_alpha=True, learnable_epsilon=True, rngs=nnx.Rngs(0)
+        )
         paths = _param_paths(nnx.state(m, nnx.Param))
         assert "('bias',)" in paths
         assert "('alpha',)" in paths
@@ -58,7 +60,9 @@ class TestLazyStateFiltering:
 
 class TestLazyTrainingStep:
     def test_kernel_frozen_others_change(self):
-        m = YatNMN(8, 4, lazy=True, use_alpha=True, learnable_epsilon=True, rngs=nnx.Rngs(0))
+        m = YatNMN(
+            8, 4, lazy=True, use_alpha=True, learnable_epsilon=True, rngs=nnx.Rngs(0)
+        )
         k0 = jnp.array(m.kernel[...])
         b0 = jnp.array(m.bias[...])
         a0 = jnp.array(m.alpha[...])

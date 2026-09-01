@@ -101,9 +101,7 @@ def yat_attention_weights(
         attn_weights = attn_weights * scale
 
     if mask is not None:
-        mask = ops.broadcast_to(
-            ops.cast(mask, "bool"), ops.shape(attn_weights)
-        )
+        mask = ops.broadcast_to(ops.cast(mask, "bool"), ops.shape(attn_weights))
         row_has_key = ops.any(mask, axis=-1, keepdims=True)
         attn_weights = ops.where(mask, attn_weights, -float("inf"))
         attn_weights = ops.where(
@@ -116,9 +114,8 @@ def yat_attention_weights(
 
     if dropout_rate > 0.0 and training:
         from keras.src import random
-        keep = random.dropout(
-            ops.ones_like(attn_weights), rate=dropout_rate
-        )
+
+        keep = random.dropout(ops.ones_like(attn_weights), rate=dropout_rate)
         attn_weights = attn_weights * keep
 
     return ops.cast(attn_weights, output_dtype)
@@ -154,7 +151,8 @@ def yat_attention(
         Output (batch, q_len, num_heads, v_dim).
     """
     weights = yat_attention_weights(
-        query, key,
+        query,
+        key,
         mask=mask,
         dropout_rate=dropout_rate,
         training=training,
@@ -179,7 +177,9 @@ def yat_attention_normalized(
 ):
     """YAT attention with normalized Q/K (optimized)."""
     return yat_attention(
-        query, key, value,
+        query,
+        key,
+        value,
         mask=mask,
         dropout_rate=dropout_rate,
         training=training,
@@ -242,6 +242,7 @@ class MultiHeadYatAttention(Layer):
         self.dropout_rate = dropout
         self.epsilon = epsilon
         self.use_out_proj = use_out_proj
+        self.supports_masking = True
         self._normalize_qk = normalize_qk
         self._spherical = spherical
         self.use_bias = use_bias
@@ -269,12 +270,16 @@ class MultiHeadYatAttention(Layer):
             )
 
         def _make_bias(name):
-            return self.add_weight(
-                name=name,
-                shape=(self.embed_dim,),
-                initializer="zeros",
-                trainable=True,
-            ) if self.use_bias else None
+            return (
+                self.add_weight(
+                    name=name,
+                    shape=(self.embed_dim,),
+                    initializer="zeros",
+                    trainable=True,
+                )
+                if self.use_bias
+                else None
+            )
 
         self.q_kernel = _make_kernel("q_kernel")
         self.k_kernel = _make_kernel("k_kernel")
@@ -311,6 +316,7 @@ class MultiHeadYatAttention(Layer):
         key=None,
         value=None,
         mask=None,
+        attention_mask=None,
         training=False,
     ):
         """Applies multi-head YAT attention.
@@ -319,12 +325,16 @@ class MultiHeadYatAttention(Layer):
             query: (batch, q_len, embed_dim)
             key: (batch, kv_len, embed_dim). Defaults to query.
             value: (batch, kv_len, embed_dim). Defaults to key.
-            mask: Boolean mask (batch, num_heads, q_len, kv_len).
+            mask: Keras sequence mask or a broadcastable attention mask.
+            attention_mask: Explicit broadcastable attention mask. Prefer this
+                argument when a rank-2 ``(q_len, kv_len)`` mask could be
+                confused with a Keras ``(batch, seq_len)`` sequence mask.
             training: Whether in training mode.
 
         Returns:
             Output (batch, q_len, embed_dim).
         """
+        is_self_attention = key is None
         if key is None:
             key = query
         if value is None:
@@ -354,15 +364,57 @@ class MultiHeadYatAttention(Layer):
                 alpha_val = self.alpha_param
 
         effective_mask = None
+        sequence_mask = None
         if mask is not None:
+            mask_rank = len(mask.shape)
+            query_keras_mask = getattr(query, "_keras_mask", None)
+            static_batch = query.shape[0]
+            static_q_len = query.shape[1]
+            first_dim = mask.shape[0] if mask_rank == 2 else None
+            looks_like_sequence_mask = mask_rank == 2 and (
+                query_keras_mask is not None
+                or first_dim is None
+                or (
+                    static_batch is not None
+                    and first_dim == static_batch
+                    and first_dim != static_q_len
+                )
+            )
+            if looks_like_sequence_mask:
+                sequence_mask = ops.cast(mask, "bool")
+            elif attention_mask is None:
+                attention_mask = mask
+            else:
+                attention_mask = ops.logical_and(attention_mask, mask)
+
+        if attention_mask is not None:
             effective_mask = ops.broadcast_to(
-                ops.cast(mask, "bool"),
+                ops.cast(attention_mask, "bool"),
                 (batch_size, self.num_heads, q_len, kv_len),
+            )
+
+        if sequence_mask is not None:
+            query_mask = ops.expand_dims(ops.expand_dims(sequence_mask, 1), -1)
+            if is_self_attention:
+                key_mask = ops.expand_dims(ops.expand_dims(sequence_mask, 1), 1)
+                sequence_attention_mask = ops.logical_and(query_mask, key_mask)
+            else:
+                sequence_attention_mask = query_mask
+            sequence_attention_mask = ops.broadcast_to(
+                sequence_attention_mask,
+                (batch_size, self.num_heads, q_len, kv_len),
+            )
+            effective_mask = (
+                sequence_attention_mask
+                if effective_mask is None
+                else ops.logical_and(effective_mask, sequence_attention_mask)
             )
 
         dropout = self.dropout_rate if training else 0.0
         x = yat_attention(
-            q, k, v,
+            q,
+            k,
+            v,
             mask=effective_mask,
             dropout_rate=dropout,
             training=training,
@@ -379,11 +431,14 @@ class MultiHeadYatAttention(Layer):
 
         if effective_mask is not None:
             query_has_key = ops.any(effective_mask, axis=(-3, -1))
-            x = ops.where(
-                ops.expand_dims(query_has_key, -1), x, ops.zeros_like(x)
-            )
+            x = ops.where(ops.expand_dims(query_has_key, -1), x, ops.zeros_like(x))
 
         return x
+
+    def compute_mask(self, inputs, previous_mask=None):
+        if previous_mask is not None and len(previous_mask.shape) == 2:
+            return previous_mask
+        return None
 
     def compute_output_shape(self, input_shape):
         return input_shape[:-1] + (self.embed_dim,)
@@ -402,9 +457,7 @@ class MultiHeadYatAttention(Layer):
                 "spherical": self._spherical,
                 "use_out_proj": self.use_out_proj,
                 "epsilon": self.epsilon,
-                "kernel_initializer": initializers.serialize(
-                    self.kernel_initializer
-                ),
+                "kernel_initializer": initializers.serialize(self.kernel_initializer),
             }
         )
         return config

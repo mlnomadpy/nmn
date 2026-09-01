@@ -1,7 +1,7 @@
 """Tests for TensorFlow YatEmbed."""
 
-import pytest
 import numpy as np
+import pytest
 
 tf = pytest.importorskip("tensorflow")
 

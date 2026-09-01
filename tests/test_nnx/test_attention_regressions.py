@@ -29,7 +29,11 @@ def test_fp16_attention_aggregate_cotangents_match_saturated_fp32_reference(comp
         value = jnp.array([[[[0.0]], [[1.0]]]], dtype=dtype)
 
         def loss(q, k, v):
-            return yat_attention(q, k, v, deterministic=True, epsilon=1.0).astype(jnp.float32).sum()
+            return (
+                yat_attention(q, k, v, deterministic=True, epsilon=1.0)
+                .astype(jnp.float32)
+                .sum()
+            )
 
         output = yat_attention(query, key, value, deterministic=True, epsilon=1.0)
         gradient_fn = jax.grad(loss, argnums=(0, 1, 2))
@@ -40,13 +44,17 @@ def test_fp16_attention_aggregate_cotangents_match_saturated_fp32_reference(comp
     reference_output, reference_grads = evaluate(jnp.float32)
     output, grads = evaluate(jnp.float16)
     limit = jnp.finfo(jnp.float16)
-    np.testing.assert_allclose(np.asarray(output, np.float32), np.asarray(reference_output), atol=2e-3)
+    np.testing.assert_allclose(
+        np.asarray(output, np.float32), np.asarray(reference_output), atol=2e-3
+    )
     for actual, expected in zip(grads, reference_grads):
         clipped = jnp.asarray(jnp.clip(expected, limit.min, limit.max), jnp.float16)
         assert jnp.all(jnp.isfinite(actual))
         np.testing.assert_allclose(
-            np.asarray(actual, np.float32), np.asarray(clipped, np.float32),
-            rtol=7e-3, atol=8.0,
+            np.asarray(actual, np.float32),
+            np.asarray(clipped, np.float32),
+            rtol=7e-3,
+            atol=8.0,
         )
 
 
@@ -147,9 +155,7 @@ def test_fused_l1_all_operand_gradients_for_broadcast_bias(bias_case):
     epsilon = jnp.array(0.1)
 
     def fused_loss(q, k, v, b, e):
-        return jnp.sum(
-            fused_yat_l1_attention(q, k, v, bias=b, epsilon=e) ** 2
-        )
+        return jnp.sum(fused_yat_l1_attention(q, k, v, bias=b, epsilon=e) ** 2)
 
     def reference_loss(q, k, v, b, e):
         return jnp.sum(_reference_l1(q, k, v, bias=b, epsilon=e) ** 2)
@@ -172,19 +178,13 @@ def test_fused_l1_self_all_operand_gradients_for_broadcast_bias(bias_case):
     epsilon = jnp.array(0.1)
 
     def fused_loss(x, v, b, e):
-        return jnp.sum(
-            fused_yat_l1_self_attention(x, v, bias=b, epsilon=e) ** 2
-        )
+        return jnp.sum(fused_yat_l1_self_attention(x, v, bias=b, epsilon=e) ** 2)
 
     def reference_loss(x, v, b, e):
         return jnp.sum(_reference_l1_self(x, v, bias=b, epsilon=e) ** 2)
 
-    actual = jax.grad(fused_loss, argnums=(0, 1, 2, 3))(
-        x, value, bias, epsilon
-    )
-    expected = jax.grad(reference_loss, argnums=(0, 1, 2, 3))(
-        x, value, bias, epsilon
-    )
+    actual = jax.grad(fused_loss, argnums=(0, 1, 2, 3))(x, value, bias, epsilon)
+    expected = jax.grad(reference_loss, argnums=(0, 1, 2, 3))(x, value, bias, epsilon)
     for got, want in zip(actual, expected):
         assert jnp.allclose(got, want, rtol=3e-5, atol=3e-5)
 
@@ -260,11 +260,13 @@ def test_multi_head_normalize_qk_matches_torch_for_zero_and_tiny_vectors():
     module.query.bias[...] = 0.0
     module.key.bias[...] = 0.0
     inputs = jnp.array(
-        [[
-            [0.0] * 8,
-            [1e-14, -1e-14, 2e-14, -2e-14, 0.0, 0.0, 1e-15, -1e-15],
-            [1.0, -2.0, 3.0, -4.0, 0.5, -0.5, 2.0, -2.0],
-        ]],
+        [
+            [
+                [0.0] * 8,
+                [1e-14, -1e-14, 2e-14, -2e-14, 0.0, 0.0, 1e-15, -1e-15],
+                [1.0, -2.0, 3.0, -4.0, 0.5, -0.5, 2.0, -2.0],
+            ]
+        ],
         dtype=jnp.float32,
     )
     module(inputs, deterministic=True)
@@ -478,9 +480,7 @@ def test_decode_validation_failures_are_transactional(kind):
             rngs=nnx.Rngs(61),
         )
         module.init_cache((1, 2, 8))
-        call = lambda token, mask=None: module(
-            token, mask=mask, deterministic=True
-        )
+        call = lambda token, mask=None: module(token, mask=mask, deterministic=True)
     else:
         module = RotaryYatAttention(
             embed_dim=8,

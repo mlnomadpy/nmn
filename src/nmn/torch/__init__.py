@@ -1,6 +1,19 @@
 """PyTorch implementation of Neural Matter Network (NMN) layers."""
 
 # Import all layers from the layers module
+# Import attention
+from .attention import (
+    MultiHeadYatAttention,
+    create_maclaurin_projection,
+    create_radial_projection,
+    maclaurin_features,
+    maclaurin_yat_attention,
+    radial_features,
+    radial_yat_attention,
+)
+
+# Import embedding
+from .embed import YatEmbed
 from .layers import (
     YatConv1D,
     YatConv2D,
@@ -13,23 +26,8 @@ from .layers import (
 # Import YatNMN from nmn module
 from .nmn import YatNMN
 
-# Import attention
-from .attention import (
-    MultiHeadYatAttention,
-    create_maclaurin_projection,
-    maclaurin_features,
-    maclaurin_yat_attention,
-    create_radial_projection,
-    radial_features,
-    radial_yat_attention,
-)
-
-# Import embedding
-from .embed import YatEmbed
-
 # Import squashers
-from .squashers import softermax, softer_sigmoid, soft_tanh
-
+from .squashers import soft_tanh, softer_sigmoid, softermax
 
 __all__ = [
     # YAT Conv layers
@@ -57,5 +55,3 @@ __all__ = [
     "softer_sigmoid",
     "soft_tanh",
 ]
-
-

@@ -16,7 +16,6 @@ import tempfile
 import time
 from collections.abc import Sequence
 
-
 _PROBE_MARKER = "__NMN_TEST_BACKEND_READY__"
 _PROBE_MARKER_BYTES = _PROBE_MARKER.encode("ascii")
 _PROBE_TIMEOUT_SECONDS = 15.0
@@ -254,10 +253,7 @@ def isolated_import_succeeds(
     elif not isinstance(stdout, (bytes, bytearray)):
         _stop_process_tree(process)
         return False
-    success = (
-        process.returncode == 0
-        and _PROBE_MARKER_BYTES in stdout.splitlines()
-    )
+    success = process.returncode == 0 and _PROBE_MARKER_BYTES in stdout.splitlines()
     if not success:
         # The direct child may have exited while a grandchild remains alive.
         _stop_process_tree(process)

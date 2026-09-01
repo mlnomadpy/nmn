@@ -7,13 +7,16 @@ standard-autodiff implementation.
 import pytest
 
 try:
+    import math
+
     import jax
     import jax.numpy as jnp
-    import math
+
     from nmn.nnx.layers.attention.fused_yat_attention import (
         fused_yat_l1_attention,
         fused_yat_l1_self_attention,
     )
+
     HAS_JAX = True
 except ImportError:
     HAS_JAX = False
@@ -23,23 +26,26 @@ pytestmark = pytest.mark.skipif(not HAS_JAX, reason="JAX/Flax not available")
 
 # ── Reference implementation (standard autodiff, no custom_vjp) ──
 
+
 def _ref_yat_l1(q, k, v, bias=None, epsilon=1e-5, mask=None, scale=None):
     q_f32 = q.astype(jnp.float32)
     k_f32 = k.astype(jnp.float32)
     dot = jnp.einsum("...qhd,...khd->...hqk", q_f32, k_f32)
-    q_sq = jnp.sum(q_f32 ** 2, axis=-1, keepdims=True)
-    k_sq = jnp.sum(k_f32 ** 2, axis=-1, keepdims=True)
+    q_sq = jnp.sum(q_f32**2, axis=-1, keepdims=True)
+    k_sq = jnp.sum(k_f32**2, axis=-1, keepdims=True)
     bd = q.ndim - 3
     perm = tuple(range(bd)) + (bd + 1, bd, bd + 2)
     q_sq_t = q_sq.transpose(perm)
     k_sq_t = k_sq.transpose(perm)
     k_sq_t = jnp.swapaxes(k_sq_t, -2, -1)
-    eps_val = epsilon.astype(jnp.float32) if isinstance(epsilon, jnp.ndarray) else epsilon
+    eps_val = (
+        epsilon.astype(jnp.float32) if isinstance(epsilon, jnp.ndarray) else epsilon
+    )
     dist = jnp.maximum(q_sq_t + k_sq_t - 2 * dot, 0.0) + eps_val
     if scale is None:
         scale = float(jnp.sqrt(jnp.float32(q.shape[-1])))
     num = (dot + bias.astype(jnp.float32)) if bias is not None else dot
-    scores = num ** 2 / (dist * scale)
+    scores = num**2 / (dist * scale)
     if mask is not None:
         scores = jnp.where(mask, scores, 0.0)
     L = jnp.sum(scores, axis=-1, keepdims=True)
@@ -59,12 +65,59 @@ def _compare_grads(loss_fused, loss_ref, args, names, atol=1e-6):
         assert err < atol, f"{name} grad max err {err:.2e} > {atol}"
 
 
+def _dot_precisions(closed_jaxpr):
+    precisions = []
+
+    def visit(jaxpr):
+        for equation in jaxpr.eqns:
+            if equation.primitive.name == "dot_general":
+                precisions.append(equation.params.get("precision"))
+            for value in equation.params.values():
+                nested = value if isinstance(value, (tuple, list)) else (value,)
+                for item in nested:
+                    if hasattr(item, "jaxpr"):
+                        visit(item.jaxpr)
+
+    visit(closed_jaxpr.jaxpr)
+    return precisions
+
+
 # ── Forward tests ──
+
 
 class TestFusedAttnForward:
 
+    @pytest.mark.parametrize("self_attention", [False, True])
+    def test_precision_reaches_every_dot_contraction(self, self_attention):
+        q = _rand((1, 3, 2, 4))
+        v = _rand((1, 3, 2, 5), 1)
+        precision = jax.lax.Precision.HIGHEST
+
+        if self_attention:
+            traced = jax.make_jaxpr(
+                lambda x, value: fused_yat_l1_self_attention(
+                    x, value, precision=precision
+                )
+            )(q, v)
+        else:
+            k = _rand((1, 4, 2, 4), 2)
+            v = _rand((1, 4, 2, 5), 3)
+            traced = jax.make_jaxpr(
+                lambda query, key, value: fused_yat_l1_attention(
+                    query, key, value, precision=precision
+                )
+            )(q, k, v)
+
+        dot_precisions = _dot_precisions(traced)
+        assert len(dot_precisions) == 2
+        assert all(item == (precision, precision) for item in dot_precisions)
+
     def test_basic(self):
-        q, k, v = _rand((2, 16, 4, 32)), _rand((2, 16, 4, 32), 1), _rand((2, 16, 4, 32), 2)
+        q, k, v = (
+            _rand((2, 16, 4, 32)),
+            _rand((2, 16, 4, 32), 1),
+            _rand((2, 16, 4, 32), 2),
+        )
         out_f = fused_yat_l1_attention(q, k, v)
         out_r = _ref_yat_l1(q, k, v)
         assert jnp.allclose(out_f, out_r, atol=1e-5)
@@ -100,7 +153,11 @@ class TestFusedAttnForward:
         assert jnp.allclose(out_f, out_r, atol=1e-5)
 
     def test_2d_batch(self):
-        q, k, v = _rand((4, 16, 8, 32)), _rand((4, 16, 8, 32), 1), _rand((4, 16, 8, 32), 2)
+        q, k, v = (
+            _rand((4, 16, 8, 32)),
+            _rand((4, 16, 8, 32), 1),
+            _rand((4, 16, 8, 32), 2),
+        )
         out_f = fused_yat_l1_attention(q, k, v)
         out_r = _ref_yat_l1(q, k, v)
         assert jnp.allclose(out_f, out_r, atol=1e-5)
@@ -115,6 +172,7 @@ class TestFusedAttnForward:
 
 
 # ── Backward tests ──
+
 
 class TestFusedAttnBackward:
 
@@ -144,9 +202,11 @@ class TestFusedAttnBackward:
             kw = {}
             idx = 3
             if b is not None:
-                kw["bias"] = a[idx]; idx += 1
+                kw["bias"] = a[idx]
+                idx += 1
             if eps_learnable:
-                kw["epsilon"] = a[idx]; idx += 1
+                kw["epsilon"] = a[idx]
+                idx += 1
             else:
                 kw["epsilon"] = e
             if m is not None:
@@ -158,9 +218,11 @@ class TestFusedAttnBackward:
             kw = {}
             idx = 3
             if b is not None:
-                kw["bias"] = a[idx]; idx += 1
+                kw["bias"] = a[idx]
+                idx += 1
             if eps_learnable:
-                kw["epsilon"] = a[idx]; idx += 1
+                kw["epsilon"] = a[idx]
+                idx += 1
             else:
                 kw["epsilon"] = e
             if m is not None:
@@ -188,8 +250,10 @@ class TestFusedAttnBackward:
         q, k, v = _rand((2, 8, 4, 16)), _rand((2, 8, 4, 16), 1), _rand((2, 8, 4, 16), 2)
         bias = _rand((4, 1, 1), 3) * 0.1
         eps = jnp.array(1e-3)
+
         def loss(q, k, v, b, e):
             return jnp.mean(fused_yat_l1_attention(q, k, v, bias=b, epsilon=e) ** 2)
+
         grads = jax.grad(loss, argnums=(0, 1, 2, 3, 4))(q, k, v, bias, eps)
         for g in grads:
             assert jnp.isfinite(g).all()
@@ -198,17 +262,24 @@ class TestFusedAttnBackward:
         q = _rand((2, 8, 4, 16))
         k = _rand((2, 32, 4, 16), 1)
         v = _rand((2, 32, 4, 16), 2)
+
         def loss_f(q, k, v):
             return jnp.mean(fused_yat_l1_attention(q, k, v) ** 2)
+
         def loss_r(q, k, v):
             return jnp.mean(_ref_yat_l1(q, k, v) ** 2)
+
         _compare_grads(loss_f, loss_r, [q, k, v], ["dQ", "dK", "dV"])
 
 
 class TestFusedAttnJIT:
 
     def test_jit_forward(self):
-        q, k, v = _rand((2, 16, 4, 32)), _rand((2, 16, 4, 32), 1), _rand((2, 16, 4, 32), 2)
+        q, k, v = (
+            _rand((2, 16, 4, 32)),
+            _rand((2, 16, 4, 32), 1),
+            _rand((2, 16, 4, 32), 2),
+        )
 
         @jax.jit
         def f(q, k, v):
@@ -219,7 +290,11 @@ class TestFusedAttnJIT:
         assert jnp.isfinite(out).all()
 
     def test_jit_train_step(self):
-        q, k, v = _rand((2, 16, 4, 32)), _rand((2, 16, 4, 32), 1), _rand((2, 16, 4, 32), 2)
+        q, k, v = (
+            _rand((2, 16, 4, 32)),
+            _rand((2, 16, 4, 32), 1),
+            _rand((2, 16, 4, 32), 2),
+        )
         bias = _rand((4, 1, 1), 3) * 0.1
         eps = jnp.array(1e-3)
 
@@ -227,6 +302,7 @@ class TestFusedAttnJIT:
         def train_step(q, k, v, b, e):
             def loss(q, k, v, b, e):
                 return jnp.mean(fused_yat_l1_attention(q, k, v, bias=b, epsilon=e) ** 2)
+
             return jax.grad(loss, argnums=(0, 1, 2, 3, 4))(q, k, v, b, e)
 
         grads = train_step(q, k, v, bias, eps)
@@ -236,22 +312,25 @@ class TestFusedAttnJIT:
 
 # ── Self-attention (Q = K = x, no-self-yat) tests ──
 
+
 def _ref_self_yat(x, v, bias=None, epsilon=1e-5, scale=None):
     """Reference self-YAT with diagonal zeroed before weights, but diagonal
     included in the L1 normalizer."""
     x_f32 = x.astype(jnp.float32)
     dot = jnp.einsum("...qhd,...khd->...hqk", x_f32, x_f32)
-    x_sq = jnp.sum(x_f32 ** 2, axis=-1, keepdims=True)
+    x_sq = jnp.sum(x_f32**2, axis=-1, keepdims=True)
     bd = x.ndim - 3
     perm = tuple(range(bd)) + (bd + 1, bd, bd + 2)
     x_sq_t = x_sq.transpose(perm)
     x_sq_k = jnp.swapaxes(x_sq_t, -2, -1)
-    eps_val = epsilon.astype(jnp.float32) if isinstance(epsilon, jnp.ndarray) else epsilon
+    eps_val = (
+        epsilon.astype(jnp.float32) if isinstance(epsilon, jnp.ndarray) else epsilon
+    )
     dist = jnp.maximum(x_sq_t + x_sq_k - 2 * dot, 0.0) + eps_val
     if scale is None:
         scale = math.sqrt(float(x.shape[-1]))
     num = (dot + bias.astype(jnp.float32)) if bias is not None else dot
-    scores = num ** 2 / (dist * scale)
+    scores = num**2 / (dist * scale)
     L = jnp.sum(scores, axis=-1, keepdims=True)
     seq = scores.shape[-1]
     eye = jnp.eye(seq, dtype=jnp.bool_)
@@ -304,12 +383,14 @@ class TestSelfYatForward:
         v_mod = v.at[:, p, :, :].set(v[:, p, :, :] * 100.0 + 50.0)
         out_mod = fused_yat_l1_self_attention(x, v_mod, epsilon=eps)
 
-        assert jnp.allclose(out_full[:, p, :, :], out_mod[:, p, :, :], atol=1e-4), \
-            "Position p output changed when v[p] changed — diagonal is NOT zeroed."
+        assert jnp.allclose(
+            out_full[:, p, :, :], out_mod[:, p, :, :], atol=1e-4
+        ), "Position p output changed when v[p] changed — diagonal is NOT zeroed."
         # Sanity: other positions must have changed (they attended to v[p])
         diff_other = float(jnp.abs(out_full[:, 0, :, :] - out_mod[:, 0, :, :]).max())
-        assert diff_other > 1e-3, \
-            f"Other positions didn't respond to v[p] change (diff={diff_other:.2e})"
+        assert (
+            diff_other > 1e-3
+        ), f"Other positions didn't respond to v[p] change (diff={diff_other:.2e})"
 
 
 class TestSelfYatBackward:
@@ -320,6 +401,7 @@ class TestSelfYatBackward:
 
         def loss_f(x, v):
             return jnp.mean(fused_yat_l1_self_attention(x, v) ** 2)
+
         def loss_r(x, v):
             return jnp.mean(_ref_self_yat(x, v) ** 2)
 
@@ -337,6 +419,7 @@ class TestSelfYatBackward:
 
         def loss_f(x, v, b, e):
             return jnp.mean(fused_yat_l1_self_attention(x, v, bias=b, epsilon=e) ** 2)
+
         def loss_r(x, v, b, e):
             return jnp.mean(_ref_self_yat(x, v, bias=b, epsilon=e) ** 2)
 
@@ -349,8 +432,10 @@ class TestSelfYatBackward:
     def test_grads_finite(self):
         x = _rand((2, 8, 4, 16))
         v = _rand((2, 8, 4, 16), 1)
+
         def loss(x, v):
             return jnp.mean(fused_yat_l1_self_attention(x, v) ** 2)
+
         gx, gv = jax.grad(loss, argnums=(0, 1))(x, v)
         assert jnp.isfinite(gx).all() and jnp.isfinite(gv).all()
 
@@ -366,7 +451,10 @@ class TestSelfYatJIT:
         @jax.jit
         def train_step(x, v, b, e):
             def loss(x, v, b, e):
-                return jnp.mean(fused_yat_l1_self_attention(x, v, bias=b, epsilon=e) ** 2)
+                return jnp.mean(
+                    fused_yat_l1_self_attention(x, v, bias=b, epsilon=e) ** 2
+                )
+
             return jax.grad(loss, argnums=(0, 1, 2, 3))(x, v, b, e)
 
         grads = train_step(x, v, bias, eps)

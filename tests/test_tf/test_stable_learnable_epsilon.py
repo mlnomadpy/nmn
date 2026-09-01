@@ -14,7 +14,6 @@ from nmn.tf import (
     YatNMN,
 )
 
-
 EPSILONS = (1e-20, 1e-5, 1000.0)
 FAMILIES = (
     (YatNMN, None, (1, 2)),
@@ -56,9 +55,7 @@ def test_learnable_epsilon_tf_function_forward_and_gradients(
         with tf.GradientTape() as tape:
             output = layer(inputs)
             loss = tf.reduce_sum(output)
-        gradients = tape.gradient(
-            loss, (inputs, layer.kernel, layer.epsilon_param)
-        )
+        gradients = tape.gradient(loss, (inputs, layer.kernel, layer.epsilon_param))
         return output, gradients
 
     output, gradients = evaluate()
@@ -142,7 +139,7 @@ def test_float32_rejects_unrepresentable_epsilon(
 
 
 @pytest.mark.parametrize("layer_cls,kernel_size,input_shape", FAMILIES[:2])
-@pytest.mark.parametrize("epsilon", [2.0 ** -1022, 1e150])
+@pytest.mark.parametrize("epsilon", [2.0**-1022, 1e150])
 def test_float64_extreme_epsilon_is_effective_and_differentiable(
     layer_cls, kernel_size, input_shape, epsilon
 ):
@@ -163,9 +160,7 @@ def test_float64_extreme_epsilon_is_effective_and_differentiable(
 
 
 @pytest.mark.parametrize("layer_cls,kernel_size,input_shape", FAMILIES[:2])
-def test_float64_rejects_softplus_underflow(
-    layer_cls, kernel_size, input_shape
-):
+def test_float64_rejects_softplus_underflow(layer_cls, kernel_size, input_shape):
     layer = _make(layer_cls, kernel_size, 5e-324, tf.float64)
     with pytest.raises(ValueError, match="not representable"):
         layer(tf.ones(input_shape, tf.float64))

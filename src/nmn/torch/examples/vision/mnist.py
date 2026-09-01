@@ -8,6 +8,7 @@ or:
 Trains a 2-layer YatNMN MLP for 3 epochs and prints train loss + test accuracy.
 On CPU (Apple Silicon, batch size 128) ~30-60s per epoch.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -61,8 +62,9 @@ def main() -> None:
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--data-root", type=str, default=".data")
-    parser.add_argument("--report", type=str, default=None,
-                        help="optional path to write JSON results")
+    parser.add_argument(
+        "--report", type=str, default=None, help="optional path to write JSON results"
+    )
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
@@ -71,7 +73,9 @@ def main() -> None:
     tfm = transforms.ToTensor()
     train_ds = datasets.MNIST(args.data_root, train=True, download=True, transform=tfm)
     test_ds = datasets.MNIST(args.data_root, train=False, download=True, transform=tfm)
-    train_dl = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=0)
+    train_dl = DataLoader(
+        train_ds, batch_size=args.batch_size, shuffle=True, num_workers=0
+    )
     test_dl = DataLoader(test_ds, batch_size=512, shuffle=False, num_workers=0)
 
     model = YatMLP().to(device)
@@ -104,10 +108,15 @@ def main() -> None:
             f"test_loss={test_loss:.4f} test_acc={test_acc:.4f} "
             f"time={epoch_s:.1f}s"
         )
-        history.append({
-            "epoch": epoch, "train_loss": train_loss,
-            "test_loss": test_loss, "test_acc": test_acc, "epoch_s": epoch_s,
-        })
+        history.append(
+            {
+                "epoch": epoch,
+                "train_loss": train_loss,
+                "test_loss": test_loss,
+                "test_acc": test_acc,
+                "epoch_s": epoch_s,
+            }
+        )
     total_s = time.perf_counter() - wall0
 
     result = {

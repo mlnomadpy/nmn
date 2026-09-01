@@ -3,8 +3,7 @@
 import threading
 import weakref
 
-from keras.src import constraints, initializers, regularizers
-from keras.src import ops
+from keras.src import constraints, initializers, ops, regularizers
 from keras.src.api_export import keras_export
 from keras.src.backend import backend, standardize_dtype
 from keras.src.backend.common.backend_utils import compute_conv_transpose_output_shape
@@ -161,9 +160,7 @@ def _get_bank_ref(layer, signature, capacity):
             bank = _KernelBankRef(layer.kernel_bank_id, signature, capacity)
             type(layer)._KERNEL_BANKS[key] = bank
         elif capacity > bank.capacity:
-            _reject_kernel_bank_expansion(
-                layer.kernel_bank_id, bank.capacity, capacity
-            )
+            _reject_kernel_bank_expansion(layer.kernel_bank_id, bank.capacity, capacity)
     layer._kernel_bank_ref = bank
     return bank
 
@@ -236,8 +233,7 @@ def _build_forward_kernel(layer, input_dim):
     if not layer.tie_kernel_bank:
         layer.kernel = layer.add_weight(
             name="kernel",
-            shape=tuple(layer.kernel_size)
-            + (input_dim // layer.groups, layer.filters),
+            shape=tuple(layer.kernel_size) + (input_dim // layer.groups, layer.filters),
             initializer=_safe_kernel_initializer(layer.kernel_initializer),
             regularizer=layer.kernel_regularizer,
             constraint=layer.kernel_constraint,
@@ -396,17 +392,21 @@ class YatConv1D(_KernelBankSerializationMixin, Layer):
     ):
         super().__init__(activity_regularizer=activity_regularizer, **kwargs)
         self.filters = filters
-        self.kernel_size = kernel_size if isinstance(kernel_size, (list, tuple)) else (kernel_size,)
+        self.kernel_size = (
+            kernel_size if isinstance(kernel_size, (list, tuple)) else (kernel_size,)
+        )
         self.strides = strides if isinstance(strides, (list, tuple)) else (strides,)
         self.padding = padding.lower()
         self.data_format = data_format
-        self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate,)
+        self.dilation_rate = (
+            dilation_rate
+            if isinstance(dilation_rate, (list, tuple))
+            else (dilation_rate,)
+        )
         if any(stride != 1 for stride in self.strides) and any(
             dilation != 1 for dilation in self.dilation_rate
         ):
-            raise ValueError(
-                "`strides > 1` is incompatible with `dilation_rate > 1`."
-            )
+            raise ValueError("`strides > 1` is incompatible with `dilation_rate > 1`.")
         self.groups = groups
         self.use_alpha = use_alpha
         self.epsilon = validate_epsilon(epsilon)
@@ -444,21 +444,21 @@ class YatConv1D(_KernelBankSerializationMixin, Layer):
             channel_axis = 1
         else:
             channel_axis = -1
-        
+
         if input_shape[channel_axis] is None:
             raise ValueError(
                 "The channel dimension of the inputs should be defined. "
                 f"Found `None`. Full input shape: {input_shape}"
             )
-        
+
         input_dim = int(input_shape[channel_axis])
-        
+
         if input_dim % self.groups != 0:
             raise ValueError(
                 f"The number of input channels ({input_dim}) must be "
                 f"divisible by the number of groups ({self.groups})."
             )
-        
+
         if self.filters % self.groups != 0:
             raise ValueError(
                 f"The number of filters ({self.filters}) must be "
@@ -538,7 +538,8 @@ class YatConv1D(_KernelBankSerializationMixin, Layer):
         if self.weight_normalized:
             reduce_axes = tuple(range(kernel.ndim - 1))
             kernel = kernel / (
-                ops.sqrt(ops.sum(ops.square(kernel), axis=reduce_axes, keepdims=True)) + 1e-8
+                ops.sqrt(ops.sum(ops.square(kernel), axis=reduce_axes, keepdims=True))
+                + 1e-8
             )
 
         # Keras' low-level conv op only accepts valid/same.  Causal Conv1D is
@@ -594,13 +595,11 @@ class YatConv1D(_KernelBankSerializationMixin, Layer):
             kernel_sq_sum_per_filter = ops.ones((self.filters,), dtype=kernel.dtype)
         else:
             kernel_sq_sum_per_filter = ops.sum(
-                kernel ** 2, axis=tuple(range(kernel.ndim - 1))
+                kernel**2, axis=tuple(range(kernel.ndim - 1))
             )
 
         # Reshape for broadcasting
-        kernel_sq_sum_reshaped = ops.reshape(
-            kernel_sq_sum_per_filter, (1, 1, -1)
-        )
+        kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, -1))
 
         # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
@@ -611,34 +610,38 @@ class YatConv1D(_KernelBankSerializationMixin, Layer):
 
     def get_config(self):
         config = super().get_config()
-        config.update({
-            "filters": self.filters,
-            "kernel_size": self.kernel_size,
-            "strides": self.strides,
-            "padding": self.padding,
-            "data_format": self.data_format,
-            "dilation_rate": self.dilation_rate,
-            "groups": self.groups,
-            "use_bias": self.use_bias,
-            "constant_bias": self.constant_bias,
-            "use_alpha": self.use_alpha,
-            "epsilon": self.epsilon,
-            "learnable_epsilon": self.learnable_epsilon,
-            "weight_normalized": self.weight_normalized,
-            "use_dropconnect": self.use_dropconnect,
-            "drop_rate": self.drop_rate,
-            "tie_kernel_bank": self.tie_kernel_bank,
-            "kernel_bank_size": self.kernel_bank_size,
-            "kernel_bank_id": self.kernel_bank_id,
-            "kernel_bank": self._kernel_bank_ref if self.tie_kernel_bank else None,
-            "kernel_initializer": initializers.serialize(self.kernel_initializer),
-            "bias_initializer": initializers.serialize(self.bias_initializer),
-            "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
-            "bias_regularizer": regularizers.serialize(self.bias_regularizer),
-            "activity_regularizer": regularizers.serialize(self.activity_regularizer),
-            "kernel_constraint": constraints.serialize(self.kernel_constraint),
-            "bias_constraint": constraints.serialize(self.bias_constraint),
-        })
+        config.update(
+            {
+                "filters": self.filters,
+                "kernel_size": self.kernel_size,
+                "strides": self.strides,
+                "padding": self.padding,
+                "data_format": self.data_format,
+                "dilation_rate": self.dilation_rate,
+                "groups": self.groups,
+                "use_bias": self.use_bias,
+                "constant_bias": self.constant_bias,
+                "use_alpha": self.use_alpha,
+                "epsilon": self.epsilon,
+                "learnable_epsilon": self.learnable_epsilon,
+                "weight_normalized": self.weight_normalized,
+                "use_dropconnect": self.use_dropconnect,
+                "drop_rate": self.drop_rate,
+                "tie_kernel_bank": self.tie_kernel_bank,
+                "kernel_bank_size": self.kernel_bank_size,
+                "kernel_bank_id": self.kernel_bank_id,
+                "kernel_bank": self._kernel_bank_ref if self.tie_kernel_bank else None,
+                "kernel_initializer": initializers.serialize(self.kernel_initializer),
+                "bias_initializer": initializers.serialize(self.bias_initializer),
+                "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
+                "bias_regularizer": regularizers.serialize(self.bias_regularizer),
+                "activity_regularizer": regularizers.serialize(
+                    self.activity_regularizer
+                ),
+                "kernel_constraint": constraints.serialize(self.kernel_constraint),
+                "bias_constraint": constraints.serialize(self.bias_constraint),
+            }
+        )
         return config
 
 
@@ -748,11 +751,21 @@ class YatConv2D(_KernelBankSerializationMixin, Layer):
     ):
         super().__init__(activity_regularizer=activity_regularizer, **kwargs)
         self.filters = filters
-        self.kernel_size = kernel_size if isinstance(kernel_size, (list, tuple)) else (kernel_size, kernel_size)
-        self.strides = strides if isinstance(strides, (list, tuple)) else (strides, strides)
+        self.kernel_size = (
+            kernel_size
+            if isinstance(kernel_size, (list, tuple))
+            else (kernel_size, kernel_size)
+        )
+        self.strides = (
+            strides if isinstance(strides, (list, tuple)) else (strides, strides)
+        )
         self.padding = padding.lower()
         self.data_format = data_format
-        self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate)
+        self.dilation_rate = (
+            dilation_rate
+            if isinstance(dilation_rate, (list, tuple))
+            else (dilation_rate, dilation_rate)
+        )
         self.groups = groups
         self.use_alpha = use_alpha
         self.epsilon = validate_epsilon(epsilon)
@@ -790,21 +803,21 @@ class YatConv2D(_KernelBankSerializationMixin, Layer):
             channel_axis = 1
         else:
             channel_axis = -1
-        
+
         if input_shape[channel_axis] is None:
             raise ValueError(
                 "The channel dimension of the inputs should be defined. "
                 f"Found `None`. Full input shape: {input_shape}"
             )
-        
+
         input_dim = int(input_shape[channel_axis])
-        
+
         if input_dim % self.groups != 0:
             raise ValueError(
                 f"The number of input channels ({input_dim}) must be "
                 f"divisible by the number of groups ({self.groups})."
             )
-        
+
         if self.filters % self.groups != 0:
             raise ValueError(
                 f"The number of filters ({self.filters}) must be "
@@ -884,7 +897,8 @@ class YatConv2D(_KernelBankSerializationMixin, Layer):
         if self.weight_normalized:
             reduce_axes = tuple(range(kernel.ndim - 1))
             kernel = kernel / (
-                ops.sqrt(ops.sum(ops.square(kernel), axis=reduce_axes, keepdims=True)) + 1e-8
+                ops.sqrt(ops.sum(ops.square(kernel), axis=reduce_axes, keepdims=True))
+                + 1e-8
             )
 
         # Compute standard convolution (dot product)
@@ -929,13 +943,11 @@ class YatConv2D(_KernelBankSerializationMixin, Layer):
             kernel_sq_sum_per_filter = ops.ones((self.filters,), dtype=kernel.dtype)
         else:
             kernel_sq_sum_per_filter = ops.sum(
-                kernel ** 2, axis=tuple(range(kernel.ndim - 1))
+                kernel**2, axis=tuple(range(kernel.ndim - 1))
             )
 
         # Reshape for broadcasting
-        kernel_sq_sum_reshaped = ops.reshape(
-            kernel_sq_sum_per_filter, (1, 1, 1, -1)
-        )
+        kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, 1, -1))
 
         # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
@@ -946,34 +958,38 @@ class YatConv2D(_KernelBankSerializationMixin, Layer):
 
     def get_config(self):
         config = super().get_config()
-        config.update({
-            "filters": self.filters,
-            "kernel_size": self.kernel_size,
-            "strides": self.strides,
-            "padding": self.padding,
-            "data_format": self.data_format,
-            "dilation_rate": self.dilation_rate,
-            "groups": self.groups,
-            "use_bias": self.use_bias,
-            "constant_bias": self.constant_bias,
-            "use_alpha": self.use_alpha,
-            "epsilon": self.epsilon,
-            "learnable_epsilon": self.learnable_epsilon,
-            "weight_normalized": self.weight_normalized,
-            "use_dropconnect": self.use_dropconnect,
-            "drop_rate": self.drop_rate,
-            "tie_kernel_bank": self.tie_kernel_bank,
-            "kernel_bank_size": self.kernel_bank_size,
-            "kernel_bank_id": self.kernel_bank_id,
-            "kernel_bank": self._kernel_bank_ref if self.tie_kernel_bank else None,
-            "kernel_initializer": initializers.serialize(self.kernel_initializer),
-            "bias_initializer": initializers.serialize(self.bias_initializer),
-            "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
-            "bias_regularizer": regularizers.serialize(self.bias_regularizer),
-            "activity_regularizer": regularizers.serialize(self.activity_regularizer),
-            "kernel_constraint": constraints.serialize(self.kernel_constraint),
-            "bias_constraint": constraints.serialize(self.bias_constraint),
-        })
+        config.update(
+            {
+                "filters": self.filters,
+                "kernel_size": self.kernel_size,
+                "strides": self.strides,
+                "padding": self.padding,
+                "data_format": self.data_format,
+                "dilation_rate": self.dilation_rate,
+                "groups": self.groups,
+                "use_bias": self.use_bias,
+                "constant_bias": self.constant_bias,
+                "use_alpha": self.use_alpha,
+                "epsilon": self.epsilon,
+                "learnable_epsilon": self.learnable_epsilon,
+                "weight_normalized": self.weight_normalized,
+                "use_dropconnect": self.use_dropconnect,
+                "drop_rate": self.drop_rate,
+                "tie_kernel_bank": self.tie_kernel_bank,
+                "kernel_bank_size": self.kernel_bank_size,
+                "kernel_bank_id": self.kernel_bank_id,
+                "kernel_bank": self._kernel_bank_ref if self.tie_kernel_bank else None,
+                "kernel_initializer": initializers.serialize(self.kernel_initializer),
+                "bias_initializer": initializers.serialize(self.bias_initializer),
+                "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
+                "bias_regularizer": regularizers.serialize(self.bias_regularizer),
+                "activity_regularizer": regularizers.serialize(
+                    self.activity_regularizer
+                ),
+                "kernel_constraint": constraints.serialize(self.kernel_constraint),
+                "bias_constraint": constraints.serialize(self.bias_constraint),
+            }
+        )
         return config
 
 
@@ -1050,11 +1066,23 @@ class YatConv3D(_KernelBankSerializationMixin, Layer):
     ):
         super().__init__(activity_regularizer=activity_regularizer, **kwargs)
         self.filters = filters
-        self.kernel_size = kernel_size if isinstance(kernel_size, (list, tuple)) else (kernel_size, kernel_size, kernel_size)
-        self.strides = strides if isinstance(strides, (list, tuple)) else (strides, strides, strides)
+        self.kernel_size = (
+            kernel_size
+            if isinstance(kernel_size, (list, tuple))
+            else (kernel_size, kernel_size, kernel_size)
+        )
+        self.strides = (
+            strides
+            if isinstance(strides, (list, tuple))
+            else (strides, strides, strides)
+        )
         self.padding = padding.lower()
         self.data_format = data_format
-        self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate, dilation_rate)
+        self.dilation_rate = (
+            dilation_rate
+            if isinstance(dilation_rate, (list, tuple))
+            else (dilation_rate, dilation_rate, dilation_rate)
+        )
         self.groups = groups
         self.use_alpha = use_alpha
         self.epsilon = validate_epsilon(epsilon)
@@ -1092,21 +1120,21 @@ class YatConv3D(_KernelBankSerializationMixin, Layer):
             channel_axis = 1
         else:
             channel_axis = -1
-        
+
         if input_shape[channel_axis] is None:
             raise ValueError(
                 "The channel dimension of the inputs should be defined. "
                 f"Found `None`. Full input shape: {input_shape}"
             )
-        
+
         input_dim = int(input_shape[channel_axis])
-        
+
         if input_dim % self.groups != 0:
             raise ValueError(
                 f"The number of input channels ({input_dim}) must be "
                 f"divisible by the number of groups ({self.groups})."
             )
-        
+
         if self.filters % self.groups != 0:
             raise ValueError(
                 f"The number of filters ({self.filters}) must be "
@@ -1186,7 +1214,8 @@ class YatConv3D(_KernelBankSerializationMixin, Layer):
         if self.weight_normalized:
             reduce_axes = tuple(range(kernel.ndim - 1))
             kernel = kernel / (
-                ops.sqrt(ops.sum(ops.square(kernel), axis=reduce_axes, keepdims=True)) + 1e-8
+                ops.sqrt(ops.sum(ops.square(kernel), axis=reduce_axes, keepdims=True))
+                + 1e-8
             )
 
         # Compute standard convolution (dot product)
@@ -1231,13 +1260,11 @@ class YatConv3D(_KernelBankSerializationMixin, Layer):
             kernel_sq_sum_per_filter = ops.ones((self.filters,), dtype=kernel.dtype)
         else:
             kernel_sq_sum_per_filter = ops.sum(
-                kernel ** 2, axis=tuple(range(kernel.ndim - 1))
+                kernel**2, axis=tuple(range(kernel.ndim - 1))
             )
 
         # Reshape for broadcasting
-        kernel_sq_sum_reshaped = ops.reshape(
-            kernel_sq_sum_per_filter, (1, 1, 1, 1, -1)
-        )
+        kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, 1, 1, -1))
 
         # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
@@ -1248,34 +1275,38 @@ class YatConv3D(_KernelBankSerializationMixin, Layer):
 
     def get_config(self):
         config = super().get_config()
-        config.update({
-            "filters": self.filters,
-            "kernel_size": self.kernel_size,
-            "strides": self.strides,
-            "padding": self.padding,
-            "data_format": self.data_format,
-            "dilation_rate": self.dilation_rate,
-            "groups": self.groups,
-            "use_bias": self.use_bias,
-            "constant_bias": self.constant_bias,
-            "use_alpha": self.use_alpha,
-            "epsilon": self.epsilon,
-            "learnable_epsilon": self.learnable_epsilon,
-            "weight_normalized": self.weight_normalized,
-            "use_dropconnect": self.use_dropconnect,
-            "drop_rate": self.drop_rate,
-            "tie_kernel_bank": self.tie_kernel_bank,
-            "kernel_bank_size": self.kernel_bank_size,
-            "kernel_bank_id": self.kernel_bank_id,
-            "kernel_bank": self._kernel_bank_ref if self.tie_kernel_bank else None,
-            "kernel_initializer": initializers.serialize(self.kernel_initializer),
-            "bias_initializer": initializers.serialize(self.bias_initializer),
-            "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
-            "bias_regularizer": regularizers.serialize(self.bias_regularizer),
-            "activity_regularizer": regularizers.serialize(self.activity_regularizer),
-            "kernel_constraint": constraints.serialize(self.kernel_constraint),
-            "bias_constraint": constraints.serialize(self.bias_constraint),
-        })
+        config.update(
+            {
+                "filters": self.filters,
+                "kernel_size": self.kernel_size,
+                "strides": self.strides,
+                "padding": self.padding,
+                "data_format": self.data_format,
+                "dilation_rate": self.dilation_rate,
+                "groups": self.groups,
+                "use_bias": self.use_bias,
+                "constant_bias": self.constant_bias,
+                "use_alpha": self.use_alpha,
+                "epsilon": self.epsilon,
+                "learnable_epsilon": self.learnable_epsilon,
+                "weight_normalized": self.weight_normalized,
+                "use_dropconnect": self.use_dropconnect,
+                "drop_rate": self.drop_rate,
+                "tie_kernel_bank": self.tie_kernel_bank,
+                "kernel_bank_size": self.kernel_bank_size,
+                "kernel_bank_id": self.kernel_bank_id,
+                "kernel_bank": self._kernel_bank_ref if self.tie_kernel_bank else None,
+                "kernel_initializer": initializers.serialize(self.kernel_initializer),
+                "bias_initializer": initializers.serialize(self.bias_initializer),
+                "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
+                "bias_regularizer": regularizers.serialize(self.bias_regularizer),
+                "activity_regularizer": regularizers.serialize(
+                    self.activity_regularizer
+                ),
+                "kernel_constraint": constraints.serialize(self.kernel_constraint),
+                "bias_constraint": constraints.serialize(self.bias_constraint),
+            }
+        )
         return config
 
 
@@ -1343,11 +1374,17 @@ class YatConvTranspose1D(_KernelBankSerializationMixin, Layer):
     ):
         super().__init__(activity_regularizer=activity_regularizer, **kwargs)
         self.filters = filters
-        self.kernel_size = kernel_size if isinstance(kernel_size, (list, tuple)) else (kernel_size,)
+        self.kernel_size = (
+            kernel_size if isinstance(kernel_size, (list, tuple)) else (kernel_size,)
+        )
         self.strides = strides if isinstance(strides, (list, tuple)) else (strides,)
         self.padding = padding.lower()
         self.data_format = data_format
-        self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate,)
+        self.dilation_rate = (
+            dilation_rate
+            if isinstance(dilation_rate, (list, tuple))
+            else (dilation_rate,)
+        )
         self.output_padding = _standardize_output_padding(output_padding, 1)
         self.use_alpha = use_alpha
         self.epsilon = validate_epsilon(epsilon)
@@ -1473,7 +1510,8 @@ class YatConvTranspose1D(_KernelBankSerializationMixin, Layer):
             filter_axis = len(self.kernel_size)
             reduce_axes = tuple(i for i in range(kernel.ndim) if i != filter_axis)
             kernel = kernel / (
-                ops.sqrt(ops.sum(ops.square(kernel), axis=reduce_axes, keepdims=True)) + 1e-8
+                ops.sqrt(ops.sum(ops.square(kernel), axis=reduce_axes, keepdims=True))
+                + 1e-8
             )
 
         # Compute transposed convolution (dot product)
@@ -1514,11 +1552,9 @@ class YatConvTranspose1D(_KernelBankSerializationMixin, Layer):
             # Transpose conv kernel shape: (*kernel_size, filters, in_dim)
             filter_axis = len(self.kernel_size)
             reduce_axes = tuple(i for i in range(kernel.ndim) if i != filter_axis)
-            kernel_sq_sum_per_filter = ops.sum(kernel ** 2, axis=reduce_axes)
+            kernel_sq_sum_per_filter = ops.sum(kernel**2, axis=reduce_axes)
 
-        kernel_sq_sum_reshaped = ops.reshape(
-            kernel_sq_sum_per_filter, (1, 1, -1)
-        )
+        kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, -1))
 
         # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
@@ -1529,34 +1565,38 @@ class YatConvTranspose1D(_KernelBankSerializationMixin, Layer):
 
     def get_config(self):
         config = super().get_config()
-        config.update({
-            "filters": self.filters,
-            "kernel_size": self.kernel_size,
-            "strides": self.strides,
-            "padding": self.padding,
-            "data_format": self.data_format,
-            "dilation_rate": self.dilation_rate,
-            "output_padding": self.output_padding,
-            "use_bias": self.use_bias,
-            "constant_bias": self.constant_bias,
-            "use_alpha": self.use_alpha,
-            "epsilon": self.epsilon,
-            "learnable_epsilon": self.learnable_epsilon,
-            "weight_normalized": self.weight_normalized,
-            "use_dropconnect": self.use_dropconnect,
-            "drop_rate": self.drop_rate,
-            "tie_kernel_bank": self.tie_kernel_bank,
-            "kernel_bank_size": self.kernel_bank_size,
-            "kernel_bank_id": self.kernel_bank_id,
-            "kernel_bank": self._kernel_bank_ref if self.tie_kernel_bank else None,
-            "kernel_initializer": initializers.serialize(self.kernel_initializer),
-            "bias_initializer": initializers.serialize(self.bias_initializer),
-            "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
-            "bias_regularizer": regularizers.serialize(self.bias_regularizer),
-            "activity_regularizer": regularizers.serialize(self.activity_regularizer),
-            "kernel_constraint": constraints.serialize(self.kernel_constraint),
-            "bias_constraint": constraints.serialize(self.bias_constraint),
-        })
+        config.update(
+            {
+                "filters": self.filters,
+                "kernel_size": self.kernel_size,
+                "strides": self.strides,
+                "padding": self.padding,
+                "data_format": self.data_format,
+                "dilation_rate": self.dilation_rate,
+                "output_padding": self.output_padding,
+                "use_bias": self.use_bias,
+                "constant_bias": self.constant_bias,
+                "use_alpha": self.use_alpha,
+                "epsilon": self.epsilon,
+                "learnable_epsilon": self.learnable_epsilon,
+                "weight_normalized": self.weight_normalized,
+                "use_dropconnect": self.use_dropconnect,
+                "drop_rate": self.drop_rate,
+                "tie_kernel_bank": self.tie_kernel_bank,
+                "kernel_bank_size": self.kernel_bank_size,
+                "kernel_bank_id": self.kernel_bank_id,
+                "kernel_bank": self._kernel_bank_ref if self.tie_kernel_bank else None,
+                "kernel_initializer": initializers.serialize(self.kernel_initializer),
+                "bias_initializer": initializers.serialize(self.bias_initializer),
+                "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
+                "bias_regularizer": regularizers.serialize(self.bias_regularizer),
+                "activity_regularizer": regularizers.serialize(
+                    self.activity_regularizer
+                ),
+                "kernel_constraint": constraints.serialize(self.kernel_constraint),
+                "bias_constraint": constraints.serialize(self.bias_constraint),
+            }
+        )
         return config
 
 
@@ -1624,11 +1664,21 @@ class YatConvTranspose2D(_KernelBankSerializationMixin, Layer):
     ):
         super().__init__(activity_regularizer=activity_regularizer, **kwargs)
         self.filters = filters
-        self.kernel_size = kernel_size if isinstance(kernel_size, (list, tuple)) else (kernel_size, kernel_size)
-        self.strides = strides if isinstance(strides, (list, tuple)) else (strides, strides)
+        self.kernel_size = (
+            kernel_size
+            if isinstance(kernel_size, (list, tuple))
+            else (kernel_size, kernel_size)
+        )
+        self.strides = (
+            strides if isinstance(strides, (list, tuple)) else (strides, strides)
+        )
         self.padding = padding.lower()
         self.data_format = data_format
-        self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate)
+        self.dilation_rate = (
+            dilation_rate
+            if isinstance(dilation_rate, (list, tuple))
+            else (dilation_rate, dilation_rate)
+        )
         self.output_padding = _standardize_output_padding(output_padding, 2)
         self.use_alpha = use_alpha
         self.epsilon = validate_epsilon(epsilon)
@@ -1754,7 +1804,8 @@ class YatConvTranspose2D(_KernelBankSerializationMixin, Layer):
             filter_axis = len(self.kernel_size)
             reduce_axes = tuple(i for i in range(kernel.ndim) if i != filter_axis)
             kernel = kernel / (
-                ops.sqrt(ops.sum(ops.square(kernel), axis=reduce_axes, keepdims=True)) + 1e-8
+                ops.sqrt(ops.sum(ops.square(kernel), axis=reduce_axes, keepdims=True))
+                + 1e-8
             )
 
         # Compute transposed convolution (dot product)
@@ -1795,11 +1846,9 @@ class YatConvTranspose2D(_KernelBankSerializationMixin, Layer):
             # Transpose conv kernel shape: (*kernel_size, filters, in_dim)
             filter_axis = len(self.kernel_size)
             reduce_axes = tuple(i for i in range(kernel.ndim) if i != filter_axis)
-            kernel_sq_sum_per_filter = ops.sum(kernel ** 2, axis=reduce_axes)
+            kernel_sq_sum_per_filter = ops.sum(kernel**2, axis=reduce_axes)
 
-        kernel_sq_sum_reshaped = ops.reshape(
-            kernel_sq_sum_per_filter, (1, 1, 1, -1)
-        )
+        kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, 1, -1))
 
         # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
@@ -1810,34 +1859,38 @@ class YatConvTranspose2D(_KernelBankSerializationMixin, Layer):
 
     def get_config(self):
         config = super().get_config()
-        config.update({
-            "filters": self.filters,
-            "kernel_size": self.kernel_size,
-            "strides": self.strides,
-            "padding": self.padding,
-            "data_format": self.data_format,
-            "dilation_rate": self.dilation_rate,
-            "output_padding": self.output_padding,
-            "use_bias": self.use_bias,
-            "constant_bias": self.constant_bias,
-            "use_alpha": self.use_alpha,
-            "epsilon": self.epsilon,
-            "learnable_epsilon": self.learnable_epsilon,
-            "weight_normalized": self.weight_normalized,
-            "use_dropconnect": self.use_dropconnect,
-            "drop_rate": self.drop_rate,
-            "tie_kernel_bank": self.tie_kernel_bank,
-            "kernel_bank_size": self.kernel_bank_size,
-            "kernel_bank_id": self.kernel_bank_id,
-            "kernel_bank": self._kernel_bank_ref if self.tie_kernel_bank else None,
-            "kernel_initializer": initializers.serialize(self.kernel_initializer),
-            "bias_initializer": initializers.serialize(self.bias_initializer),
-            "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
-            "bias_regularizer": regularizers.serialize(self.bias_regularizer),
-            "activity_regularizer": regularizers.serialize(self.activity_regularizer),
-            "kernel_constraint": constraints.serialize(self.kernel_constraint),
-            "bias_constraint": constraints.serialize(self.bias_constraint),
-        })
+        config.update(
+            {
+                "filters": self.filters,
+                "kernel_size": self.kernel_size,
+                "strides": self.strides,
+                "padding": self.padding,
+                "data_format": self.data_format,
+                "dilation_rate": self.dilation_rate,
+                "output_padding": self.output_padding,
+                "use_bias": self.use_bias,
+                "constant_bias": self.constant_bias,
+                "use_alpha": self.use_alpha,
+                "epsilon": self.epsilon,
+                "learnable_epsilon": self.learnable_epsilon,
+                "weight_normalized": self.weight_normalized,
+                "use_dropconnect": self.use_dropconnect,
+                "drop_rate": self.drop_rate,
+                "tie_kernel_bank": self.tie_kernel_bank,
+                "kernel_bank_size": self.kernel_bank_size,
+                "kernel_bank_id": self.kernel_bank_id,
+                "kernel_bank": self._kernel_bank_ref if self.tie_kernel_bank else None,
+                "kernel_initializer": initializers.serialize(self.kernel_initializer),
+                "bias_initializer": initializers.serialize(self.bias_initializer),
+                "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
+                "bias_regularizer": regularizers.serialize(self.bias_regularizer),
+                "activity_regularizer": regularizers.serialize(
+                    self.activity_regularizer
+                ),
+                "kernel_constraint": constraints.serialize(self.kernel_constraint),
+                "bias_constraint": constraints.serialize(self.bias_constraint),
+            }
+        )
         return config
 
 
@@ -1905,11 +1958,23 @@ class YatConvTranspose3D(_KernelBankSerializationMixin, Layer):
     ):
         super().__init__(activity_regularizer=activity_regularizer, **kwargs)
         self.filters = filters
-        self.kernel_size = kernel_size if isinstance(kernel_size, (list, tuple)) else (kernel_size, kernel_size, kernel_size)
-        self.strides = strides if isinstance(strides, (list, tuple)) else (strides, strides, strides)
+        self.kernel_size = (
+            kernel_size
+            if isinstance(kernel_size, (list, tuple))
+            else (kernel_size, kernel_size, kernel_size)
+        )
+        self.strides = (
+            strides
+            if isinstance(strides, (list, tuple))
+            else (strides, strides, strides)
+        )
         self.padding = padding.lower()
         self.data_format = data_format
-        self.dilation_rate = dilation_rate if isinstance(dilation_rate, (list, tuple)) else (dilation_rate, dilation_rate, dilation_rate)
+        self.dilation_rate = (
+            dilation_rate
+            if isinstance(dilation_rate, (list, tuple))
+            else (dilation_rate, dilation_rate, dilation_rate)
+        )
         self.output_padding = _standardize_output_padding(output_padding, 3)
         self.use_alpha = use_alpha
         self.epsilon = validate_epsilon(epsilon)
@@ -2035,7 +2100,8 @@ class YatConvTranspose3D(_KernelBankSerializationMixin, Layer):
             filter_axis = len(self.kernel_size)
             reduce_axes = tuple(i for i in range(kernel.ndim) if i != filter_axis)
             kernel = kernel / (
-                ops.sqrt(ops.sum(ops.square(kernel), axis=reduce_axes, keepdims=True)) + 1e-8
+                ops.sqrt(ops.sum(ops.square(kernel), axis=reduce_axes, keepdims=True))
+                + 1e-8
             )
 
         # Compute transposed convolution (dot product)
@@ -2075,11 +2141,9 @@ class YatConvTranspose3D(_KernelBankSerializationMixin, Layer):
         else:
             filter_axis = len(self.kernel_size)
             reduce_axes = tuple(i for i in range(kernel.ndim) if i != filter_axis)
-            kernel_sq_sum_per_filter = ops.sum(kernel ** 2, axis=reduce_axes)
+            kernel_sq_sum_per_filter = ops.sum(kernel**2, axis=reduce_axes)
 
-        kernel_sq_sum_reshaped = ops.reshape(
-            kernel_sq_sum_per_filter, (1, 1, 1, 1, -1)
-        )
+        kernel_sq_sum_reshaped = ops.reshape(kernel_sq_sum_per_filter, (1, 1, 1, 1, -1))
 
         # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
@@ -2090,34 +2154,38 @@ class YatConvTranspose3D(_KernelBankSerializationMixin, Layer):
 
     def get_config(self):
         config = super().get_config()
-        config.update({
-            "filters": self.filters,
-            "kernel_size": self.kernel_size,
-            "strides": self.strides,
-            "padding": self.padding,
-            "data_format": self.data_format,
-            "dilation_rate": self.dilation_rate,
-            "output_padding": self.output_padding,
-            "use_bias": self.use_bias,
-            "constant_bias": self.constant_bias,
-            "use_alpha": self.use_alpha,
-            "epsilon": self.epsilon,
-            "learnable_epsilon": self.learnable_epsilon,
-            "weight_normalized": self.weight_normalized,
-            "use_dropconnect": self.use_dropconnect,
-            "drop_rate": self.drop_rate,
-            "tie_kernel_bank": self.tie_kernel_bank,
-            "kernel_bank_size": self.kernel_bank_size,
-            "kernel_bank_id": self.kernel_bank_id,
-            "kernel_bank": self._kernel_bank_ref if self.tie_kernel_bank else None,
-            "kernel_initializer": initializers.serialize(self.kernel_initializer),
-            "bias_initializer": initializers.serialize(self.bias_initializer),
-            "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
-            "bias_regularizer": regularizers.serialize(self.bias_regularizer),
-            "activity_regularizer": regularizers.serialize(self.activity_regularizer),
-            "kernel_constraint": constraints.serialize(self.kernel_constraint),
-            "bias_constraint": constraints.serialize(self.bias_constraint),
-        })
+        config.update(
+            {
+                "filters": self.filters,
+                "kernel_size": self.kernel_size,
+                "strides": self.strides,
+                "padding": self.padding,
+                "data_format": self.data_format,
+                "dilation_rate": self.dilation_rate,
+                "output_padding": self.output_padding,
+                "use_bias": self.use_bias,
+                "constant_bias": self.constant_bias,
+                "use_alpha": self.use_alpha,
+                "epsilon": self.epsilon,
+                "learnable_epsilon": self.learnable_epsilon,
+                "weight_normalized": self.weight_normalized,
+                "use_dropconnect": self.use_dropconnect,
+                "drop_rate": self.drop_rate,
+                "tie_kernel_bank": self.tie_kernel_bank,
+                "kernel_bank_size": self.kernel_bank_size,
+                "kernel_bank_id": self.kernel_bank_id,
+                "kernel_bank": self._kernel_bank_ref if self.tie_kernel_bank else None,
+                "kernel_initializer": initializers.serialize(self.kernel_initializer),
+                "bias_initializer": initializers.serialize(self.bias_initializer),
+                "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
+                "bias_regularizer": regularizers.serialize(self.bias_regularizer),
+                "activity_regularizer": regularizers.serialize(
+                    self.activity_regularizer
+                ),
+                "kernel_constraint": constraints.serialize(self.kernel_constraint),
+                "bias_constraint": constraints.serialize(self.bias_constraint),
+            }
+        )
         return config
 
 

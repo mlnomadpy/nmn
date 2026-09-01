@@ -29,7 +29,7 @@ def make_attention_mask(
 
     This function creates a mask by applying a pairwise function to all
     combinations of query and key positions. Common use cases:
-    
+
     - Padding mask: Pass boolean arrays indicating valid positions
     - Custom masks: Use custom pairwise functions
 
@@ -153,4 +153,3 @@ def causal_attention_mask(seq_len: int) -> Array:
         >>> #  [1, 1, 1, 1]]
     """
     return jnp.tril(jnp.ones((seq_len, seq_len)))
-

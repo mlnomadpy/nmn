@@ -14,7 +14,6 @@ import tensorflow as tf
 
 from ._precision import reduction_safe_upcast, saturating_downcast
 
-
 __all__ = ["yat_score"]
 
 
@@ -34,7 +33,9 @@ def yat_score(layer, dot_prod_map, distance_sq_map):
     # Add bias before squaring (constant or learnable).
     if layer.use_bias:
         if layer._constant_bias_value is not None:
-            dot_prod_map = dot_prod_map + tf.cast(layer._constant_bias_value, dot_prod_map.dtype)
+            dot_prod_map = dot_prod_map + tf.cast(
+                layer._constant_bias_value, dot_prod_map.dtype
+            )
         else:
             dot_prod_map = dot_prod_map + reduction_safe_upcast(layer.bias)
 
@@ -48,7 +49,7 @@ def yat_score(layer, dot_prod_map, distance_sq_map):
         eps = layer.epsilon
 
     # YAT: (dot + bias) ** 2 / (||x - W|| ** 2 + eps).
-    y = dot_prod_map ** 2 / (tf.maximum(distance_sq_map, 0.0) + eps)
+    y = dot_prod_map**2 / (tf.maximum(distance_sq_map, 0.0) + eps)
 
     # Optional alpha (learnable; constant_alpha is folded into layer.alpha).
     if layer.use_alpha and layer.alpha is not None:

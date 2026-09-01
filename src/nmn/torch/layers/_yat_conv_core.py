@@ -18,8 +18,7 @@ import math
 from typing import Callable, Iterable, Optional
 
 import torch
-from torch import Tensor
-from torch import nn
+from torch import Tensor, nn
 from torch.nn import functional as F
 from torch.nn.modules.utils import _single
 from torch.nn.parameter import Parameter
@@ -31,7 +30,6 @@ from nmn._epsilon import (
 )
 
 from .._precision import saturating_downcast, saturating_upcast
-
 
 __all__ = [
     "DEFAULT_CONSTANT_ALPHA",
@@ -109,7 +107,9 @@ def setup_yat_attrs(
     # all output channels.
     if scalar_bias and constant_bias is None and bias:
         bias_param_dtype = storage_dtype if storage_dtype is not None else torch.float32
-        layer.bias = nn.Parameter(torch.zeros((1,), dtype=bias_param_dtype, device=device))
+        layer.bias = nn.Parameter(
+            torch.zeros((1,), dtype=bias_param_dtype, device=device)
+        )
     layer.softplus_bias = softplus_bias and layer.bias is not None
     layer.scalar_bias = scalar_bias and layer.bias is not None
 
@@ -127,7 +127,8 @@ def setup_yat_attrs(
         raw_eps = inverse_softplus(layer.epsilon)
         layer.epsilon_param = nn.Parameter(
             torch.full(
-                (1,), raw_eps,
+                (1,),
+                raw_eps,
                 dtype=epsilon_dtype,
                 device=device,
             )
@@ -208,8 +209,13 @@ def _resolve_eps(layer, dtype: torch.dtype):
     return layer.epsilon
 
 
-def _yat_score(layer, dot_prod_map: Tensor, distance_sq_map: Tensor,
-               bias_val: Optional[Tensor], alpha: Optional[Tensor]) -> Tensor:
+def _yat_score(
+    layer,
+    dot_prod_map: Tensor,
+    distance_sq_map: Tensor,
+    bias_val: Optional[Tensor],
+    alpha: Optional[Tensor],
+) -> Tensor:
     """(dot + bias) ** 2 / (||x - W|| ** 2 + eps) * alpha — shared tail."""
     view_shape = (1, -1) + (1,) * (dot_prod_map.dim() - 2)
     if bias_val is not None:
@@ -218,7 +224,7 @@ def _yat_score(layer, dot_prod_map: Tensor, distance_sq_map: Tensor,
     if isinstance(eps, Tensor):
         dot_prod_map = dot_prod_map.to(eps.dtype)
         distance_sq_map = distance_sq_map.to(eps.dtype)
-    y = dot_prod_map ** 2 / (distance_sq_map + eps)
+    y = dot_prod_map**2 / (distance_sq_map + eps)
     if layer._constant_alpha_value is not None:
         y = y * layer._constant_alpha_value
     elif alpha is not None:
@@ -267,7 +273,12 @@ def yat_conv_forward(
         )
 
     # DropConnect (inverted-dropout pattern).
-    if layer.use_dropconnect and not deterministic and layer.drop_rate > 0.0 and layer.training:
+    if (
+        layer.use_dropconnect
+        and not deterministic
+        and layer.drop_rate > 0.0
+        and layer.training
+    ):
         keep_prob = 1.0 - layer.drop_rate
         drop_mask = torch.bernoulli(torch.full_like(weight, keep_prob))
         weight = (weight * drop_mask) / keep_prob
@@ -277,7 +288,7 @@ def yat_conv_forward(
 
     if layer.weight_normalized:
         reduce_dims = tuple(range(1, weight.dim()))
-        kernel_norm = torch.sqrt(torch.sum(weight ** 2, dim=reduce_dims, keepdim=True))
+        kernel_norm = torch.sqrt(torch.sum(weight**2, dim=reduce_dims, keepdim=True))
         weight = weight / (kernel_norm + 1e-8)
 
     # Dot product (delegates to the layer's _conv_forward which already
@@ -289,30 +300,51 @@ def yat_conv_forward(
     in_channels_per_group = layer.in_channels // layer.groups
     ones_kernel = torch.ones(
         (layer.groups, in_channels_per_group) + tuple(layer.kernel_size),
-        device=input.device, dtype=input.dtype,
+        device=input.device,
+        dtype=input.dtype,
     )
     if layer.padding_mode != "zeros":
         patch_sq_sum_raw = conv_fn(
-            F.pad(input_squared, layer._reversed_padding_repeated_twice, mode=layer.padding_mode),
-            ones_kernel, None, layer.stride, _single(0), layer.dilation, layer.groups,
+            F.pad(
+                input_squared,
+                layer._reversed_padding_repeated_twice,
+                mode=layer.padding_mode,
+            ),
+            ones_kernel,
+            None,
+            layer.stride,
+            _single(0),
+            layer.dilation,
+            layer.groups,
         )
     else:
         patch_sq_sum_raw = conv_fn(
-            input_squared, ones_kernel, None, layer.stride, layer.padding,
-            layer.dilation, layer.groups,
+            input_squared,
+            ones_kernel,
+            None,
+            layer.stride,
+            layer.padding,
+            layer.dilation,
+            layer.groups,
         )
     if layer.groups > 1:
         num_out_channels_per_group = out_channels // layer.groups
-        patch_sq_sum = patch_sq_sum_raw.repeat_interleave(num_out_channels_per_group, dim=1)
+        patch_sq_sum = patch_sq_sum_raw.repeat_interleave(
+            num_out_channels_per_group, dim=1
+        )
     else:
-        patch_sq_sum = patch_sq_sum_raw.repeat(1, out_channels, *([1] * (patch_sq_sum_raw.dim() - 2)))
+        patch_sq_sum = patch_sq_sum_raw.repeat(
+            1, out_channels, *([1] * (patch_sq_sum_raw.dim() - 2))
+        )
 
     # ||kernel||^2 per output filter.
     if layer.weight_normalized:
-        kernel_sq_sum = torch.ones(weight.shape[0], device=weight.device, dtype=weight.dtype)
+        kernel_sq_sum = torch.ones(
+            weight.shape[0], device=weight.device, dtype=weight.dtype
+        )
     else:
         reduce_dims = tuple(range(1, weight.dim()))
-        kernel_sq_sum = torch.sum(weight ** 2, dim=reduce_dims)
+        kernel_sq_sum = torch.sum(weight**2, dim=reduce_dims)
 
     view_shape = (1, -1) + (1,) * (dot_prod_map.dim() - 2)
     distance_sq = (
@@ -355,7 +387,12 @@ def yat_conv_transpose_forward(
             for tensor in (input, weight, bias_val, alpha)
         )
 
-    if layer.use_dropconnect and not deterministic and layer.drop_rate > 0.0 and layer.training:
+    if (
+        layer.use_dropconnect
+        and not deterministic
+        and layer.drop_rate > 0.0
+        and layer.training
+    ):
         keep_prob = 1.0 - layer.drop_rate
         drop_mask = torch.bernoulli(torch.full_like(weight, keep_prob))
         weight = (weight * drop_mask) / keep_prob
@@ -365,8 +402,14 @@ def yat_conv_transpose_forward(
 
     # Dot product (transposed conv).
     dot_prod_map = conv_transpose_fn(
-        input, weight, None, layer.stride, layer.padding,
-        output_padding, layer.groups, layer.dilation,
+        input,
+        weight,
+        None,
+        layer.stride,
+        layer.padding,
+        output_padding,
+        layer.groups,
+        layer.dilation,
     )
 
     # ||patch||^2 via conv_transpose with ones kernel in the (in_channels,
@@ -375,12 +418,19 @@ def yat_conv_transpose_forward(
     gout = layer.out_channels // layer.groups
     ones_kernel = torch.ones(
         (layer.in_channels, gout) + tuple(layer.kernel_size),
-        device=input.device, dtype=input.dtype,
+        device=input.device,
+        dtype=input.dtype,
     )
     input_squared = input * input
     patch_sq_sum = conv_transpose_fn(
-        input_squared, ones_kernel, None, layer.stride, layer.padding,
-        output_padding, layer.groups, layer.dilation,
+        input_squared,
+        ones_kernel,
+        None,
+        layer.stride,
+        layer.padding,
+        output_padding,
+        layer.groups,
+        layer.dilation,
     )
 
     # ||kernel||^2 per output filter. For groups > 1 each absolute output
@@ -388,7 +438,7 @@ def yat_conv_transpose_forward(
     # gout, *k), reduce over (gin, spatial), flatten to (out_channels,).
     w_grouped = weight.view(layer.groups, gin, gout, *layer.kernel_size)
     reduce_dims = (1,) + tuple(range(3, w_grouped.dim()))
-    kernel_sq_sum = (w_grouped ** 2).sum(dim=reduce_dims).reshape(-1)
+    kernel_sq_sum = (w_grouped**2).sum(dim=reduce_dims).reshape(-1)
 
     view_shape = (1, -1) + (1,) * (dot_prod_map.dim() - 2)
     distance_sq = (

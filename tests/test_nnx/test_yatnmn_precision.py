@@ -8,7 +8,9 @@ try:
     import jax.numpy as jnp
     from flax import nnx
     from jax import lax
+
     from nmn.nnx.layers import YatNMN
+
     HAS_JAX = True
 except ImportError:
     HAS_JAX = False
@@ -17,8 +19,9 @@ except ImportError:
 pytestmark = pytest.mark.skipif(not HAS_JAX, reason="JAX/Flax not available")
 
 
-def _layer(width, mode, *, fused=False, epsilon=1e-3, distance_floor=0.0,
-           dot_general=None):
+def _layer(
+    width, mode, *, fused=False, epsilon=1e-3, distance_floor=0.0, dot_general=None
+):
     if dot_general is None:
         dot_general = lax.dot_general
     return YatNMN(
@@ -51,9 +54,9 @@ def test_fused_and_standard_modes_have_exact_forward_and_gradient_parity(mode):
     _, (standard_grads, standard_input_grad) = jax.value_and_grad(
         _loss, argnums=(0, 1)
     )(standard, x)
-    _, (fused_grads, fused_input_grad) = jax.value_and_grad(
-        _loss, argnums=(0, 1)
-    )(fused, x)
+    _, (fused_grads, fused_input_grad) = jax.value_and_grad(_loss, argnums=(0, 1))(
+        fused, x
+    )
     np.testing.assert_array_equal(
         standard_input_grad,
         fused_input_grad,
@@ -70,12 +73,22 @@ def test_fused_and_standard_modes_have_exact_forward_and_gradient_parity(mode):
 def test_default_fused_gradient_matches_standard_when_distance_clamp_is_active():
     width = 64
     standard = YatNMN(
-        width, 1, fused=False, use_bias=False, use_alpha=False,
-        epsilon=1e-5, rngs=nnx.Rngs(0),
+        width,
+        1,
+        fused=False,
+        use_bias=False,
+        use_alpha=False,
+        epsilon=1e-5,
+        rngs=nnx.Rngs(0),
     )
     fused = YatNMN(
-        width, 1, fused=True, use_bias=False, use_alpha=False,
-        epsilon=1e-5, rngs=nnx.Rngs(0),
+        width,
+        1,
+        fused=True,
+        use_bias=False,
+        use_alpha=False,
+        epsilon=1e-5,
+        rngs=nnx.Rngs(0),
     )
     x = jax.random.normal(jax.random.key(2), (1, width)) * 10.0
     standard.kernel[...] = x.T
@@ -166,9 +179,7 @@ def test_reduced_precision_modes_stay_close_to_fp32(
     reference_output = reference(x_fp32)
     candidate_output = candidate(x_bf16).astype(jnp.float32)
     reference_grad = jax.grad(lambda x: _loss(reference, x))(x_fp32)
-    candidate_grad = jax.grad(lambda x: _loss(candidate, x))(x_bf16).astype(
-        jnp.float32
-    )
+    candidate_grad = jax.grad(lambda x: _loss(candidate, x))(x_bf16).astype(jnp.float32)
 
     assert jnp.isfinite(candidate_output).all()
     assert jnp.isfinite(candidate_grad).all()
@@ -177,9 +188,7 @@ def test_reduced_precision_modes_stay_close_to_fp32(
     gradient_error = jnp.linalg.norm(candidate_grad - reference_grad)
     gradient_error /= jnp.maximum(jnp.linalg.norm(reference_grad), 1e-12)
     gradient_cosine = jnp.vdot(candidate_grad.ravel(), reference_grad.ravel())
-    gradient_cosine /= (
-        jnp.linalg.norm(candidate_grad) * jnp.linalg.norm(reference_grad)
-    )
+    gradient_cosine /= jnp.linalg.norm(candidate_grad) * jnp.linalg.norm(reference_grad)
 
     assert float(forward_error) < forward_tolerance
     assert float(gradient_error) < gradient_tolerance
@@ -221,9 +230,7 @@ def test_mixed_mode_supports_float16_and_bfloat16_with_fp32_parity(
     reference_output = reference(x_fp32)
     candidate_output = candidate(x_low).astype(jnp.float32)
     reference_grad = jax.grad(lambda x: _loss(reference, x))(x_fp32)
-    candidate_grad = jax.grad(lambda x: _loss(candidate, x))(x_low).astype(
-        jnp.float32
-    )
+    candidate_grad = jax.grad(lambda x: _loss(candidate, x))(x_low).astype(jnp.float32)
 
     forward_error = jnp.linalg.norm(candidate_output - reference_output)
     forward_error /= jnp.maximum(jnp.linalg.norm(reference_output), 1e-12)

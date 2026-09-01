@@ -15,15 +15,15 @@ jax = pytest.importorskip("jax")
 import jax.numpy as jnp  # noqa: E402
 
 from nmn.linen import (  # noqa: E402
-    spherical_kappa,
-    maclaurin_coeffs,
     create_maclaurin_projection,
+    create_radial_projection,
+    linear_attention,
+    maclaurin_coeffs,
     maclaurin_features,
     maclaurin_yat_attention,
-    create_radial_projection,
     radial_features,
     radial_yat_attention,
-    linear_attention,
+    spherical_kappa,
 )
 
 

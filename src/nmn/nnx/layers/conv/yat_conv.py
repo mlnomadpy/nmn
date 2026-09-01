@@ -23,27 +23,27 @@ from jax import lax
 logger = logging.getLogger(__name__)
 
 from flax import nnx
-from flax.nnx.module import Module
 from flax.nnx import rnglib
+from flax.nnx.module import Module
 from flax.nnx.nn import dtypes
 from flax.typing import (
+    ConvGeneralDilatedT,
     Dtype,
     Initializer,
-    PrecisionLike,
-    ConvGeneralDilatedT,
     PaddingLike,
+    PrecisionLike,
     PromoteDtypeFn,
 )
 
+from .._numerics import finite_cast, fp32_if_low_precision, inverse_softplus
 from .utils import (
+    DEFAULT_CONSTANT_ALPHA,
     canonicalize_padding,
     conv_dimension_numbers,
-    default_kernel_init,
-    default_bias_init,
     default_alpha_init,
-    DEFAULT_CONSTANT_ALPHA,
+    default_bias_init,
+    default_kernel_init,
 )
-from .._numerics import finite_cast, fp32_if_low_precision, inverse_softplus
 
 Array = jax.Array
 
@@ -165,13 +165,9 @@ class YatConv(Module):
         if feature_group_count <= 0:
             raise ValueError("feature_group_count must be positive")
         if in_features % feature_group_count != 0:
-            raise ValueError(
-                "in_features must be a multiple of feature_group_count"
-            )
+            raise ValueError("in_features must be a multiple of feature_group_count")
         if out_features % feature_group_count != 0:
-            raise ValueError(
-                "out_features must be a multiple of feature_group_count"
-            )
+            raise ValueError("out_features must be a multiple of feature_group_count")
         if isinstance(kernel_size, int):
             kernel_size = (kernel_size,)
         else:
@@ -220,8 +216,12 @@ class YatConv(Module):
 
                     if bank_out_features > existing_bank_size:
                         # Auto-expand bank to accommodate larger layer
-                        logger.info("Auto-expanding kernel bank '%s': %d -> %d filters",
-                                    kernel_bank_id, existing_bank_size, bank_out_features)
+                        logger.info(
+                            "Auto-expanding kernel bank '%s': %d -> %d filters",
+                            kernel_bank_id,
+                            existing_bank_size,
+                            bank_out_features,
+                        )
                         new_shape = existing_shape[:-1] + (bank_out_features,)
                         old_kernel = shared_kernel.value
                         # Pad with random initialization for new filters
@@ -230,7 +230,9 @@ class YatConv(Module):
                         if positive_init:
                             new_kernel_val = jnp.abs(new_kernel_val)
                         # Copy old values, new filters already initialized
-                        new_kernel_val = new_kernel_val.at[..., :existing_bank_size].set(old_kernel)
+                        new_kernel_val = new_kernel_val.at[
+                            ..., :existing_bank_size
+                        ].set(old_kernel)
                         shared_kernel.value = new_kernel_val
                     # elif bank_out_features < existing_bank_size: bank is larger, slice used below
 
@@ -316,7 +318,9 @@ class YatConv(Module):
         if self.weight_normalized:
             kernel_val = self.kernel[...]
             reduce_axes = tuple(range(kernel_val.ndim - 1))
-            kernel_norm = jnp.sqrt(jnp.sum(kernel_val**2, axis=reduce_axes, keepdims=True))
+            kernel_norm = jnp.sqrt(
+                jnp.sum(kernel_val**2, axis=reduce_axes, keepdims=True)
+            )
             self.kernel.value = kernel_val / (kernel_norm + 1e-8)
 
         if use_dropconnect:
@@ -349,9 +353,7 @@ class YatConv(Module):
         if num_batch_dimensions != 1:
             input_batch_shape = inputs.shape[:num_batch_dimensions]
             total_batch_size = int(np.prod(input_batch_shape))
-            flat_input_shape = (total_batch_size,) + inputs.shape[
-                num_batch_dimensions:
-            ]
+            flat_input_shape = (total_batch_size,) + inputs.shape[num_batch_dimensions:]
             inputs_flat = jnp.reshape(inputs, flat_input_shape)
         else:
             inputs_flat = inputs
@@ -414,12 +416,16 @@ class YatConv(Module):
         # Normalize kernel if weight normalization is enabled
         if self.weight_normalized:
             reduce_axes = tuple(range(kernel_val.ndim - 1))
-            kernel_norm = jnp.sqrt(jnp.sum(kernel_val**2, axis=reduce_axes, keepdims=True))
+            kernel_norm = jnp.sqrt(
+                jnp.sum(kernel_val**2, axis=reduce_axes, keepdims=True)
+            )
             kernel_val = kernel_val / (kernel_norm + 1e-8)
 
         # Get bias value (either learnable or constant)
         if self._constant_bias_value is not None:
-            bias_val = jnp.full((self.out_features,), self._constant_bias_value, dtype=self.param_dtype)
+            bias_val = jnp.full(
+                (self.out_features,), self._constant_bias_value, dtype=self.param_dtype
+            )
         elif self.bias is not None:
             bias_val = self.bias[...]
             if self.softplus_bias:
@@ -498,7 +504,9 @@ class YatConv(Module):
         # Optimization: if weights are normalized, skip computation and use 1.0
         if self.weight_normalized:
             # When weight_normalized=True, ||W||² = 1 for each filter
-            kernel_sq_sum_per_filter = jnp.ones((kernel_val.shape[-1],), dtype=kernel_val.dtype)
+            kernel_sq_sum_per_filter = jnp.ones(
+                (kernel_val.shape[-1],), dtype=kernel_val.dtype
+            )
         else:
             reduce_axes_for_kernel_sq = tuple(range(kernel_val.ndim - 1))
             kernel_sq_sum_per_filter = jnp.sum(

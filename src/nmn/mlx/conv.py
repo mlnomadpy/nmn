@@ -36,7 +36,6 @@ import mlx.nn as nn
 
 from ._yat_core import yat_score
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -142,7 +141,9 @@ def _prepad_input(
             # low side comes from x[1:low+1] reversed.
             prefix = _reverse_slice(x, axis, 1, low + 1) if low > 0 else None
             # high side comes from x[-(high+1):-1] reversed.
-            suffix = _reverse_slice(x, axis, size - high - 1, size - 1) if high > 0 else None
+            suffix = (
+                _reverse_slice(x, axis, size - high - 1, size - 1) if high > 0 else None
+            )
         else:
             raise ValueError(f"unknown pre-pad mode: {mode!r}")
 
@@ -264,6 +265,7 @@ class _YatConvBase(nn.Module):
 
         # Alpha configuration.
         from .nmn import DEFAULT_CONSTANT_ALPHA
+
         self._constant_alpha_value: Optional[float] = None
         if constant_alpha is not None and constant_alpha is not False:
             if constant_alpha is True:
@@ -350,7 +352,11 @@ class _YatConvBase(nn.Module):
         else:
             spatial = inputs.shape[1:-1]
             low_pad, high_pad = _resolve_padding(
-                self.padding, self.kernel_size, self.dilation_rate, spatial, self.strides
+                self.padding,
+                self.kernel_size,
+                self.dilation_rate,
+                spatial,
+                self.strides,
             )
         padding_arg = (low_pad, high_pad)
 
@@ -359,9 +365,7 @@ class _YatConvBase(nn.Module):
         # time so the ||W||² term collapses to a constant 1 below.
         if self.weight_normalized:
             reduce_axes = tuple(range(1, kernel.ndim))
-            norm = mx.sqrt(
-                mx.sum(kernel * kernel, axis=reduce_axes, keepdims=True)
-            )
+            norm = mx.sqrt(mx.sum(kernel * kernel, axis=reduce_axes, keepdims=True))
             kernel = kernel / (norm + 1e-8)
         # DropConnect on the kernel.
         if self.use_dropconnect and not deterministic and self.drop_rate > 0.0:
@@ -509,6 +513,7 @@ class _YatConvTransposeBase(nn.Module):
 
         # Alpha config.
         from .nmn import DEFAULT_CONSTANT_ALPHA
+
         self._constant_alpha_value: Optional[float] = None
         if constant_alpha is not None and constant_alpha is not False:
             if constant_alpha is True:
@@ -621,7 +626,9 @@ class _YatConvTransposeBase(nn.Module):
             stride=self.strides if self._ndim > 1 else self.strides[0],
             padding=pad_arg,
             dilation=self.dilation_rate if self._ndim > 1 else self.dilation_rate[0],
-            output_padding=self.output_padding if self._ndim > 1 else self.output_padding[0],
+            output_padding=(
+                self.output_padding if self._ndim > 1 else self.output_padding[0]
+            ),
         )
 
         # Per-output-position ||x_contrib||² via ones-kernel.
@@ -640,13 +647,13 @@ class _YatConvTransposeBase(nn.Module):
             stride=self.strides if self._ndim > 1 else self.strides[0],
             padding=pad_arg,
             dilation=self.dilation_rate if self._ndim > 1 else self.dilation_rate[0],
-            output_padding=self.output_padding if self._ndim > 1 else self.output_padding[0],
+            output_padding=(
+                self.output_padding if self._ndim > 1 else self.output_padding[0]
+            ),
         )
         if same_target is not None:
             dot_prod_map = _resize_spatial_high(dot_prod_map, same_target)
-            patch_sq_filter_map = _resize_spatial_high(
-                patch_sq_filter_map, same_target
-            )
+            patch_sq_filter_map = _resize_spatial_high(patch_sq_filter_map, same_target)
         # All filter channels carry the same sum (the kernel was all ones)
         # — take channel 0 and broadcast.
         patch_sq_map_one = patch_sq_filter_map[..., :1]
@@ -695,8 +702,16 @@ YatConvTranspose3d = YatConvTranspose3D
 
 
 __all__ = [
-    "YatConv1D", "YatConv2D", "YatConv3D",
-    "YatConv1d", "YatConv2d", "YatConv3d",
-    "YatConvTranspose1D", "YatConvTranspose2D", "YatConvTranspose3D",
-    "YatConvTranspose1d", "YatConvTranspose2d", "YatConvTranspose3d",
+    "YatConv1D",
+    "YatConv2D",
+    "YatConv3D",
+    "YatConv1d",
+    "YatConv2d",
+    "YatConv3d",
+    "YatConvTranspose1D",
+    "YatConvTranspose2D",
+    "YatConvTranspose3D",
+    "YatConvTranspose1d",
+    "YatConvTranspose2d",
+    "YatConvTranspose3d",
 ]

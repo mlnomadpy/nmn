@@ -1,16 +1,16 @@
 """Tests for Keras YAT attention."""
 
-import pytest
 import numpy as np
+import pytest
 
 keras = pytest.importorskip("keras")
 
 from nmn.keras.attention import (
+    MultiHeadYatAttention,
     normalize_qk,
-    yat_attention_weights,
     yat_attention,
     yat_attention_normalized,
-    MultiHeadYatAttention,
+    yat_attention_weights,
 )
 
 to_numpy = keras.ops.convert_to_numpy
@@ -67,6 +67,29 @@ class TestAttentionFunctions:
 
 
 class TestMultiHeadYatAttention:
+    def test_keras_sequence_mask_is_expanded_and_preserved(self):
+        tokens = keras.Input(shape=(3,), dtype="int32")
+        embedded = keras.layers.Embedding(10, 4, mask_zero=True)(tokens)
+        attended = MultiHeadYatAttention(embed_dim=4, num_heads=2)(embedded)
+        assert attended._keras_mask is not None
+        model = keras.Model(tokens, attended)
+
+        token_values = np.array([[1, 2, 0], [3, 0, 0]], dtype=np.int32)
+        output = to_numpy(model(token_values))
+
+        assert output.shape == (2, 3, 4)
+        np.testing.assert_array_equal(output[0, 2], np.zeros(4))
+        np.testing.assert_array_equal(output[1, 1:], np.zeros((2, 4)))
+
+    def test_explicit_rank_two_attention_mask_remains_supported(self):
+        layer = MultiHeadYatAttention(embed_dim=4, num_heads=2)
+        inputs = np.arange(24, dtype=np.float32).reshape(2, 3, 4) / 24.0
+        attention_mask = np.tril(np.ones((3, 3), dtype=bool))
+
+        output = layer(inputs, attention_mask=attention_mask)
+
+        assert output.shape == (2, 3, 4)
+
     def test_self_attention(self):
         attn = MultiHeadYatAttention(embed_dim=32, num_heads=4)
         x = np.random.randn(2, 10, 32).astype(np.float32)

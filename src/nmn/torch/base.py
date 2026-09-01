@@ -1,18 +1,18 @@
 # mypy: allow-untyped-defs
 import math
 from typing import Optional, Union
-from typing_extensions import deprecated
 
 import torch
 from torch import Tensor
 from torch._torch_docs import reproducibility_notes
-from torch.nn import functional as F, init
+from torch.nn import functional as F
+from torch.nn import init
 from torch.nn.common_types import _size_1_t, _size_2_t, _size_3_t
-from torch.nn.parameter import Parameter, UninitializedParameter
 from torch.nn.modules.lazy import LazyModuleMixin
 from torch.nn.modules.module import Module
 from torch.nn.modules.utils import _pair, _reverse_repeat_tuple, _single, _triple
-
+from torch.nn.parameter import Parameter, UninitializedParameter
+from typing_extensions import deprecated
 
 __all__ = [
     "Conv1d",
@@ -57,8 +57,17 @@ convolution_notes = {
 }  # noqa: B950
 
 
+__all__ = [
+    "_ConvNd",
+    "_ConvTransposeNd",
+    "_ConvTransposeMixin",
+    "YatConvNd",
+    "YatConvTransposeNd",
+    "_LazyConvXdMixin",
+    "convolution_notes",
+    "reproducibility_notes",
+]
 
-__all__ = ["_ConvNd", "_ConvTransposeNd", "_ConvTransposeMixin", "YatConvNd", "YatConvTransposeNd", "_LazyConvXdMixin", "convolution_notes", "reproducibility_notes"]
 
 class _ConvNd(Module):
     __constants__ = [
@@ -217,8 +226,6 @@ class _ConvNd(Module):
             self.padding_mode = "zeros"
 
 
-
-
 class _ConvTransposeNd(_ConvNd):
     def __init__(
         self,
@@ -313,8 +320,6 @@ class _ConvTransposeNd(_ConvNd):
         return ret
 
 
-
-
 class _ConvTransposeMixin(_ConvTransposeNd):
     @deprecated(
         "`_ConvTransposeMixin` is a deprecated internal class. "
@@ -323,8 +328,6 @@ class _ConvTransposeMixin(_ConvTransposeNd):
     )
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-
 
 
 class YatConvNd(_ConvNd):
@@ -352,9 +355,9 @@ class YatConvNd(_ConvNd):
     ) -> None:
         # Remove device and dtype from kwargs to avoid duplicate keyword arguments
         # when they are passed both explicitly and within **kwargs
-        kwargs.pop('device', None)
-        kwargs.pop('dtype', None)
-        
+        kwargs.pop("device", None)
+        kwargs.pop("dtype", None)
+
         super().__init__(
             in_channels,
             out_channels,
@@ -375,53 +378,57 @@ class YatConvNd(_ConvNd):
         self.use_dropconnect = use_dropconnect
         self.epsilon = epsilon
         self.drop_rate = drop_rate
-        
+
         factory_kwargs = {"device": device, "dtype": dtype}
-        
+
         if self.use_alpha:
             self.alpha = Parameter(torch.ones(1, **factory_kwargs))
         else:
             self.register_parameter("alpha", None)
-            
+
         # Register mask as buffer (not a parameter)
         if mask is not None:
             self.register_buffer("mask", mask)
         else:
             self.register_buffer("mask", None)
 
-    def _yat_forward(self, input: Tensor, conv_fn: callable, deterministic: bool = False) -> Tensor:
+    def _yat_forward(
+        self, input: Tensor, conv_fn: callable, deterministic: bool = False
+    ) -> Tensor:
         # Apply DropConnect and masking to weights
         weight = self.weight
-        
+
         # Apply DropConnect if enabled and not in deterministic mode
         if self.use_dropconnect and not deterministic and self.drop_rate > 0.0:
             if self.training:
                 keep_prob = 1.0 - self.drop_rate
                 mask = torch.bernoulli(torch.full_like(weight, keep_prob))
                 weight = (weight * mask) / keep_prob
-        
+
         # Apply mask if provided
         if self.mask is not None:
             if self.mask.shape != weight.shape:
                 raise ValueError(
-                    f'Mask needs to have the same shape as weights. '
-                    f'Shapes are: {self.mask.shape}, {weight.shape}'
+                    f"Mask needs to have the same shape as weights. "
+                    f"Shapes are: {self.mask.shape}, {weight.shape}"
                 )
             weight = weight * self.mask
-        
+
         # Compute dot product using standard convolution: input * weight
         dot_prod_map = self._conv_forward(input, weight, None)
 
         # Compute ||input_patches||^2 using convolution with ones kernel
         input_squared = input * input
-        
+
         # For grouped convolution, we need one kernel per group
         # Each kernel sums over the input channels in that group
         # PyTorch conv expects: (out_channels, in_channels_per_group, *kernel_size)
         in_channels_per_group = self.in_channels // self.groups
         ones_kernel_shape = (self.groups, in_channels_per_group) + self.kernel_size
-        ones_kernel = torch.ones(ones_kernel_shape, device=input.device, dtype=input.dtype)
-        
+        ones_kernel = torch.ones(
+            ones_kernel_shape, device=input.device, dtype=input.dtype
+        )
+
         if self.padding_mode != "zeros":
             patch_sq_sum_map_raw = conv_fn(
                 F.pad(
@@ -446,7 +453,7 @@ class YatConvNd(_ConvNd):
                 self.dilation,
                 self.groups,
             )
-        
+
         # Handle grouped convolution: repeat patch sums for each output channel in each group
         if self.groups > 1:
             if self.out_channels % self.groups != 0:
@@ -457,7 +464,9 @@ class YatConvNd(_ConvNd):
             )
         else:
             # For groups=1, need to repeat across all output channels
-            patch_sq_sum_map = patch_sq_sum_map_raw.repeat(1, self.out_channels, *([1] * (patch_sq_sum_map_raw.dim() - 2)))
+            patch_sq_sum_map = patch_sq_sum_map_raw.repeat(
+                1, self.out_channels, *([1] * (patch_sq_sum_map_raw.dim() - 2))
+            )
 
         # Compute ||kernel||^2 per filter (sum over all dimensions except output channel)
         # Weight shape: (out_channels, in_channels_per_group, *kernel_size)
@@ -470,7 +479,7 @@ class YatConvNd(_ConvNd):
 
         # Compute distance squared: ||patch||^2 + ||kernel||^2 - 2 * dot_product
         distance_sq_map = patch_sq_sum_map + kernel_sq_sum_reshaped - 2 * dot_prod_map
-        
+
         # YAT computation: (dot_product)^2 / (distance_squared + epsilon)
         y = dot_prod_map**2 / (distance_sq_map + self.epsilon)
 
@@ -480,7 +489,9 @@ class YatConvNd(_ConvNd):
 
         # Apply alpha scaling if enabled
         if self.use_alpha and self.alpha is not None:
-            scale = (math.sqrt(self.out_channels) / math.log(1.0 + self.out_channels)) ** self.alpha
+            scale = (
+                math.sqrt(self.out_channels) / math.log(1.0 + self.out_channels)
+            ) ** self.alpha
             y = y * scale
 
         return y
@@ -489,8 +500,6 @@ class YatConvNd(_ConvNd):
 # TODO: Conv2dLocal
 # TODO: Conv2dMap
 # TODO: ConvTranspose2dMap
-
-
 
 
 class _LazyConvXdMixin(LazyModuleMixin):
@@ -563,81 +572,124 @@ class _LazyConvXdMixin(LazyModuleMixin):
 
 class YatConvTransposeNd(YatConvNd):
     """Base class for YAT transposed convolution layers."""
-    
-    def _yat_transpose_forward(self, input: Tensor, conv_transpose_fn: callable, deterministic: bool = False, output_size: Optional[list[int]] = None) -> Tensor:
+
+    def _yat_transpose_forward(
+        self,
+        input: Tensor,
+        conv_transpose_fn: callable,
+        deterministic: bool = False,
+        output_size: Optional[list[int]] = None,
+    ) -> Tensor:
         # Apply DropConnect and masking to weights
         weight = self.weight
-        
+
         # Apply DropConnect if enabled and not in deterministic mode
         if self.use_dropconnect and not deterministic and self.drop_rate > 0.0:
             if self.training:
                 keep_prob = 1.0 - self.drop_rate
                 mask = torch.bernoulli(torch.full_like(weight, keep_prob))
                 weight = (weight * mask) / keep_prob
-        
+
         # Apply mask if provided
         if self.mask is not None:
             if self.mask.shape != weight.shape:
                 raise ValueError(
-                    f'Mask needs to have the same shape as weights. '
-                    f'Shapes are: {self.mask.shape}, {weight.shape}'
+                    f"Mask needs to have the same shape as weights. "
+                    f"Shapes are: {self.mask.shape}, {weight.shape}"
                 )
             weight = weight * self.mask
-        
+
         # Compute dot product using transposed convolution
-        if hasattr(self, '_output_padding'):
+        if hasattr(self, "_output_padding"):
             # For ConvTranspose classes, need to compute output_padding
             if output_size is not None:
                 num_spatial_dims = len(self.kernel_size)
                 output_padding = self._output_padding(
-                    input, output_size, self.stride, self.padding, 
-                    self.kernel_size, num_spatial_dims, self.dilation
+                    input,
+                    output_size,
+                    self.stride,
+                    self.padding,
+                    self.kernel_size,
+                    num_spatial_dims,
+                    self.dilation,
                 )
             else:
                 output_padding = self.output_padding
-                
+
             dot_prod_map = conv_transpose_fn(
-                input, weight, None, self.stride, self.padding, 
-                output_padding, self.groups, self.dilation
+                input,
+                weight,
+                None,
+                self.stride,
+                self.padding,
+                output_padding,
+                self.groups,
+                self.dilation,
             )
         else:
             dot_prod_map = conv_transpose_fn(
-                input, weight, None, self.stride, self.padding, 
-                self.dilation, self.groups
+                input,
+                weight,
+                None,
+                self.stride,
+                self.padding,
+                self.dilation,
+                self.groups,
             )
 
         # Compute ||input_patches||^2 using transposed convolution with ones kernel
         input_squared = input * input
-        
+
         # For transposed convolution, we need a kernel to compute patch sums
         # The weight shape for transpose conv is (in_channels, out_channels_per_group, *kernel_size)
         # So we need ones kernel of shape (in_channels // groups, 1, *kernel_size)
         in_channels_per_group = self.in_channels // self.groups
         ones_kernel_shape = (in_channels_per_group, 1) + self.kernel_size
-        ones_kernel = torch.ones(ones_kernel_shape, device=input.device, dtype=input.dtype)
+        ones_kernel = torch.ones(
+            ones_kernel_shape, device=input.device, dtype=input.dtype
+        )
 
         # Compute patch squared sum using same transposed convolution function
-        if hasattr(self, '_output_padding') and output_size is not None:
+        if hasattr(self, "_output_padding") and output_size is not None:
             patch_sq_sum_map_raw = conv_transpose_fn(
-                input_squared, ones_kernel, None, self.stride, self.padding,
-                output_padding, self.groups, self.dilation
+                input_squared,
+                ones_kernel,
+                None,
+                self.stride,
+                self.padding,
+                output_padding,
+                self.groups,
+                self.dilation,
             )
         else:
-            if hasattr(self, 'output_padding'):
+            if hasattr(self, "output_padding"):
                 patch_sq_sum_map_raw = conv_transpose_fn(
-                    input_squared, ones_kernel, None, self.stride, self.padding,
-                    self.output_padding, self.groups, self.dilation
+                    input_squared,
+                    ones_kernel,
+                    None,
+                    self.stride,
+                    self.padding,
+                    self.output_padding,
+                    self.groups,
+                    self.dilation,
                 )
             else:
                 patch_sq_sum_map_raw = conv_transpose_fn(
-                    input_squared, ones_kernel, None, self.stride, self.padding,
-                    self.dilation, self.groups
+                    input_squared,
+                    ones_kernel,
+                    None,
+                    self.stride,
+                    self.padding,
+                    self.dilation,
+                    self.groups,
                 )
 
         # Handle grouping for output channels
         # For transpose conv, we need to repeat across all output channels
         if self.out_channels > 1:
-            patch_sq_sum_map = patch_sq_sum_map_raw.repeat(1, self.out_channels, *([1] * (patch_sq_sum_map_raw.dim() - 2)))
+            patch_sq_sum_map = patch_sq_sum_map_raw.repeat(
+                1, self.out_channels, *([1] * (patch_sq_sum_map_raw.dim() - 2))
+            )
         else:
             patch_sq_sum_map = patch_sq_sum_map_raw
 
@@ -650,7 +702,7 @@ class YatConvTransposeNd(YatConvNd):
         else:
             # Regular convolution case
             reduce_axes_for_kernel_sq = tuple(range(weight.dim() - 1))
-        
+
         kernel_sq_sum_per_filter = torch.sum(weight**2, dim=reduce_axes_for_kernel_sq)
 
         # Reshape for broadcasting
@@ -667,11 +719,9 @@ class YatConvTransposeNd(YatConvNd):
 
         # Apply alpha scaling if enabled
         if self.use_alpha and self.alpha is not None:
-            scale = (math.sqrt(self.out_channels) / math.log(1.0 + self.out_channels)) ** self.alpha
+            scale = (
+                math.sqrt(self.out_channels) / math.log(1.0 + self.out_channels)
+            ) ** self.alpha
             y = y * scale
 
         return y
-
-
-
-

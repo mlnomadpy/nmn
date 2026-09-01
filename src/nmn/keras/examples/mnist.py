@@ -10,6 +10,7 @@ Set KERAS_BACKEND={jax,tensorflow,torch} before importing keras to choose backen
 Requires:
     pip install "nmn[keras]" jax      # or tensorflow / torch
 """
+
 from __future__ import annotations
 
 import argparse
@@ -24,14 +25,18 @@ import numpy as np
 from nmn.keras import YatNMN
 
 
-def build_model(hidden1: int = 256, hidden2: int = 128, num_classes: int = 10) -> keras.Model:
-    return keras.Sequential([
-        keras.layers.Input((28, 28)),
-        keras.layers.Flatten(),
-        YatNMN(features=hidden1),
-        YatNMN(features=hidden2),
-        keras.layers.Dense(num_classes),
-    ])
+def build_model(
+    hidden1: int = 256, hidden2: int = 128, num_classes: int = 10
+) -> keras.Model:
+    return keras.Sequential(
+        [
+            keras.layers.Input((28, 28)),
+            keras.layers.Flatten(),
+            YatNMN(units=hidden1),
+            YatNMN(units=hidden2),
+            keras.layers.Dense(num_classes),
+        ]
+    )
 
 
 def main() -> None:
@@ -61,18 +66,23 @@ def main() -> None:
 
     wall0 = time.perf_counter()
     hist = model.fit(
-        x_train, y_train,
-        batch_size=args.batch_size, epochs=args.epochs,
-        validation_data=(x_test, y_test), verbose=2,
+        x_train,
+        y_train,
+        batch_size=args.batch_size,
+        epochs=args.epochs,
+        validation_data=(x_test, y_test),
+        verbose=2,
     )
     total_s = time.perf_counter() - wall0
 
     test_loss, test_acc = model.evaluate(x_test, y_test, verbose=0)
     history = [
-        {"epoch": i,
-         "train_loss": float(hist.history["loss"][i]),
-         "test_loss": float(hist.history["val_loss"][i]),
-         "test_acc": float(hist.history["val_accuracy"][i])}
+        {
+            "epoch": i,
+            "train_loss": float(hist.history["loss"][i]),
+            "test_loss": float(hist.history["val_loss"][i]),
+            "test_acc": float(hist.history["val_accuracy"][i]),
+        }
         for i in range(args.epochs)
     ]
     result = {

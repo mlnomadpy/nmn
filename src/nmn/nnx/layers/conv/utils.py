@@ -9,11 +9,9 @@ from __future__ import annotations
 import typing as tp
 
 import jax.numpy as jnp
-from jax import lax
-
 from flax.nnx.nn import initializers
-from flax.typing import PaddingLike, LaxPadding
-
+from flax.typing import LaxPadding, PaddingLike
+from jax import lax
 
 # Default initializers
 default_kernel_init = initializers.xavier_normal()
@@ -83,7 +81,3 @@ def conv_dimension_numbers(input_shape: tuple) -> lax.ConvDimensionNumbers:
 
 # Alias for backwards compatibility
 _conv_dimension_numbers = conv_dimension_numbers
-
-
-
-

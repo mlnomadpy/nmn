@@ -1,7 +1,7 @@
 """Tests for Linen YatEmbed."""
 
-import pytest
 import numpy as np
+import pytest
 
 jax = pytest.importorskip("jax")
 flax = pytest.importorskip("flax")

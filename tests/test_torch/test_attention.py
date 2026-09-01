@@ -4,13 +4,13 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from nmn.torch.attention.multi_head import MultiHeadYatAttention
 from nmn.torch.attention.yat_attention import (
     normalize_qk,
-    yat_attention_weights,
     yat_attention,
     yat_attention_normalized,
+    yat_attention_weights,
 )
-from nmn.torch.attention.multi_head import MultiHeadYatAttention
 
 
 class TestAttentionFunctions:
