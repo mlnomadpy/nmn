@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 sys.modules["mteb"] = MagicMock()
 sys.modules["datasets"] = MagicMock()
 sys.modules["wandb"] = MagicMock()
+sys.modules["tokenizers"] = MagicMock()
 
 import jax
 import jax.numpy as jnp
