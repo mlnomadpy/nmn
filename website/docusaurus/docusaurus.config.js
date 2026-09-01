@@ -29,8 +29,12 @@ const config = {
 
     trailingSlash: false,
 
-    onBrokenLinks: 'warn',
-    onBrokenMarkdownLinks: 'warn',
+    onBrokenLinks: 'throw',
+    markdown: {
+        hooks: {
+            onBrokenMarkdownLinks: 'throw',
+        },
+    },
 
     // Even if you don't use internationalization, you can use this field to set
     // useful metadata like html lang. For example, if your site is Chinese, you
@@ -108,7 +112,7 @@ const config = {
                     },
                     { to: '/blog', label: 'Blog', position: 'left' },
                     {
-                        href: '/paper/',
+                        href: '/paper',
                         label: 'Paper',
                         position: 'left',
                     },
@@ -174,7 +178,7 @@ const config = {
                             },
                             {
                                 label: 'Paper (Interactive)',
-                                href: '/paper/',
+                                href: '/paper',
                             },
                         ],
                     },

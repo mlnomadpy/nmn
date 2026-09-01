@@ -11,7 +11,7 @@ products, YAT attention scores each query against each key with the geometric
 ## Mathematical Formulation
 
 $$
-\text{ⵟ-Attn}(Q, K, V) = \text{norm}\!\left(\frac{(Q K^\top + b)^2}{\lVert Q - K\rVert^2 + \varepsilon}\right) V
+\mathrm{YAT\text{-}Attn}(Q, K, V) = \operatorname{norm}\!\left(\frac{(Q K^\top + b)^2}{\lVert Q - K\rVert^2 + \varepsilon}\right) V
 $$
 
 where the ⵟ-product computes geometric similarity between queries and keys, and

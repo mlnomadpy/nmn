@@ -44,7 +44,7 @@ function HomepageHeader() {
                     </Link>
                     <Link
                         className="button button--secondary button--lg"
-                        href="/paper/">
+                        href="/paper">
                         Interactive Paper 📄
                     </Link>
                 </div>
