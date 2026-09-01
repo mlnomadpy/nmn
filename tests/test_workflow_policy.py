@@ -88,7 +88,7 @@ def test_mypy_checks_the_package_from_one_drift_resistant_config():
     package_files = sorted((ROOT / "src" / "nmn").rglob("*.py"))
 
     assert config["files"] == ["src/nmn"]
-    assert "follow_imports" not in config
+    assert config["follow_imports"] == "skip"
     assert "exclude" not in config
     assert "mypy==2.3.1" in project["project"]["optional-dependencies"]["dev"]
     assert len(package_files) >= 99

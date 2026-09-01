@@ -1271,7 +1271,7 @@ def main():
             f"[Epoch {epoch}] Completed {actual_val_iters} validation iterations in {val_time/60:.1f}m"
         )
 
-        val_acc = np.mean(total_acc) * 100
+        val_acc = float(np.mean(total_acc) * 100)
         val_loss = float(np.mean(total_loss))
 
         # Update monitor with epoch summary
