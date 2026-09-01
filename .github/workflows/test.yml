@@ -107,10 +107,10 @@ jobs:
         JAX_PLATFORM_NAME: cpu
     
     - name: Upload coverage
-      uses: codecov/codecov-action@v5
+      uses: codecov/codecov-action@v7
       if: matrix.python-version == '3.11'
       with:
-        file: ./coverage.xml
+        files: ./coverage.xml
         flags: jax
         token: ${{ secrets.CODECOV_TOKEN }}
       continue-on-error: true
@@ -184,10 +184,10 @@ jobs:
         -k "optional_backend_probe_windows_job_kills_descendants"
 
     - name: Upload coverage
-      uses: codecov/codecov-action@v5
+      uses: codecov/codecov-action@v7
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
       with:
-        file: ./coverage.xml
+        files: ./coverage.xml
         flags: torch
         token: ${{ secrets.CODECOV_TOKEN }}
       continue-on-error: true
@@ -243,10 +243,10 @@ jobs:
         pytest tests/test_keras/ tests/test_tf/ -v --cov=nmn --cov-report=xml
 
     - name: Upload coverage
-      uses: codecov/codecov-action@v5
+      uses: codecov/codecov-action@v7
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
       with:
-        file: ./coverage.xml
+        files: ./coverage.xml
         flags: keras
         token: ${{ secrets.CODECOV_TOKEN }}
       continue-on-error: true
