@@ -124,7 +124,7 @@ def _version() -> str:
     try:
         from nmn import __version__
 
-        return __version__
+        return str(__version__)
     except Exception:  # pragma: no cover - defensive
         return "0.0.0"
 
