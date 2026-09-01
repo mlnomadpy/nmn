@@ -46,7 +46,7 @@ is :func:`nmn.mlx.attention.yat_attention_normalized`.
 from __future__ import annotations
 
 import math
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import mlx.core as mx
 import numpy as np
@@ -80,7 +80,7 @@ def maclaurin_coeffs(b: float, epsilon: float, nmax: int) -> np.ndarray:
     a = (b * b) * beta.copy()
     a[1:] += 2.0 * b * beta[:-1]
     a[2:] += beta[:-2]
-    return a  # (nmax + 1,), all >= 0 for b >= 0
+    return cast(np.ndarray, a)  # (nmax + 1,), all >= 0 for b >= 0
 
 
 def create_maclaurin_projection(
