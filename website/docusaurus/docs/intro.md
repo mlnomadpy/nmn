@@ -11,7 +11,7 @@ sidebar_position: 1
 The core operation is defined as:
 
 $$
-\text{ⵟ}(\mathbf{w}, \mathbf{x}) = \frac{\langle \mathbf{w}, \mathbf{x} \rangle^2}{\|\mathbf{w} - \mathbf{x}\|^2 + \epsilon}
+\mathrm{YAT}(\mathbf{w}, \mathbf{x}) = \frac{\langle \mathbf{w}, \mathbf{x} \rangle^2}{\|\mathbf{w} - \mathbf{x}\|^2 + \epsilon}
 $$
 
 Where:
@@ -112,7 +112,7 @@ The ⵟ-product is a **Mercer kernel** — it is positive semi-definite (PSD). T
 For fixed `‖x‖` and `‖W‖`, the ⵟ-product output is bounded:
 
 $$
-0 \le \text{ⵟ}(\mathbf{w}, \mathbf{x}) \le \frac{\|\mathbf{w}\|^2 \|\mathbf{x}\|^2}{\epsilon}
+0 \le \mathrm{YAT}(\mathbf{w}, \mathbf{x}) \le \frac{\|\mathbf{w}\|^2 \|\mathbf{x}\|^2}{\epsilon}
 $$
 
 This boundedness means gradients cannot explode through the YAT operation itself — a property that ReLU networks lack without residual connections or normalization.
