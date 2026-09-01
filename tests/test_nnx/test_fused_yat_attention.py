@@ -59,9 +59,51 @@ def _compare_grads(loss_fused, loss_ref, args, names, atol=1e-6):
         assert err < atol, f"{name} grad max err {err:.2e} > {atol}"
 
 
+def _dot_precisions(closed_jaxpr):
+    precisions = []
+
+    def visit(jaxpr):
+        for equation in jaxpr.eqns:
+            if equation.primitive.name == "dot_general":
+                precisions.append(equation.params.get("precision"))
+            for value in equation.params.values():
+                nested = value if isinstance(value, (tuple, list)) else (value,)
+                for item in nested:
+                    if hasattr(item, "jaxpr"):
+                        visit(item.jaxpr)
+
+    visit(closed_jaxpr.jaxpr)
+    return precisions
+
+
 # ── Forward tests ──
 
 class TestFusedAttnForward:
+
+    @pytest.mark.parametrize("self_attention", [False, True])
+    def test_precision_reaches_every_dot_contraction(self, self_attention):
+        q = _rand((1, 3, 2, 4))
+        v = _rand((1, 3, 2, 5), 1)
+        precision = jax.lax.Precision.HIGHEST
+
+        if self_attention:
+            traced = jax.make_jaxpr(
+                lambda x, value: fused_yat_l1_self_attention(
+                    x, value, precision=precision
+                )
+            )(q, v)
+        else:
+            k = _rand((1, 4, 2, 4), 2)
+            v = _rand((1, 4, 2, 5), 3)
+            traced = jax.make_jaxpr(
+                lambda query, key, value: fused_yat_l1_attention(
+                    query, key, value, precision=precision
+                )
+            )(q, k, v)
+
+        dot_precisions = _dot_precisions(traced)
+        assert len(dot_precisions) == 2
+        assert all(item == (precision, precision) for item in dot_precisions)
 
     def test_basic(self):
         q, k, v = _rand((2, 16, 4, 32)), _rand((2, 16, 4, 32), 1), _rand((2, 16, 4, 32), 2)

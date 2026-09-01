@@ -5,23 +5,26 @@ import numpy as np
 
 
 def test_tf_yat_conv_transpose():
-    """Test YatConvTranspose layers if implemented."""
+    """Exercise every public TensorFlow transpose-convolution family."""
     try:
         import tensorflow as tf
-        from nmn.tf import conv
-        
-        # Check if transpose conv is implemented
-        if hasattr(conv, 'YatConvTranspose1D') or hasattr(conv, 'YatConvTranspose2D'):
-            pytest.skip("YatConvTranspose not yet implemented in TensorFlow")
-        
-        # If implemented, add tests here
-        assert False, "Update test when YatConvTranspose is implemented"
-        
+        from nmn.tf import (
+            YatConvTranspose1D,
+            YatConvTranspose2D,
+            YatConvTranspose3D,
+        )
+
+        cases = (
+            (YatConvTranspose1D, 3, tf.ones((2, 4, 2))),
+            (YatConvTranspose2D, (3, 3), tf.ones((2, 4, 5, 2))),
+            (YatConvTranspose3D, (3, 3, 3), tf.ones((2, 3, 4, 5, 2))),
+        )
+        for layer_type, kernel_size, inputs in cases:
+            output = layer_type(filters=3, kernel_size=kernel_size)(inputs)
+            assert output.shape[0] == 2
+            assert output.shape[-1] == 3
     except ImportError:
         pytest.skip("TensorFlow dependencies not available")
-    except AttributeError:
-        # If not implemented, skip gracefully
-        pytest.skip("YatConvTranspose not yet implemented in TensorFlow")
 
 
 def test_tf_yat_nmn_gradient():
@@ -150,7 +153,6 @@ def test_tf_yat_conv_all_dimensions():
         
     except ImportError:
         pytest.skip("TensorFlow dependencies not available")
-
 
 
 

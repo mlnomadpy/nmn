@@ -28,8 +28,8 @@ def build_model(hidden1: int = 256, hidden2: int = 128, num_classes: int = 10) -
     return keras.Sequential([
         keras.layers.Input((28, 28)),
         keras.layers.Flatten(),
-        YatNMN(features=hidden1),
-        YatNMN(features=hidden2),
+        YatNMN(units=hidden1),
+        YatNMN(units=hidden2),
         keras.layers.Dense(num_classes),
     ])
 

@@ -394,7 +394,10 @@ pytest tests/ -m "not slow"                        # skip slow tests
 pytest tests/ --cov=nmn --cov-report=html          # coverage report
 ```
 
-CI matrix: Linux × Python {3.10, 3.11, 3.12} for all frameworks, plus macOS-3.11 (PyTorch + Keras/TF) and Windows-3.11 (PyTorch). See [`.github/workflows/test.yml`](.github/workflows/test.yml).
+CI covers the base install, PyTorch and Keras/TF on Python 3.10–3.12, and
+JAX/Flax on Python 3.11–3.12 (the versions required by JAX 0.9.x). Platform
+smoke jobs cover macOS, Windows, and Apple-Silicon MLX. See
+[`.github/workflows/test.yml`](.github/workflows/test.yml).
 
 ---
 

@@ -24,10 +24,41 @@ concurrency:
   group: tests-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
+  test-base-collection:
+    name: Test base install and optional-backend collection
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+
+    - name: Install base package and test runner
+      run: |
+        python -m pip install --upgrade pip
+        pip install numpy pytest
+        pip install -e .
+        pip check
+
+    - name: Collect without optional ML frameworks
+      run: pytest --collect-only -q
+
+    - name: Run import-light CLI tests
+      run: pytest tests/test_cli.py -q
+
   test-jax:
     name: Test JAX/Flax
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -56,6 +87,7 @@ jobs:
         pip install pytest pytest-cov
         pip install -e ".[dev]"
         pip install "jax==0.9.1" "jaxlib==0.9.1" "flax==0.12.5" optax
+        pip check
     
     - name: Clear pycache
       run: |
@@ -65,6 +97,12 @@ jobs:
     - name: Run JAX tests
       run: |
         pytest tests/test_nnx/ tests/test_linen/ tests/integration/ tests/benchmarks/ -v -m "not slow" --cov=nmn --cov-report=xml
+      env:
+        JAX_PLATFORM_NAME: cpu
+
+    - name: Run executable JAX regression scripts
+      if: matrix.python-version == '3.11'
+      run: pytest tests/scripts/ -v -m "not slow"
       env:
         JAX_PLATFORM_NAME: cpu
     
@@ -80,6 +118,7 @@ jobs:
   test-torch:
     name: Test PyTorch (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -117,6 +156,7 @@ jobs:
         pip install pytest pytest-cov
         pip install -e ".[dev]"
         pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+        pip check
 
     - name: Install dependencies (Windows)
       if: runner.os == 'Windows'
@@ -126,6 +166,7 @@ jobs:
         pip install pytest pytest-cov
         pip install -e ".[dev]"
         pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+        pip check
 
     - name: Clear pycache (Linux/macOS)
       if: runner.os != 'Windows'
@@ -154,6 +195,7 @@ jobs:
   test-keras:
     name: Test Keras/TF (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -189,6 +231,7 @@ jobs:
         pip install pytest pytest-cov
         pip install -e ".[dev]"
         pip install tensorflow
+        pip check
 
     - name: Clear pycache
       run: |
@@ -211,6 +254,7 @@ jobs:
   test-keras-multibackend:
     name: Test Keras (${{ matrix.backend }} backend)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -244,6 +288,7 @@ jobs:
 
     - name: Verify isolated backend import
       run: |
+        pip check
         python -c "import keras; import nmn.keras; assert keras.backend.backend() == '${{ matrix.backend }}'"
 
     - name: Run Keras backend suite
@@ -252,6 +297,7 @@ jobs:
   test-mlx:
     name: Test MLX (Apple Silicon)
     runs-on: macos-15
+    timeout-minutes: 30
 
     steps:
     - uses: actions/checkout@v6
@@ -273,6 +319,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install numpy pytest pytest-cov
         pip install -e ".[mlx]"
+        pip check
 
     - name: Verify MLX Metal device
       run: |
@@ -313,6 +360,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
     - uses: actions/checkout@v6
 
@@ -344,6 +392,7 @@ jobs:
   mypy:
     name: Type Check (MyPy)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
     - uses: actions/checkout@v6
 

@@ -153,8 +153,7 @@ def test_keras_yat_conv_all_dimensions():
         assert output2d.shape[0] == 4
         assert output2d.shape[-1] == 8
         
-        # Note: YatConv3D is not implemented in Keras yet
+        # YatConv3D has dedicated coverage in test_yat_conv3d.py.
         
     except ImportError:
         pytest.skip("Keras/TensorFlow dependencies not available")
-

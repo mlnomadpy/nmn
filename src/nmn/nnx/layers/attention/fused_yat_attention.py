@@ -94,14 +94,18 @@ def _unbroadcast_to(gradient: Array, target: Array) -> Array:
       gradient = jnp.sum(gradient, axis=axis, keepdims=True)
   return gradient.reshape(target.shape).astype(target.dtype)
 
-def _yat_scores(q_f32, k_f32, bias, epsilon, mask, has_bias, has_mask, scale):
+def _yat_scores(
+    q_f32, k_f32, bias, epsilon, mask, has_bias, has_mask, scale, precision
+):
   """Compute raw YAT scores and the L1 normalizer.
 
   Returns (scores, L, dist, dot, num, clamp_grad) where
   L = sum(scores, axis=-1, keepdims=True).
   ``dist`` = squared_dist + eps (the denominator), kept for backward.
   """
-  dot = jnp.einsum("...qhd,...khd->...hqk", q_f32, k_f32)
+  dot = jnp.einsum(
+      "...qhd,...khd->...hqk", q_f32, k_f32, precision=precision
+  )
 
   q_sq = jnp.sum(q_f32 ** 2, axis=-1, keepdims=True)
   k_sq = jnp.sum(k_f32 ** 2, axis=-1, keepdims=True)
@@ -140,7 +144,7 @@ def _fused_yat_l1_attn(query, key, value, bias, epsilon, mask,
 
   scores, L, _, _, _, _ = _yat_scores(
       q_f32, k_f32, bias.astype(jnp.float32) if has_bias else bias,
-      epsilon.astype(jnp.float32), mask, has_bias, has_mask, scale)
+      epsilon.astype(jnp.float32), mask, has_bias, has_mask, scale, precision)
 
   weights = (scores / (L + 1e-12)).astype(query.dtype)
 
@@ -155,7 +159,7 @@ def _fused_yat_l1_attn_fwd(query, key, value, bias, epsilon, mask,
 
   scores, L, _, _, _, _ = _yat_scores(
       q_f32, k_f32, bias.astype(jnp.float32) if has_bias else bias,
-      epsilon.astype(jnp.float32), mask, has_bias, has_mask, scale)
+      epsilon.astype(jnp.float32), mask, has_bias, has_mask, scale, precision)
 
   weights = (scores / (L + 1e-12)).astype(query.dtype)
   out = jnp.einsum("...hqk,...khd->...qhd", weights, value, precision=precision)
@@ -175,7 +179,7 @@ def _fused_yat_l1_attn_bwd(has_bias, has_mask, has_eps_grad, scale, precision,
   b_f32 = bias.astype(jnp.float32) if has_bias else bias
 
   scores, _, dist, dot, num, clamp_grad = _yat_scores(
-      q_f32, k_f32, b_f32, e_f32, mask, has_bias, has_mask, scale)
+      q_f32, k_f32, b_f32, e_f32, mask, has_bias, has_mask, scale, precision)
 
   L_safe = L + 1e-12
   W = scores / L_safe                   # [..., H, Q, K]
@@ -342,7 +346,7 @@ def fused_yat_l1_self_attention(
   )
 
 
-def _yat_self_scores(x_f32, bias, epsilon, has_bias, scale):
+def _yat_self_scores(x_f32, bias, epsilon, has_bias, scale, precision):
   """Compute raw YAT scores with zero diagonal, and the L1 normalizer that
   includes the diagonal.
 
@@ -351,7 +355,9 @@ def _yat_self_scores(x_f32, bias, epsilon, has_bias, scale):
     - L = sum(scores_full, axis=-1, keepdims=True)   # includes diagonal
   """
   # dot = x @ x^T — symmetric matmul via einsum
-  dot = jnp.einsum("...qhd,...khd->...hqk", x_f32, x_f32)
+  dot = jnp.einsum(
+      "...qhd,...khd->...hqk", x_f32, x_f32, precision=precision
+  )
 
   x_sq = jnp.sum(x_f32 ** 2, axis=-1, keepdims=True)   # [..., seq, heads, 1]
 
@@ -385,7 +391,7 @@ def _fused_yat_l1_self_attn(x, value, bias, epsilon,
 
   scores_off, L, _, _, _, _ = _yat_self_scores(
       x_f32, bias.astype(jnp.float32) if has_bias else bias,
-      epsilon.astype(jnp.float32), has_bias, scale)
+      epsilon.astype(jnp.float32), has_bias, scale, precision)
 
   weights = (scores_off / (L + 1e-12)).astype(x.dtype)
   out = jnp.einsum("...hqk,...khd->...qhd", weights, value, precision=precision)
@@ -398,7 +404,7 @@ def _fused_yat_l1_self_attn_fwd(x, value, bias, epsilon,
 
   scores_off, L, _, _, _, _ = _yat_self_scores(
       x_f32, bias.astype(jnp.float32) if has_bias else bias,
-      epsilon.astype(jnp.float32), has_bias, scale)
+      epsilon.astype(jnp.float32), has_bias, scale, precision)
 
   weights = (scores_off / (L + 1e-12)).astype(x.dtype)
   out = jnp.einsum("...hqk,...khd->...qhd", weights, value, precision=precision)
@@ -414,7 +420,7 @@ def _fused_yat_l1_self_attn_bwd(has_bias, has_eps_grad, scale, precision, res, g
   b_f32 = bias.astype(jnp.float32) if has_bias else bias
 
   scores_off, _, dist, dot, num, clamp_grad = _yat_self_scores(
-      x_f32, b_f32, e_f32, has_bias, scale)
+      x_f32, b_f32, e_f32, has_bias, scale, precision)
 
   seq_len = scores_off.shape[-1]
   eye = jnp.eye(seq_len, dtype=jnp.bool_)

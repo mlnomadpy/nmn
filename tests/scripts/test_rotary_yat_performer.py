@@ -22,6 +22,9 @@ from nmn.nnx.layers.attention.rotary_yat import (
     apply_rotary_emb,
     rotary_yat_performer_attention,
 )
+from nmn.nnx.layers.attention.spherical_yat_performer import (
+    create_yat_tp_projection,
+)
 
 
 def print_stats(name: str, arr: jnp.ndarray):
@@ -194,7 +197,9 @@ def test_rotary_yat_performer():
     k = jax.random.normal(k2, (batch_size, seq_len, num_heads, head_dim))
     v = jax.random.normal(k3, (batch_size, seq_len, num_heads, head_dim))
     
-    projection = create_yat_projection(k4, num_features, head_dim)
+    projection = create_yat_tp_projection(
+        k4, head_dim=head_dim, num_prf_features=8
+    )
     freqs_cos, freqs_sin = precompute_freqs_cis(head_dim, max_seq_len)
     
     # Test with normalize_inputs=True
@@ -237,7 +242,7 @@ def test_rotary_yat_attention_module():
         num_heads=num_heads,
         max_seq_len=max_seq_len,
         use_performer=True,
-        num_features=embed_dim // 2,
+        num_prf_features=8,
         performer_normalize=True,
         constant_alpha=True,  # sqrt(2)
         rngs=rngs,
@@ -273,7 +278,7 @@ def test_gradient_flow():
         num_heads=num_heads,
         max_seq_len=max_seq_len,
         use_performer=True,
-        num_features=embed_dim // 2,
+        num_prf_features=8,
         performer_normalize=True,
         constant_alpha=True,
         rngs=rngs,
@@ -325,7 +330,7 @@ def test_long_sequence():
         num_heads=num_heads,
         max_seq_len=max_seq_len,
         use_performer=True,
-        num_features=embed_dim // 2,
+        num_prf_features=8,
         performer_normalize=True,
         constant_alpha=True,
         rngs=rngs,

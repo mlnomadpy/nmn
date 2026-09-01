@@ -16,7 +16,6 @@ import time
 from pathlib import Path
 
 import tensorflow as tf
-import tensorflow_datasets as tfds
 
 from nmn.tf import YatNMN
 
@@ -42,6 +41,14 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--report", type=str, default=None)
     args = parser.parse_args()
+
+    try:
+        import tensorflow_datasets as tfds
+    except ImportError as error:
+        raise SystemExit(
+            "The TensorFlow MNIST example requires tensorflow-datasets; "
+            "install it with `pip install tensorflow-datasets`."
+        ) from error
 
     tf.random.set_seed(args.seed)
     print(f"tf devices: {tf.config.list_physical_devices()}")

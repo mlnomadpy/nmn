@@ -1,7 +1,71 @@
-"""Shared test fixtures and utilities for all frameworks."""
+"""Shared test fixtures and optional-backend collection policy."""
 
-import pytest
+import importlib.util
+import os
+from functools import lru_cache
+
 import numpy as np
+import pytest
+
+from tests._isolated_backend import mlx_is_usable
+
+
+_OPTIONAL_TEST_DEPENDENCIES = {
+    "test_torch": ("torch",),
+    "test_nnx": ("jax", "flax"),
+    "test_linen": ("jax", "flax"),
+    "test_tf": ("tensorflow",),
+    "scripts": ("jax", "flax"),
+    "benchmarks": ("jax", "flax"),
+}
+
+
+def _module_available(module_name):
+    try:
+        return importlib.util.find_spec(module_name) is not None
+    except (ImportError, ModuleNotFoundError, ValueError):
+        return False
+
+
+def _keras_backend_available():
+    if not _module_available("keras"):
+        return False
+    backend = os.environ.get("KERAS_BACKEND", "tensorflow")
+    backend_module = {"tensorflow": "tensorflow", "torch": "torch", "jax": "jax"}.get(
+        backend, backend
+    )
+    return _module_available(backend_module)
+
+
+@lru_cache(maxsize=1)
+def _mlx_backend_available():
+    """Check MLX in a child because native Metal initialization can abort."""
+    return _module_available("mlx") and mlx_is_usable()
+
+
+def pytest_ignore_collect(collection_path, config):
+    """Skip an optional backend's tests before importing that backend.
+
+    Individual test modules may still use ``pytest.importorskip`` when useful,
+    but collection safety is enforced once here so a plain ``pytest`` works in
+    a base NMN installation with no ML framework installed.
+    """
+    del config
+    parts = collection_path.parts
+    try:
+        test_root = parts[parts.index("tests") + 1]
+    except (ValueError, IndexError):
+        return False
+
+    if test_root == "test_keras":
+        return not _keras_backend_available()
+    if test_root == "test_mlx":
+        return not _mlx_backend_available()
+
+    required_modules = _OPTIONAL_TEST_DEPENDENCIES.get(test_root)
+    if required_modules is None:
+        return False
+    return not all(_module_available(module) for module in required_modules)
 
 
 # ============================================================================

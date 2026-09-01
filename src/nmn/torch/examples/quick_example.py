@@ -29,7 +29,7 @@ def example_1_basic_yat_layers():
     fc = YatNMN(
         in_features=256,
         out_features=128,
-        use_alpha=True,
+        alpha=True,
         epsilon=1e-5
     )
     

@@ -66,7 +66,7 @@ from nmn.torch.nmn import YatNMN
 layer = YatNMN(
     in_features=256,
     out_features=128,
-    use_alpha=True,
+    alpha=True,
     epsilon=1e-5
 )
 
