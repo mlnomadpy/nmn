@@ -248,7 +248,7 @@ class YatNMN(Module):
                         new_kernel_val = new_kernel_val.at[:, :existing_bank_size].set(
                             old_kernel
                         )
-                        shared_kernel.value = new_kernel_val
+                        shared_kernel.set_value(new_kernel_val)
                     # elif bank_out_features < existing_bank_size: bank is larger, slice used below
 
             self.kernel = shared_kernel
@@ -358,7 +358,7 @@ class YatNMN(Module):
         if self.weight_normalized:
             kernel_val = self.kernel[...]
             kernel_norm = jnp.sqrt(jnp.sum(kernel_val**2, axis=0, keepdims=True))
-            self.kernel.value = kernel_val / (kernel_norm + 1e-8)
+            self.kernel[...] = kernel_val / (kernel_norm + 1e-8)
 
         if use_dropconnect:
             self.dropconnect_key = rngs.dropout.fork()

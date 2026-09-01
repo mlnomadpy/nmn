@@ -206,11 +206,11 @@ def run_nnx_dense(
     )
 
     # NNX kernel is (in_features, out_features)
-    layer.kernel.value = jnp.array(weights)
+    layer.kernel[...] = jnp.array(weights)
     if bias is not None:
-        layer.bias.value = jnp.array(bias)
+        layer.bias[...] = jnp.array(bias)
     if alpha is not None:
-        layer.alpha.value = jnp.array([alpha])
+        layer.alpha[...] = jnp.array([alpha])
 
     x = jnp.array(inputs)
     output = layer(x)
