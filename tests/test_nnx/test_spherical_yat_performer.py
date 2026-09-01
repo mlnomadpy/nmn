@@ -277,6 +277,48 @@ class TestYatTPAttention:
         out2 = yat_tp_attention(q, k, v, params)
         np.testing.assert_allclose(out1, out2, atol=1e-6)
 
+    def test_gradient_scaling_compatibility_flag_is_numerically_neutral(self):
+        """The retained compatibility flag must not alter outputs or gradients."""
+        from nmn.nnx.layers.attention.spherical_yat_performer import (
+            create_yat_tp_projection,
+            yat_tp_attention,
+        )
+
+        key = random.PRNGKey(42)
+        params = create_yat_tp_projection(
+            key,
+            head_dim=8,
+            num_prf_features=4,
+            num_quad_nodes=2,
+            num_anchor_features=4,
+        )
+        q_key, k_key, v_key = random.split(key, 3)
+        q = random.normal(q_key, (1, 6, 2, 8))
+        k = random.normal(k_key, (1, 6, 2, 8))
+        v = random.normal(v_key, (1, 6, 2, 5))
+
+        def evaluate(flag, query, key_, value):
+            return yat_tp_attention(
+                query,
+                key_,
+                value,
+                params,
+                gradient_scaling=flag,
+            )
+
+        without_scaling = evaluate(False, q, k, v)
+        with_scaling = evaluate(True, q, k, v)
+        np.testing.assert_array_equal(without_scaling, with_scaling)
+
+        def loss(flag, query, key_, value):
+            return jnp.sum(evaluate(flag, query, key_, value) ** 2)
+
+        without_grads = jax.grad(loss, argnums=(1, 2, 3))(False, q, k, v)
+        with_grads = jax.grad(loss, argnums=(1, 2, 3))(True, q, k, v)
+        for expected, actual in zip(without_grads, with_grads):
+            np.testing.assert_array_equal(expected, actual)
+            assert jnp.isfinite(actual).all()
+
 
 class TestKernelApproximation:
     """Tests for kernel approximation quality."""
@@ -417,25 +459,26 @@ class TestKernelApproximation:
         ), f"Error didn't decrease: seq=32 err={mean_errors[0]:.4f}, seq=512 err={mean_errors[-1]:.4f}"
 
 
+@pytest.fixture(scope="module")
+def reference_data():
+    from nmn.nnx.layers.attention.yat_attention import yat_attention_normalized
+
+    key = random.PRNGKey(0)
+    batch, seq_len, heads, head_dim = 2, 64, 4, 64
+    k1, k2, k3 = random.split(key, 3)
+    q = random.normal(k1, (batch, seq_len, heads, head_dim))
+    k = random.normal(k2, (batch, seq_len, heads, head_dim))
+    v = random.normal(k3, (batch, seq_len, heads, head_dim))
+    exact = yat_attention_normalized(q, k, v)
+    return q, k, v, exact, head_dim
+
+
 class TestParameterSweep:
     """Parametric sweep testing all P x M x R combinations for quality and speed."""
 
     P_VALUES = [8, 16, 32]
     M_VALUES = [2, 4, 8]
     R_VALUES = [1, 2, 4]
-
-    @pytest.fixture(scope="class")
-    def reference_data(self):
-        from nmn.nnx.layers.attention.yat_attention import yat_attention_normalized
-
-        key = random.PRNGKey(0)
-        batch, seq_len, heads, head_dim = 2, 64, 4, 64
-        k1, k2, k3 = random.split(key, 3)
-        q = random.normal(k1, (batch, seq_len, heads, head_dim))
-        k = random.normal(k2, (batch, seq_len, heads, head_dim))
-        v = random.normal(k3, (batch, seq_len, heads, head_dim))
-        exact = yat_attention_normalized(q, k, v)
-        return q, k, v, exact, head_dim
 
     @pytest.mark.parametrize("P", P_VALUES)
     @pytest.mark.parametrize("M", M_VALUES)

@@ -318,7 +318,7 @@ frameworks (`create_*_projection` + `*_features` + `*_yat_attention`):
 Trained Yat-attention learns a per-head bias `b > 0`, which SLAY's `b = 0` anchors
 cannot represent. **MAY** is bias-aware and near-exact there. Benchmark (cosine
 similarity of linearized vs exact attention output, `d=64`, `N=512`, matched
-`F=256`, `ε = median sq-distance`, reproduced by `tests/scripts/benchmark_may_ray.py`):
+`F=256`, `ε = median sq-distance`, reproduced by `benchmarks/benchmark_may_ray.py`):
 
 ```
    b  │  MAY   │  SLAY      b  │  MAY   │  SLAY
@@ -395,9 +395,10 @@ pytest tests/ --cov=nmn --cov-report=html          # coverage report
 ```
 
 CI covers the base install, PyTorch and Keras/TF on Python 3.10–3.12, and
-JAX/Flax on Python 3.11–3.12 (the versions required by JAX 0.9.x). Platform
-smoke jobs cover macOS, Windows, and Apple-Silicon MLX. See
-[`.github/workflows/test.yml`](.github/workflows/test.yml).
+JAX/Flax on Python 3.11–3.12 across both minimum and latest supported
+dependencies. Platform smoke jobs cover macOS, Windows, and Apple-Silicon MLX.
+See [`tests/README.md`](tests/README.md) for the suite layout and
+[`.github/workflows/test.yml`](.github/workflows/test.yml) for the CI matrix.
 
 ---
 

@@ -10,7 +10,7 @@ The ground-truth kernel is computed directly in NumPy (bias-aware, with
 measures *feature-map quality* and is identical across frameworks. Each installed
 framework's feature maps are then evaluated against that shared ground truth.
 
-Run:  python3 tests/scripts/benchmark_may_ray.py
+Run:  python3 benchmarks/benchmark_may_ray.py
 Frameworks that are not installed are skipped automatically.
 """
 

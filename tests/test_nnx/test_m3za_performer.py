@@ -1,28 +1,39 @@
+import importlib
 import sys
-from unittest.mock import MagicMock
-
-# Mock heavy/problematic dependencies
-sys.modules["mteb"] = MagicMock()
-sys.modules["datasets"] = MagicMock()
-sys.modules["wandb"] = MagicMock()
-sys.modules["tokenizers"] = MagicMock()
+from unittest.mock import MagicMock, patch
 
 import jax
 import jax.numpy as jnp
+import pytest
 from flax import nnx
 
-from nmn.nnx.examples.language import m3za, m3za_perf
 
-# Disable mesh partitioning for simple local test
-m3za.mesh = None
-m3za_perf.mesh = None
+@pytest.fixture(scope="module")
+def m3za_modules():
+    """Import example-only dependencies without polluting the full NNX suite."""
+    mocked_dependencies = {
+        name: MagicMock() for name in ("mteb", "datasets", "wandb", "tokenizers")
+    }
+    module_names = (
+        "nmn.nnx.examples.language.m3za",
+        "nmn.nnx.examples.language.m3za_perf",
+    )
+    parent = importlib.import_module("nmn.nnx.examples.language")
+    with patch.dict(sys.modules, mocked_dependencies):
+        modules = tuple(importlib.import_module(name) for name in module_names)
+        for module in modules:
+            module.mesh = None
+        yield modules
 
-from nmn.nnx.examples.language.m3za import MiniBERT
+    for name, module in zip(module_names, modules):
+        sys.modules.pop(name, None)
+        child_name = name.rsplit(".", 1)[-1]
+        if getattr(parent, child_name, None) is module:
+            delattr(parent, child_name)
 
 
-def test_m3za_forward():
-    print("Testing M3ZA MiniBERT with Performer...")
-
+def test_m3za_forward(m3za_modules):
+    m3za, _ = m3za_modules
     # Config
     config = {
         "maxlen": 128,
@@ -34,7 +45,7 @@ def test_m3za_forward():
     }
 
     rngs = nnx.Rngs(42)
-    model = MiniBERT(
+    model = m3za.MiniBERT(
         maxlen=config["maxlen"],
         vocab_size=config["vocab_size"],
         embed_dim=config["embed_dim"],
@@ -51,15 +62,9 @@ def test_m3za_forward():
     )
 
     # Forward pass
-    print("Running forward pass...")
     logits = model(inputs, training=False)
 
-    print(f"Logits shape: {logits.shape}")
     assert logits.shape == (batch_size, config["maxlen"], config["vocab_size"])
-    print("Forward pass successful!")
-
-    # Check gradients
-    print("Checking gradients...")
 
     def loss_fn(model, x):
         logits = model(x, training=True)
@@ -67,13 +72,16 @@ def test_m3za_forward():
 
     grad_fn = nnx.grad(loss_fn)
     grads = grad_fn(model, inputs)
-    print("Gradient computation successful!")
+    gradient_leaves = jax.tree.leaves(grads)
+    assert gradient_leaves
+    assert all(jnp.isfinite(leaf).all() for leaf in gradient_leaves)
 
 
-def test_m3za_performer_forward_and_optimizer_step():
+def test_m3za_performer_forward_and_optimizer_step(m3za_modules):
     """Keep the performer example executable against the current NNX API."""
     import optax
 
+    _, m3za_perf = m3za_modules
     model = m3za_perf.MiniBERT(
         maxlen=8,
         vocab_size=32,
@@ -94,7 +102,3 @@ def test_m3za_performer_forward_and_optimizer_step():
         model, optimizer, {"input_ids": inputs, "labels": labels}
     )[0]
     assert jnp.isfinite(loss)
-
-
-if __name__ == "__main__":
-    test_m3za_forward()

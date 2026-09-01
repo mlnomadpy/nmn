@@ -125,7 +125,7 @@ class TestYatNMNComprehensive:
             return jnp.sum(model(x))
 
         loss, grads = loss_fn(layer)
-        assert grads.kernel.value is not None
+        assert jnp.isfinite(grads.kernel[...]).all()
 
     def test_positive_outputs_no_bias(self):
         """Test that YAT produces non-negative outputs without bias."""
@@ -254,7 +254,7 @@ class TestYatConvComprehensive:
             return jnp.sum(model(x))
 
         loss, grads = loss_fn(layer)
-        assert grads.kernel.value is not None
+        assert jnp.isfinite(grads.kernel[...]).all()
 
     def test_positive_outputs(self):
         """Test that outputs are non-negative without bias."""
@@ -316,7 +316,7 @@ class TestYatConvTransposeComprehensive:
             return jnp.sum(model(x))
 
         loss, grads = loss_fn(layer)
-        assert grads.kernel.value is not None
+        assert jnp.isfinite(grads.kernel[...]).all()
 
 
 # ============================================================================
