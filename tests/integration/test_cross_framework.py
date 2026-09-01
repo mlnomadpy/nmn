@@ -281,11 +281,11 @@ def get_nnx_output(inputs_np, weights_np, bias_np=None, alpha_np=None, epsilon=1
     )
 
     # Set weights
-    layer.kernel.value = jnp.array(weights_np)
+    layer.kernel[...] = jnp.array(weights_np)
     if bias_np is not None:
-        layer.bias.value = jnp.array(bias_np)
+        layer.bias[...] = jnp.array(bias_np)
     if alpha_np is not None:
-        layer.alpha.value = jnp.array([alpha_np])
+        layer.alpha[...] = jnp.array([alpha_np])
 
     x = jnp.array(inputs_np)
     output = layer(x)

@@ -154,7 +154,7 @@ class Embed(Module):
         if self.weight_normalized:
             embedding_val = self.embedding[...]
             embedding_norm = jnp.sqrt(jnp.sum(embedding_val**2, axis=1, keepdims=True))
-            self.embedding.value = embedding_val / (embedding_norm + 1e-8)
+            self.embedding[...] = embedding_val / (embedding_norm + 1e-8)
 
     def __call__(self, inputs: jax.Array) -> jax.Array:
         """Embeds the inputs along the last dimension.
