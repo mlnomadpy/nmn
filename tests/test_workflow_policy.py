@@ -1,6 +1,7 @@
 """Regression tests for CI/CD workflow policy."""
 
 import json
+import re
 from pathlib import Path
 
 WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
@@ -17,10 +18,15 @@ def test_publish_uploads_only_version_tags():
 
 
 def test_ci_actions_use_node24_compatible_releases():
-    workflows = "\n".join(path.read_text() for path in WORKFLOWS.glob("*.yml"))
+    workflow_paths = [
+        *WORKFLOWS.glob("*.yml"),
+        *WORKFLOWS.glob("*.yaml"),
+    ]
+    workflows = "\n".join(path.read_text() for path in workflow_paths)
 
-    assert "actions/checkout@v6" not in workflows
-    assert "actions/checkout@v7" in workflows
+    checkout_versions = re.findall(r"actions/checkout@(v\d+)", workflows)
+    assert checkout_versions
+    assert set(checkout_versions) == {"v7"}
     assert "actions/setup-python@v5" not in workflows
     assert "codecov/codecov-action@v4" not in workflows
     assert "codecov/codecov-action@v5" not in workflows
@@ -42,14 +48,15 @@ def test_website_is_built_on_pull_requests_with_node24():
     assert "website/docusaurus/**" in workflow
     assert "node-version: '24'" in workflow
     assert "npm ci" in workflow
-    assert (
-        "cp website/index.html website/docusaurus/static/paper/index.html" in workflow
-    )
+    assert "bash website/prepare-docusaurus-static.sh" in workflow
     assert "npm run build" in workflow
 
     config = (DOCUSAURUS / "docusaurus.config.js").read_text()
     assert "onBrokenLinks: 'throw'" in config
     assert "onBrokenMarkdownLinks: 'throw'" in config
+
+    deploy_workflow = (WORKFLOWS / "deploy.yml").read_text()
+    assert "bash website/prepare-docusaurus-static.sh" in deploy_workflow
 
 
 def test_website_manifest_and_lockfile_use_coherent_versions():

@@ -36,10 +36,8 @@ jobs:
         working-directory: website/docusaurus
         run: npm ci
 
-      - name: Prepare static paper route
-        run: |
-          mkdir -p website/docusaurus/static/paper
-          cp website/index.html website/docusaurus/static/paper/index.html
+      - name: Prepare static website assets
+        run: bash website/prepare-docusaurus-static.sh
 
       - name: Build website
         working-directory: website/docusaurus
