@@ -339,6 +339,7 @@ class _YatConvBase(nn.Module):
         if inputs.dtype != self.dtype:
             inputs = inputs.astype(self.dtype)
         self._maybe_build(inputs)
+        assert self.input_channels is not None
 
         # Custom padding modes (CIRCULAR / REFLECT / CAUSAL) → pre-pad and
         # then run conv with VALID. The native VALID / SAME / int paths
@@ -579,6 +580,7 @@ class _YatConvTransposeBase(nn.Module):
         if inputs.dtype != self.dtype:
             inputs = inputs.astype(self.dtype)
         self._maybe_build(inputs)
+        assert self.input_channels is not None
 
         # ``SAME`` is defined per axis as
         # ``output = input * stride + output_padding``. MLX only accepts

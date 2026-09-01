@@ -3,7 +3,8 @@
 
 import math
 import threading
-from typing import Optional, Union
+from collections.abc import Callable
+from typing import ClassVar, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -76,8 +77,11 @@ class YatNMN(nn.Module):
     # Default constant alpha value (sqrt(2))
     DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
     # Class-level shared kernel banks (guarded by a lock for thread safety)
-    _KERNEL_BANKS = {}
-    _KERNEL_BANK_USED = {}
+    weight: nn.Parameter
+    bias: Optional[nn.Parameter]
+    alpha: Optional[nn.Parameter]
+    _KERNEL_BANKS: ClassVar[dict[tuple[object, ...], nn.Parameter]] = {}
+    _KERNEL_BANK_USED: ClassVar[dict[tuple[object, ...], bool]] = {}
     _KERNEL_BANKS_LOCK = threading.Lock()
 
     def __init__(
@@ -102,9 +106,9 @@ class YatNMN(nn.Module):
         tie_kernel_bank: bool = False,
         kernel_bank_size: Optional[int] = None,
         kernel_bank_id: str = "default",
-        kernel_init: callable = None,
-        bias_init: callable = None,
-        alpha_init: callable = None,
+        kernel_init: Optional[Callable[[torch.Tensor], object]] = None,
+        bias_init: Optional[Callable[[torch.Tensor], object]] = None,
+        alpha_init: Optional[Callable[[torch.Tensor], object]] = None,
         device=None,
     ):
         super().__init__()
@@ -298,9 +302,9 @@ class YatNMN(nn.Module):
 
     def reset_parameters(
         self,
-        kernel_init: callable = None,
-        bias_init: callable = None,
-        alpha_init: callable = None,
+        kernel_init: Optional[Callable[[torch.Tensor], object]] = None,
+        bias_init: Optional[Callable[[torch.Tensor], object]] = None,
+        alpha_init: Optional[Callable[[torch.Tensor], object]] = None,
         *,
         initialize_kernel: bool = True,
     ):

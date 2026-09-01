@@ -22,7 +22,7 @@ from jax import lax
 
 from ._numerics import fp32_if_low_precision, inverse_softplus
 
-Array = jax.Array
+Array: tp.TypeAlias = jax.Array
 Axis = int
 Size = int
 

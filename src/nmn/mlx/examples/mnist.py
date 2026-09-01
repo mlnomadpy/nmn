@@ -16,6 +16,7 @@ import argparse
 import json
 import time
 from pathlib import Path
+from typing import cast
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -42,13 +43,13 @@ class YatMLP(nn.Module):
         # see the full parameter tree from step 0.
         dummy = mx.zeros((1, in_features))
         _ = self.fc1(dummy)
-        _ = self.fc2(self.fc1(dummy))
+        _ = self.fc2(cast(mx.array, self.fc1(dummy)))
 
     def __call__(self, x: mx.array) -> mx.array:
         x = x.reshape((x.shape[0], -1))
-        x = self.fc1(x)
-        x = self.fc2(x)
-        return self.out(x)
+        x = cast(mx.array, self.fc1(x))
+        x = cast(mx.array, self.fc2(x))
+        return cast(mx.array, self.out(x))
 
 
 def loss_fn(model: YatMLP, x: mx.array, y: mx.array) -> mx.array:
@@ -67,7 +68,8 @@ def eval_batches(
         y = mx.array(labels[start : start + batch_size])
         logits = model(x)
         total_loss += float(mx.sum(nn.losses.cross_entropy(logits, y)))
-        correct += int(mx.sum(mx.argmax(logits, axis=1) == y))
+        matches = cast(mx.array, mx.argmax(logits, axis=1) == y)
+        correct += int(mx.sum(matches))
     return total_loss / n, correct / n
 
 
@@ -138,9 +140,9 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.device == "cpu":
-        mx.set_default_device(mx.cpu)
+        mx.set_default_device(cast(mx.Device, mx.cpu))
     else:
-        mx.set_default_device(mx.gpu)
+        mx.set_default_device(cast(mx.Device, mx.gpu))
     mx.random.seed(args.seed)
     print(f"mlx device: {mx.default_device()}")
 

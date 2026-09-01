@@ -29,8 +29,10 @@ mypy --no-error-summary
 
 MyPy discovers the supported package surface from `[tool.mypy]` in
 `pyproject.toml`. New Python modules below `src/nmn/` are checked automatically.
-The small explicit exclusion list records existing annotation debt tracked by
-GitHub issue #114; remove a path from that list in the same change that fixes it.
+There are no package exclusions: every Python module, including examples and
+all optional-backend implementations, participates in the same CI type check.
+MyPy skips recursively checking imported dependencies so each package module
+owns its errors consistently across the supported backend-version matrix.
 
 Tests for unavailable optional backends are skipped before importing that
 backend. Keep new optional-backend imports inside their backend tree or guarded

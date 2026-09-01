@@ -49,6 +49,8 @@ except ImportError:
 
         _mon_path = str(pathlib.Path(__file__).parent / "tpu_monitor.py")
         _spec = importlib.util.spec_from_file_location("tpu_monitor", _mon_path)
+        if _spec is None or _spec.loader is None:
+            raise ImportError(f"Could not load training monitor from {_mon_path}")
         _mod = importlib.util.module_from_spec(_spec)
         _spec.loader.exec_module(_mod)
         TrainingMonitor = _mod.TrainingMonitor
@@ -67,7 +69,7 @@ def _is_notebook_frontend() -> bool:
         ip = get_ipython()
         if ip is None:
             return False
-        return ip.__class__.__name__ == "ZMQInteractiveShell"
+        return bool(ip.__class__.__name__ == "ZMQInteractiveShell")
     except Exception:
         return False
 
@@ -923,8 +925,8 @@ def main():
         "resnet50": (Bottleneck, [3, 4, 6, 3]),
         "resnet101": (Bottleneck, [3, 4, 23, 3]),
     }
-    block_cls, layers = block_map[args.model]
-    layers = tuple(layers)  # Make hashable for JIT
+    block_cls, layer_counts = block_map[args.model]
+    layers = tuple(layer_counts)  # Make hashable for JIT
     dtype = jnp.bfloat16 if args.mixed_precision else jnp.float32
 
     # Initialize Model under Mesh & Rules Context
@@ -1269,8 +1271,8 @@ def main():
             f"[Epoch {epoch}] Completed {actual_val_iters} validation iterations in {val_time/60:.1f}m"
         )
 
-        val_acc = np.mean(total_acc) * 100
-        val_loss = np.mean(total_loss)
+        val_acc = float(np.mean(total_acc) * 100)
+        val_loss = float(np.mean(total_loss))
 
         # Update monitor with epoch summary
         if monitor is not None:

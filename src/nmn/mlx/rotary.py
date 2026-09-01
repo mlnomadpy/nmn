@@ -389,6 +389,8 @@ class RotaryYatAttention(nn.Module):
         v = mx.reshape(v, (B, L, self.num_heads, self.head_dim))
 
         if decode:
+            assert self.cached_key is not None
+            assert self.cached_value is not None
             cache_old = self.cache_index
             # Splice the new K / V into the cache and read back the full
             # accumulated history.

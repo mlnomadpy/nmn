@@ -535,6 +535,7 @@ class RotaryYatAttention(Module):
 
         # Handle alpha configuration (same logic as MultiHeadAttention)
         self.alpha: nnx.Param[Array] | None
+        self._constant_alpha_value: float | None
 
         if constant_alpha is not None and constant_alpha is not False:
             # Use constant alpha (no learnable parameter)
@@ -579,6 +580,9 @@ class RotaryYatAttention(Module):
         self.perf_anchors: nnx.Cache | None
         self.perf_quad_nodes: nnx.Cache | None
         self.perf_quad_weights: nnx.Cache | None
+        self.num_features: int | None
+        self.num_scales: int | None
+        self.num_features_per_scale: int | None
         # Generic store for non-slay performer params (maclaurin / radial).
         # The frozen projection arrays live under nnx.Cache so they are excluded
         # from nnx.Param state; non-array scalars are kept as static meta.
@@ -862,6 +866,10 @@ class RotaryYatAttention(Module):
         # Apply Rotary YAT attention
         if self.use_performer and self.performer_kind == "slay":
             # Performer mode (SLAY anchor approximation): O(n) complexity
+            assert self.perf_projections is not None
+            assert self.perf_anchors is not None
+            assert self.perf_quad_nodes is not None
+            assert self.perf_quad_weights is not None
 
             # Reconstruct params dict
             performer_params = {

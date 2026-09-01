@@ -670,7 +670,7 @@ def main():
         wandb.init(
             project=args.wandb_project,
             entity=args.wandb_entity,
-            config=args,
+            config=vars(args),
             name=run_name,
         )
 
