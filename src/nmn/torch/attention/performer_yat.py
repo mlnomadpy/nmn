@@ -52,7 +52,7 @@ The exact (quadratic) reference these approximate is
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import numpy as np
 import torch
@@ -101,7 +101,7 @@ def maclaurin_coeffs(b: float, eps: float, nmax: int) -> np.ndarray:
     a = (b * b) * beta.copy()
     a[1:] += 2.0 * b * beta[:-1]
     a[2:] += beta[:-2]
-    return a  # [nmax+1], all >= 0 for b >= 0
+    return cast(np.ndarray, a)  # [nmax+1], all >= 0 for b >= 0
 
 
 # --------------------------------------------------------------------------

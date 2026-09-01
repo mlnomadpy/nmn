@@ -68,6 +68,8 @@ Public API (mirrors the SLAY file's signature style):
 
 from __future__ import annotations
 
+from typing import cast
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -97,7 +99,7 @@ def maclaurin_coeffs(b: float, epsilon: float, nmax: int) -> np.ndarray:
     a = (b * b) * beta.copy()
     a[1:] += 2.0 * b * beta[:-1]
     a[2:] += beta[:-2]
-    return a  # [nmax+1]
+    return cast(np.ndarray, a)  # [nmax+1]
 
 
 def create_maclaurin_projection(

@@ -67,7 +67,7 @@ and shared by q and k); the per-token feature maps and the attention readout use
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import numpy as np
 from keras.src import ops
@@ -108,7 +108,7 @@ def maclaurin_coeffs(b: float, eps: float, nmax: int) -> np.ndarray:
     a = b * b * beta.copy()
     a[1:] += 2.0 * b * beta[:-1]
     a[2:] += beta[:-2]
-    return a
+    return cast(np.ndarray, a)
 
 
 # --------------------------------------------------------------------------

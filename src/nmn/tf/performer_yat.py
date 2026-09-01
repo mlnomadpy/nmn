@@ -51,7 +51,7 @@ stored as TensorFlow constants, so the feature maps themselves are pure TF ops.
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import numpy as np
 import tensorflow as tf
@@ -97,7 +97,7 @@ def maclaurin_coeffs(b: float, eps: float, nmax: int) -> np.ndarray:
     a = b * b * beta.copy()
     a[1:] += 2.0 * b * beta[:-1]
     a[2:] += beta[:-2]
-    return a  # [nmax + 1], all >= 0 for b >= 0
+    return cast(np.ndarray, a)  # [nmax + 1], all >= 0 for b >= 0
 
 
 # --------------------------------------------------------------------------
