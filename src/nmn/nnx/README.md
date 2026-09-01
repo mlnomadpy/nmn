@@ -27,22 +27,30 @@ Comprehensive Flax NNX implementation of YAT (Yet Another Transformation) neural
 git clone <repository-url>
 cd nmn
 
-# Install in development mode with JAX/Flax support
-pip install -e .
+# Install in development mode with CPU JAX/Flax support
+pip install -e ".[nnx]"
 
-# For TPU support
-pip install -e ".[tpu]"
+# For TPU support, install the official JAX accelerator wheel first
+pip install --upgrade "jax[tpu]>=0.9.1"
+pip install -e ".[nnx]"
 
-# For GPU support (CUDA)
-pip install -e ".[gpu]"
+# For NVIDIA GPU support (CUDA 13), install the official JAX wheel first
+pip install --upgrade "jax[cuda13]>=0.9.1"
+pip install -e ".[nnx]"
 ```
 
-**Dependencies:**
-- JAX >= 0.4.0
-- Flax >= 0.7.0
-- Optax (for optimization)
-- Orbax (for checkpointing)
-- Grain (optional, for efficient data loading on TPU)
+See the [JAX installation guide](https://docs.jax.dev/en/latest/installation.html)
+for platform requirements and alternative CUDA versions.
+
+**Core dependencies installed by `nmn[nnx]`:**
+
+- JAX >= 0.9.1
+- Flax >= 0.12.5
+
+**Optional example dependencies:**
+
+- Optax (`pip install optax`) for the training example
+- Grain (`pip install grain`) for the TPU data-loading example
 
 ## Quick Start
 
@@ -685,6 +693,8 @@ print(f"Test Accuracy: {accuracy:.4f}")
 YAT layers are designed for efficient TPU execution:
 
 ### 1. **Use Grain for Data Loading**
+
+This optional example requires Grain (`pip install grain`).
 
 ```python
 import grain.python as grain
