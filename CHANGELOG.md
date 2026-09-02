@@ -21,6 +21,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   exact reviewed allowance only for two upstream `image-size` no-fix findings.
 - Updated `qs` to 6.16.0 to resolve its request-buffer denial-of-service
   advisory without expanding the website audit allowlist.
+- Made coverage uploads authenticated through OIDC and failure-blocking, with
+  explicit project and patch coverage policies for the combined backend flags.
+- Added a repository-owned coverage gate that combines JAX, PyTorch, and
+  Keras/TensorFlow data, enforcing 70% project and 80% changed-line coverage
+  even when an external reporting integration is unavailable.
 
 ---
 

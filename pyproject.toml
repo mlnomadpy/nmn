@@ -120,7 +120,7 @@ strict_equality = true
 
 [tool.coverage.run]
 source = ["src/nmn"]
-omit = ["*/tests/*", "*/examples/*", "*/__pycache__/*"]
+omit = ["*/tests/*", "*/examples/*", "*/__pycache__/*", "*/_version.py"]
 
 [tool.coverage.report]
 exclude_lines = [
