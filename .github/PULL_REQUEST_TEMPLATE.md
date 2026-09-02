@@ -24,6 +24,7 @@ Thanks for sending a pull request! Please make sure you've read CONTRIBUTING.md 
 - [ ] Flax Linen (`nmn.linen`)
 - [ ] Keras (`nmn.keras`)
 - [ ] TensorFlow (`nmn.tf`)
+- [ ] MLX (`nmn.mlx`)
 - [ ] All / cross-framework
 
 ## Test plan

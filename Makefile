@@ -40,7 +40,7 @@ help: ## Show this help (default target)
 	@echo "  lint           flake8 errors (E9,F63,F7,F82) + advisory style pass"
 	@echo "  format         Auto-format with black + isort"
 	@echo "  format-check   Check formatting without writing (black/isort --check)"
-	@echo "  typecheck      mypy on the torch and nnx backends"
+	@echo "  typecheck      mypy on the full nmn package"
 	@echo ""
 	@echo "Build & docs"
 	@echo "  build          Build the sdist + wheel (python -m build)"
@@ -103,9 +103,8 @@ format-check: ## Check formatting without modifying files
 	$(PYTHON) -m black --check --diff $(SRC) $(TEST)
 	$(PYTHON) -m isort --check-only --diff $(SRC) $(TEST)
 
-typecheck: ## mypy on the torch and nnx backends
-	$(PYTHON) -m mypy $(SRC)/torch --ignore-missing-imports
-	$(PYTHON) -m mypy $(SRC)/nnx --ignore-missing-imports
+typecheck: ## mypy on the full nmn package using pyproject.toml
+	$(PYTHON) -m mypy --no-error-summary
 
 # ---------------------------------------------------------------------------
 # Build & docs

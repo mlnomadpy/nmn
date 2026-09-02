@@ -72,6 +72,7 @@ pip install -e ".[dev,nnx]"       # Flax NNX (JAX)
 pip install -e ".[dev,linen]"     # Flax Linen (JAX)
 pip install -e ".[dev,keras]"     # Keras
 pip install -e ".[dev,tf]"        # TensorFlow
+pip install -e ".[dev,mlx]"       # MLX (Apple Silicon)
 
 # Everything (heavy; recommended for cross-framework consistency work)
 pip install -e ".[test]"
@@ -94,7 +95,6 @@ nmn info          # banner with the six frameworks and their pip extras
 ### 5. (Optional) install the pre-commit hooks
 
 ```bash
-pip install pre-commit
 pre-commit install
 ```
 
@@ -116,7 +116,7 @@ make test-torch     # one backend's tests (also: -nnx, -linen, -keras, -tf, -mlx
 make lint           # flake8 errors (E9,F63,F7,F82) + advisory style pass
 make format         # auto-format with black + isort
 make format-check   # check formatting without writing
-make typecheck      # mypy on the torch and nnx backends
+make typecheck      # mypy on the full nmn package
 
 make build          # build sdist + wheel
 make docs           # where to find the documentation
@@ -136,7 +136,7 @@ Each of the six framework backends — `nmn.torch`, `nmn.nnx`, `nmn.linen`, `nmn
 | `nmn[torch]` | torch, torchvision | `nmn.torch` |
 | `nmn[nnx]` | jax, jaxlib, flax | `nmn.nnx` |
 | `nmn[linen]` | jax, jaxlib, flax | `nmn.linen` |
-| `nmn[keras]` | tensorflow | `nmn.keras` |
+| `nmn[keras]` | keras | `nmn.keras` (select a Keras backend separately) |
 | `nmn[tf]` | tensorflow | `nmn.tf` |
 | `nmn[mlx]` | mlx (Apple Silicon) | `nmn.mlx` |
 
@@ -195,11 +195,11 @@ open htmlcov/index.html
 # Skip slow tests
 pytest tests/ -m "not slow"
 
-# Only one framework's marker
-pytest tests/ -m torch
 ```
 
-Custom markers are declared in [`pyproject.toml`](pyproject.toml): `slow`, `integration`, `torch`, `jax`, `tf`.
+The `slow` marker is declared in [`pyproject.toml`](pyproject.toml). Select a
+backend by its test directory rather than by a marker; optional backends that
+are unavailable are skipped safely.
 
 ### Writing tests
 
@@ -217,7 +217,7 @@ Style is enforced by **black**, **isort**, **flake8**, and **mypy**. black/isort
 make format        # black + isort (writes changes)
 make format-check  # black + isort in --check mode
 make lint          # flake8 errors (must pass) + advisory style pass
-make typecheck     # mypy on the torch and nnx backends
+make typecheck     # mypy on the full nmn package
 ```
 
 The equivalent raw commands:
@@ -231,12 +231,12 @@ isort src/ tests/
 flake8 src/nmn --select=E9,F63,F7,F82       # errors only (must pass)
 flake8 src/nmn --max-line-length=127        # style (informational)
 
-# Type check (informational for now, tightening over time)
-mypy src/nmn/torch --ignore-missing-imports
-mypy src/nmn/nnx   --ignore-missing-imports
+# Type check (uses the package-wide configuration in pyproject.toml)
+mypy --no-error-summary
 ```
 
-CI fails only on **flake8 errors** (`E9,F63,F7,F82`) and test failures. Black/isort/mypy are advisory but please run them locally before pushing.
+CI blocks on test failures, **flake8 errors** (`E9,F63,F7,F82`), Black,
+isort, and package-wide MyPy. Run the matching `make` targets before pushing.
 
 ### Conventions
 
@@ -273,7 +273,7 @@ Layers should reach **all 6 frameworks** before being considered complete. The r
 3. **Run tests + linters** locally.
 4. **Update CHANGELOG.md** under `## [Unreleased]` if the change is user-visible.
 5. **Open a PR** against `master`. Fill in the PR template — describe what changed, why, and how it was tested.
-6. **CI must pass** (tests + flake8 errors). Style checks are advisory but help reviewers.
+6. **CI must pass** (tests, formatting, lint, and package-wide type checks).
 7. **One reviewer approval** is required for merge. A maintainer will merge.
 
 PRs that touch more than one framework should ideally be split, unless the change is intrinsically cross-framework (e.g. a renaming for parity).
