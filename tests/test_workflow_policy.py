@@ -299,4 +299,6 @@ def test_website_dependency_audit_has_exact_reviewed_allowlist():
     }
     assert "critical > 0" in script
     assert "Unreviewed high advisories" in script
+    assert "report.error" in script
+    assert "did not return a vulnerability report" in script
     assert "reviewed repository images" in rationale

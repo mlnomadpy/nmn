@@ -24,6 +24,16 @@ try {
   process.exit(1);
 }
 
+if (
+  report.error ||
+  typeof report.vulnerabilities !== 'object' ||
+  typeof report.metadata?.vulnerabilities !== 'object'
+) {
+  const detail = report.error?.detail || report.error?.summary || report.message;
+  console.error(`npm audit did not return a vulnerability report: ${detail || 'unknown error'}`);
+  process.exit(1);
+}
+
 const activeHighAdvisories = new Set();
 for (const vulnerability of Object.values(report.vulnerabilities ?? {})) {
   for (const advisory of vulnerability.via ?? []) {
