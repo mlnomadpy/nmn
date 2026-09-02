@@ -1,0 +1,90 @@
+name: Minimum Backend Versions
+
+on:
+  pull_request:
+    paths:
+      - 'pyproject.toml'
+      - '.github/workflows/minimum-versions.yml'
+  schedule:
+    - cron: '23 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  torch:
+    name: PyTorch 1.11 minimum smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+          cache: pip
+      - name: Install declared lower bound
+        run: |
+          pip install numpy pytest
+          pip install -e . --no-deps
+          pip install 'torch==1.11.0+cpu' 'torchvision==0.12.0+cpu' --extra-index-url https://download.pytorch.org/whl/cpu
+          pip check
+      - name: Exercise representative public APIs
+        run: pytest tests/test_torch/test_yat_nmn.py tests/test_torch/test_attention.py -q
+
+  tensorflow:
+    name: TensorFlow 2.10 minimum smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+          cache: pip
+      - name: Install declared lower bound
+        run: |
+          pip install pytest 'tensorflow==2.10.0'
+          pip install -e . --no-deps
+          pip check
+      - name: Exercise representative public APIs
+        run: pytest tests/test_tf/test_basic.py tests/test_tf/test_attention.py -q
+
+  keras:
+    name: Keras 3.0 minimum smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      KERAS_BACKEND: torch
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+          cache: pip
+      - name: Install declared lower bound
+        run: |
+          pip install numpy pytest 'keras==3.0.0'
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e . --no-deps
+          pip check
+      - name: Exercise representative public APIs
+        run: pytest tests/test_keras/test_basic.py tests/test_keras/test_attention.py -q
+
+  mlx:
+    name: MLX 0.18 minimum smoke
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install declared lower bound
+        run: |
+          pip install numpy pytest 'mlx==0.18.0'
+          pip install -e . --no-deps
+          pip check
+      - name: Exercise representative public APIs on Apple Silicon
+        run: pytest tests/test_mlx/test_basic.py tests/test_mlx/test_attention.py -q

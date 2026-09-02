@@ -11,6 +11,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Repaired the contributor workflow so clean dev installs can build packages,
   local pytest always resolves the checkout, Make and CI share package-wide
   type checking, and documentation/templates match the six supported backends.
+- Hardened CI/CD with immutable third-party Action pins, job-scoped OIDC,
+  bounded release/deploy jobs, unskippable policy checks, and scheduled runtime
+  smoke tests for every declared backend minimum.
 
 ---
 
