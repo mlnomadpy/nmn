@@ -146,3 +146,9 @@ version-file = "src/nmn/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/nmn"]
+
+[tool.hatch.build.targets.sdist]
+# dacli is the local orchestration/evidence ledger. It is excluded through
+# .git/info/exclude rather than the shared .gitignore, so declare the release
+# boundary explicitly instead of relying on developer-local Git state.
+exclude = ["/.dacli"]

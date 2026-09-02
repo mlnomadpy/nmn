@@ -106,6 +106,13 @@ def test_mypy_checks_the_package_from_one_drift_resistant_config():
     assert "src/nmn/nnx/" not in mypy_job
 
 
+def test_sdist_excludes_the_local_dacli_evidence_ledger():
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    sdist = project["tool"]["hatch"]["build"]["targets"]["sdist"]
+
+    assert "/.dacli" in sdist["exclude"]
+
+
 def test_mirror_fails_and_verifies_when_sync_is_unavailable():
     workflow = (WORKFLOWS / "mirror.yml").read_text()
 
