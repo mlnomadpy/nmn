@@ -5,6 +5,76 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+No changes yet.
+
+---
+
+## [0.3.4] — 2026-09-02
+
+### Added
+- **Complete direct-package static analysis** — MyPy 2.3.1 now checks every
+  Python module under `src/nmn` through one canonical configuration. CI policy
+  tests reject package exclusions, duplicate MyPy invocations, and accidental
+  narrowing of the checked package surface. Imported third-party modules remain
+  skipped so each NMN module owns its errors consistently across the supported
+  minimum/latest dependency matrix.
+- **Website pull-request validation** — Docusaurus now builds on Node.js 24 for
+  website changes, using the same static-asset preparation path as deployment.
+- **Minimum and latest JAX/Flax coverage** within the existing CI matrix, plus
+  policy tests for dependency, documentation, optional-backend collection, and
+  workflow invariants.
+
+### Changed
+- Updated every GitHub Actions checkout to `actions/checkout@v7`, artifact
+  upload/download actions to their Node.js 24 releases, Docusaurus packages to
+  3.10.2, and React/React DOM to 19.2.8.
+- Reorganized the test tree so assertion-based regressions remain under pytest
+  while exploratory diagnostics and benchmarks live outside test collection.
+- Modernized Flax NNX variable updates to avoid deprecated `.value`
+  assignments while preserving shared-bank identity, slices, and gradients.
+- Corrected accelerator installation documentation to use the real `nmn[nnx]`
+  extra with the official JAX TPU/CUDA wheels and metadata-aligned minimums.
+
+### Fixed
+- Mirror synchronization now fails visibly when its credential is unavailable
+  instead of reporting a false successful no-op.
+- Pinned lint/type-check tooling and import-light CLI annotations make local and
+  CI quality gates deterministic across supported backend versions.
+
+---
+
+## [0.3.3] — 2026-09-01
+
+### Added
+- Native Apple Silicon/Metal MLX CI, TPU-oriented Pallas validation, Windows
+  process-tree cleanup regressions, safe optional-backend collection, and a
+  broader cross-framework numerical-parity suite.
+- Precision policy plumbing for every Pallas attention dot product and
+  TPU-legal NNX Pallas BlockSpecs for forward and backward kernels.
+
+### Changed
+- Low-precision YAT score paths accumulate overflow-prone intermediates and
+  operator-local cotangents safely while preserving genuine NaNs and public
+  float16/bfloat16 output contracts.
+- Learnable epsilon initialization uses stable inverse softplus with validated,
+  dtype-aware storage across dense and convolution families.
+- Fully masked attention rows, broadcast masks, normalization, output
+  projection, and incremental decoding semantics are aligned across backends.
+
+### Fixed
+- Grouped and transposed convolution parity, Keras `channels_first` execution
+  on TensorFlow CPU, shared-kernel-bank lifecycle behavior, and serialization.
+- MLX fused epsilon gradients and transposed-convolution `SAME` behavior,
+  including compiled/lazy and native Metal coverage.
+- NNX attention custom-VJP gradients, cache transactionality and overflow,
+  DropConnect RNG behavior, grouped patch norms, and transpose-kernel layouts.
+- Release publishing now runs only for version tags and validates artifacts in
+  TestPyPI before publishing to PyPI.
+
+---
+
 ## [0.3.2] — 2026-06-09
 
 ### Added

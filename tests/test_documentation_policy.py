@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 OPTIONAL_DEPENDENCIES = PYPROJECT["project"]["optional-dependencies"]
 NNX_README = (ROOT / "src/nmn/nnx/README.md").read_text(encoding="utf-8")
+CHANGELOG = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
 
 
 def _minimum_version(extra: str, package: str) -> str:
@@ -64,3 +65,21 @@ def test_agent_docs_link_to_release_sources_instead_of_hard_coding_version():
         assert "Current release:" not in content
         assert "https://pypi.org/project/nmn/" in content
         assert "https://github.com/azettaai/nmn/releases" in content
+
+
+def test_changelog_has_unreleased_and_descending_dated_releases():
+    headers = re.findall(
+        r"^## \[([^\]]+)\](?: — (\d{4}-\d{2}-\d{2}))?$",
+        CHANGELOG,
+        re.MULTILINE,
+    )
+    assert headers and headers[0] == ("Unreleased", "")
+
+    releases = headers[1:]
+    versions = [version for version, _date in releases]
+    assert len(versions) == len(set(versions))
+    assert all(re.fullmatch(r"\d+\.\d+\.\d+", version) for version in versions)
+    assert all(date for _version, date in releases)
+
+    version_tuples = [tuple(map(int, version.split("."))) for version in versions]
+    assert version_tuples == sorted(version_tuples, reverse=True)

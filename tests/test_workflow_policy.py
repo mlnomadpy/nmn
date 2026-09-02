@@ -85,13 +85,20 @@ def test_mypy_checks_the_package_from_one_drift_resistant_config():
     workflow = (WORKFLOWS / "test.yml").read_text()
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())
     config = project["tool"]["mypy"]
-    package_files = sorted((ROOT / "src" / "nmn").rglob("*.py"))
+    package_files = sorted(
+        path
+        for path in (ROOT / "src" / "nmn").rglob("*.py")
+        if path.name != "_version.py"
+    )
 
     assert config["files"] == ["src/nmn"]
     assert config["follow_imports"] == "skip"
     assert "exclude" not in config
     assert "mypy==2.3.1" in project["project"]["optional-dependencies"]["dev"]
-    assert len(package_files) >= 99
+    # hatch-vcs materializes the ignored ``_version.py`` during builds. Count
+    # only committed package sources so this invariant is identical in a clean
+    # checkout and an already-built developer tree.
+    assert len(package_files) >= 98
     assert workflow.count("mypy --no-error-summary") == 1
     mypy_job = workflow.split("  mypy:", 1)[1]
     assert 'pip install -e ".[dev]" "numpy<2.3"' in mypy_job
