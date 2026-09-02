@@ -24,6 +24,12 @@ jobs:
         with:
           fetch-depth: 0  # full history so hatch-vcs can read tags
 
+      - name: Verify release tag is contained in master
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          git fetch --no-tags origin master
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/master
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:

@@ -31,6 +31,27 @@ You should receive an acknowledgment within **72 hours**. We will follow up with
 - Once a fix is released, we will publicly disclose the vulnerability via a GitHub Security Advisory and a release note in [`CHANGELOG.md`](CHANGELOG.md).
 - We aim for **90 days** from report to public disclosure as a maximum; faster if a patch is straightforward.
 
+## Repository and Release Integrity
+
+The following GitHub repository settings are part of NMN's release security
+boundary and must remain enabled:
+
+- the `master` branch ruleset requires pull requests and the repository's lint,
+  type-check, base-install, and representative backend test checks;
+- deletion and non-fast-forward updates are blocked for `master`;
+- version tags matching `v*.*.*` cannot be deleted or updated;
+- secret scanning, secret-scanning push protection, and Dependabot security
+  updates are enabled;
+- merged pull-request branches are deleted automatically; and
+- the `pypi` environment retains its required reviewer and trusted-publisher
+  configuration.
+
+The publication workflow provides a second release boundary: a version tag is
+accepted only when its commit is contained in `origin/master`, artifacts are
+built once, TestPyPI publication succeeds, and the protected `pypi` environment
+approves the final OIDC publication. Repository administrators should audit
+these settings after ownership, plan, or workflow changes.
+
 ## Scope
 
 In scope:
