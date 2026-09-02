@@ -26,7 +26,9 @@ def test_publish_uploads_only_version_tags():
     assert "- 'v*.*.*'" in trigger_block
     assert "if: startsWith(github.ref, 'refs/tags/v')" in workflow
     assert 'git fetch --no-tags origin master' in workflow
-    assert 'git merge-base --is-ancestor "$GITHUB_SHA" origin/master' in workflow
+    assert (
+        'git merge-base --is-ancestor "$GITHUB_SHA" origin/master' in workflow
+    )
 
 
 def test_release_integrity_controls_are_documented():
