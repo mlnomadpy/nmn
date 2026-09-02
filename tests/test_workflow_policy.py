@@ -25,6 +25,24 @@ def test_publish_uploads_only_version_tags():
     assert "branches:" not in trigger_block
     assert "- 'v*.*.*'" in trigger_block
     assert "if: startsWith(github.ref, 'refs/tags/v')" in workflow
+    assert "git fetch --no-tags origin master" in workflow
+    assert 'git merge-base --is-ancestor "$GITHUB_SHA" origin/master' in workflow
+
+
+def test_release_integrity_controls_are_documented():
+    security = (ROOT / "SECURITY.md").read_text()
+    security = " ".join(security.split())
+
+    for control in (
+        "`master` branch ruleset",
+        "version tags matching `v*.*.*`",
+        "secret-scanning push protection",
+        "Dependabot security updates",
+        "deleted automatically",
+        "contained in `origin/master`",
+        "protected `pypi` environment",
+    ):
+        assert control in security
 
 
 def test_ci_actions_use_node24_compatible_releases():
