@@ -7,6 +7,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+---
+
+## [0.3.5] — 2026-09-02
+
+### Added
+- Added authenticated, failure-blocking Codecov reporting plus a
+  repository-owned coverage gate that combines JAX, PyTorch, and
+  Keras/TensorFlow data and enforces 70% project and 80% changed-line
+  coverage on protected branches.
+- Added active repository rulesets for protected `master` pull requests and
+  immutable semantic-version tags, alongside CodeQL, secret scanning, push
+  protection, Dependabot updates, automatic branch cleanup, and documented
+  release-integrity controls.
+
 ### Changed
 - Repaired the contributor workflow so clean dev installs can build packages,
   local pytest always resolves the checkout, Make and CI share package-wide
@@ -21,11 +35,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   exact reviewed allowance only for two upstream `image-size` no-fix findings.
 - Updated `qs` to 6.16.0 to resolve its request-buffer denial-of-service
   advisory without expanding the website audit allowlist.
-- Made coverage uploads authenticated through OIDC and failure-blocking, with
-  explicit project and patch coverage policies for the combined backend flags.
-- Added a repository-owned coverage gate that combines JAX, PyTorch, and
-  Keras/TensorFlow data, enforcing 70% project and 80% changed-line coverage
-  even when an external reporting integration is unavailable.
+
+### Fixed
+- Replaced the broken cross-repository mirror credential path with a
+  repository-scoped, fast-forward-only self-sync workflow and restored the
+  public mirror's `master` branch and annotated v0.3.3/v0.3.4 tags.
+- Closed CI trigger and supply-chain gaps across pull requests, pushes,
+  scheduled minimum-backend smokes, website builds, packaging, publishing,
+  deployment, and mirror synchronization.
 
 ---
 
