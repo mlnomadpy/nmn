@@ -72,7 +72,7 @@ jobs:
         run: pytest tests/test_keras/test_basic.py tests/test_keras/test_attention.py -q
 
   mlx:
-    name: MLX 0.18 minimum smoke
+    name: MLX 0.18.1 minimum smoke
     runs-on: macos-15
     timeout-minutes: 15
     steps:
@@ -83,7 +83,7 @@ jobs:
           cache: pip
       - name: Install declared lower bound
         run: |
-          pip install numpy pytest 'mlx==0.18.0'
+          pip install numpy pytest 'mlx==0.18.1'
           pip install -e . --no-deps
           pip check
       - name: Exercise representative public APIs on Apple Silicon

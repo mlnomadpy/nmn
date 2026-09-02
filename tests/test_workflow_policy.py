@@ -113,7 +113,7 @@ def test_minimum_backend_policy_is_scheduled_and_matches_metadata():
     assert "torch==1.11.0+cpu" in workflow and "torch>=1.11.0" in extras["torch"]
     assert "tensorflow==2.10.0" in workflow and "tensorflow>=2.10.0" in extras["tf"]
     assert "keras==3.0.0" in workflow and "keras>=3.0.0" in extras["keras"]
-    assert "mlx==0.18.0" in workflow and "mlx>=0.18.0" in extras["mlx"]
+    assert "mlx==0.18.1" in workflow and "mlx>=0.18.1" in extras["mlx"]
     assert "native TPU Mosaic and CUDA" in docs
     assert "real Apple Silicon GPU" in docs
 

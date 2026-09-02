@@ -24,6 +24,9 @@ class TestAttentionFunctions:
 
     @pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
     @pytest.mark.parametrize("spherical", [False, True])
+    @pytest.mark.skipif(
+        not hasattr(torch, "compile"), reason="torch.compile requires PyTorch 2"
+    )
     def test_fully_masked_rows_are_zero_with_finite_compiled_gradients(
         self, spherical, dtype
     ):
@@ -130,6 +133,9 @@ class TestAttentionFunctions:
 class TestMultiHeadYatAttention:
     @pytest.mark.parametrize("mask_rank", [2, 4])
     @pytest.mark.parametrize("cross_attention", [False, True])
+    @pytest.mark.skipif(
+        not hasattr(torch, "compile"), reason="torch.compile requires PyTorch 2"
+    )
     def test_fully_masked_rows_stay_zero_after_biased_output_projection(
         self, cross_attention, mask_rank
     ):
