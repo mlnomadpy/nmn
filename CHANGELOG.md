@@ -19,6 +19,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Patched the website's `serialize-javascript` and `uuid` dependency paths and
   added a fail-closed audit gate for new high/critical advisories, retaining an
   exact reviewed allowance only for two upstream `image-size` no-fix findings.
+- Updated `qs` to 6.16.0 to resolve its request-buffer denial-of-service
+  advisory without expanding the website audit allowlist.
 
 ---
 

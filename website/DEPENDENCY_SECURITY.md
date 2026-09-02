@@ -10,6 +10,8 @@ or any high-severity advisory that is not listed in the audit script.
   exhaustion advisories inherited through Docusaurus's webpack plugins.
 - `uuid` is overridden to 11.1.1, the first patched release for the buffer
   bounds advisory inherited through `sockjs`.
+- `qs` is overridden to 6.16.0, the first patched release for
+  `GHSA-4mjr-xmp4-gh2g`, inherited through the Docusaurus development server.
 
 Both overrides are exercised by the production Docusaurus build. Dependabot
 continues to update the npm lockfile weekly.

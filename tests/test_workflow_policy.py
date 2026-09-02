@@ -309,12 +309,14 @@ def test_website_dependency_audit_has_exact_reviewed_allowlist():
 
     assert manifest["scripts"]["audit:ci"] == "node ../audit-dependencies.mjs"
     assert manifest["overrides"] == {
+        "qs": "6.16.0",
         "serialize-javascript": "7.1.1",
         "uuid": "11.1.1",
     }
     assert (
         lockfile["packages"]["node_modules/serialize-javascript"]["version"] == "7.1.1"
     )
+    assert lockfile["packages"]["node_modules/qs"]["version"] == "6.16.0"
     assert lockfile["packages"]["node_modules/uuid"]["version"] == "11.1.1"
     assert "npm run audit:ci" in workflow
     assert set(re.findall(r"'(GHSA-[\w-]+)'", script)) == {
