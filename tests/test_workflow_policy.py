@@ -274,3 +274,31 @@ def test_website_manifest_and_lockfile_use_coherent_versions():
         )
         assert locked_requirement == version
         assert locked_packages[f"node_modules/{package}"]["version"] == version
+
+
+def test_website_dependency_audit_has_exact_reviewed_allowlist():
+    manifest = json.loads((DOCUSAURUS / "package.json").read_text())
+    lockfile = json.loads((DOCUSAURUS / "package-lock.json").read_text())
+    workflow = (WORKFLOWS / "website.yml").read_text()
+    script = (ROOT / "website" / "audit-dependencies.mjs").read_text()
+    rationale = (ROOT / "website" / "DEPENDENCY_SECURITY.md").read_text()
+
+    assert manifest["scripts"]["audit:ci"] == "node ../audit-dependencies.mjs"
+    assert manifest["overrides"] == {
+        "serialize-javascript": "7.1.1",
+        "uuid": "11.1.1",
+    }
+    assert (
+        lockfile["packages"]["node_modules/serialize-javascript"]["version"] == "7.1.1"
+    )
+    assert lockfile["packages"]["node_modules/uuid"]["version"] == "11.1.1"
+    assert "npm run audit:ci" in workflow
+    assert set(re.findall(r"'(GHSA-[\w-]+)'", script)) == {
+        "GHSA-w3rx-r6r6-pgpr",
+        "GHSA-5p2g-fcmc-qvqq",
+    }
+    assert "critical > 0" in script
+    assert "Unreviewed high advisories" in script
+    assert "report.error" in script
+    assert "did not return a vulnerability report" in script
+    assert "reviewed repository images" in rationale

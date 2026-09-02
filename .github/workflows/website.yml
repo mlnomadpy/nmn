@@ -36,6 +36,10 @@ jobs:
         working-directory: website/docusaurus
         run: npm ci
 
+      - name: Enforce reviewed dependency advisories
+        working-directory: website/docusaurus
+        run: npm run audit:ci
+
       - name: Prepare static website assets
         run: bash website/prepare-docusaurus-static.sh
 
