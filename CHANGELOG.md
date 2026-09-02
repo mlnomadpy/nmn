@@ -38,6 +38,8 @@ No changes yet.
   extra with the official JAX TPU/CUDA wheels and metadata-aligned minimums.
 
 ### Fixed
+- Source distributions explicitly exclude the local `.dacli` orchestration and
+  evidence ledger, including run transcripts and task worktrees.
 - Mirror synchronization now fails visibly when its credential is unavailable
   instead of reporting a false successful no-op.
 - Pinned lint/type-check tooling and import-light CLI annotations make local and
