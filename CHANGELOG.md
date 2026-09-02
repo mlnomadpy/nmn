@@ -16,6 +16,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   smoke tests for every declared backend minimum.
 - Restored PyTorch 1.11 masked-attention compatibility and corrected the MLX
   lower bound to 0.18.1, the first published release in the 0.18 series.
+- Patched the website's `serialize-javascript` and `uuid` dependency paths and
+  added a fail-closed audit gate for new high/critical advisories, retaining an
+  exact reviewed allowance only for two upstream `image-size` no-fix findings.
 
 ---
 
