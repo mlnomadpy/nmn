@@ -1,55 +1,61 @@
-name: Mirror to mlnomadpy/nmn
+name: Sync public mirror
 
-# Keeps the original repository github.com/mlnomadpy/nmn in sync with the
-# canonical github.com/azettaai/nmn. On every push to master (and on version
-# tags) this fast-forwards the mirror's master and pushes all tags.
-#
-# Setup (one-time): create a Personal Access Token with `contents:write` (repo)
-# scope on mlnomadpy/nmn and add it to this repo's secrets as `MIRROR_PAT`
-# (Settings → Secrets and variables → Actions). A missing secret is a failed
-# synchronization and must remain visible in Actions.
+# This file is intentionally identical in the canonical and mirror repositories.
+# It executes only in mlnomadpy/nmn, where the ephemeral GITHUB_TOKEN has write
+# access to that repository and no access to azettaai/nmn. The canonical source
+# is fetched anonymously and the mirror refuses divergent history or tag edits.
 
 on:
-  push:
-    branches:
-      - master
-    tags:
-      - 'v*.*.*'
+  schedule:
+    - cron: '17 * * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: mirror-mlnomadpy
+  group: sync-public-mirror
   cancel-in-progress: false
 
 jobs:
-  mirror:
-    name: Push master + tags to mlnomadpy/nmn
+  sync:
+    name: Fast-forward master and tags from azettaai/nmn
+    if: github.repository == 'mlnomadpy/nmn'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0  # full history + tags for a clean fast-forward
+          fetch-depth: 0
 
-      - name: Mirror to mlnomadpy/nmn
-        env:
-          MIRROR_PAT: ${{ secrets.MIRROR_PAT }}
+      - name: Fetch and verify canonical history
         run: |
-          if [ -z "${MIRROR_PAT}" ]; then
-            echo "::error::MIRROR_PAT is not set; the public mirror was not updated."
+          git remote add canonical https://github.com/azettaai/nmn.git
+          git fetch --prune canonical master --tags
+          mirror_head="$(git rev-parse refs/remotes/origin/master)"
+          canonical_head="$(git rev-parse refs/remotes/canonical/master)"
+          if ! git merge-base --is-ancestor "${mirror_head}" "${canonical_head}"; then
+            echo "Mirror master has diverged from canonical master." >&2
             exit 1
           fi
-          remote="https://x-access-token:${MIRROR_PAT}@github.com/mlnomadpy/nmn.git"
-          # Sync master (fast-forward only; the mirror should never diverge).
-          git push "${remote}" "HEAD:refs/heads/master"
-          # Sync all version tags.
-          git push "${remote}" --tags
-          expected_head="$(git rev-parse HEAD)"
-          mirrored_head="$(git ls-remote "${remote}" refs/heads/master | awk '{print $1}')"
-          if [ "${mirrored_head}" != "${expected_head}" ]; then
-            echo "::error::Mirror verification failed: expected ${expected_head}, got ${mirrored_head:-missing}."
-            exit 1
-          fi
+
+      - name: Update mirror with repository-scoped authentication
+        run: |
+          git push origin refs/remotes/canonical/master:refs/heads/master
+          git push origin --tags
+
+      - name: Verify remote master and tags
+        run: |
+          canonical_head="$(git rev-parse refs/remotes/canonical/master)"
+          mirrored_head="$(git ls-remote origin refs/heads/master | awk '{print $1}')"
+          test -n "${mirrored_head}"
+          test "${mirrored_head}" = "${canonical_head}"
+
+          while IFS= read -r tag_ref; do
+            canonical_tag="$(git rev-parse "${tag_ref}")"
+            mirrored_tag="$(git ls-remote origin "${tag_ref}" | awk '{print $1}')"
+            test -n "${mirrored_tag}"
+            test "${mirrored_tag}" = "${canonical_tag}"
+          done < <(git for-each-ref --format='%(refname)' refs/tags)
