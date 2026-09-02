@@ -44,7 +44,8 @@ jobs:
           cache: pip
       - name: Install declared lower bound
         run: |
-          pip install pytest 'tensorflow==2.10.0'
+          # TensorFlow 2.10 predates NumPy 2's binary ABI.
+          pip install pytest 'numpy<2' 'tensorflow==2.10.0'
           pip install -e . --no-deps
           pip check
       - name: Exercise representative public APIs
