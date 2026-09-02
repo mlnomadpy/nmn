@@ -37,3 +37,22 @@ owns its errors consistently across the supported backend-version matrix.
 Tests for unavailable optional backends are skipped before importing that
 backend. Keep new optional-backend imports inside their backend tree or guarded
 with `pytest.importorskip`.
+
+## Dependency and accelerator policy
+
+Every pull request runs the latest supported CPU suites for JAX/Flax, PyTorch,
+TensorFlow, and all three Keras backends. The declared lower bounds for Torch,
+TensorFlow, Keras, and MLX receive a weekly representative runtime smoke test;
+JAX/Flax's lower bound runs its full suite on every pull request because it is
+the reference implementation. Dependabot keeps both mutable dependency ranges
+and the immutable GitHub Action commit pins current.
+
+Continuous accelerator coverage is intentionally explicit:
+
+- MLX runs its full suite, fused Metal kernel gradients, and transpose-kernel
+  parity on a real Apple Silicon GPU for every pull request;
+- PyTorch, TensorFlow, Keras, and ordinary JAX tests run on CPU;
+- Pallas kernels run their independent numerical oracle and BlockSpec legality
+  checks in CPU interpret mode;
+- native TPU Mosaic and CUDA execution remain external validation gates and
+  are not represented as continuously tested in compatibility claims.

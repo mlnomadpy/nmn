@@ -254,7 +254,8 @@ class MultiHeadYatAttention(nn.Module):
         # A projection bias must not reintroduce a value for a query whose
         # every key is masked in every head.
         if effective_mask is not None:
-            query_has_key = effective_mask.any(dim=(-3, -1))
+            # Torch 1.11 accepts only one reduction dimension at a time.
+            query_has_key = effective_mask.any(dim=-1).any(dim=-2)
             x = torch.where(query_has_key.unsqueeze(-1), x, torch.zeros_like(x))
 
         return x

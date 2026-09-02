@@ -15,6 +15,7 @@ WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
 DOCUSAURUS = WORKFLOWS.parents[1] / "website" / "docusaurus"
 ROOT = WORKFLOWS.parents[1]
 CHECKOUT_REF = re.compile(r"actions/checkout@([^\s'\"#]+)")
+ACTION_REF = re.compile(r"uses:\s+([^\s@]+)@([^\s#]+)")
 
 
 def test_publish_uploads_only_version_tags():
@@ -44,11 +45,77 @@ def test_ci_actions_use_node24_compatible_releases():
     assert "actions/download-artifact@v4" not in workflows
 
 
+def test_third_party_actions_are_immutable_and_dependabot_updates_them():
+    workflow_paths = [*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml")]
+    action_refs = [
+        (owner, ref)
+        for path in workflow_paths
+        for owner, ref in ACTION_REF.findall(path.read_text())
+        if not owner.startswith("actions/")
+    ]
+
+    assert action_refs
+    assert all(re.fullmatch(r"[0-9a-f]{40}", ref) for _, ref in action_refs)
+    assert {owner for owner, _ in action_refs} == {
+        "codecov/codecov-action",
+        "pypa/gh-action-pypi-publish",
+    }
+    dependabot = (ROOT / ".github" / "dependabot.yml").read_text()
+    assert 'package-ecosystem: "github-actions"' in dependabot
+
+
 def test_codecov_uses_current_files_input():
     workflow = (WORKFLOWS / "test.yml").read_text()
 
     assert "        file: ./coverage.xml" not in workflow
     assert workflow.count("        files: ./coverage.xml") == 3
+
+
+def test_policy_ci_runs_for_every_pull_request_and_push():
+    workflow = (WORKFLOWS / "test.yml").read_text()
+    trigger = workflow.split("concurrency:", 1)[0]
+
+    assert "pull_request:" in trigger
+    assert "push:" in trigger
+    assert "paths:" not in trigger
+
+
+def test_release_and_deployment_permissions_are_job_scoped_and_bounded():
+    publish = (WORKFLOWS / "publish.yml").read_text()
+    deploy = (WORKFLOWS / "deploy.yml").read_text()
+    mirror = (WORKFLOWS / "mirror.yml").read_text()
+
+    publish_global = publish.split("jobs:", 1)[0]
+    deploy_global = deploy.split("jobs:", 1)[0]
+    publish_build = publish.split("  build:", 1)[1].split("  publish-to-testpypi:", 1)[
+        0
+    ]
+    deploy_build = deploy.split("  build:", 1)[1].split("  deploy:", 1)[0]
+
+    assert "id-token: write" not in publish_global
+    assert "id-token: write" not in publish_build
+    assert publish.count("id-token: write") == 2
+    assert "id-token: write" not in deploy_global
+    assert "id-token: write" not in deploy_build
+    assert deploy.count("id-token: write") == 1
+    assert publish.count("timeout-minutes:") == 3
+    assert deploy.count("timeout-minutes:") == 2
+    assert mirror.count("timeout-minutes:") == 1
+
+
+def test_minimum_backend_policy_is_scheduled_and_matches_metadata():
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    workflow = (WORKFLOWS / "minimum-versions.yml").read_text()
+    docs = (ROOT / "tests" / "README.md").read_text()
+    extras = project["project"]["optional-dependencies"]
+
+    assert "schedule:" in workflow and "workflow_dispatch:" in workflow
+    assert "torch==1.11.0+cpu" in workflow and "torch>=1.11.0" in extras["torch"]
+    assert "tensorflow==2.10.0" in workflow and "tensorflow>=2.10.0" in extras["tf"]
+    assert "keras==3.0.0" in workflow and "keras>=3.0.0" in extras["keras"]
+    assert "mlx==0.18.1" in workflow and "mlx>=0.18.1" in extras["mlx"]
+    assert "native TPU Mosaic and CUDA" in docs
+    assert "real Apple Silicon GPU" in docs
 
 
 def test_jax_ci_covers_minimum_and_latest_dependency_sets():
