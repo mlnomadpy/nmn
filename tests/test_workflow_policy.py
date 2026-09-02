@@ -89,6 +89,24 @@ def test_codecov_uses_current_files_input():
     assert workflow.count("        files: ./coverage.xml") == 3
 
 
+def test_codecov_uploads_are_oidc_authenticated_and_failure_blocking():
+    workflow = (WORKFLOWS / "test.yml").read_text()
+    readme = (ROOT / "README.md").read_text()
+    policy = (ROOT / "codecov.yml").read_text()
+
+    assert workflow.count("        use_oidc: true") == 3
+    assert workflow.count("        fail_ci_if_error: true") == 3
+    assert workflow.count("        disable_search: true") == 3
+    assert workflow.count("      id-token: write") == 3
+    assert "CODECOV_TOKEN" not in workflow
+    for upload in workflow.split("- name: Upload coverage")[1:]:
+        assert "continue-on-error" not in upload.split("\n\n", 1)[0]
+    assert "branch=master" in readme
+    assert "target: auto" in policy
+    assert "target: 80%" in policy
+    assert "carryforward: true" in policy
+
+
 def test_policy_ci_runs_for_every_pull_request_and_push():
     workflow = (WORKFLOWS / "test.yml").read_text()
     trigger = workflow.split("concurrency:", 1)[0]

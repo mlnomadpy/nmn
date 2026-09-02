@@ -1,0 +1,24 @@
+coverage:
+  precision: 2
+  round: down
+  range: 50..100
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        target: 80%
+        threshold: 1%
+
+flag_management:
+  default_rules:
+    carryforward: true
+
+comment:
+  layout: "condensed_header, condensed_files, condensed_footer"
+  require_changes: true
+
+github_checks:
+  annotations: true

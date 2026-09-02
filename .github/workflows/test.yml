@@ -49,6 +49,9 @@ jobs:
     name: Test JAX/Flax (${{ matrix.dependencies }}, py${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -106,13 +109,17 @@ jobs:
       with:
         files: ./coverage.xml
         flags: jax
-        token: ${{ secrets.CODECOV_TOKEN }}
-      continue-on-error: true
+        use_oidc: true
+        fail_ci_if_error: true
+        disable_search: true
 
   test-torch:
     name: Test PyTorch (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -177,13 +184,17 @@ jobs:
       with:
         files: ./coverage.xml
         flags: torch
-        token: ${{ secrets.CODECOV_TOKEN }}
-      continue-on-error: true
+        use_oidc: true
+        fail_ci_if_error: true
+        disable_search: true
 
   test-keras:
     name: Test Keras/TF (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -231,8 +242,9 @@ jobs:
       with:
         files: ./coverage.xml
         flags: keras
-        token: ${{ secrets.CODECOV_TOKEN }}
-      continue-on-error: true
+        use_oidc: true
+        fail_ci_if_error: true
+        disable_search: true
 
   test-keras-multibackend:
     name: Test Keras (${{ matrix.backend }} backend)
