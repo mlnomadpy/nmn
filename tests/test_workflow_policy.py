@@ -4,6 +4,8 @@ import json
 import re
 from pathlib import Path
 
+import nmn
+
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover - Python 3.10
@@ -79,6 +81,47 @@ def test_lint_toolchain_is_reproducible_and_skips_generated_version_file():
     assert '"black==26.5.1"' in workflow
     assert '"isort==9.0.1"' in workflow
     assert "extend-exclude = 'src/nmn/_version\\.py'" in project
+
+
+def test_local_checkout_precedes_any_installed_nmn_package():
+    package_path = Path(nmn.__file__).resolve()
+
+    assert package_path.is_relative_to(ROOT / "src")
+
+
+def test_developer_commands_and_tool_versions_match_ci():
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    makefile = (ROOT / "Makefile").read_text()
+    precommit = (ROOT / ".pre-commit-config.yaml").read_text()
+    dev = set(project["project"]["optional-dependencies"]["dev"])
+
+    assert "build>=1.2.2" in dev
+    assert {"black==26.5.1", "isort==9.0.1", "flake8==7.3.0"} <= dev
+    assert "$(PYTHON) -m mypy --no-error-summary" in makefile
+    assert "rev: 26.5.1" in precommit
+    assert "rev: 9.0.1" in precommit
+    assert "rev: 7.3.0" in precommit
+
+
+def test_only_documented_pytest_markers_are_declared():
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text())
+
+    assert project["tool"]["pytest"]["ini_options"]["markers"] == [
+        "slow: marks tests as slow (deselect with '-m \"not slow\"')"
+    ]
+
+
+def test_contribution_templates_cover_every_backend():
+    expected = {"nmn.torch", "nmn.nnx", "nmn.linen", "nmn.keras", "nmn.tf", "nmn.mlx"}
+    templates = [
+        ROOT / ".github" / "PULL_REQUEST_TEMPLATE.md",
+        ROOT / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml",
+        ROOT / ".github" / "ISSUE_TEMPLATE" / "feature_request.yml",
+    ]
+
+    for template in templates:
+        contents = template.read_text()
+        assert all(backend in contents for backend in expected), template
 
 
 def test_mypy_checks_the_package_from_one_drift_resistant_config():

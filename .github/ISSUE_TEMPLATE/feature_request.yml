@@ -36,6 +36,7 @@ body:
         - Flax Linen (nmn.linen)
         - Keras (nmn.keras)
         - TensorFlow (nmn.tf)
+        - MLX (nmn.mlx)
         - All frameworks
         - Build / packaging
         - Documentation

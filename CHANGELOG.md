@@ -7,7 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-No changes yet.
+### Changed
+- Repaired the contributor workflow so clean dev installs can build packages,
+  local pytest always resolves the checkout, Make and CI share package-wide
+  type checking, and documentation/templates match the six supported backends.
 
 ---
 
