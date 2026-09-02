@@ -223,14 +223,20 @@ def test_sdist_excludes_the_local_dacli_evidence_ledger():
     assert "/.dacli" in sdist["exclude"]
 
 
-def test_mirror_fails_and_verifies_when_sync_is_unavailable():
+def test_mirror_uses_repository_scoped_self_sync_and_verifies_every_ref():
     workflow = (WORKFLOWS / "mirror.yml").read_text()
 
-    assert 'if [ -z "${MIRROR_PAT}" ]; then' in workflow
-    assert "exit 0" not in workflow
-    assert "exit 1" in workflow
+    assert "github.repository == 'mlnomadpy/nmn'" in workflow
+    assert "contents: write" in workflow
+    assert "MIRROR_PAT" not in workflow
+    assert "https://github.com/azettaai/nmn.git" in workflow
+    assert "git merge-base --is-ancestor" in workflow
+    assert "git push origin refs/remotes/canonical/master:refs/heads/master" in workflow
+    assert "git push origin --tags" in workflow
     assert "git ls-remote" in workflow
     assert "mirrored_head" in workflow
+    assert "mirrored_tag" in workflow
+    assert "continue-on-error" not in workflow
 
 
 def test_website_is_built_on_pull_requests_with_node24():
