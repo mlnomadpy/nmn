@@ -107,6 +107,29 @@ def test_codecov_uploads_are_oidc_authenticated_and_failure_blocking():
     assert "carryforward: true" in policy
 
 
+def test_local_coverage_policy_is_fail_closed_and_combines_backend_data():
+    workflow = (WORKFLOWS / "test.yml").read_text()
+    project = (ROOT / "pyproject.toml").read_text()
+
+    assert workflow.count("uses: actions/upload-artifact@v7") == 3
+    assert workflow.count("uses: actions/download-artifact@v8") == 3
+    assert workflow.count("include-hidden-files: true") == 3
+    assert workflow.count("if-no-files-found: error") == 3
+    assert "cp .coverage .coverage.jax" in workflow
+    assert "cp .coverage .coverage.torch" in workflow
+    assert "cp .coverage .coverage.keras" in workflow
+    assert "needs: [test-jax, test-torch, test-keras]" in workflow
+    assert "coverage combine coverage-data" in workflow
+    assert "coverage report --fail-under=70" in workflow
+    assert "--compare-branch=origin/${{ github.base_ref }}" in workflow
+    assert "--fail-under=80" in workflow
+    assert '"*/_version.py"' in project
+    coverage_job = workflow.split("  coverage-policy:", 1)[1].split(
+        "\n  test-keras-multibackend:", 1
+    )[0]
+    assert "continue-on-error" not in coverage_job
+
+
 def test_policy_ci_runs_for_every_pull_request_and_push():
     workflow = (WORKFLOWS / "test.yml").read_text()
     trigger = workflow.split("concurrency:", 1)[0]

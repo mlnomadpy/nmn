@@ -103,6 +103,19 @@ jobs:
       env:
         JAX_PLATFORM_NAME: cpu
 
+    - name: Stage JAX coverage data
+      if: matrix.dependencies == 'minimum'
+      run: cp .coverage .coverage.jax
+
+    - name: Preserve JAX coverage for the local policy gate
+      uses: actions/upload-artifact@v7
+      if: matrix.dependencies == 'minimum'
+      with:
+        name: coverage-jax
+        path: .coverage.jax
+        include-hidden-files: true
+        if-no-files-found: error
+
     - name: Upload coverage
       uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
       if: matrix.dependencies == 'minimum'
@@ -172,11 +185,24 @@ jobs:
     - name: Run PyTorch tests
       run: pytest tests/test_torch/ -v --cov=nmn --cov-report=xml
 
+    - name: Stage PyTorch coverage data
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      run: cp .coverage .coverage.torch
+
     - name: Verify Windows optional-backend probe cleanup
       if: runner.os == 'Windows'
       run: >-
         python -m pytest tests/test_cli.py -v
         -k "optional_backend_probe_windows_job_kills_descendants"
+
+    - name: Preserve PyTorch coverage for the local policy gate
+      uses: actions/upload-artifact@v7
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      with:
+        name: coverage-torch
+        path: .coverage.torch
+        include-hidden-files: true
+        if-no-files-found: error
 
     - name: Upload coverage
       uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
@@ -236,6 +262,19 @@ jobs:
       run: |
         pytest tests/test_keras/ tests/test_tf/ -v --cov=nmn --cov-report=xml
 
+    - name: Stage Keras/TF coverage data
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      run: cp .coverage .coverage.keras
+
+    - name: Preserve Keras/TF coverage for the local policy gate
+      uses: actions/upload-artifact@v7
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      with:
+        name: coverage-keras
+        path: .coverage.keras
+        include-hidden-files: true
+        if-no-files-found: error
+
     - name: Upload coverage
       uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
@@ -245,6 +284,57 @@ jobs:
         use_oidc: true
         fail_ci_if_error: true
         disable_search: true
+
+  coverage-policy:
+    name: Enforce combined and changed-line coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [test-jax, test-torch, test-keras]
+
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+
+    - name: Install coverage policy tools
+      run: python -m pip install "coverage[toml]" diff-cover
+
+    - name: Download JAX coverage
+      uses: actions/download-artifact@v8
+      with:
+        name: coverage-jax
+        path: coverage-data
+
+    - name: Download PyTorch coverage
+      uses: actions/download-artifact@v8
+      with:
+        name: coverage-torch
+        path: coverage-data
+
+    - name: Download Keras/TF coverage
+      uses: actions/download-artifact@v8
+      with:
+        name: coverage-keras
+        path: coverage-data
+
+    - name: Enforce 70% combined project coverage
+      run: |
+        coverage combine coverage-data
+        coverage xml -o combined-coverage.xml
+        coverage report --fail-under=70
+
+    - name: Enforce 80% changed-line coverage
+      if: github.event_name == 'pull_request'
+      run: >-
+        diff-cover combined-coverage.xml
+        --compare-branch=origin/${{ github.base_ref }}
+        --fail-under=80
 
   test-keras-multibackend:
     name: Test Keras (${{ matrix.backend }} backend)
