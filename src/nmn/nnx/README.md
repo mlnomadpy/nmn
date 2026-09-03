@@ -242,28 +242,37 @@ Share kernel parameters across multiple layers to **reduce model size** and **en
 
 **Key concepts:**
 - **Kernel Bank**: Shared parameter store managed at class level
-- **Auto-expansion**: Automatically grows when larger layer needs more features
+- **Fixed capacity**: The first consumer fixes the bank size; set
+  `kernel_bank_size` there to the largest size any consumer will need
 - **First-k slicing**: Each layer extracts the first k filters it needs
 - **Namespace isolation**: Multiple independent banks via `kernel_bank_id`
+- **Compatible signatures**: A shared convolution bank requires the same
+  `kernel_bank_id`, spatial `kernel_size`, input channels per group, group count,
+  parameter dtype, initializer, and `positive_init` setting. A shared dense
+  bank requires the same `kernel_bank_id`, input feature count, parameter
+  dtype, initializer, and `positive_init` setting. Changing one of these
+  fields intentionally creates a separate bank.
 
 ```python
 from nmn.nnx.layers.conv import YatConv
 
 rngs = nnx.Rngs(0)
 
-# Create multiple layers sharing same kernel bank
+# Create parallel consumers with compatible input/kernel/group signatures.
+# These are not a sequential stack: every consumer accepts 32 input channels.
 layer1 = YatConv(
-    in_features=3,
+    in_features=32,
     out_features=32,  # First 32 filters
     kernel_size=(3, 3),
     tie_kernel_bank=True,
+    kernel_bank_size=128,  # Fixed capacity declared before state/optimizer creation
     kernel_bank_id='resnet-conv',  # Bank namespace
     rngs=rngs
 )
 
 layer2 = YatConv(
     in_features=32,
-    out_features=64,  # Auto-expands to 64
+    out_features=64,  # Uses the first 64 filters
     kernel_size=(3, 3),
     tie_kernel_bank=True,
     kernel_bank_id='resnet-conv',
@@ -271,17 +280,17 @@ layer2 = YatConv(
 )
 
 layer3 = YatConv(
-    in_features=64,
-    out_features=128,  # Auto-expands to 128
+    in_features=32,
+    out_features=128,  # Uses the full preallocated bank
     kernel_size=(3, 3),
     tie_kernel_bank=True,
     kernel_bank_id='resnet-conv',
     rngs=rngs
 )
 
-# Console output:
-# Auto-expanding kernel bank 'resnet-conv': 32 -> 64 filters
-# Auto-expanding kernel bank 'resnet-conv': 64 -> 128 filters
+# A later consumer requesting more than 128 filters raises ValueError without
+# mutating the shared parameter, gradients, or optimizer state.
+assert layer1.kernel is layer2.kernel is layer3.kernel
 ```
 
 **For YatNMN:**
@@ -298,12 +307,14 @@ head1 = YatNMN(
 )
 
 head2 = YatNMN(
-    in_features=256,
+    in_features=512,  # Must match head1 to share its kernel bank
     out_features=128,
     tie_kernel_bank=True,
     kernel_bank_id='classifier',  # Shares with head1
     rngs=rngs
 )
+
+assert head1.kernel is head2.kernel
 ```
 
 **Multiple independent banks:**
@@ -335,16 +346,15 @@ classifier = YatNMN(
 **Parameter reduction example:**
 
 ```
-ResNet-50 without tying:
-- Stage 1: 32 filters
-- Stage 2: 64 filters
-- Stage 3: 128 filters
-- Stage 4: 256 filters
-Total unique: 480 filters
+Four compatible parallel 3x3 convolutions, each with 64 input channels and
+32, 64, 128, and 256 output filters:
 
-With weight tying:
-- Single shared bank: 256 filters (final size)
-Reduction: 480 -> 256 (46.7% fewer parameters)
+- Untied kernels: 3 * 3 * 64 * (32 + 64 + 128 + 256) = 276,480 elements
+- One preallocated 256-filter bank: 3 * 3 * 64 * 256 = 147,456 elements
+- Kernel-parameter reduction: 46.7%
+
+This calculation excludes each consumer's independent bias/alpha/epsilon
+state. Sequential stages with different input widths require separate banks.
 ```
 
 ### Constant Alpha Scaling
@@ -514,12 +524,11 @@ class EfficientYATResNet(nnx.Module):
             padding='SAME',
             weight_normalized=True,      # 10-15% speedup
             constant_alpha=True,         # Use sqrt(2)
-            tie_kernel_bank=True,        # Share weights
-            kernel_bank_id='conv-bank',
             rngs=rngs
         )
         
-        # Stage 2: 64 filters (bank auto-expands)
+        # Stage 2: 64 filters. Its input width differs from stage 1, so it
+        # intentionally uses an independent kernel.
         self.conv2 = YatConv(
             in_features=32,
             out_features=64,
@@ -528,12 +537,11 @@ class EfficientYATResNet(nnx.Module):
             padding='SAME',
             weight_normalized=True,
             constant_alpha=True,
-            tie_kernel_bank=True,
-            kernel_bank_id='conv-bank',
             rngs=rngs
         )
         
-        # Stage 3: 128 filters (bank auto-expands)
+        # Stage 3: 128 filters. Sequential stages with different input widths
+        # cannot share a tied kernel bank.
         self.conv3 = YatConv(
             in_features=64,
             out_features=128,
@@ -542,8 +550,6 @@ class EfficientYATResNet(nnx.Module):
             padding='SAME',
             weight_normalized=True,
             constant_alpha=True,
-            tie_kernel_bank=True,
-            kernel_bank_id='conv-bank',
             rngs=rngs
         )
         
@@ -553,8 +559,6 @@ class EfficientYATResNet(nnx.Module):
             out_features=num_classes,
             weight_normalized=True,
             constant_alpha=True,
-            tie_kernel_bank=True,
-            kernel_bank_id='head-bank',
             rngs=rngs
         )
     
@@ -627,16 +631,12 @@ class OptimizedYATNet(nnx.Module):
             3, 64, (3, 3), padding='SAME',
             weight_normalized=True,
             constant_alpha=True,
-            tie_kernel_bank=True,
-            kernel_bank_id='conv',
             rngs=rngs
         )
         self.conv2 = YatConv(
             64, 128, (3, 3), strides=(2, 2), padding='SAME',
             weight_normalized=True,
             constant_alpha=True,
-            tie_kernel_bank=True,
-            kernel_bank_id='conv',
             rngs=rngs
         )
         self.head = YatNMN(
@@ -814,14 +814,17 @@ layer = YatConv(64, 128, (3, 3), constant_alpha=True, rngs=rngs)
 
 ### 3. **Apply Weight Tying for Large Models**
 ```python
-# 30-50% parameter reduction in ResNet-style architectures
-layers = [
-    YatConv(ch_in, ch_out, (3, 3), 
-            tie_kernel_bank=True, 
-            kernel_bank_id='shared',
-            rngs=rngs)
-    for ch_in, ch_out in [(3, 64), (64, 128), (128, 256)]
-]
+# Tied banks are useful for parallel consumers with compatible signatures.
+# Preallocate the largest required output width on the first consumer.
+narrow = YatConv(
+    64, 64, (3, 3), tie_kernel_bank=True,
+    kernel_bank_id='shared', kernel_bank_size=128, rngs=rngs,
+)
+wide = YatConv(
+    64, 128, (3, 3), tie_kernel_bank=True,
+    kernel_bank_id='shared', kernel_bank_size=128, rngs=rngs,
+)
+assert narrow.kernel is wide.kernel
 ```
 
 ### 4. **Use Appropriate Padding Mode**
