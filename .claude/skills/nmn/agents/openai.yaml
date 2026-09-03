@@ -1,0 +1,4 @@
+interface:
+  display_name: "NMN Framework Guide"
+  short_description: "Use NMN correctly across six ML frameworks"
+  default_prompt: "Use $nmn to implement this model with the correct backend API and verify numerical behavior."
