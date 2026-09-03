@@ -131,6 +131,15 @@ print(y.shape)  # (4, 16, 512)
 
 Drop in as a replacement for `keras.layers.MultiHeadAttention`.
 
+The `mask` argument has one unambiguous meaning: a rank-2 Keras query sequence
+mask shaped `(batch, query_length)`, where `True` marks a valid token. For
+self-attention the same sequence mask also masks keys; for cross-attention it
+masks queries only. This contract does not change when `batch == query_length`.
+Pass pairwise masks—including rank-2 `(query_length, key_length)` masks—through
+`attention_mask`. For backward compatibility, rank-3 and rank-4 pairwise masks
+passed through `mask` remain supported. When both arguments are present, the
+layer combines them.
+
 ---
 
 ## 6. Saving & loading

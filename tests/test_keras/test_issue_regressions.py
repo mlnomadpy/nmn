@@ -121,9 +121,9 @@ def test_attention_layer_zeroes_fully_masked_rows_after_projection(
     mask_np[..., 0, :] = False
     mask = tensor(mask_np, dtype="bool")
     output = (
-        layer(query, key=context, value=context, mask=mask)
+        layer(query, key=context, value=context, attention_mask=mask)
         if cross_attention
-        else layer(query, mask=mask)
+        else layer(query, attention_mask=mask)
     )
     np.testing.assert_array_equal(to_numpy(output)[:, 0], 0.0)
     assert np.all(np.isfinite(to_numpy(output)))
