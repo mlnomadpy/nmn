@@ -7,16 +7,22 @@ Concise, accurate orientation for an agent working with the `nmn` package
 
 ## Install the agent skill
 
-This repo ships an [Agent Skill](https://docs.claude.com/en/docs/claude-code/skills)
-at [`.claude/skills/nmn/`](.claude/skills/nmn/SKILL.md). Install it so your coding
-agent auto-loads NMN expertise whenever you `import nmn` or work with YAT layers —
-no manual lookup:
+This repo ships a portable Agent Skill at
+[`.claude/skills/nmn/`](.claude/skills/nmn/SKILL.md). Give the entire `nmn`
+directory to an agent—not only `SKILL.md`—because its per-framework references
+and UI metadata are part of the skill. Install it so the agent auto-loads NMN
+expertise whenever you `import nmn` or work with YAT layers:
 
 ```bash
-# user-level (applies to all your projects)
+# Codex user-level (applies to all your projects)
+mkdir -p ~/.codex/skills
+cp -r .claude/skills/nmn ~/.codex/skills/nmn
+
+# Claude Code user-level (applies to all your projects)
+mkdir -p ~/.claude/skills
 cp -r .claude/skills/nmn ~/.claude/skills/nmn
 
-# or project-level (commit it with your repo)
+# Claude Code project-level (commit it with your repo)
 mkdir -p .claude/skills && cp -r /path/to/nmn/.claude/skills/nmn .claude/skills/nmn
 ```
 

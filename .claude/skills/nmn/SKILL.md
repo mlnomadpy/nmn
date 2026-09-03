@@ -1,126 +1,140 @@
 ---
 name: nmn
-description: >-
-  Use when writing, reviewing, or debugging code that uses the `nmn`
-  (Neural-Matter Network) Python library — activation-free YAT / ⵟ neural
-  layers and attention that learn non-linearity geometrically. Trigger when a
-  file imports `nmn` or `from nmn.<framework> import ...`; when the user
-  mentions "Neural Matter Network", "YAT layer/attention", `YatNMN`, `YatConv`,
-  `MultiHeadYatAttention`, `RotaryYatAttention`, the MAY/RAY performer feature
-  maps, or lazy YatNMN training; or when choosing/using nmn across PyTorch,
-  Flax NNX, Flax Linen, Keras, TensorFlow, or MLX. Covers per-framework imports
-  and the `units`/`features`/`in_features` constructor differences, the
-  SLAY/MAY/RAY performer maps, lazy mode, and the `nmn` CLI.
+description: Use when writing, porting, reviewing, debugging, training, exporting, or benchmarking code with the nmn Neural Matter Network Python package. Trigger on `import nmn`, `nmn.torch`, `nmn.nnx`, `nmn.linen`, `nmn.keras`, `nmn.tf`, `nmn.mlx`, YatNMN/YatDense, YAT convolution or embedding, MultiHeadYatAttention, RotaryYatAttention, SLAY/MAY/RAY/GOAT attention, Pallas YAT kernels, tied kernel banks, learnable epsilon, lazy or mixed-precision NMN training. Provides verified per-framework constructors, tensor layouts, masking semantics, serialization, accelerator guidance, and tests for PyTorch, Flax NNX, Flax Linen, Keras 3, TensorFlow, and MLX.
 ---
 
-# Using the `nmn` (Neural-Matter Network) library
+# Use NMN
 
-`nmn` ships **YAT (ⵟ) layers** — activation-free neural layers whose response is
-`(⟨w,x⟩ + b)² / (‖w − x‖² + ε)`, a ratio of *similarity* to *distance*. The same
-math is implemented, numerically equivalent (< 1e-6 fp32), across **six
-frameworks**. Each framework is an independent optional install.
+Treat the installed package and repository source as authoritative. NMN ships
+the YAT family across six independent backends; similar class names do not imply
+identical constructor names, layouts, state APIs, or export formats.
 
-## Step 0 — check the environment first
+## Start with discovery
 
-Before writing code, confirm which backend is installed:
+Run these before writing backend-specific code:
 
 ```bash
-nmn doctor            # which of the 6 backends import + versions
-nmn guide <framework> # a self-contained quickstart (torch/nnx/linen/keras/tf/mlx)
-nmn features          # MAY/RAY performer maps + lazy YatNMN usage
+nmn version
+nmn doctor
+nmn frameworks
+nmn guide <torch|nnx|linen|keras|tf|mlx>
+nmn features
 ```
 
-`import nmn` is import-light; a framework is only pulled in when you import its
-subpackage. If a backend is missing: `pip install nmn[<framework>]`
-(`torch`, `nnx`, `linen`, `keras`, `tf`, `mlx`).
+If working from a checkout, inspect `src/nmn/<backend>/__init__.py` and the real
+class signature. Do not infer one backend's kwargs from another.
 
-## Pick the framework, then use the EXACT import + constructor
+Install exactly the backend needed:
 
-The single most common mistake is the wrong `YatNMN` constructor kwarg — it
-differs per framework. Use this table verbatim:
+```bash
+python -m pip install "nmn[torch]"
+python -m pip install "nmn[nnx]"
+python -m pip install "nmn[linen]"
+python -m pip install "nmn[keras]"
+python -m pip install "nmn[tf]"
+python -m pip install "nmn[mlx]"
+```
 
-| Framework | Import | `YatNMN` constructor |
+`nmn[all]` excludes MLX because MLX requires Apple Silicon. Importing `nmn`
+itself is framework-light; importing a backend requires that backend's extra.
+
+## Select the backend reference
+
+Read only the reference relevant to the task:
+
+- [PyTorch](references/pytorch.md): eager/compile, tied banks, `param_dtype`.
+- [Flax NNX](references/flax-nnx.md): NNX state, JIT, decode, performers,
+  precision modes, and Pallas TPU/GPU attention.
+- [Flax Linen](references/flax-linen.md): `init`/`apply`, Optax freezing,
+  grouped convolution, softmax/L1 attention.
+- [Keras 3](references/keras.md): backend selection, serialization, shared
+  convolution banks, and channels-first portability.
+- [TensorFlow](references/tensorflow.md): native TF modules, `tf.function`,
+  grouped convolution, and SavedModel signatures.
+- [MLX](references/mlx.md): Apple GPU, eager/fused paths, compile, decode, and
+  transpose-SAME semantics.
+
+For behavior shared by all backends, read
+[the cross-framework contract](references/shared-contract.md).
+
+## Constructor map
+
+Use the exact dense constructor for the selected backend:
+
+| Backend | Import | Construction |
 | --- | --- | --- |
-| PyTorch | `from nmn.torch import YatNMN` | `YatNMN(in_features, out_features)` |
-| Flax NNX | `from nmn.nnx import YatNMN` | `YatNMN(in_features, out_features, rngs=nnx.Rngs(0))` |
-| Flax Linen | `from nmn.linen import YatNMN` | `YatNMN(features=N)` — call `YatNMN(features=N)(x)` |
-| Keras | `from nmn.keras import YatNMN` | `YatNMN(units)` — **`units`, not `features`** |
-| TensorFlow | `from nmn.tf import YatNMN` | `YatNMN(features)` |
-| MLX | `from nmn.mlx import YatNMN` | `YatNMN(features)` |
+| PyTorch | `from nmn.torch import YatNMN` | `YatNMN(in_features=128, out_features=64)` |
+| Flax NNX | `from nmn.nnx import YatNMN` | `YatNMN(128, 64, rngs=nnx.Rngs(0))` |
+| Flax Linen | `from nmn.linen import YatNMN` | `YatNMN(features=64)` then `init`/`apply` |
+| Keras 3 | `from nmn.keras import YatNMN` | `YatNMN(units=64)` |
+| TensorFlow | `from nmn.tf import YatNMN` | `YatNMN(features=64)`; input width is lazy |
+| MLX | `from nmn.mlx import YatNMN` | `YatNMN(features=64)`; input width is lazy |
 
-Minimal MLP (Flax NNX):
+Common aliases are intentionally incomplete: Keras/TF/MLX export `YatDense`;
+NNX exports dimension-generic `YatConv` and `YatConvTranspose` plus aliases;
+Linen attention is `MultiHeadAttention`; Torch/Keras/TF/MLX use
+`MultiHeadYatAttention`.
 
-```python
-from flax import nnx
-from nmn.nnx import YatNMN
+## Core semantics
 
-class MLP(nnx.Module):
-    def __init__(self, rngs):
-        self.fc1 = YatNMN(in_features=784, out_features=256, rngs=rngs)
-        self.fc2 = YatNMN(in_features=256, out_features=10, rngs=rngs)
-    def __call__(self, x):
-        return self.fc2(self.fc1(x))   # no activation between layers — YAT is non-linear
+For an input vector `x` and output kernel vector `w`, YAT computes a learned
+scale of
+
+```text
+((dot(x, w) + bias) ** 2) / (squared_distance(x, w) + epsilon)
 ```
 
-Common knobs (same names across frameworks): `use_bias`, `use_alpha` /
-`constant_alpha`, `epsilon`, `learnable_epsilon`. Conv variants exist too:
-`YatConv{1,2,3}D` / `YatConvTranspose{1,2,3}D` (torch/keras/tf/linen) and
-`YatConv` (nnx).
+The ratio is already nonlinear. Do not automatically insert ReLU/GELU after a
+YAT layer. `constant_alpha=True` means the backend's documented constant;
+a numeric `constant_alpha` uses that value. `lazy=True` / `freeze_kernel=True`
+freezes only the kernel; bias, alpha, and learnable epsilon remain trainable.
 
-## Attention
+`epsilon` must be finite and strictly positive. When `learnable_epsilon=True`,
+the public effective epsilon is `softplus(epsilon_param)`. Keep optimizer and
+checkpoint code aware that low-precision layers may retain epsilon state in
+FP32 to avoid underflow or overflow.
 
-- `MultiHeadYatAttention(embed_dim, num_heads, ...)` — Keras / TensorFlow / MLX.
-- Flax NNX: `from nmn.nnx import MultiHeadAttention` → `MultiHeadAttention(num_heads, in_features, rngs=...)` (also exported as `MultiHeadYatAttention`).
-- Flax Linen: `MultiHeadAttention(num_heads, qkv_features=..., out_features=...)` — **no `in_features`**.
-- NNX RoPE + O(n) performer: `RotaryYatAttention(embed_dim, num_heads, use_performer=True, performer_kind="slay"|"maclaurin"|"radial", performer_num_features=256, rngs=...)`. There is **no `key_dim`** kwarg anywhere, and RotaryYatAttention takes `embed_dim` (not `in_features`) and `performer_num_features` (not `num_features`).
+## Attention and masks
 
-## Linear-attention feature maps: SLAY / MAY / RAY
+Functional attention tensors use `[..., query_length, heads, head_dim]` for Q
+and `[..., key_length, heads, head_dim]` for K/V. Modules generally accept
+batch-major `[batch, sequence, embedding]` inputs.
 
-Approximate the spherical-YAT kernel `κ(s) = (s+b)²/((2+ε)−2s)` so attention runs
-in **O(n)**. Available across frameworks as `create_*_projection` /
-`*_features` / `*_yat_attention` (canonical kwargs `bias=`, `epsilon=`):
+Boolean masks use `True` for allowed positions and may be broadcast from common
+`[Q,K]`, `[B,Q,K]`, or `[B,H,Q,K]` forms. A fully masked query row produces
+exactly zero attention weights and exactly zero module output, including after
+an output projection with bias. Do not replace this with a uniform row or NaNs.
 
-- **SLAY** (anchor) — bias-free (`b = 0`) only.
-- **MAY** (Random Maclaurin) — bias-aware; near-exact for the deployment regime `b > 0`, where it beats SLAY.
-- **RAY** (radial) — bias-aware secondary route.
+Use SLAY for the bias-free spherical-anchor regime. Use MAY (`maclaurin`) or
+RAY (`radial`) when the kernel bias matters. Their features are sign-indefinite;
+stabilize only the final denominator, never the features themselves.
 
-```python
-from nmn.nnx import create_maclaurin_projection, maclaurin_yat_attention
-# epsilon here is the YAT ε. MAY is near-exact when ε ≈ the median squared
-# distance (~O(1) on the unit sphere), not a tiny stabilizer like 1e-5.
-p = create_maclaurin_projection(key, head_dim=64, num_features=256, bias=1.0, epsilon=0.5)
-out = maclaurin_yat_attention(q, k, v, p)   # q,k,v: [batch, seq, heads, head_dim]
-```
+## Numeric policy
 
-MAY/RAY features are **sign-indefinite** — never add an epsilon to the features
-(it biases the estimator); only stabilize the division denominator.
+NMN promotes vulnerable low-precision score reductions where necessary,
+preserves the requested public output dtype, saturates finite values that do not
+fit that dtype, and preserves genuine NaNs. Compare low-precision behavior to a
+synchronized FP32 reference for outputs and all trainable/input gradients.
 
-## Lazy training mode (freeze the kernel)
+A mathematically out-of-range gradient accumulated from multiple independent
+uses of the same FP16 leaf cannot be represented in FP16. Prefer FP32 parameter
+storage, autocast/loss scaling, or BF16 where appropriate; do not claim arbitrary
+FP16 leaf accumulation remains exact.
 
-`YatNMN(..., lazy=True)` (alias `freeze_kernel=True`) freezes **only the kernel**
-feature directions; **`bias`, `alpha`, and `epsilon` stay trainable**. Uses each
-backend's idiomatic mechanism (NNX `FrozenParam`, torch `requires_grad=False`,
-mlx `freeze`, Keras/TF `trainable=False`, linen `stop_gradient`). Default is
-`lazy=False` (unchanged).
+## Verification workflow
 
-## Gotchas
-
-- Backends are **independent optional installs** — run `nmn doctor`; don't assume torch/tf/jax/mlx is present.
-- `YatNMN` kwarg differs per framework (table above) — Keras is `units`, NOT `features`.
-- No `key_dim` on any attention class; `MultiHeadYatAttention` needs `embed_dim` + `num_heads`.
-- Don't insert activation functions between YAT layers — the non-linearity is built in.
-- There is **no RNN module** (`nmn.nnx.rnn` does not exist); any such import is wrong.
-- Squashers are at the package root: `from nmn.nnx import softermax, softer_sigmoid, soft_tanh`.
-
-## Verify
-
-Run the whole suite (backend tests auto-skip when a framework is absent), or
-target one backend's directory:
+Test the narrow backend first, then shared parity and the full available suite:
 
 ```bash
-python -m pytest -q                 # full suite
-python -m pytest tests/test_torch -q # one backend
+python -m pytest -q tests/test_<backend>
+python -m pytest -q tests/integration
+python -m pytest -q
 ```
 
-For deeper, self-contained per-framework quickstarts, prefer `nmn guide <framework>`
-over guessing — it prints verified, runnable snippets.
+Missing optional backends should skip cleanly. Validate on the real accelerator
+for accelerator-specific paths: Pallas on TPU/GPU and fused MLX on Apple Metal.
+CPU interpretation proves algebra, not native lowering.
+
+When porting between backends, synchronize every parameter explicitly and test
+forward values plus input/kernel/bias/alpha/epsilon gradients. Compare semantics,
+not initializer randomness or framework-default layouts.
