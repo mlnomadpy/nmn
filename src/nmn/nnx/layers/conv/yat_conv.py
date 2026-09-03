@@ -11,17 +11,12 @@ patch-wise between input patches and kernel weights.
 
 from __future__ import annotations
 
-import logging
 import threading
 import typing as tp
 
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax import lax
-
-logger = logging.getLogger(__name__)
-
 from flax import nnx
 from flax.nnx import rnglib
 from flax.nnx.module import Module
@@ -34,6 +29,7 @@ from flax.typing import (
     PrecisionLike,
     PromoteDtypeFn,
 )
+from jax import lax
 
 from .._numerics import finite_cast, fp32_if_low_precision, inverse_softplus
 from .utils import (
@@ -111,7 +107,8 @@ class YatConv(Module):
         tie_kernel_bank: If True, reuse a shared kernel bank across compatible
             YatConv instances and slice the first ``out_features`` filters.
         kernel_bank_size: Total number of filters in the shared bank. If None,
-            defaults to ``out_features`` for the creating instance.
+            defaults to ``out_features`` for the creating instance. Bank capacity
+            is immutable; declare the largest required size on the first consumer.
         kernel_bank_id: Optional bank namespace to control sharing groups.
         rngs: Random number generators.
     """
@@ -181,9 +178,14 @@ class YatConv(Module):
         self._kernel_slice = slice(None)
 
         if tie_kernel_bank:
-            # Auto-calculate bank size: use specified size or default to current layer's out_features
-            # Bank will auto-expand if a later layer needs more features
-            bank_out_features = kernel_bank_size or out_features
+            bank_out_features = (
+                out_features if kernel_bank_size is None else kernel_bank_size
+            )
+            if bank_out_features < out_features:
+                raise ValueError(
+                    "kernel_bank_size must be at least out_features, "
+                    f"got {bank_out_features} < {out_features}"
+                )
 
             bank_shape = kernel_size + (
                 in_features // feature_group_count,
@@ -202,7 +204,11 @@ class YatConv(Module):
             with YatConv._KERNEL_BANKS_LOCK:
                 shared_kernel = YatConv._KERNEL_BANKS.get(bank_key)
                 if shared_kernel is None:
-                    # First layer using this bank: create with auto-sized dimensions
+                    # The first consumer fixes capacity. Resizing a live Param can
+                    # invalidate gradients and optimizer moments that already hold
+                    # its original shape, and NNX state extraction is not observable
+                    # here. Requiring up-front capacity is therefore the only safe
+                    # class-global sharing contract.
                     kernel_key = rngs.params()
                     kernel_val = kernel_init(kernel_key, bank_shape, param_dtype)
                     if positive_init:
@@ -210,31 +216,16 @@ class YatConv(Module):
                     shared_kernel = nnx.Param(kernel_val)
                     YatConv._KERNEL_BANKS[bank_key] = shared_kernel
                 else:
-                    # Bank exists: auto-expand if needed
-                    existing_shape = shared_kernel.value.shape
+                    existing_shape = shared_kernel[...].shape
                     existing_bank_size = existing_shape[-1]
 
                     if bank_out_features > existing_bank_size:
-                        # Auto-expand bank to accommodate larger layer
-                        logger.info(
-                            "Auto-expanding kernel bank '%s': %d -> %d filters",
-                            kernel_bank_id,
-                            existing_bank_size,
-                            bank_out_features,
+                        raise ValueError(
+                            f"Kernel bank {kernel_bank_id!r} has fixed capacity "
+                            f"{existing_bank_size}; requested {bank_out_features}. "
+                            "Set kernel_bank_size to the maximum required capacity "
+                            "when constructing the first consumer."
                         )
-                        new_shape = existing_shape[:-1] + (bank_out_features,)
-                        old_kernel = shared_kernel.value
-                        # Pad with random initialization for new filters
-                        kernel_key = rngs.params()
-                        new_kernel_val = kernel_init(kernel_key, new_shape, param_dtype)
-                        if positive_init:
-                            new_kernel_val = jnp.abs(new_kernel_val)
-                        # Copy old values, new filters already initialized
-                        new_kernel_val = new_kernel_val.at[
-                            ..., :existing_bank_size
-                        ].set(old_kernel)
-                        shared_kernel.set_value(new_kernel_val)
-                    # elif bank_out_features < existing_bank_size: bank is larger, slice used below
 
             self.kernel = shared_kernel
             self._kernel_slice = slice(0, out_features)
