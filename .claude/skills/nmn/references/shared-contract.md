@@ -11,8 +11,9 @@ and construction differ; use the backend reference rather than guessing.
 - `lazy=True` and `freeze_kernel=True` freeze only the kernel.
 - `learnable_epsilon=True` stores a raw parameter and evaluates its softplus.
 - `weight_normalized=True` uses normalized kernel geometry where supported.
-- DropConnect is stochastic only during training/non-deterministic calls. Use a
-  rate in `[0, 1)` and pass the framework's training/deterministic flag.
+- Where supported, DropConnect is stochastic only during
+  training/non-deterministic calls. Use a rate in `[0, 1)` and pass the
+  framework's training/deterministic flag.
 - Tied banks share only compatible geometry, device, backend, and dtype policy.
   Preallocate capacity when architecture width is known.
 
@@ -21,12 +22,16 @@ and construction differ; use the backend reference rather than guessing.
 - Dense operates on the final feature dimension.
 - JAX/Linen/NNX, Keras, TF, and MLX convolution examples are channels-last.
 - Native PyTorch convolution is channels-first.
-- Attention functional APIs use `[..., Q, H, D]`; attention modules use
-  `[B, S, E]` unless their backend reference says otherwise.
+- The portable attention functional layout is `[B, Q, H, D]`; only use extra
+  leading batch dimensions where the selected backend documents them.
+- Attention modules use `[B, S, E]` unless their backend reference says
+  otherwise.
 
 ## Masks
 
 - Boolean `True` means allowed/visible.
+- Portable broadcast forms are `[Q,K]`, `[H,Q,K]`, `[B,1,Q,K]`, and
+  `[B,H,Q,K]`; rank 3 aligns to heads rather than batches.
 - Broadcast masks to score shape rather than indexing fixed mask ranks.
 - Partially masked rows normalize over valid keys only.
 - Fully masked rows yield exact-zero weights and outputs with finite gradients.

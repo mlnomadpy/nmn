@@ -89,21 +89,26 @@ YAT layer. `constant_alpha=True` means the backend's documented constant;
 a numeric `constant_alpha` uses that value. `lazy=True` / `freeze_kernel=True`
 freezes only the kernel; bias, alpha, and learnable epsilon remain trainable.
 
-`epsilon` must be finite and strictly positive. When `learnable_epsilon=True`,
-the public effective epsilon is `softplus(epsilon_param)`. Keep optimizer and
-checkpoint code aware that low-precision layers may retain epsilon state in
-FP32 to avoid underflow or overflow.
+Pass a finite, strictly positive `epsilon`; treat this as a caller precondition
+because validation is not yet uniform across every backend. When
+`learnable_epsilon=True`, the public effective epsilon is
+`softplus(epsilon_param)`. Keep optimizer and checkpoint code aware that
+low-precision layers may retain epsilon state in FP32 to avoid underflow or
+overflow.
 
 ## Attention and masks
 
-Functional attention tensors use `[..., query_length, heads, head_dim]` for Q
-and `[..., key_length, heads, head_dim]` for K/V. Modules generally accept
-batch-major `[batch, sequence, embedding]` inputs.
+The portable functional-attention layout is `[batch, query_length, heads,
+head_dim]` for Q and `[batch, key_length, heads, head_dim]` for K/V. Some JAX
+functions, including Pallas attention, document extra leading batch dimensions;
+do not assume that extension in Torch, TensorFlow, or MLX. Modules generally
+accept batch-major `[batch, sequence, embedding]` inputs.
 
 Boolean masks use `True` for allowed positions and may be broadcast from common
-`[Q,K]`, `[B,Q,K]`, or `[B,H,Q,K]` forms. A fully masked query row produces
-exactly zero attention weights and exactly zero module output, including after
-an output projection with bias. Do not replace this with a uniform row or NaNs.
+`[Q,K]`, `[H,Q,K]`, `[B,1,Q,K]`, or `[B,H,Q,K]` forms. A rank-3 mask aligns to
+heads, not batches. A fully masked query row produces exactly zero attention
+weights and exactly zero module output, including after an output projection
+with bias. Do not replace this with a uniform row or NaNs.
 
 Use SLAY for the bias-free spherical-anchor regime. Use MAY (`maclaurin`) or
 RAY (`radial`) when the kernel bias matters. Their features are sign-indefinite;

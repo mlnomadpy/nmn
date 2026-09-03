@@ -53,8 +53,9 @@ x = torch.randn(2, 32, 128)
 y = attn(x, mask=torch.ones(32, 32, dtype=torch.bool))
 ```
 
-Pass `key=` and `value=` for cross attention. `deterministic=False` enables
-training dropout. Fully masked query rows return exact-zero weights/output.
+Pass `key=` and `value=` for cross attention. With the module in training mode,
+`deterministic=False` permits dropout; `eval()` disables it. Fully masked query
+rows return exact-zero weights/output.
 
 ## Precision and transforms
 
