@@ -14,6 +14,79 @@ from nmn.torch.attention.yat_attention import (
 
 
 class TestAttentionFunctions:
+    @pytest.mark.parametrize(
+        ("dtype", "rtol", "atol"),
+        [
+            pytest.param(torch.float16, 5e-3, 5e-4, id="float16"),
+            pytest.param(torch.bfloat16, 2e-2, 3e-3, id="bfloat16"),
+        ],
+    )
+    @pytest.mark.parametrize("compiled", [False, True], ids=["eager", "compiled"])
+    def test_normalized_low_precision_matches_fp32_output_and_gradients(
+        self, dtype, rtol, atol, compiled
+    ):
+        if compiled and not hasattr(torch, "compile"):
+            pytest.skip("torch.compile requires PyTorch 2")
+
+        # Build the reference from values quantized to the caller dtype so this
+        # measures arithmetic precision rather than input representation error.
+        query_data = torch.tensor(
+            [[[[300.0, 300.0, 300.0, 300.0]], [[300.0, -300.0, 200.0, -200.0]]]],
+            dtype=dtype,
+        )
+        key_data = torch.tensor(
+            [
+                [
+                    [[300.0, 300.0, 300.0, -300.0]],
+                    [[300.0, -300.0, -300.0, 300.0]],
+                    [[-300.0, 250.0, 200.0, 100.0]],
+                ]
+            ],
+            dtype=dtype,
+        )
+        value_data = torch.tensor(
+            [[[[1.0, -1.0]], [[3.0, 2.0]], [[-2.0, 4.0]]]], dtype=dtype
+        )
+        mask = torch.tensor([[[[False, False, False], [True, True, False]]]])
+        cotangent = torch.tensor([[[[0.5, -0.25]], [[1.5, 0.75]]]])
+
+        def evaluate(compute_dtype, use_compile, normalized):
+            query = query_data.to(compute_dtype).detach().requires_grad_()
+            key = key_data.to(compute_dtype).detach().requires_grad_()
+            value = value_data.to(compute_dtype).detach().requires_grad_()
+            alpha = torch.tensor(1.25, dtype=dtype).to(compute_dtype).requires_grad_()
+
+            def apply(q, k, v, a):
+                if normalized:
+                    return yat_attention_normalized(
+                        q, k, v, mask=mask, training=False, alpha=a
+                    )
+                return yat_attention(
+                    q, k, v, mask=mask, training=False, alpha=a, spherical=True
+                )
+
+            if use_compile:
+                apply = torch.compile(apply, backend="eager")
+            output = apply(query, key, value, alpha)
+            gradients = torch.autograd.grad(
+                (output.float() * cotangent).sum(), (query, key, value, alpha)
+            )
+            return output, gradients
+
+        reference_output, reference_gradients = evaluate(torch.float32, False, False)
+        output, gradients = evaluate(dtype, compiled, True)
+
+        assert output.dtype == dtype
+        assert torch.equal(output[:, 0], torch.zeros_like(output[:, 0]))
+        assert all(torch.isfinite(gradient).all() for gradient in gradients)
+        torch.testing.assert_close(
+            output.float(), reference_output, rtol=rtol, atol=atol
+        )
+        for gradient, reference_gradient in zip(gradients, reference_gradients):
+            torch.testing.assert_close(
+                gradient.float(), reference_gradient, rtol=rtol, atol=atol
+            )
+
     def test_negative_scale_cannot_make_masked_key_win_softmax(self):
         q = torch.ones(1, 1, 1, 4)
         k = torch.ones(1, 2, 1, 4)

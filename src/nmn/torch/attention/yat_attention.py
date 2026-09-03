@@ -21,7 +21,6 @@ Note: Constant alpha (e.g. sqrt(2)) is handled by the calling module
 
 from __future__ import annotations
 
-import math
 from typing import Optional, Tuple
 
 import torch
@@ -238,46 +237,19 @@ def yat_attention_normalized(
     Returns:
         Output of shape (batch, q_len, num_heads, v_dim)
     """
-    head_dim = query.shape[-1]
-
-    # Normalize to unit vectors
-    query_n, key_n = normalize_qk(query, key, epsilon)
-
-    # Dot product: q·k → (B, H, Q, K)
-    dot_product = torch.einsum("bqhd,bkhd->bhqk", query_n, key_n)
-
-    # Simplified: (q·k)² / ((2(1 - q·k) + ε) * √d)
-    # Clamp distance: bf16 rounding can make q·k > 1 after normalization
-    dim_scale = head_dim**0.5
-    squared_dot = dot_product.square()
-    distance_sq = (2.0 - 2.0 * dot_product).clamp(min=0.0)
-
-    attn_weights = squared_dot / ((distance_sq + epsilon) * dim_scale)
-
-    # Alpha scaling (before softmax)
-    # Either learnable alpha (simple multiply) or direct constant scale, never both
-    if alpha is not None:
-        attn_weights = attn_weights * alpha
-    elif scale is not None:
-        attn_weights = attn_weights * scale
-
-    # Mask
-    if mask is not None:
-        mask = torch.broadcast_to(mask.to(dtype=torch.bool), attn_weights.shape)
-        row_has_key = mask.any(dim=-1, keepdim=True)
-        attn_weights = attn_weights.masked_fill(~mask, float("-inf"))
-        attn_weights = torch.where(
-            row_has_key, attn_weights, torch.zeros_like(attn_weights)
-        )
-
-    # Softmax
-    attn_weights = F.softmax(attn_weights, dim=-1)
-    if mask is not None:
-        attn_weights = torch.where(mask, attn_weights, torch.zeros_like(attn_weights))
-
-    # Dropout
-    if dropout_p > 0.0 and training:
-        attn_weights = F.dropout(attn_weights, p=dropout_p, training=True)
-
-    # Weighted sum
-    return torch.einsum("bhqk,bkhd->bqhd", attn_weights, value)
+    # Keep this public optimized alias on the same guarded score path as
+    # ``yat_attention(..., spherical=True)``.  In particular, fp16/bfloat16
+    # normalization and score formation must accumulate in fp32 before the
+    # bounded attention weights return to the caller dtype.
+    return yat_attention(
+        query,
+        key,
+        value,
+        mask=mask,
+        dropout_p=dropout_p,
+        training=training,
+        epsilon=epsilon,
+        alpha=alpha,
+        scale=scale,
+        spherical=True,
+    )
