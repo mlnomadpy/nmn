@@ -24,6 +24,8 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 
+from nmn._attention_shape import validate_attention_inputs
+
 
 def fused_yat_l1_attention(
     query: Array,
@@ -65,6 +67,8 @@ def fused_yat_l1_attention(
     Returns:
         Output of shape [..., q_length, num_heads, v_dim].
     """
+    validate_attention_inputs(query, key, value)
+
     has_bias = bias is not None
     has_mask = mask is not None
     has_eps_grad = isinstance(epsilon, jnp.ndarray)
@@ -377,6 +381,8 @@ def fused_yat_l1_self_attention(
     Returns:
         Output of shape [..., seq_len, num_heads, v_dim].
     """
+    validate_attention_inputs(x, x, value)
+
     has_bias = bias is not None
     has_eps_grad = isinstance(epsilon, jnp.ndarray)
 

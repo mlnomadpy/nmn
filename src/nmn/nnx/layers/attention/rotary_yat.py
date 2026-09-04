@@ -46,6 +46,7 @@ from flax.typing import (
 )
 from jax import Array, random
 
+from nmn._attention_shape import validate_attention_inputs
 from nmn.nnx.layers.squashers import softermax
 
 from .._numerics import fp32_if_low_precision, inverse_softplus
@@ -229,6 +230,8 @@ def rotary_yat_attention_weights(
     Returns:
         Attention weights of shape [..., num_heads, q_length, kv_length].
     """
+    validate_attention_inputs(query, key)
+
     # Apply RoPE to query and key
     if key_position_offset is None:
         key_position_offset = position_offset
@@ -296,6 +299,8 @@ def rotary_yat_attention(
     query, key, value = promote_dtype((query, key, value), dtype=dtype)
     dtype = query.dtype
 
+    validate_attention_inputs(query, key, value)
+
     # Compute attention weights with RoPE + YAT
     attn_weights = rotary_yat_attention_weights(
         query,
@@ -357,6 +362,8 @@ def rotary_yat_performer_attention(
     """
     query, key, value = promote_dtype((query, key, value), dtype=dtype)
     dtype = query.dtype
+
+    validate_attention_inputs(query, key, value)
 
     # Apply RoPE first
     if key_position_offset is None:

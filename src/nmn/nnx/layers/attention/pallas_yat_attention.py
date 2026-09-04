@@ -36,6 +36,8 @@ import jax.numpy as jnp
 from jax import lax
 from jax.experimental import pallas as pl
 
+from nmn._attention_shape import validate_attention_inputs
+
 
 def _dot(a, b, precision):
     """Pallas dot with an explicit caller-selected precision policy."""
@@ -339,16 +341,7 @@ def pallas_yat_l1_attention(
 
 
 def _validate_inputs(q, k, v, block_q, block_k, interpret):
-    if q.ndim < 3 or k.ndim < 3 or v.ndim < 3:
-        raise ValueError("q, k, and v must have shape [..., sequence, heads, features]")
-    if q.shape[:-3] != k.shape[:-3] or q.shape[:-3] != v.shape[:-3]:
-        raise ValueError("q, k, and v batch dimensions must match")
-    if q.shape[-1] != k.shape[-1]:
-        raise ValueError("q and k head_dim must match")
-    if q.shape[-2] != k.shape[-2] or q.shape[-2] != v.shape[-2]:
-        raise ValueError("q, k, and v number of heads must match")
-    if k.shape[-3] != v.shape[-3]:
-        raise ValueError("k and v sequence lengths must match")
+    validate_attention_inputs(q, k, v)
     if q.shape[-3] == 0 or k.shape[-3] == 0:
         raise ValueError("q and k sequence lengths must be non-zero")
     if block_q <= 0 or block_k <= 0:

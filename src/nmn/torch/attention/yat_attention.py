@@ -27,6 +27,8 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 
+from nmn._attention_shape import validate_attention_inputs
+
 from .._precision import saturating_upcast
 
 
@@ -85,7 +87,7 @@ def yat_attention_weights(
     Returns:
         Attention weights of shape (batch, num_heads, q_len, kv_len)
     """
-    assert query.ndim == key.ndim == 4, "Expected (batch, seq, heads, dim)"
+    validate_attention_inputs(query, key, exact_rank=4)
     output_dtype = query.dtype
     if output_dtype in (torch.float16, torch.bfloat16):
         # dot^2 and the expanded squared distance both overflow/cancel readily
@@ -189,6 +191,8 @@ def yat_attention(
     Returns:
         Output of shape (batch, q_len, num_heads, v_dim)
     """
+    validate_attention_inputs(query, key, value, exact_rank=4)
+
     attn_weights = yat_attention_weights(
         query,
         key,
