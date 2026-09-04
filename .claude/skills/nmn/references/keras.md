@@ -44,9 +44,13 @@ attn = MultiHeadYatAttention(embed_dim=128, num_heads=8)
 y = attn(x, attention_mask=mask, training=True)
 ```
 
-`mask` and `attention_mask` are accepted aliases; do not pass conflicting
-values. Fully masked query rows yield exact zeros even when output projection
-bias is enabled.
+A rank-2 `mask` is always a Keras query sequence mask shaped `[batch,
+query_length]`; in self-attention it also masks the corresponding keys. Use
+`attention_mask` for pairwise masks, including rank-2 `[query_length,
+key_length]` masks. Legacy rank-3 and rank-4 pairwise masks passed through
+`mask` remain supported. The two masks are combined when both are supplied.
+Fully masked query rows yield exact zeros even when output projection bias is
+enabled.
 
 ## Dtype and serialization
 

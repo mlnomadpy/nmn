@@ -325,10 +325,13 @@ class MultiHeadYatAttention(Layer):
             query: (batch, q_len, embed_dim)
             key: (batch, kv_len, embed_dim). Defaults to query.
             value: (batch, kv_len, embed_dim). Defaults to key.
-            mask: Keras sequence mask or a broadcastable attention mask.
-            attention_mask: Explicit broadcastable attention mask. Prefer this
-                argument when a rank-2 ``(q_len, kv_len)`` mask could be
-                confused with a Keras ``(batch, seq_len)`` sequence mask.
+            mask: Rank-2 Keras query sequence mask with shape
+                ``(batch, q_len)``. In self-attention it masks both query and
+                key positions; in cross-attention it masks query positions.
+                For backward compatibility, rank-3 and rank-4 masks retain
+                their legacy meaning as broadcastable pairwise masks.
+            attention_mask: Explicit pairwise or broadcastable attention mask,
+                including rank-2 ``(q_len, kv_len)`` masks.
             training: Whether in training mode.
 
         Returns:
@@ -367,25 +370,21 @@ class MultiHeadYatAttention(Layer):
         sequence_mask = None
         if mask is not None:
             mask_rank = len(mask.shape)
-            query_keras_mask = getattr(query, "_keras_mask", None)
-            static_batch = query.shape[0]
-            static_q_len = query.shape[1]
-            first_dim = mask.shape[0] if mask_rank == 2 else None
-            looks_like_sequence_mask = mask_rank == 2 and (
-                query_keras_mask is not None
-                or first_dim is None
-                or (
-                    static_batch is not None
-                    and first_dim == static_batch
-                    and first_dim != static_q_len
-                )
-            )
-            if looks_like_sequence_mask:
+            if mask_rank == 2:
                 sequence_mask = ops.cast(mask, "bool")
-            elif attention_mask is None:
-                attention_mask = mask
+            elif mask_rank >= 3:
+                attention_mask = (
+                    mask
+                    if attention_mask is None
+                    else ops.logical_and(attention_mask, mask)
+                )
             else:
-                attention_mask = ops.logical_and(attention_mask, mask)
+                raise ValueError(
+                    "`mask` must be either a rank-2 Keras sequence mask with "
+                    "shape (batch, query_length) or a legacy rank-3/rank-4 "
+                    "pairwise mask; pass rank-2 pairwise masks through "
+                    "`attention_mask`."
+                )
 
         if attention_mask is not None:
             effective_mask = ops.broadcast_to(
