@@ -58,6 +58,8 @@ import numpy as np
 import torch
 from torch import Tensor
 
+from nmn._attention_shape import validate_attention_inputs
+
 __all__ = [
     "maclaurin_coeffs",
     "create_maclaurin_projection",
@@ -231,6 +233,7 @@ def maclaurin_yat_attention(
     Returns:
         ``(B, Q, H, v_dim)``.
     """
+    validate_attention_inputs(query, key, value, exact_rank=4)
     q_feat = maclaurin_features(query, params, normalize=True)
     k_feat = maclaurin_features(key, params, normalize=True)
     return linear_attention_readout(
@@ -378,6 +381,7 @@ def radial_yat_attention(
 
     See :func:`maclaurin_yat_attention`; same signature, RAY feature map.
     """
+    validate_attention_inputs(query, key, value, exact_rank=4)
     q_feat = radial_features(query, params, normalize=True)
     k_feat = radial_features(key, params, normalize=True)
     return linear_attention_readout(
@@ -412,6 +416,7 @@ def linear_attention_readout(
     Returns:
         ``(B, Q, H, v_dim)``.
     """
+    validate_attention_inputs(q_feat, k_feat, value, exact_rank=4)
     if k_feat.dtype != q_feat.dtype:
         k_feat = k_feat.to(q_feat.dtype)
     if value.dtype != q_feat.dtype:

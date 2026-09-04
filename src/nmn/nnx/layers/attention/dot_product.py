@@ -21,6 +21,8 @@ from flax.nnx.nn.dtypes import promote_dtype
 from flax.typing import Dtype, PrecisionLike
 from jax import Array, random
 
+from nmn._attention_shape import validate_attention_inputs
+
 from ._attention_core import finalize_attention_weights
 
 
@@ -65,10 +67,7 @@ def dot_product_attention_weights(
     query, key = promote_dtype((query, key), dtype=dtype)
     dtype = query.dtype
 
-    assert query.ndim == key.ndim, "q, k must have same rank."
-    assert query.shape[:-3] == key.shape[:-3], "q, k batch dims must match."
-    assert query.shape[-2] == key.shape[-2], "q, k num_heads must match."
-    assert query.shape[-1] == key.shape[-1], "q, k depths must match."
+    validate_attention_inputs(query, key)
 
     # Calculate scaled attention matrix
     depth = query.shape[-1]
@@ -136,14 +135,7 @@ def dot_product_attention(
     query, key, value = promote_dtype((query, key, value), dtype=dtype)
     dtype = query.dtype
 
-    assert key.ndim == query.ndim == value.ndim, "q, k, v must have same rank."
-    assert (
-        query.shape[:-3] == key.shape[:-3] == value.shape[:-3]
-    ), "q, k, v batch dims must match."
-    assert (
-        query.shape[-2] == key.shape[-2] == value.shape[-2]
-    ), "q, k, v num_heads must match."
-    assert key.shape[-3] == value.shape[-3], "k, v lengths must match."
+    validate_attention_inputs(query, key, value)
 
     # Compute attention weights
     attn_weights = dot_product_attention_weights(

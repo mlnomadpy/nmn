@@ -77,6 +77,8 @@ from flax.nnx.nn.dtypes import promote_dtype
 from flax.typing import Dtype, PrecisionLike
 from jax import Array, lax, random
 
+from nmn._attention_shape import validate_attention_inputs
+
 
 def maclaurin_coeffs(b: float, epsilon: float, nmax: int) -> np.ndarray:
     """Maclaurin coefficients ``a_n`` of ``kappa(s) = (s+b)²/(C-2s)``.
@@ -328,6 +330,7 @@ def maclaurin_yat_attention(
         Output ``[..., q_length, num_heads, v_dim]``.
     """
     query, key, value = promote_dtype((query, key, value), dtype=None)
+    validate_attention_inputs(query, key, value)
 
     q_feat = maclaurin_features(query, params, normalize=True)
     k_feat = maclaurin_features(key, params, normalize=True)

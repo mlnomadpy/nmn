@@ -84,6 +84,8 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 
+from nmn._attention_shape import validate_attention_inputs
+
 __all__ = [
     "spherical_kappa",
     "maclaurin_coeffs",
@@ -387,6 +389,7 @@ def linear_attention(
     Returns:
         ``(B, Q, H, dv)``.
     """
+    validate_attention_inputs(phi_q, phi_k, value, exact_rank=4)
     if causal:
         # kv[b, k, h, f, d] = phi_k[b, k, h, f] * value[b, k, h, d]
         kv = jnp.einsum("bkhf,bkhd->bkhfd", phi_k, value)
@@ -429,6 +432,7 @@ def maclaurin_yat_attention(
     Returns:
         ``(B, Q, H, dv)``.
     """
+    validate_attention_inputs(query, key, value, exact_rank=4)
     phi_q = maclaurin_features(query, params, normalize=True)
     phi_k = maclaurin_features(key, params, normalize=True)
     return linear_attention(phi_q, phi_k, value, causal=causal, eps_div=eps_div)
@@ -455,6 +459,7 @@ def radial_yat_attention(
     Returns:
         ``(B, Q, H, dv)``.
     """
+    validate_attention_inputs(query, key, value, exact_rank=4)
     phi_q = radial_features(query, params, normalize=True)
     phi_k = radial_features(key, params, normalize=True)
     return linear_attention(phi_q, phi_k, value, causal=causal, eps_div=eps_div)
