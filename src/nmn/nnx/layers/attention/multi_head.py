@@ -34,6 +34,8 @@ from flax.typing import (
 )
 from jax import Array, lax
 
+from nmn._validation import validate_positive_int, validate_rate
+
 from .._numerics import fp32_if_low_precision, inverse_softplus
 from .masks import combine_masks
 from .yat_attention import yat_attention
@@ -74,8 +76,7 @@ def _validate_decode_mask(mask: Array | None, expected_shape: tuple[int, ...]) -
         broadcast_shape = jnp.broadcast_shapes(tuple(mask.shape), expected_shape)
     except ValueError as exc:
         raise ValueError(
-            f"Decode mask shape {mask.shape} is not broadcastable to "
-            f"{expected_shape}."
+            f"Decode mask shape {mask.shape} is not broadcastable to {expected_shape}."
         ) from exc
     if broadcast_shape != expected_shape:
         raise ValueError(
@@ -263,6 +264,14 @@ class MultiHeadAttention(Module):
             use_softermax: Whether to use softermax instead of softmax.
             power: Power parameter for softermax.
         """
+        num_heads = validate_positive_int(num_heads, "num_heads")
+        in_features = validate_positive_int(in_features, "in_features")
+        if qkv_features is not None:
+            qkv_features = validate_positive_int(qkv_features, "qkv_features")
+        if out_features is not None:
+            out_features = validate_positive_int(out_features, "out_features")
+        dropout_rate = validate_rate(dropout_rate, "dropout_rate")
+        dropconnect_rate = validate_rate(dropconnect_rate, "dropconnect_rate")
         self.num_heads = num_heads
         self.in_features = in_features
         self.qkv_features = qkv_features if qkv_features is not None else in_features
@@ -299,11 +308,6 @@ class MultiHeadAttention(Module):
         self.power = power
         self.use_dropconnect = use_dropconnect
         self.dropconnect_rate = dropconnect_rate
-        if not 0.0 <= dropconnect_rate < 1.0:
-            raise ValueError(
-                "dropconnect_rate must be in the half-open interval [0, 1), "
-                f"got {dropconnect_rate}"
-            )
         self.dropconnect_rng = (
             rngs.dropout.fork() if use_dropconnect else nnx.data(None)
         )

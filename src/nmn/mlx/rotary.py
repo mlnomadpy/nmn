@@ -23,6 +23,9 @@ import mlx.core as mx
 import mlx.nn as nn
 import numpy as np
 
+from nmn._epsilon import validate_epsilon
+from nmn._validation import validate_positive_int, validate_rate
+
 from .attention import yat_attention_weights
 
 __all__ = [
@@ -220,17 +223,19 @@ class RotaryYatAttention(nn.Module):
         epsilon: float = 1e-5,
         dtype: mx.Dtype = mx.float32,
     ) -> None:
+        embed_dim = validate_positive_int(embed_dim, "embed_dim")
+        num_heads = validate_positive_int(num_heads, "num_heads")
+        max_seq_len = validate_positive_int(max_seq_len, "max_seq_len")
+        dropout = validate_rate(dropout, "dropout")
         super().__init__()
         if embed_dim % num_heads != 0:
             raise ValueError(
-                f"embed_dim ({embed_dim}) must be divisible by "
-                f"num_heads ({num_heads})."
+                f"embed_dim ({embed_dim}) must be divisible by num_heads ({num_heads})."
             )
         head_dim = embed_dim // num_heads
         if head_dim % 2 != 0:
             raise ValueError(f"head_dim ({head_dim}) must be even for RoPE.")
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
+        epsilon = validate_epsilon(epsilon)
 
         self.embed_dim = embed_dim
         self.num_heads = num_heads

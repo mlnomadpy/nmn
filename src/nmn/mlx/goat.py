@@ -41,11 +41,15 @@ Mask convention matches the rest of ``nmn.mlx``: ``True`` = attend,
 
 from __future__ import annotations
 
-import math
 from typing import Optional
 
 import mlx.core as mx
 import mlx.nn as nn
+
+from nmn._epsilon import validate_epsilon
+from nmn._validation import validate_positive_int
+
+from ._epsilon import make_epsilon_parameter
 
 __all__ = [
     "goat_yat_attention_weights",
@@ -94,15 +98,55 @@ def goat_yat_attention_weights(
     Returns:
         ``(B, H, Lq, Lk)`` row-stochastic weights.
     """
-    qh = mx.transpose(q, (0, 2, 1, 3))  # (B, H, Lq, D)
-    kh = mx.transpose(k, (0, 2, 1, 3))  # (B, H, Lk, D)
-    scores = _yat_scores(qh, kh, b, eps)  # (B, H, Lq, Lk) >= 0
-    if self_mask and scores.shape[-2] == scores.shape[-1]:
-        n = scores.shape[-1]
-        scores = scores * (1.0 - mx.eye(n, dtype=scores.dtype))[None, None]
+    # Normalising ``numerator / denominator`` directly is numerically unsafe
+    # for tiny learned epsilons: its backward materialises ``1 / eps**2``
+    # before the softplus chain rule can cancel the overflow.  Multiplying all
+    # scores in a row by the same positive scale is algebraically neutral.  A
+    # detached minimum denominator keeps every ratio at most one and bounds the
+    # reciprocal in the backward pass by ``1 / eps`` instead.
+    # ``mx.result_type`` is newer than NMN's minimum supported MLX.  Learned
+    # low-precision epsilon parameters are stored in float32, so this explicit
+    # promotion covers the stability path without raising the MLX floor.
+    compute_dtype = (
+        mx.float32 if mx.float32 in (q.dtype, k.dtype, b.dtype, eps.dtype) else q.dtype
+    )
+    qh = mx.transpose(q, (0, 2, 1, 3)).astype(compute_dtype)
+    kh = mx.transpose(k, (0, 2, 1, 3)).astype(compute_dtype)
+    b = b.astype(compute_dtype).reshape(1, -1, 1, 1)
+    eps = eps.reshape(1, -1, 1, 1)
+    dot = qh @ mx.swapaxes(kh, -1, -2)
+    qn = mx.sum(qh * qh, axis=-1, keepdims=True)
+    kn = mx.sum(kh * kh, axis=-1, keepdims=True)
+    dist2 = mx.maximum(qn + mx.swapaxes(kn, -1, -2) - 2.0 * dot, 0.0)
+    denominator = dist2 + eps
+    numerator = (dot + b) ** 2
+
+    eligible = None
+    if self_mask and denominator.shape[-2] == denominator.shape[-1]:
+        n = denominator.shape[-1]
+        eligible = (mx.eye(n, dtype=compute_dtype) == 0)[None, None]
     if mask is not None:
-        scores = scores * mask.astype(scores.dtype)
-    return scores / (mx.sum(scores, axis=-1, keepdims=True) + floor)
+        mask = mask.astype(mx.bool_)
+        eligible = mask if eligible is None else eligible & mask
+    if eligible is not None:
+        # Excluded entries must not traverse even a finite-but-extreme ratio:
+        # multiplying an infinite cotangent by a later zero mask is still NaN.
+        denominator = mx.where(eligible, denominator, mx.ones_like(denominator))
+        numerator = mx.where(eligible, numerator, mx.zeros_like(numerator))
+
+    row_scale = mx.stop_gradient(mx.min(denominator, axis=-1, keepdims=True))
+    # Do not spell this ratio as division.  Its quotient VJP may evaluate
+    # ``row_scale / denominator**2``; for epsilon=1e-20 the square underflows
+    # on Metal before the algebraically finite ratio can be recovered.  The
+    # log-domain identity only requires ``1 / denominator`` in its VJP.
+    denominator_ratio = mx.exp(mx.log(row_scale) - mx.log(denominator))
+    scores = numerator * denominator_ratio
+    row_sum = mx.sum(scores, axis=-1, keepdims=True)
+    # The additive indicator preserves the documented zero result for a fully
+    # masked row even when ``floor * row_scale`` underflows at the smallest
+    # supported fp32 epsilon.  It is zero for every nonempty row.
+    empty_row = (row_sum == 0).astype(scores.dtype)
+    return scores / (row_sum + floor * row_scale + empty_row)
 
 
 def goat_yat_attention(
@@ -120,6 +164,7 @@ def goat_yat_attention(
     """
     w = goat_yat_attention_weights(q, k, b, eps, mask=mask, self_mask=self_mask)
     vh = mx.transpose(v, (0, 2, 1, 3))  # (B, H, Lk, D)
+    w = w.astype(vh.dtype)
     out = w @ vh  # (B, H, Lq, D)
     return mx.transpose(out, (0, 2, 1, 3))  # (B, Lq, H, D)
 
@@ -151,6 +196,8 @@ class GoatYatAttention(nn.Module):
         epsilon: float = 1.0,
         dtype: mx.Dtype = mx.float32,
     ):
+        embed_dim = validate_positive_int(embed_dim, "embed_dim")
+        num_heads = validate_positive_int(num_heads, "num_heads")
         super().__init__()
         if embed_dim % num_heads != 0:
             raise ValueError(
@@ -158,8 +205,7 @@ class GoatYatAttention(nn.Module):
             )
         if variant not in ("v", "nov"):
             raise ValueError(f"variant must be 'v' or 'nov', got {variant!r}")
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
+        epsilon = validate_epsilon(epsilon)
 
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -171,9 +217,8 @@ class GoatYatAttention(nn.Module):
 
         # Per-head learnable (b, eps), softplus-reparameterised.
         # b_raw = 0 -> softplus(0) = log 2; eps_raw chosen so softplus = epsilon.
-        raw_eps = math.log(math.exp(epsilon) - 1.0)
         self.b_raw = mx.zeros((num_heads,), dtype=dtype)
-        self.eps_raw = mx.full((num_heads,), raw_eps, dtype=dtype)
+        self.eps_raw = make_epsilon_parameter(epsilon, dtype, (num_heads,))
 
         scale = embed_dim**-0.5
         if variant == "v":

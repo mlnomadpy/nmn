@@ -774,6 +774,12 @@ src/nmn/
 
 ### Running Examples
 
+Install the backend together with the example dependencies before running a
+training script. Exact installs are `pip install "nmn[torch,examples]"`,
+`pip install "nmn[nnx,examples]"`, `pip install "nmn[linen,examples]"`, and
+`pip install "nmn[mlx,examples]"`. Importing and instantiating the model classes
+requires only the backend extra and never downloads a dataset.
+
 ```bash
 # PyTorch / Flax NNX / Flax Linen (all runnable on CPU in seconds)
 PYTHONPATH=src python -m nmn.torch.examples.vision.mnist --report .context/torch_mnist.json
@@ -896,7 +902,6 @@ from nmn.mlx import softermax, softer_sigmoid, soft_tanh
 <p align="center">
   <sub>Built with ❤️ by <a href="https://azetta.ai">Azetta.ai</a></sub>
 </p>
-
 
 
 

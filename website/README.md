@@ -66,12 +66,18 @@ This will start a local server at `http://localhost:3000`.
 The final deployed website combines both components. The **Interactive Paper** is embedded into the Docusaurus site.
 
 ### Deployment Workflow (`deploy.yml`)
-1.  **Builds the Visual Paper**: Uses the existing `website/index.html` and assets.
-2.  **Builds Docusaurus**: Compiles the documentation site.
-3.  **Merges**:
+1.  **Runs the reusable website workflow**: Installs the exact
+    `docusaurus/package-lock.json` dependency graph and enforces the reviewed
+    dependency-advisory policy.
+2.  **Builds the Visual Paper**: Uses the existing `website/index.html` and assets.
+3.  **Builds Docusaurus**: Compiles the documentation site.
+4.  **Merges**:
     *   The Visual Paper (`index.html`, `css/`, `js/`, `assets/`) is copied into the Docusaurus `static/paper/` directory.
     *   This makes the visual paper accessible at `https://azettaai.github.io/nmn/paper/`.
-4.  **Deploys**: The combined artifact is pushed to GitHub Pages.
+5.  **Deploys the audited artifact**: GitHub Pages consumes the artifact emitted
+    by that same build; deployment does not reinstall dependencies or rebuild
+    the site. An audit or build failure therefore blocks artifact creation and
+    deployment.
 
 ### Key Links
 *   **Documentation Home**: [https://azettaai.github.io/nmn/](https://azettaai.github.io/nmn/)

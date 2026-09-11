@@ -14,6 +14,11 @@ from typing import Optional, Union
 import mlx.core as mx
 import mlx.nn as nn
 
+from nmn._epsilon import validate_epsilon
+from nmn._validation import validate_positive_int
+
+from ._precision import reduction_safe_upcast, saturating_downcast
+
 __all__ = ["YatEmbed"]
 
 
@@ -49,9 +54,10 @@ class YatEmbed(nn.Module):
         weight_normalized: bool = False,
         dtype: mx.Dtype = mx.float32,
     ) -> None:
+        num_embeddings = validate_positive_int(num_embeddings, "num_embeddings")
+        features = validate_positive_int(features, "features")
         super().__init__()
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
+        epsilon = validate_epsilon(epsilon)
 
         self.num_embeddings = num_embeddings
         self.features = features
@@ -107,6 +113,9 @@ class YatEmbed(nn.Module):
         if query.dtype != self.dtype:
             query = query.astype(self.dtype)
         embedding = self.embedding
+        output_dtype = query.dtype
+        query = reduction_safe_upcast(query)
+        embedding = reduction_safe_upcast(embedding)
 
         if self.spherical:
             query = query / (
@@ -128,7 +137,7 @@ class YatEmbed(nn.Module):
         y = (y * y) / (distances + self.epsilon)
 
         if self._constant_alpha_value is not None:
-            y = y * mx.array(self._constant_alpha_value, dtype=self.dtype)
+            y = y * mx.array(self._constant_alpha_value, dtype=y.dtype)
         elif self.use_alpha and getattr(self, "alpha", None) is not None:
-            y = y * self.alpha
-        return y
+            y = y * reduction_safe_upcast(self.alpha)
+        return saturating_downcast(y, output_dtype)

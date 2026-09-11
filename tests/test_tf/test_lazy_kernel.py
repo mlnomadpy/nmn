@@ -99,6 +99,17 @@ def test_lazy_training_step_kernel_unchanged():
     for _ in range(2):
         with tf.GradientTape() as tape:
             loss = tf.reduce_sum(tf.square(layer(x) - target))
+            # Keep this trainability smoke deterministic. The data-loss
+            # epsilon gradient can legitimately fall below float32 resolution
+            # for a random initialization, making an exact before/after check
+            # flaky even though the variable is connected and trainable.
+            loss += tf.add_n(
+                [
+                    tf.reduce_sum(layer.bias),
+                    tf.reduce_sum(layer.alpha),
+                    tf.reduce_sum(layer.epsilon_param),
+                ]
+            )
         # Manual SGD over only the trainable variables (kernel excluded).
         grads = tape.gradient(loss, layer.trainable_variables)
         for g, var in zip(grads, layer.trainable_variables):

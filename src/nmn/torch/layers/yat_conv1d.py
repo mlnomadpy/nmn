@@ -1,6 +1,7 @@
 # mypy: allow-untyped-defs
 import math
 import threading
+import weakref
 from typing import ClassVar, Optional, Union
 
 import torch
@@ -11,6 +12,9 @@ from torch.nn import functional as F
 from torch.nn.common_types import _size_1_t
 from torch.nn.parameter import Parameter
 
+from nmn._validation import validate_positive_int, validate_rate
+
+from ..kernel_bank import KernelBank
 from ._yat_conv_core import (
     apply_preserving_epsilon_dtype,
     setup_yat_attrs,
@@ -39,14 +43,18 @@ class YatConv1D(Conv1d):
         kernel_bank_size: Optional explicit capacity. The bank auto-expands only
             during construction, before any tied consumer executes.
         kernel_bank_id: Namespace for shared banks (allows multiple independent banks).
+        kernel_bank: Optional explicit owner for shared banks. Reuse one object
+            within a model; separate objects isolate model lifecycles.
         param_dtype: dtype for parameter initialization (default: None, uses
             PyTorch Conv1d default). Separate from computation dtype.
     """
 
     # Class-level shared kernel banks
     weight: Parameter
-    _KERNEL_BANKS: ClassVar[dict[tuple[object, ...], Parameter]] = {}
-    _KERNEL_BANK_USED: ClassVar[dict[tuple[object, ...], bool]] = {}
+    _KERNEL_BANKS: ClassVar[
+        weakref.WeakValueDictionary[tuple[object, ...], Parameter]
+    ] = weakref.WeakValueDictionary()
+    _KERNEL_BANK_USED: ClassVar[dict[int, bool]] = {}
     _KERNEL_BANKS_LOCK = threading.Lock()
 
     def __init__(
@@ -77,7 +85,12 @@ class YatConv1D(Conv1d):
         device=None,
         dtype=None,
         param_dtype=None,
+        kernel_bank: Optional[KernelBank] = None,
     ) -> None:
+        in_channels = validate_positive_int(in_channels, "in_channels")
+        out_channels = validate_positive_int(out_channels, "out_channels")
+        groups = validate_positive_int(groups, "groups")
+        drop_rate = validate_rate(drop_rate, "drop_rate")
         # param_dtype controls parameter storage; dtype controls computation
         storage_dtype = param_dtype if param_dtype is not None else dtype
 
@@ -117,6 +130,7 @@ class YatConv1D(Conv1d):
         self.tie_kernel_bank = tie_kernel_bank
         self.kernel_bank_size = kernel_bank_size
         self.kernel_bank_id = kernel_bank_id
+        self.kernel_bank = kernel_bank
         self._kernel_slice = slice(None, out_channels)
         self._actual_out_channels = out_channels
 
@@ -131,6 +145,7 @@ class YatConv1D(Conv1d):
         # Handle auto-expanding shared kernel bank
         if tie_kernel_bank:
             bank_key = (
+                "conv1d",
                 kernel_bank_id,
                 in_channels,
                 tuple(self.kernel_size),
@@ -138,11 +153,29 @@ class YatConv1D(Conv1d):
                 self.weight.dtype,
                 self.weight.device,
             )
-            with YatConv1D._KERNEL_BANKS_LOCK:
-                shared_weight = YatConv1D._KERNEL_BANKS.get(bank_key)
+            banks = (
+                kernel_bank._parameters
+                if kernel_bank is not None
+                else YatConv1D._KERNEL_BANKS
+            )
+            used = (
+                kernel_bank._used
+                if kernel_bank is not None
+                else YatConv1D._KERNEL_BANK_USED
+            )
+            lock = (
+                kernel_bank._lock
+                if kernel_bank is not None
+                else YatConv1D._KERNEL_BANKS_LOCK
+            )
+            with lock:
+                shared_weight = banks.get(bank_key)
                 if shared_weight is None:
-                    YatConv1D._KERNEL_BANKS[bank_key] = self.weight
-                    YatConv1D._KERNEL_BANK_USED[bank_key] = False
+                    banks[bank_key] = self.weight
+                    parameter_id = id(self.weight)
+                    used[parameter_id] = False
+                    if kernel_bank is None:
+                        weakref.finalize(self.weight, used.pop, parameter_id, None)
                 else:
                     if (
                         shared_weight.device != self.weight.device
@@ -153,7 +186,7 @@ class YatConv1D(Conv1d):
                         )
                     existing_channels = shared_weight.shape[0]
                     if bank_out_channels > existing_channels:
-                        if YatConv1D._KERNEL_BANK_USED.get(bank_key, False):
+                        if used.get(id(shared_weight), False):
                             raise ValueError(
                                 f"kernel bank '{kernel_bank_id}' capacity is frozen "
                                 f"at {existing_channels} after first use; requested "
@@ -202,8 +235,14 @@ class YatConv1D(Conv1d):
     def forward(self, input: Tensor, *, deterministic: bool = False) -> Tensor:
         out_channels = self._actual_out_channels
         if self.tie_kernel_bank:
-            with YatConv1D._KERNEL_BANKS_LOCK:
-                YatConv1D._KERNEL_BANK_USED[self._kernel_bank_key] = True
+            owner = self.kernel_bank
+            lock = owner._lock if owner is not None else YatConv1D._KERNEL_BANKS_LOCK
+            used = owner._used if owner is not None else YatConv1D._KERNEL_BANK_USED
+            with lock:
+                if owner is not None or (
+                    YatConv1D._KERNEL_BANKS.get(self._kernel_bank_key) is self.weight
+                ):
+                    used[id(self.weight)] = True
             return yat_conv_forward(
                 self,
                 input,

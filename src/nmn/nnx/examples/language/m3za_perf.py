@@ -1,3 +1,11 @@
+"""Performance-oriented M3ZA language-model example.
+
+Install training and dataset dependencies with ``pip install "nmn[nnx,examples]"``.
+The model definitions themselves require only ``nmn[nnx]``.
+"""
+
+from __future__ import annotations
+
 import json
 import os
 import time
@@ -8,18 +16,35 @@ import flax.nnx as nnx
 import jax
 import jax.numpy as jnp
 import numpy as np
-import optax
-import orbax.checkpoint as orbax
-import wandb
-from datasets import load_dataset
 from jax.experimental import mesh_utils
 from jax.sharding import Mesh, NamedSharding
 from jax.sharding import PartitionSpec as P
-from mteb import MTEB, get_tasks
-from tokenizers import Tokenizer
 
+from nmn._example_dependencies import lazy_example_dependency
 from nmn.nnx.layers import YatNMN
 from nmn.nnx.layers.attention import RotaryYatAttention
+
+_INSTALL = "nmn[nnx,examples]"
+optax = lazy_example_dependency(
+    "optax", install=_INSTALL, purpose="The M3ZA performance example"
+)
+orbax = lazy_example_dependency(
+    "orbax.checkpoint",
+    install=_INSTALL,
+    purpose="The M3ZA performance checkpoint example",
+)
+wandb = lazy_example_dependency(
+    "wandb", install=_INSTALL, purpose="The M3ZA performance experiment logger"
+)
+datasets = lazy_example_dependency(
+    "datasets", install=_INSTALL, purpose="The M3ZA performance data loader"
+)
+mteb = lazy_example_dependency(
+    "mteb", install=_INSTALL, purpose="The M3ZA performance evaluation"
+)
+tokenizers = lazy_example_dependency(
+    "tokenizers", install=_INSTALL, purpose="The M3ZA performance tokenizer"
+)
 
 # --- JAX Device and Mesh Setup ---
 if jax.default_backend() == "tpu":
@@ -65,7 +90,7 @@ class ModernTransformerBlock(nnx.Module):
     ):
         if mesh is not None:
             kernel_init = nnx.with_partitioning(
-                nnx.initializers.xavier_uniform(), NamedSharding(mesh, P(None, "model"))
+                nnx.initializers.xavier_uniform(), P(None, "model"), mesh=mesh
             )
         else:
             kernel_init = nnx.initializers.xavier_uniform()
@@ -506,11 +531,13 @@ def main_pretrain():
 
     # 1. Load Data Stream
     print("\n=== Data Loading ===")
-    full_dataset = load_dataset("HuggingFaceFW/fineweb", split="train", streaming=True)
+    full_dataset = datasets.load_dataset(
+        "HuggingFaceFW/fineweb", split="train", streaming=True
+    )
 
     # 2. Load Pretrained Tokenizer (RoBERTa)
     print("Loading pretrained 'roberta-base' tokenizer...")
-    tokenizer = Tokenizer.from_pretrained("roberta-base")
+    tokenizer = tokenizers.Tokenizer.from_pretrained("roberta-base")
     tokenizer.enable_truncation(max_length=config["maxlen"])
 
     config["vocab_size"] = tokenizer.get_vocab_size()
@@ -593,7 +620,7 @@ def main_contrastive_tuning(mlm_checkpoint_path, config):
     model = create_model(rngs, config)
 
     # Reload Tokenizer
-    tokenizer = Tokenizer.from_pretrained("roberta-base")
+    tokenizer = tokenizers.Tokenizer.from_pretrained("roberta-base")
     tokenizer.enable_truncation(max_length=config["maxlen"])
 
     print(f"Loading weights from {mlm_checkpoint_path}...")
@@ -608,7 +635,7 @@ def main_contrastive_tuning(mlm_checkpoint_path, config):
 
     print("Loading SNLI dataset for pairs...")
     # FIX: Added streaming=True to return an IterableDataset compatible with shuffle(buffer_size) and .iter()
-    snli_dataset = load_dataset("snli", split="train", streaming=True)
+    snli_dataset = datasets.load_dataset("snli", split="train", streaming=True)
     contrastive_dataset = process_dataset_for_contrastive(
         snli_dataset, tokenizer, config["maxlen"]
     )
@@ -656,7 +683,7 @@ def main_eval(checkpoint_path, config):
     model = create_model(rngs, config)
 
     # Reload Tokenizer
-    tokenizer = Tokenizer.from_pretrained("roberta-base")
+    tokenizer = tokenizers.Tokenizer.from_pretrained("roberta-base")
     tokenizer.enable_truncation(max_length=config["maxlen"])
 
     checkpointer = orbax.PyTreeCheckpointer()
@@ -671,13 +698,13 @@ def main_eval(checkpoint_path, config):
 
     # FIX: Use get_tasks to convert string names to Task objects
     try:
-        tasks = get_tasks(tasks=tasks)
+        tasks = mteb.get_tasks(tasks=tasks)
     except Exception as e:
         print(f"Warning: Could not load specific tasks {tasks}: {e}")
         # Fallback to STS12 if specific tasks fail
-        tasks = get_tasks(tasks=["STS12"])
+        tasks = mteb.get_tasks(tasks=["STS12"])
 
-    evaluation = MTEB(tasks=tasks)
+    evaluation = mteb.MTEB(tasks=tasks)
     results = evaluation.run(
         mteb_model, output_folder="mteb_results", eval_splits=["test"]
     )

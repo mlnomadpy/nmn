@@ -1,5 +1,7 @@
 """PyTorch implementation of Neural Matter Network (NMN) layers."""
 
+from . import _dependency as _dependency
+
 # Import all layers from the layers module
 # Import attention
 from .attention import (
@@ -10,10 +12,13 @@ from .attention import (
     maclaurin_yat_attention,
     radial_features,
     radial_yat_attention,
+    yat_attention,
+    yat_attention_weights,
 )
 
 # Import embedding
 from .embed import YatEmbed
+from .kernel_bank import KernelBank
 from .layers import (
     YatConv1D,
     YatConv2D,
@@ -39,8 +44,11 @@ __all__ = [
     "YatConvTranspose3D",
     # YAT NMN
     "YatNMN",
+    "KernelBank",
     # YAT Attention
     "MultiHeadYatAttention",
+    "yat_attention",
+    "yat_attention_weights",
     # MAY / RAY linear-attention feature maps
     "create_maclaurin_projection",
     "maclaurin_features",

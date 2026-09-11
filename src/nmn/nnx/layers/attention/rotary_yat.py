@@ -47,9 +47,11 @@ from flax.typing import (
 from jax import Array, random
 
 from nmn._attention_shape import validate_attention_inputs
+from nmn._validation import validate_positive_int, validate_rate
 from nmn.nnx.layers.squashers import softermax
 
 from .._numerics import fp32_if_low_precision, inverse_softplus
+from ._attention_core import validate_attention_normalization
 from .maclaurin_yat import (
     _validate_linear_attention_mask,
     create_maclaurin_projection,
@@ -360,6 +362,7 @@ def rotary_yat_performer_attention(
     - Multi-Scale FAVOR+ features for YAT kernel approximation
     - O(n) linear complexity attention
     """
+    dropout_rate = validate_rate(dropout_rate, "dropout_rate")
     query, key, value = promote_dtype((query, key, value), dtype=dtype)
     dtype = query.dtype
 
@@ -508,6 +511,11 @@ class RotaryYatAttention(Module):
                 use_alpha=True.
             rngs: Random number generators.
         """
+        validate_attention_normalization(normalization)
+        embed_dim = validate_positive_int(embed_dim, "embed_dim")
+        num_heads = validate_positive_int(num_heads, "num_heads")
+        max_seq_len = validate_positive_int(max_seq_len, "max_seq_len")
+        dropout_rate = validate_rate(dropout_rate, "dropout_rate")
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.head_dim = embed_dim // num_heads
@@ -568,8 +576,7 @@ class RotaryYatAttention(Module):
 
         if embed_dim % num_heads != 0:
             raise ValueError(
-                f"embed_dim ({embed_dim}) must be divisible by "
-                f"num_heads ({num_heads})."
+                f"embed_dim ({embed_dim}) must be divisible by num_heads ({num_heads})."
             )
 
         if self.head_dim % 2 != 0:

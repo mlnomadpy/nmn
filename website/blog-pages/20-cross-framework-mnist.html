@@ -271,13 +271,13 @@
                         <p>
                             Different frameworks, but the op decomposes into
                             <code>matmul → square → divide → broadcast-add ε</code>
-                            in all of them. Our cross-framework parity tests
-                            (<code>tests/test_cross_framework_parity*.py</code>) show
-                            &lt; 10⁻⁶ max element-wise difference in fp32 — so identical
-                            initialization + identical mini-batches would give bit-similar
-                            losses up to floating-point reduction order. The 0.4-pp accuracy
-                            spread above is dominated by per-framework PRNG seeding and
-                            shuffle order, not by any Yat-side difference.
+                            in all of them. The current oracle and fixture suites under
+                            <code>tests/conformance/</code> compare exact float32 profiles
+                            against an independent NumPy float64 reference using the
+                            tolerances in <code>nmn/conformance_manifest.json</code>. Those
+                            tests establish operation-level agreement; they do not imply
+                            bit-identical training trajectories. The accuracy spread above
+                            also includes per-framework PRNG seeding and shuffle order.
                         </p>
 
                         <h3>What about TensorFlow and Keras?</h3>
@@ -338,9 +338,10 @@ KERAS_BACKEND=jax PYTHONPATH=src python -m nmn.keras.examples.mnist \
                             style="margin: 2rem 0; padding: 1.5rem; background: linear-gradient(135deg, rgba(0,100,255,0.08), rgba(0,255,136,0.05)); border-radius: 12px; border-left: 3px solid var(--terminal-green);">
                             <p style="margin: 0;">
                                 <strong>Yat is framework-portable in practice, not just in theory.</strong>
-                                The implementation parity tests said it should be; this post is the
-                                experimental receipt. Pick the framework that fits your stack — the
-                                model you build will train the same.
+                                The benchmark is an experimental receipt for the configurations
+                                reported above. For current operation-level evidence and its exact
+                                scope, consult the generated conformance contract before porting a
+                                model between frameworks.
                             </p>
                         </div>
 

@@ -11,6 +11,8 @@ from torch.nn.common_types import _size_3_t
 from torch.nn.modules.utils import _triple
 from torch.nn.parameter import Parameter
 
+from nmn._validation import validate_positive_int, validate_rate
+
 from ._yat_conv_core import (
     apply_preserving_epsilon_dtype,
     setup_yat_attrs,
@@ -62,6 +64,10 @@ class YatConvTranspose3D(ConvTranspose3d):
         dtype=None,
         param_dtype=None,
     ) -> None:
+        in_channels = validate_positive_int(in_channels, "in_channels")
+        out_channels = validate_positive_int(out_channels, "out_channels")
+        groups = validate_positive_int(groups, "groups")
+        drop_rate = validate_rate(drop_rate, "drop_rate")
         storage_dtype = param_dtype if param_dtype is not None else dtype
 
         # If constant_bias or scalar_bias is set, don't allocate a per-channel

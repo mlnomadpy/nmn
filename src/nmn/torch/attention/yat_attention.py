@@ -28,6 +28,7 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from nmn._attention_shape import validate_attention_inputs
+from nmn._validation import validate_rate
 
 from .._precision import saturating_upcast
 
@@ -88,6 +89,7 @@ def yat_attention_weights(
         Attention weights of shape (batch, num_heads, q_len, kv_len)
     """
     validate_attention_inputs(query, key, exact_rank=4)
+    dropout_p = validate_rate(dropout_p, "dropout_p")
     output_dtype = query.dtype
     if output_dtype in (torch.float16, torch.bfloat16):
         # dot^2 and the expanded squared distance both overflow/cancel readily

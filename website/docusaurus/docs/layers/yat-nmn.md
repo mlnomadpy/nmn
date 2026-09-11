@@ -26,8 +26,11 @@ $$
 from nmn.nnx import YatNMN
 ```
 
-`YatNMN` ships in all six backends with numerically equivalent outputs. The
-**size argument differs per backend** — this is the #1 gotcha:
+`YatNMN` ships in all six backends. The
+[generated conformance contract](/docs/conformance) gives the exact tested
+float32 profiles and tolerances; support for other dtypes is not presented as
+cross-framework test evidence. The **size argument differs per backend** —
+this is the #1 gotcha:
 
 | Framework | Import | Constructor |
 |-----------|--------|-------------|

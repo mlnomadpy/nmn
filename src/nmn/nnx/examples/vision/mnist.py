@@ -7,6 +7,8 @@ or:
 
 Trains a 2-layer YatNMN MLP for 3 epochs. Uses torchvision to fetch MNIST so
 no tensorflow-datasets dependency is required.
+
+Install the runnable example with ``pip install "nmn[nnx,examples]"``.
 """
 
 from __future__ import annotations
@@ -19,11 +21,25 @@ from pathlib import Path
 import jax
 import jax.numpy as jnp
 import numpy as np
-import optax
 from flax import nnx
-from torchvision import datasets, transforms
 
+from nmn._example_dependencies import lazy_example_dependency
 from nmn.nnx import YatNMN
+
+_INSTALL = "nmn[nnx,examples]"
+optax = lazy_example_dependency(
+    "optax", install=_INSTALL, purpose="The Flax NNX MNIST training example"
+)
+datasets = lazy_example_dependency(
+    "torchvision.datasets",
+    install=_INSTALL,
+    purpose="The Flax NNX MNIST data loader",
+)
+transforms = lazy_example_dependency(
+    "torchvision.transforms",
+    install=_INSTALL,
+    purpose="The Flax NNX MNIST data loader",
+)
 
 
 class YatMLP(nnx.Module):

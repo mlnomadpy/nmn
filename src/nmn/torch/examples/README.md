@@ -13,6 +13,10 @@ Runnable training scripts using NMN's PyTorch layers.
 ## Quick start — MNIST
 
 ```bash
+pip install "nmn[torch,examples]"
+```
+
+```bash
 PYTHONPATH=src python -m nmn.torch.examples.vision.mnist \
     --epochs 3 --batch-size 128 --lr 3e-4 \
     --report .context/torch_mnist.json

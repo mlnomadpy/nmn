@@ -94,3 +94,126 @@ def test_embed_gradient_reduces_loss():
     mx.eval(layer.parameters())
     loss_after = float(loss_fn(layer, ids, target))
     assert loss_after < float(loss)
+
+
+def _mlx_attend_value_and_grads(dtype, spherical, compiled, loss_scale=1.0):
+    layer = YatEmbed(
+        num_embeddings=2, features=2, epsilon=1.0, spherical=spherical, dtype=dtype
+    )
+    layer.embedding = mx.array([[-100.0, -99.0], [100.0, -99.0]], dtype=dtype)
+    layer.alpha = mx.array([1.25], dtype=dtype)
+    query = mx.array([[100.0, 100.0]], dtype=dtype)
+
+    query_grad_fn = mx.value_and_grad(
+        lambda value: mx.sum(layer.attend(value).astype(mx.float32)) * loss_scale
+    )
+    raw_parameter_grad_fn = mlx_nn.value_and_grad(
+        layer,
+        lambda model, value: (
+            mx.sum(model.attend(value).astype(mx.float32)) * loss_scale
+        ),
+    )
+    attend_fn = layer.attend
+    if compiled:
+        state = layer.state
+        query_grad_fn = mx.compile(query_grad_fn, inputs=state)
+        parameter_grad_fn = mx.compile(
+            lambda value: raw_parameter_grad_fn(layer, value),
+            inputs=state,
+        )
+        attend_fn = mx.compile(attend_fn, inputs=state)
+
+    output = attend_fn(query)
+    _, query_grad = query_grad_fn(query)
+    _, parameter_grads = (
+        parameter_grad_fn(query) if compiled else raw_parameter_grad_fn(layer, query)
+    )
+    mx.eval(output, query_grad, parameter_grads)
+    return output, (query_grad, parameter_grads["embedding"], parameter_grads["alpha"])
+
+
+@pytest.mark.parametrize("dtype", [mx.float16, mx.bfloat16])
+@pytest.mark.parametrize("spherical", [False, True])
+@pytest.mark.parametrize("compiled", [False, True])
+def test_low_precision_attend_matches_fp32_on_native_metal(
+    mlx_gpu, dtype, spherical, compiled
+):
+    del mlx_gpu
+    expected_output, expected_grads = _mlx_attend_value_and_grads(
+        mx.float32, spherical, compiled
+    )
+    output, grads = _mlx_attend_value_and_grads(dtype, spherical, compiled)
+
+    assert output.dtype == dtype
+    assert np.allclose(
+        np.array(output.astype(mx.float32)),
+        np.array(expected_output),
+        rtol=2e-2,
+        atol=2e-2,
+    )
+    for actual, expected in zip(grads, expected_grads):
+        assert np.isfinite(np.array(actual.astype(mx.float32))).all()
+        assert np.allclose(
+            np.array(actual.astype(mx.float32)),
+            np.array(expected),
+            rtol=3e-2,
+            atol=2e-2,
+        )
+
+
+@pytest.mark.parametrize("spherical", [False, True])
+def test_fp16_attend_saturates_output_and_gradients_and_preserves_nan(
+    mlx_gpu, spherical
+):
+    del mlx_gpu
+    layer = YatEmbed(
+        num_embeddings=2, features=2, spherical=spherical, dtype=mx.float16
+    )
+    layer.embedding = mx.array([[300.0, 300.0], [300.0, -300.0]], dtype=mx.float16)
+    query = mx.array([[300.0, 300.0]], dtype=mx.float16)
+
+    # Materialize the eager NaN probe before compiling against ``layer.state``.
+    # MLX transfers ownership of captured lazy state arrays to the compiled
+    # graph, so constructing a new eager graph from that state afterwards can
+    # leave arrays without a primitive.
+    nan_score = layer.attend(mx.array([[float("nan"), 300.0]], mx.float16))
+    mx.eval(nan_score)
+    nan_score_np = np.array(nan_score.astype(mx.float32))
+
+    query_grad_fn = mx.grad(
+        lambda value: mx.sum(layer.attend(value).astype(mx.float32))
+    )
+    parameter_grad_fn = mlx_nn.value_and_grad(
+        layer,
+        lambda model, value: mx.sum(model.attend(value).astype(mx.float32)),
+    )
+
+    def compiled_bundle(value):
+        score = layer.attend(value)
+        query_grad = query_grad_fn(value)
+        _, parameter_grads = parameter_grad_fn(layer, value)
+        return score, query_grad, parameter_grads
+
+    score, query_grad, parameter_grads = mx.compile(
+        compiled_bundle, inputs=layer.state
+    )(query)
+    mx.eval(score, query_grad, parameter_grads)
+
+    assert float(score[0, 0]) == np.finfo(np.float16).max
+    assert np.isfinite(np.array(query_grad)).all()
+    assert all(np.isfinite(np.array(value)).all() for value in parameter_grads.values())
+    assert np.isnan(nan_score_np).all()
+
+
+def test_fp16_attend_returning_gradients_saturate_against_fp32(mlx_gpu):
+    del mlx_gpu
+    spherical, loss_scale = False, 1e4
+    _, expected_grads = _mlx_attend_value_and_grads(
+        mx.float32, spherical, True, loss_scale
+    )
+    _, grads = _mlx_attend_value_and_grads(mx.float16, spherical, True, loss_scale)
+    limits = np.finfo(np.float16)
+    for actual, expected in zip(grads, expected_grads):
+        clipped = np.clip(np.array(expected), limits.min, limits.max).astype(np.float16)
+        assert np.isfinite(np.array(actual)).all()
+        assert np.allclose(np.array(actual), clipped, rtol=2e-2, atol=32.0)

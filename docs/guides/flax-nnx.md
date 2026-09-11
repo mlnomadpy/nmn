@@ -58,6 +58,9 @@ No `nnx.relu` needed.
 
 ## 3. MNIST end-to-end
 
+For the runnable script, install `pip install "nmn[nnx,examples]"`. Importing
+its `YatMLP` model still requires only `nmn[nnx]` and does not load data.
+
 ```python
 import jax, jax.numpy as jnp
 import optax
@@ -347,11 +350,12 @@ the clamp, to preserve standard/fused forward and gradient parity. The unchanged
 default FP32 path retains its optimized analytical VJP.
 
 `mixed` requests FP32 accumulation via JAX's `preferred_element_type` without
-materializing full FP32 copies of low-precision inputs and kernels. Both
-`jnp.float16` and `jnp.bfloat16` operands are covered by numerical-parity tests;
-BF16 is the recommended TPU storage/operand dtype. Confirm the final lowered
-HLO and performance on the target TPU, since CPU/GPU execution is not a
-substitute for a TPU profile.
+materializing full FP32 copies of low-precision inputs and kernels. FP16 and
+BF16 are supported execution choices here, but the packaged cross-framework
+conformance profiles currently enforce float32 only. BF16 is the recommended
+TPU storage/operand dtype. Confirm numerical behavior, the final lowered HLO,
+and performance on the target TPU; CPU/GPU execution is not a substitute for a
+TPU profile.
 
 ---
 

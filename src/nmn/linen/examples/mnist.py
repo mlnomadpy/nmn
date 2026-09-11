@@ -6,6 +6,8 @@ or:
     python src/nmn/linen/examples/mnist.py
 
 Uses torchvision to fetch MNIST so no tensorflow-datasets dependency is required.
+
+Install the runnable example with ``pip install "nmn[linen,examples]"``.
 """
 
 from __future__ import annotations
@@ -19,11 +21,25 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 import numpy as np
-import optax
 from flax.training import train_state
-from torchvision import datasets, transforms
 
+from nmn._example_dependencies import lazy_example_dependency
 from nmn.linen import YatNMN
+
+_INSTALL = "nmn[linen,examples]"
+optax = lazy_example_dependency(
+    "optax", install=_INSTALL, purpose="The Flax Linen MNIST training example"
+)
+datasets = lazy_example_dependency(
+    "torchvision.datasets",
+    install=_INSTALL,
+    purpose="The Flax Linen MNIST data loader",
+)
+transforms = lazy_example_dependency(
+    "torchvision.transforms",
+    install=_INSTALL,
+    purpose="The Flax Linen MNIST data loader",
+)
 
 
 class YatMLP(nn.Module):

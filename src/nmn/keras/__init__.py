@@ -1,11 +1,26 @@
 """Keras backend for Neural Matter Network (NMN)."""
 
+from . import _dependency as _dependency
 from .attention import (
     MultiHeadYatAttention,
     normalize_qk,
     yat_attention,
     yat_attention_normalized,
     yat_attention_weights,
+)
+from .conv import (
+    YatConv1D,
+    YatConv1d,
+    YatConv2D,
+    YatConv2d,
+    YatConv3D,
+    YatConv3d,
+    YatConvTranspose1D,
+    YatConvTranspose1d,
+    YatConvTranspose2D,
+    YatConvTranspose2d,
+    YatConvTranspose3D,
+    YatConvTranspose3d,
 )
 from .embed import YatEmbed
 from .nmn import YatDense, YatNMN
@@ -20,38 +35,20 @@ from .performer_yat import (
 )
 from .squashers import soft_tanh, softer_sigmoid, softermax
 
-try:
-    from .conv import (
-        YatConv1D,
-        YatConv1d,
-        YatConv2D,
-        YatConv2d,
-        YatConv3D,
-        YatConv3d,
-        YatConvTranspose1D,
-        YatConvTranspose1d,
-        YatConvTranspose2D,
-        YatConvTranspose2d,
-        YatConvTranspose3D,
-        YatConvTranspose3d,
-    )
-
-    _conv_all = [
-        "YatConv1D",
-        "YatConv2D",
-        "YatConv3D",
-        "YatConv1d",
-        "YatConv2d",
-        "YatConv3d",
-        "YatConvTranspose1D",
-        "YatConvTranspose2D",
-        "YatConvTranspose3D",
-        "YatConvTranspose1d",
-        "YatConvTranspose2d",
-        "YatConvTranspose3d",
-    ]
-except ImportError:
-    _conv_all = []
+_conv_all = [
+    "YatConv1D",
+    "YatConv2D",
+    "YatConv3D",
+    "YatConv1d",
+    "YatConv2d",
+    "YatConv3d",
+    "YatConvTranspose1D",
+    "YatConvTranspose2D",
+    "YatConvTranspose3D",
+    "YatConvTranspose1d",
+    "YatConvTranspose2d",
+    "YatConvTranspose3d",
+]
 
 __all__ = [
     "YatNMN",

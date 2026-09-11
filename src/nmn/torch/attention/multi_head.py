@@ -22,6 +22,8 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.nn.parameter import Parameter
 
+from nmn._validation import validate_positive_int, validate_rate
+
 from .yat_attention import yat_attention
 
 __all__ = ["MultiHeadYatAttention"]
@@ -88,12 +90,14 @@ class MultiHeadYatAttention(nn.Module):
         dtype=None,
         param_dtype=None,
     ):
+        embed_dim = validate_positive_int(embed_dim, "embed_dim")
+        num_heads = validate_positive_int(num_heads, "num_heads")
+        dropout = validate_rate(dropout, "dropout")
         super().__init__()
 
         if embed_dim % num_heads != 0:
             raise ValueError(
-                f"embed_dim ({embed_dim}) must be divisible by "
-                f"num_heads ({num_heads})."
+                f"embed_dim ({embed_dim}) must be divisible by num_heads ({num_heads})."
             )
 
         self.embed_dim = embed_dim

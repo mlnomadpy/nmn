@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import threading
 import typing as tp
+import weakref
 
 import jax
 import jax.numpy as jnp
@@ -31,6 +32,10 @@ from flax.typing import (
 )
 from jax import lax
 
+from nmn._kernel_bank import initializer_signature
+from nmn._validation import validate_positive_int, validate_rate
+
+from ...kernel_bank import KernelBank, _BankParam
 from .._numerics import finite_cast, fp32_if_low_precision, inverse_softplus
 from .utils import (
     DEFAULT_CONSTANT_ALPHA,
@@ -110,11 +115,15 @@ class YatConv(Module):
             defaults to ``out_features`` for the creating instance. Bank capacity
             is immutable; declare the largest required size on the first consumer.
         kernel_bank_id: Optional bank namespace to control sharing groups.
+        kernel_bank: Optional explicit owner for shared banks. Reuse one object
+            within a model; separate objects isolate model lifecycles.
         rngs: Random number generators.
     """
 
     __data__ = ("kernel", "bias", "alpha", "epsilon_param", "mask", "dropconnect_key")
-    _KERNEL_BANKS: dict[tuple[tp.Any, ...], nnx.Param] = {}
+    _KERNEL_BANKS: weakref.WeakValueDictionary[tuple[tp.Any, ...], _BankParam] = (
+        weakref.WeakValueDictionary()
+    )
     _KERNEL_BANKS_LOCK = threading.Lock()
 
     def __init__(
@@ -152,15 +161,15 @@ class YatConv(Module):
         tie_kernel_bank: bool = False,
         kernel_bank_size: tp.Optional[int] = None,
         kernel_bank_id: str = "default",
+        kernel_bank: tp.Optional[KernelBank] = None,
         rngs: rnglib.Rngs,
     ):
-        if not 0.0 <= drop_rate < 1.0:
-            raise ValueError(
-                "drop_rate must be in the half-open interval [0, 1), "
-                f"got {drop_rate}"
-            )
-        if feature_group_count <= 0:
-            raise ValueError("feature_group_count must be positive")
+        in_features = validate_positive_int(in_features, "in_features")
+        out_features = validate_positive_int(out_features, "out_features")
+        feature_group_count = validate_positive_int(
+            feature_group_count, "feature_group_count"
+        )
+        drop_rate = validate_rate(drop_rate, "drop_rate")
         if in_features % feature_group_count != 0:
             raise ValueError("in_features must be a multiple of feature_group_count")
         if out_features % feature_group_count != 0:
@@ -192,17 +201,27 @@ class YatConv(Module):
                 bank_out_features,
             )
             bank_key = (
+                "conv",
                 kernel_bank_id,
                 kernel_size,
                 in_features // feature_group_count,
                 feature_group_count,
                 param_dtype,
-                kernel_init,
+                initializer_signature(kernel_init),
                 positive_init,
             )
 
-            with YatConv._KERNEL_BANKS_LOCK:
-                shared_kernel = YatConv._KERNEL_BANKS.get(bank_key)
+            lock = (
+                kernel_bank._lock
+                if kernel_bank is not None
+                else YatConv._KERNEL_BANKS_LOCK
+            )
+            with lock:
+                shared_kernel = (
+                    kernel_bank._get(bank_key)
+                    if kernel_bank is not None
+                    else YatConv._KERNEL_BANKS.get(bank_key)
+                )
                 if shared_kernel is None:
                     # The first consumer fixes capacity. Resizing a live Param can
                     # invalidate gradients and optimizer moments that already hold
@@ -213,8 +232,11 @@ class YatConv(Module):
                     kernel_val = kernel_init(kernel_key, bank_shape, param_dtype)
                     if positive_init:
                         kernel_val = jnp.abs(kernel_val)
-                    shared_kernel = nnx.Param(kernel_val)
-                    YatConv._KERNEL_BANKS[bank_key] = shared_kernel
+                    shared_kernel = _BankParam(kernel_val)
+                    if kernel_bank is not None:
+                        kernel_bank._set(bank_key, shared_kernel)
+                    else:
+                        YatConv._KERNEL_BANKS[bank_key] = shared_kernel
                 else:
                     existing_shape = shared_kernel[...].shape
                     existing_bank_size = existing_shape[-1]
@@ -235,6 +257,9 @@ class YatConv(Module):
             if positive_init:
                 kernel_val = jnp.abs(kernel_val)
             self.kernel = nnx.Param(kernel_val)
+        # Assign after ``kernel`` so NNX keeps the backward-compatible state path
+        # and records the bank's copy as a graph reference to the same variable.
+        self.kernel_bank = kernel_bank
 
         self.bias: nnx.Param[jax.Array] | None
         self._constant_bias_value: tp.Optional[float] = None

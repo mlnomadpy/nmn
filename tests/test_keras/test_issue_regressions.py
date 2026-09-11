@@ -154,6 +154,141 @@ def input_gradient(layer, value):
 
 
 @pytest.mark.parametrize(
+    "layer_cls,input_shape,kernel,strides,expected",
+    [
+        (YatConvTranspose1D, (1, 3, 1), 2, 3, (1, 8, 1)),
+        (YatConvTranspose2D, (1, 2, 3, 1), (2, 3), (3, 2), (1, 5, 7, 1)),
+        (
+            YatConvTranspose3D,
+            (1, 2, 2, 2, 1),
+            (2, 3, 2),
+            (3, 2, 4),
+            (1, 5, 5, 6, 1),
+        ),
+    ],
+)
+def test_canonical_conv_transpose_valid_shapes_and_config(
+    layer_cls, input_shape, kernel, strides, expected
+):
+    layer = layer_cls(
+        1,
+        kernel,
+        strides=strides,
+        padding="valid",
+        output_shape_mode="nmn",
+        use_bias=False,
+        use_alpha=False,
+    )
+    output = layer(keras.ops.ones(input_shape))
+    assert tuple(output.shape) == expected
+    assert tuple(layer.compute_output_shape(input_shape)) == expected
+    restored = layer_cls.from_config(layer.get_config())
+    assert restored.output_shape_mode == "nmn"
+
+
+def test_canonical_same_output_padding_extends_high_side():
+    layer = YatConvTranspose1D(
+        1,
+        2,
+        strides=3,
+        padding="same",
+        output_padding=1,
+        output_shape_mode="nmn",
+        use_bias=False,
+        use_alpha=False,
+    )
+    output = layer(keras.ops.ones((1, 3, 1)))
+    assert tuple(output.shape) == (1, 10, 1)
+    np.testing.assert_array_equal(to_numpy(output)[:, -1], 0.0)
+
+
+def test_canonical_same_output_padding_uncrops_valid_kernel_contributions():
+    inputs = keras.ops.convert_to_tensor([[[0.5], [1.0], [1.5]]])
+    same = YatConvTranspose1D(
+        1,
+        3,
+        strides=2,
+        padding="same",
+        output_padding=1,
+        output_shape_mode="nmn",
+        use_bias=False,
+        use_alpha=False,
+        epsilon=0.1,
+    )
+    valid = YatConvTranspose1D(
+        1,
+        3,
+        strides=2,
+        padding="valid",
+        output_shape_mode="nmn",
+        use_bias=False,
+        use_alpha=False,
+        epsilon=0.1,
+    )
+    same(inputs)
+    valid(inputs)
+    kernel = keras.ops.reshape(keras.ops.arange(3, dtype="float32") + 1, (3, 1, 1))
+    same.kernel.assign(kernel)
+    valid.kernel.assign(kernel)
+
+    same_output = same(inputs)
+    valid_output = valid(inputs)
+    assert tuple(same_output.shape) == tuple(valid_output.shape) == (1, 7, 1)
+    np.testing.assert_allclose(to_numpy(same_output), to_numpy(valid_output))
+
+
+def test_conv_transpose_framework_mode_preserves_legacy_stride_gap():
+    inputs = keras.ops.ones((1, 3, 1))
+    legacy = YatConvTranspose1D(
+        1, 2, strides=3, padding="valid", use_bias=False, use_alpha=False
+    )
+    canonical = YatConvTranspose1D(
+        1,
+        2,
+        strides=3,
+        padding="valid",
+        output_shape_mode="nmn",
+        use_bias=False,
+        use_alpha=False,
+    )
+    assert tuple(legacy(inputs).shape) == (1, 9, 1)
+    assert tuple(canonical(inputs).shape) == (1, 8, 1)
+
+
+def test_conv_transpose_rejects_unknown_output_shape_mode():
+    with pytest.raises(ValueError, match="output_shape_mode"):
+        YatConvTranspose1D(1, 2, output_shape_mode="typo")
+
+
+def test_canonical_conv_transpose_jax_input_and_kernel_gradients_are_finite():
+    if BACKEND != "jax":
+        pytest.skip("stateless parameter-gradient probe uses the JAX backend")
+    import jax
+    import jax.numpy as jnp
+
+    layer = YatConvTranspose2D(
+        1,
+        (2, 3),
+        strides=(3, 2),
+        padding="valid",
+        output_shape_mode="nmn",
+        use_bias=False,
+        use_alpha=False,
+    )
+    value = jnp.arange(6, dtype=jnp.float32).reshape((1, 2, 3, 1)) / 5
+    layer(value)
+    trainable = [variable.value for variable in layer.trainable_variables]
+
+    def loss(x, parameters):
+        output, _ = layer.stateless_call(parameters, layer.non_trainable_variables, x)
+        return jnp.sum(output)
+
+    input_grad, parameter_grads = jax.grad(loss, argnums=(0, 1))(value, trainable)
+    assert jnp.isfinite(input_grad).all()
+    assert all(jnp.isfinite(gradient).all() for gradient in parameter_grads)
+
+
+@pytest.mark.parametrize(
     ("layer_cls", "input_shape"),
     [
         (YatConv1D, (2, 7, 4)),

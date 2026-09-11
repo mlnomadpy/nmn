@@ -48,6 +48,7 @@ def test_missing_keras_runtime_is_ignored(monkeypatch):
 def test_diagnostics_and_benchmarks_stay_outside_pytest_tree():
     """Prevent import-time experiments from becoming accidental CI tests."""
     assert not (ROOT / "tests" / "scripts").exists()
-    assert not list((ROOT / "benchmarks").rglob("test_*.py"))
+    assert not any((ROOT / "tests" / "benchmarks").rglob("*"))
+    assert (ROOT / "benchmarks" / "benchmark_attention_speed.py").is_file()
     assert (ROOT / "benchmarks" / "README.md").is_file()
     assert (ROOT / "tests" / "README.md").is_file()

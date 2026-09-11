@@ -20,6 +20,12 @@ from typing import List, Optional, Tuple, Union, cast
 import mlx.core as mx
 import mlx.nn as nn
 
+from nmn._epsilon import validate_epsilon
+from nmn._validation import validate_positive_int, validate_rate
+
+from ._epsilon import make_epsilon_parameter
+from ._precision import saturating_downcast
+
 DEFAULT_CONSTANT_ALPHA = math.sqrt(2.0)
 
 
@@ -96,10 +102,9 @@ class YatNMN(nn.Module):
         freeze_kernel: Optional[bool] = None,
     ) -> None:
         super().__init__()
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
-        if not 0.0 <= drop_rate < 1.0:
-            raise ValueError(f"drop_rate must be in [0, 1), got {drop_rate}")
+        epsilon = validate_epsilon(epsilon)
+        features = validate_positive_int(features, "features")
+        drop_rate = validate_rate(drop_rate, "drop_rate")
 
         # ``freeze_kernel`` is an alias for ``lazy``; either enables lazy mode.
         self.lazy = bool(lazy) or bool(freeze_kernel)
@@ -166,9 +171,7 @@ class YatNMN(nn.Module):
             self.bias = mx.zeros((self.features,), dtype=self.dtype)
 
         if self.learnable_epsilon:
-            # softplus(raw) = epsilon  ->  raw = log(exp(epsilon) - 1)
-            raw_eps = math.log(math.exp(self.epsilon) - 1.0)
-            self.epsilon_param = mx.array([raw_eps], dtype=self.dtype)
+            self.epsilon_param = make_epsilon_parameter(self.epsilon, self.dtype)
 
         self.is_built = True
 
@@ -217,6 +220,11 @@ class YatNMN(nn.Module):
             and not self.spherical
             and not self.weight_normalized
             and not self.return_weights
+            and not (
+                self.learnable_epsilon
+                and getattr(self, "epsilon_param", None) is not None
+                and self.epsilon_param.dtype != self.dtype
+            )
         ):
             from .fused import fused_yat_score
 
@@ -299,6 +307,8 @@ class YatNMN(nn.Module):
         # Effective epsilon.
         if self.learnable_epsilon and getattr(self, "epsilon_param", None) is not None:
             eps = nn.softplus(self.epsilon_param)
+            y = y.astype(eps.dtype)
+            distances = distances.astype(eps.dtype)
         else:
             eps = self.epsilon
 
@@ -309,6 +319,8 @@ class YatNMN(nn.Module):
             y = y * mx.array(self._constant_alpha_value, dtype=self.dtype)
         elif self.use_alpha and getattr(self, "alpha", None) is not None:
             y = y * self.alpha
+
+        y = saturating_downcast(y, self.dtype)
 
         if self.return_weights:
             return y, self.kernel
@@ -347,7 +359,7 @@ class YatNMN(nn.Module):
             self.alpha = weights[idx].astype(self.dtype)
             idx += 1
         if self.learnable_epsilon:
-            self.epsilon_param = weights[idx].astype(self.dtype)
+            self.epsilon_param = weights[idx].astype(self.epsilon_param.dtype)
 
 
 # Backward-compat alias used by the other backends.

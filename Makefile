@@ -16,7 +16,7 @@ TEST := tests
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install test test-fast \
+.PHONY: help install test test-fast benchmark-attention \
         test-torch test-nnx test-linen test-keras test-tf test-mlx \
         lint format format-check typecheck build docs clean
 
@@ -35,6 +35,7 @@ help: ## Show this help (default target)
 	@echo "  test-keras     Run the Keras tests           (tests/test_keras/)"
 	@echo "  test-tf        Run the TensorFlow tests      (tests/test_tf/)"
 	@echo "  test-mlx       Run the MLX tests             (tests/test_mlx/)"
+	@echo "  benchmark-attention  Run the explicit JAX attention benchmark"
 	@echo ""
 	@echo "Quality"
 	@echo "  lint           flake8 errors (E9,F63,F7,F82) + advisory style pass"
@@ -84,6 +85,9 @@ test-tf: ## TensorFlow backend tests
 
 test-mlx: ## MLX backend tests
 	$(PYTHON) -m pytest $(TEST)/test_mlx/
+
+benchmark-attention: ## Run the explicit JAX attention benchmark
+	$(PYTHON) -m pytest benchmarks/benchmark_attention_speed.py -m benchmark -v -s
 
 # ---------------------------------------------------------------------------
 # Quality

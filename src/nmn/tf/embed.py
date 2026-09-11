@@ -7,10 +7,13 @@ weight-sharing between embedding and output layers in language models.
 from __future__ import annotations
 
 import math
-from typing import List, Optional, Union
+from typing import Optional, Union
 
 import tensorflow as tf
 
+from nmn._validation import validate_positive_int
+
+from ._precision import reduction_safe_upcast, saturating_downcast
 from .saved_model import ExportPath, export_embedding
 
 __all__ = ["YatEmbed"]
@@ -49,6 +52,8 @@ class YatEmbed(tf.Module):
         dtype: tf.DType = tf.float32,
         name: Optional[str] = None,
     ):
+        num_embeddings = validate_positive_int(num_embeddings, "num_embeddings")
+        features = validate_positive_int(features, "features")
         super().__init__(name=name)
         self.num_embeddings = num_embeddings
         self.features = features
@@ -109,6 +114,9 @@ class YatEmbed(tf.Module):
         """
         query = tf.cast(query, self.dtype)
         embedding = self.embedding
+        output_dtype = query.dtype
+        query = reduction_safe_upcast(query)
+        embedding = reduction_safe_upcast(embedding)
 
         if self.spherical:
             query = query / (
@@ -122,22 +130,22 @@ class YatEmbed(tf.Module):
         y = tf.matmul(query, tf.transpose(embedding))
 
         if self.spherical:
-            distances = 2.0 - 2.0 * y
+            distances = tf.maximum(2.0 - 2.0 * y, 0.0)
         else:
             query_sq = tf.reduce_sum(tf.square(query), axis=-1, keepdims=True)
             embed_sq = tf.transpose(
                 tf.reduce_sum(tf.square(embedding), axis=1, keepdims=True)
             )
-            distances = query_sq + embed_sq - 2.0 * y
+            distances = tf.maximum(query_sq + embed_sq - 2.0 * y, 0.0)
 
         y = tf.square(y) / (distances + self.epsilon)
 
         if self._constant_alpha_value is not None:
-            y = y * tf.cast(self._constant_alpha_value, self.dtype)
+            y = y * tf.cast(self._constant_alpha_value, y.dtype)
         elif self.alpha is not None:
-            y = y * self.alpha
+            y = y * reduction_safe_upcast(self.alpha)
 
-        return y
+        return saturating_downcast(y, output_dtype)
 
     def export(
         self,

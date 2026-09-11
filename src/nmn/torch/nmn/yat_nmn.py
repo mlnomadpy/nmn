@@ -3,6 +3,7 @@
 
 import math
 import threading
+import weakref
 from collections.abc import Callable
 from typing import ClassVar, Optional, Union
 
@@ -15,8 +16,11 @@ from nmn._epsilon import (
     validate_epsilon,
     validate_epsilon_for_dtype,
 )
+from nmn._kernel_bank import initializer_signature
+from nmn._validation import validate_positive_int
 
 from .._precision import saturating_downcast, saturating_upcast
+from ..kernel_bank import KernelBank
 
 __all__ = ["YatNMN"]
 
@@ -69,6 +73,8 @@ class YatNMN(nn.Module):
           kernel_bank_size (int): Optional explicit size for the shared bank. Banks
               auto-expand only during construction, before any consumer executes.
           kernel_bank_id (str): Namespace for shared banks (allows multiple independent banks).
+          kernel_bank (KernelBank): Optional explicit owner for shared banks. Reuse
+              one object within a model; separate objects isolate model lifecycles.
           kernel_init (callable): Initializer for the weight matrix
           bias_init (callable): Initializer for the bias
           alpha_init (callable): Initializer for the scaling parameter (only used if constant_alpha is None)
@@ -80,8 +86,10 @@ class YatNMN(nn.Module):
     weight: nn.Parameter
     bias: Optional[nn.Parameter]
     alpha: Optional[nn.Parameter]
-    _KERNEL_BANKS: ClassVar[dict[tuple[object, ...], nn.Parameter]] = {}
-    _KERNEL_BANK_USED: ClassVar[dict[tuple[object, ...], bool]] = {}
+    _KERNEL_BANKS: ClassVar[
+        weakref.WeakValueDictionary[tuple[object, ...], nn.Parameter]
+    ] = weakref.WeakValueDictionary()
+    _KERNEL_BANK_USED: ClassVar[dict[int, bool]] = {}
     _KERNEL_BANKS_LOCK = threading.Lock()
 
     def __init__(
@@ -110,7 +118,10 @@ class YatNMN(nn.Module):
         bias_init: Optional[Callable[[torch.Tensor], object]] = None,
         alpha_init: Optional[Callable[[torch.Tensor], object]] = None,
         device=None,
+        kernel_bank: Optional[KernelBank] = None,
     ):
+        in_features = validate_positive_int(in_features, "in_features")
+        out_features = validate_positive_int(out_features, "out_features")
         super().__init__()
 
         # Store attributes
@@ -142,6 +153,7 @@ class YatNMN(nn.Module):
         self.tie_kernel_bank = tie_kernel_bank
         self.kernel_bank_size = kernel_bank_size
         self.kernel_bank_id = kernel_bank_id
+        self.kernel_bank = kernel_bank
         self._kernel_slice = slice(None)
         initialize_kernel = True
 
@@ -160,16 +172,32 @@ class YatNMN(nn.Module):
                 )
             bank_device = torch.empty((), dtype=param_dtype, device=device).device
             bank_key = (
+                "dense",
                 kernel_bank_id,
                 in_features,
                 param_dtype,
                 bank_device,
-                id(kernel_init),
+                initializer_signature(kernel_init),
                 positive_init,
             )
 
-            with YatNMN._KERNEL_BANKS_LOCK:
-                shared_weight = YatNMN._KERNEL_BANKS.get(bank_key)
+            banks = (
+                kernel_bank._parameters
+                if kernel_bank is not None
+                else YatNMN._KERNEL_BANKS
+            )
+            used = (
+                kernel_bank._used
+                if kernel_bank is not None
+                else YatNMN._KERNEL_BANK_USED
+            )
+            lock = (
+                kernel_bank._lock
+                if kernel_bank is not None
+                else YatNMN._KERNEL_BANKS_LOCK
+            )
+            with lock:
+                shared_weight = banks.get(bank_key)
                 if shared_weight is None:
                     # First layer: create bank
                     self.weight = nn.Parameter(
@@ -179,8 +207,11 @@ class YatNMN(nn.Module):
                             device=bank_device,
                         )
                     )
-                    YatNMN._KERNEL_BANKS[bank_key] = self.weight
-                    YatNMN._KERNEL_BANK_USED[bank_key] = False
+                    banks[bank_key] = self.weight
+                    parameter_id = id(self.weight)
+                    used[parameter_id] = False
+                    if kernel_bank is None:
+                        weakref.finalize(self.weight, used.pop, parameter_id, None)
                 else:
                     if (
                         shared_weight.device != bank_device
@@ -197,7 +228,7 @@ class YatNMN(nn.Module):
                     initialize_kernel = False
                     existing_size = shared_weight.shape[0]
                     if bank_out_features > existing_size:
-                        if YatNMN._KERNEL_BANK_USED.get(bank_key, False):
+                        if used.get(id(shared_weight), False):
                             raise ValueError(
                                 f"kernel bank '{kernel_bank_id}' capacity is frozen "
                                 f"at {existing_size} after first use; requested "
@@ -375,8 +406,14 @@ class YatNMN(nn.Module):
         kernel = self.weight
         # Slice shared kernel if tying is enabled
         if self.tie_kernel_bank:
-            with YatNMN._KERNEL_BANKS_LOCK:
-                YatNMN._KERNEL_BANK_USED[self._kernel_bank_key] = True
+            owner = self.kernel_bank
+            lock = owner._lock if owner is not None else YatNMN._KERNEL_BANKS_LOCK
+            used = owner._used if owner is not None else YatNMN._KERNEL_BANK_USED
+            with lock:
+                if owner is not None or (
+                    YatNMN._KERNEL_BANKS.get(self._kernel_bank_key) is self.weight
+                ):
+                    used[id(self.weight)] = True
             kernel = kernel[self._kernel_slice]
 
         # Resolve bias (learnable or constant)

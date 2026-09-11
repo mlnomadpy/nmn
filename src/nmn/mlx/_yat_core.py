@@ -15,6 +15,8 @@ from typing import cast
 import mlx.core as mx
 import mlx.nn as nn
 
+from ._precision import saturating_downcast
+
 __all__ = ["yat_score"]
 
 
@@ -53,6 +55,8 @@ def yat_score(
     # Effective epsilon (softplus-of-raw learnable, or constant).
     if layer.learnable_epsilon and getattr(layer, "epsilon_param", None) is not None:
         eps = nn.softplus(layer.epsilon_param)
+        dot_prod_map = dot_prod_map.astype(eps.dtype)
+        distance_sq_map = distance_sq_map.astype(eps.dtype)
     else:
         eps = layer.epsilon
 
@@ -65,4 +69,4 @@ def yat_score(
     elif layer.use_alpha and getattr(layer, "alpha", None) is not None:
         y = y * layer.alpha
 
-    return cast(mx.array, y)
+    return cast(mx.array, saturating_downcast(y, layer.dtype))

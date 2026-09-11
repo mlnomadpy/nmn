@@ -1,6 +1,7 @@
 name: Website
 
 on:
+  workflow_call:
   push:
     branches: [ main, master, develop ]
     paths:
@@ -46,3 +47,10 @@ jobs:
       - name: Build website
         working-directory: website/docusaurus
         run: npm run build
+
+      # deploy.yml consumes this artifact from the same workflow run. Because
+      # steps fail closed, an audit or build failure prevents its creation.
+      - name: Upload audited website artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: website/docusaurus/build

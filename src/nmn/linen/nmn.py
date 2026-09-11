@@ -20,6 +20,7 @@ from nmn._epsilon import (
     validate_epsilon,
     validate_epsilon_for_dtype,
 )
+from nmn._validation import validate_positive_int
 
 
 def _epsilon_dtype(param_dtype, epsilon):
@@ -127,6 +128,7 @@ class YatNMN(Module):
 
     def __post_init__(self) -> None:
         super().__post_init__()
+        validate_positive_int(self.features, "features")
         validate_epsilon(self.epsilon)
 
     @compact

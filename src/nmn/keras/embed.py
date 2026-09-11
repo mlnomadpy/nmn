@@ -13,6 +13,8 @@ from keras.src import initializers, ops
 from keras.src.layers.layer import Layer
 from keras.src.saving.object_registration import register_keras_serializable
 
+from nmn._validation import validate_positive_int
+
 from ._yat_core import (
     reduction_safe_upcast,
     saturating_downcast,
@@ -55,6 +57,8 @@ class YatEmbed(Layer):
         embedding_initializer="glorot_normal",
         **kwargs,
     ):
+        num_embeddings = validate_positive_int(num_embeddings, "num_embeddings")
+        features = validate_positive_int(features, "features")
         super().__init__(**kwargs)
         self.num_embeddings = num_embeddings
         self.features = features

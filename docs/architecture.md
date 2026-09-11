@@ -103,7 +103,11 @@ The same Yat operation, three slightly different parameter naming conventions in
 | Learnable α            | `use_alpha`                    | `use_alpha`                    | `use_alpha` / `constant_alpha` | `use_alpha` / `constant_alpha` |
 | Bias                   | `use_bias`                     | `use_bias`                     | `use_bias`                     | `use_bias`                     |
 
-Internal math is **numerically equivalent across all six frameworks** — PyTorch, TensorFlow, Keras, Flax NNX, Flax Linen, and MLX (max abs error < 1e-6 in fp32; see `tests/integration/test_cross_framework_consistency.py` and the full `(spherical × weight_normalized × learnable_epsilon × bias_mode)` matrix in `tests/integration/test_yat_nmn_parity.py`).
+The intended math is shared across all six frameworks—PyTorch, TensorFlow,
+Keras, Flax NNX, Flax Linen, and MLX—but parity claims are scoped by the
+machine-readable [`conformance_manifest.json`](../src/nmn/conformance_manifest.json).
+Its generated [support table](generated/conformance.md) names the oracle- and
+fixture-tested paths and the exact per-dtype tolerances enforced by CI.
 
 ---
 

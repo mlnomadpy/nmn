@@ -13,6 +13,7 @@ from nmn._epsilon import (
     validate_epsilon,
     validate_epsilon_for_dtype,
 )
+from nmn._validation import validate_positive_int
 
 from ._yat_core import reduction_safe_upcast, saturating_downcast, stable_yat_ratio
 
@@ -109,6 +110,7 @@ class YatNMN(Layer):
         bias_constraint=None,
         **kwargs,
     ):
+        units = validate_positive_int(units, "units")
         super().__init__(activity_regularizer=activity_regularizer, **kwargs)
         self.units = units
         self.epsilon = validate_epsilon(epsilon)

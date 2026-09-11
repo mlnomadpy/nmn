@@ -13,6 +13,8 @@ from typing import Optional, Tuple, Union
 
 import tensorflow as tf
 
+from nmn._validation import validate_positive_int, validate_rate
+
 from ._precision import reduction_safe_upcast
 from .saved_model import ExportPath, export_attention
 
@@ -69,6 +71,7 @@ def yat_attention_weights(
     Returns:
         Attention weights (batch, num_heads, q_len, kv_len).
     """
+    dropout_rate = validate_rate(dropout_rate, "dropout_rate")
     output_dtype = query.dtype
     if output_dtype in (tf.float16, tf.bfloat16):
         query = reduction_safe_upcast(query)
@@ -257,12 +260,14 @@ class MultiHeadYatAttention(tf.Module):
         dtype: tf.DType = tf.float32,
         name: Optional[str] = None,
     ):
+        embed_dim = validate_positive_int(embed_dim, "embed_dim")
+        num_heads = validate_positive_int(num_heads, "num_heads")
+        dropout = validate_rate(dropout, "dropout")
         super().__init__(name=name)
 
         if embed_dim % num_heads != 0:
             raise ValueError(
-                f"embed_dim ({embed_dim}) must be divisible by "
-                f"num_heads ({num_heads})."
+                f"embed_dim ({embed_dim}) must be divisible by num_heads ({num_heads})."
             )
 
         self.embed_dim = embed_dim

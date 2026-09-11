@@ -406,6 +406,10 @@ Runnable examples live alongside each backend in the source tree:
 A curated walkthrough is in EXAMPLES.md:
   {ONLINE_EXAMPLES}
 
+Install a backend together with its runnable-example dependencies:
+  pip install "nmn[nnx,examples]"    # use linen, torch, or mlx as needed
+Dataset loaders alone are available through the smaller ``nmn[data]`` extra.
+
 Quickstart for the most popular backend (Flax NNX):
 
     import jax.numpy as jnp

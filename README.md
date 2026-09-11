@@ -3,7 +3,7 @@
 <p align="center">
   <em>Activation-free neural layers that learn non-linearity through geometric operations.</em>
   <br>
-  <strong>One library. Six frameworks. Numerically equivalent.</strong>
+  <strong>One library. Six frameworks. Manifest-verified conformance.</strong>
 </p>
 
 <p align="center">
@@ -75,7 +75,7 @@ y = YatNMN(in_features=128, out_features=64)(x)   # geometric, intrinsically non
 | Requires an external activation for non-linearity      | Non-linearity is intrinsic                                              |
 | Fires for distant-but-aligned vectors (spurious)       | Penalizes distance → cleaner, prototype-like features                   |
 
-NMN ships across **PyTorch, Flax NNX, Flax Linen, Keras 3, TensorFlow, and MLX** (Apple Silicon) with numerically equivalent outputs (< 1e-6 max-abs error in fp32, verified by an integration parity matrix). Pick the framework you like; switch later without retraining math.
+NMN ships across **PyTorch, Flax NNX, Flax Linen, Keras 3, TensorFlow, and MLX** (Apple Silicon). Cross-framework support, execution modes, dtypes, serialization, and the exact enforced tolerances live in the machine-readable [`conformance_manifest.json`](src/nmn/conformance_manifest.json); the generated [conformance table](docs/generated/conformance.md) distinguishes oracle-tested paths from capabilities that are only declared.
 
 ---
 
@@ -90,7 +90,14 @@ pip install "nmn[keras]"          # + Keras 3 (choose JAX, TF, or Torch separate
 pip install "nmn[tf]"             # + TensorFlow
 pip install "nmn[mlx]"            # + MLX (Apple Silicon only)
 pip install "nmn[all]"            # everything except MLX (Linux/Windows safe)
+pip install "nmn[data]"           # dataset loaders used by runnable examples
+pip install "nmn[nnx,examples]"   # NNX + all training/example dependencies
 ```
+
+Backend extras contain only what the library itself imports. Runnable training
+scripts need both their backend and the `examples` extra—for example,
+`nmn[torch,examples]`, `nmn[linen,examples]`, or `nmn[mlx,examples]`. The
+lighter `data` extra installs only the supported dataset loaders.
 
 **Requirements:** Python ≥ 3.10 (≥ 3.11 if you want JAX/Flax).
 
@@ -251,7 +258,7 @@ print(model.apply(params, jnp.ones((32, 28, 28, 1))).shape)  # (32, 10)
 
 ## Choose your framework
 
-All six backends expose the same operations with framework-idiomatic naming. They are **numerically equivalent** (verified in `tests/integration/`).
+All six backends expose the same operation families with framework-idiomatic naming. The [generated conformance table](docs/generated/conformance.md) is the authority for which paths are oracle-tested, fixture-tested, partial, or only declared.
 
 | Framework      | Pick it when…                                                                   | Guide                                          |
 | -------------- | ------------------------------------------------------------------------------- | ---------------------------------------------- |
@@ -266,7 +273,9 @@ All six backends expose the same operations with framework-idiomatic naming. The
 
 ## Layer reference
 
-All layers are available across **all 6 frameworks** with verified parity.
+The layer families below are available across all six frameworks. Verification
+depth differs by operation and backend; consult the generated conformance table
+before treating an entry as oracle-tested parity.
 
 | Operation                  | PyTorch                    | TF / Keras                 | Flax NNX                 | Flax Linen                 | MLX                        |
 | -------------------------- | -------------------------- | -------------------------- | ------------------------ | -------------------------- | -------------------------- |
@@ -287,20 +296,12 @@ All layers are available across **all 6 frameworks** with verified parity.
 
 ### Cross-framework consistency
 
-```
-Framework Pair             │ Max Error    │ Status
-───────────────────────────┼──────────────┼────────
-PyTorch ↔ TensorFlow       │ < 1e-6       │ ✅
-PyTorch ↔ Keras            │ < 1e-6       │ ✅
-PyTorch ↔ Flax NNX         │ < 1e-6       │ ✅
-PyTorch ↔ Flax Linen       │ < 1e-6       │ ✅
-PyTorch ↔ MLX (CPU)        │ < 1e-6       │ ✅
-TensorFlow ↔ Keras         │ < 1e-7       │ ✅
-Flax NNX ↔ Flax Linen      │ < 1e-7       │ ✅
-Flax NNX ↔ MLX (CPU)       │ < 1e-6       │ ✅
-```
+The conformance harness compares backend results with an independent NumPy
+float64 oracle. The enforced float32 dense tolerance is `rtol=2e-4` and
+`atol=2e-5`; lower-precision profiles and every capability declaration are
+read from the same packaged manifest used by the tests.
 
-Run yourself: `pytest tests/integration/test_cross_framework_consistency.py -v`.
+Run it yourself: `pytest tests/conformance -v`.
 
 ### Bias-aware linear-attention feature maps (MAY / RAY)
 
@@ -389,7 +390,7 @@ pip install "nmn[test]"
 
 pytest tests/                                      # everything
 pytest tests/test_torch/                           # one framework
-pytest tests/integration/                          # cross-framework parity
+pytest tests/conformance/                          # manifest conformance profiles
 pytest tests/ -m "not slow"                        # skip slow tests
 pytest tests/ --cov=nmn --cov-report=html          # coverage report
 ```
@@ -407,7 +408,7 @@ See [`tests/README.md`](tests/README.md) for the suite layout and
 | Area                       | Status                                                              |
 | -------------------------- | ------------------------------------------------------------------- |
 | Core layers across 6 frameworks | ✅ Production-ready, on PyPI                                  |
-| Cross-framework consistency tests | ✅ Verified < 1e-6 in fp32                                  |
+| Cross-framework conformance contract | ✅ Machine-readable matrix + oracle/fixture harness    |
 | Documentation               | ✅ Per-platform guides, architecture, migration                     |
 | ONNX export                | 🚧 Should work (standard ops) — not yet covered in CI ([TODO.md](TODO.md)) |
 | INT8 quantization          | 🚧 Not yet implemented ([TODO.md](TODO.md))                         |

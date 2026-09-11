@@ -642,6 +642,8 @@ def test_examples_points_to_examples_md(capsys):
     assert cli.main(["examples"]) == 0
     out = capsys.readouterr().out
     assert "EXAMPLES.md" in out
+    assert 'pip install "nmn[nnx,examples]"' in out
+    assert "nmn[data]" in out
     assert "nmn guide" in out
 
 

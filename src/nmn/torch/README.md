@@ -189,14 +189,16 @@ linear = YatNMN(
 Share kernel parameters across multiple layers to **reduce model size** and **encourage feature learning**.
 
 **Key concepts:**
-- **Kernel Bank**: A shared parameter store for multiple layers
+- **Kernel Bank**: A model-owned shared parameter store for multiple layers
 - **Construction-time auto-expansion**: Grows when a larger layer is constructed,
   until the first tied consumer executes. The first forward freezes capacity so
   live gradients and optimizer state can never be invalidated.
 - **First-k slicing**: Layers extract the first k filters they need
 
 ```python
-from nmn.torch.layers import YatConv2D
+from nmn.torch import KernelBank, YatConv2D
+
+conv_bank = KernelBank()
 
 # Create multiple layers sharing same kernel bank
 layer1 = YatConv2D(
@@ -204,7 +206,8 @@ layer1 = YatConv2D(
     out_channels=32,  # Use first 32 filters from bank
     kernel_size=3,
     tie_kernel_bank=True,           # Enable weight tying
-    kernel_bank_id='resnet-conv'    # Bank namespace
+    kernel_bank_id='resnet-conv',   # Bank namespace
+    kernel_bank=conv_bank,           # Explicit model owner
 )
 
 layer2 = YatConv2D(
@@ -212,7 +215,8 @@ layer2 = YatConv2D(
     out_channels=64,  # Automatically expands bank to 64
     kernel_size=3,
     tie_kernel_bank=True,
-    kernel_bank_id='resnet-conv'
+    kernel_bank_id='resnet-conv',
+    kernel_bank=conv_bank,
 )
 
 layer3 = YatConv2D(
@@ -220,7 +224,8 @@ layer3 = YatConv2D(
     out_channels=128,  # Automatically expands bank to 128
     kernel_size=3,
     tie_kernel_bank=True,
-    kernel_bank_id='resnet-conv'
+    kernel_bank_id='resnet-conv',
+    kernel_bank=conv_bank,
 )
 
 # All three layers share kernels, bank auto-expanded: 32 -> 64 -> 128
@@ -229,6 +234,12 @@ layer3 = YatConv2D(
 Build every tied consumer before running any of them, or set
 `kernel_bank_size` on the first consumer to the maximum required capacity.
 Requesting a larger capacity after the first forward raises `ValueError`.
+Keep the `KernelBank` on the containing model and pass it to every intended
+consumer. Separate owners isolate models even when `kernel_bank_id` strings
+match. Omitting `kernel_bank=` retains legacy ID-based sharing through a weak
+compatibility registry, which releases an entry after its last layer dies.
+Live legacy consumers with matching IDs still share; use separate explicit
+owners whenever independently loaded models must be isolated.
 
 Because PyTorch applies `.to()`, `.float()`, `.double()`, and similar operations
 one module at a time, they cannot safely migrate a class-level shared bank.
@@ -246,21 +257,27 @@ Auto-expanding kernel bank 'resnet-conv': 64 -> 128 filters
 **For YatNMN:**
 
 ```python
-from nmn.torch.nmn import YatNMN
+from nmn.torch import KernelBank, YatNMN
+
+head_bank = KernelBank()
 
 head1 = YatNMN(
     in_features=512,
     out_features=256,
     tie_kernel_bank=True,
-    kernel_bank_id='classifier'
+    kernel_bank_id='classifier',
+    kernel_bank=head_bank,
 )
 
 head2 = YatNMN(
-    in_features=256,
+    in_features=512,
     out_features=128,
     tie_kernel_bank=True,
-    kernel_bank_id='classifier'
+    kernel_bank_id='classifier',
+    kernel_bank=head_bank,
 )
+
+assert head1.weight is head2.weight
 ```
 
 **Multiple independent banks:**

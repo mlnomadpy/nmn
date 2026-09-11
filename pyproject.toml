@@ -47,14 +47,34 @@ dev = [
     "tomli>=1.1.0; python_version < '3.11'",
 ]
 nnx = ["jax>=0.9.1", "jaxlib>=0.9.1", "flax>=0.12.5"]
-torch = ["torch>=1.11.0", "torchvision>=0.12.0"]
+torch = ["torch>=1.11.0"]
 keras = ["keras>=3.0.0"]
 tf = ["tensorflow>=2.10.0"]
 linen = ["jax>=0.9.1", "jaxlib>=0.9.1", "flax>=0.12.5"]
 mlx = ["mlx>=0.18.1"]
 all = ["nmn[nnx,torch,keras,tf,linen]"]
+data = [
+    "torchvision>=0.12.0",
+    "tensorflow-datasets>=4.8.0",
+    "datasets>=2.0.0",
+]
+examples = [
+    "nmn[data]",
+    "optax>=0.1.4",
+    "orbax-checkpoint>=0.4.0",
+    "wandb>=0.15.0",
+    "tokenizers>=0.13.0",
+    "mteb>=1.0.0",
+    "matplotlib>=3.5.0",
+    "seaborn>=0.11.0",
+    "scikit-learn>=1.1.0",
+    "pillow>=9.0.0",
+    "tqdm>=4.0.0",
+    "grain>=0.2.0",
+]
 test = [
     "nmn[dev,all]",
+    "torchvision>=0.12.0",
     "tensorflow-datasets>=4.8.0",
     "optax>=0.1.4",
     "matplotlib>=3.5.0",
@@ -98,6 +118,7 @@ python_functions = ["test_*"]
 addopts = ["--verbose", "--tb=short", "--strict-markers"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "benchmark: explicit performance measurements excluded from correctness CI",
 ]
 
 [tool.mypy]
@@ -120,6 +141,7 @@ strict_equality = true
 
 [tool.coverage.run]
 source = ["src/nmn"]
+relative_files = true
 omit = ["*/tests/*", "*/examples/*", "*/__pycache__/*", "*/_version.py"]
 
 [tool.coverage.report]

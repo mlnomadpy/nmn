@@ -241,7 +241,7 @@ linear = YatNMN(
 Share kernel parameters across multiple layers to **reduce model size** and **encourage feature reuse**.
 
 **Key concepts:**
-- **Kernel Bank**: Shared parameter store managed at class level
+- **Kernel Bank**: Explicit model-owned shared parameter store
 - **Fixed capacity**: The first consumer fixes the bank size; set
   `kernel_bank_size` there to the largest size any consumer will need
 - **First-k slicing**: Each layer extracts the first k filters it needs
@@ -254,9 +254,10 @@ Share kernel parameters across multiple layers to **reduce model size** and **en
   fields intentionally creates a separate bank.
 
 ```python
-from nmn.nnx.layers.conv import YatConv
+from nmn.nnx import KernelBank, YatConv
 
 rngs = nnx.Rngs(0)
+conv_bank = KernelBank()
 
 # Create parallel consumers with compatible input/kernel/group signatures.
 # These are not a sequential stack: every consumer accepts 32 input channels.
@@ -267,6 +268,7 @@ layer1 = YatConv(
     tie_kernel_bank=True,
     kernel_bank_size=128,  # Fixed capacity declared before state/optimizer creation
     kernel_bank_id='resnet-conv',  # Bank namespace
+    kernel_bank=conv_bank,
     rngs=rngs
 )
 
@@ -276,6 +278,7 @@ layer2 = YatConv(
     kernel_size=(3, 3),
     tie_kernel_bank=True,
     kernel_bank_id='resnet-conv',
+    kernel_bank=conv_bank,
     rngs=rngs
 )
 
@@ -285,6 +288,7 @@ layer3 = YatConv(
     kernel_size=(3, 3),
     tie_kernel_bank=True,
     kernel_bank_id='resnet-conv',
+    kernel_bank=conv_bank,
     rngs=rngs
 )
 
@@ -293,16 +297,26 @@ layer3 = YatConv(
 assert layer1.kernel is layer2.kernel is layer3.kernel
 ```
 
+Keep the `KernelBank` on the containing model and pass it to every intended
+consumer. Separate owners isolate models even when `kernel_bank_id` strings
+match. Omitting `kernel_bank=` retains legacy ID-based sharing through a weak
+compatibility registry, which releases an entry after its last layer dies.
+Live legacy consumers with matching IDs still share; use separate explicit
+owners whenever independently loaded models must be isolated.
+
 **For YatNMN:**
 
 ```python
-from nmn.nnx import YatNMN
+from nmn.nnx import KernelBank, YatNMN
+
+head_bank = KernelBank()
 
 head1 = YatNMN(
     in_features=512,
     out_features=256,
     tie_kernel_bank=True,
     kernel_bank_id='classifier',
+    kernel_bank=head_bank,
     rngs=rngs
 )
 
@@ -311,6 +325,7 @@ head2 = YatNMN(
     out_features=128,
     tie_kernel_bank=True,
     kernel_bank_id='classifier',  # Shares with head1
+    kernel_bank=head_bank,
     rngs=rngs
 )
 
@@ -791,12 +806,13 @@ logits = mixed(x.astype(jnp.bfloat16), deterministic=True)
 ```
 
 `mixed` avoids explicit full-array FP32 operand casts and uses
-`preferred_element_type=jnp.float32`; numerical-parity tests cover both FP16
-and BF16 operands. `bf16` uses a dimension-scaled form to keep intermediate
+`preferred_element_type=jnp.float32`. FP16 and BF16 are supported execution
+choices, but the packaged cross-framework conformance profiles currently
+enforce float32 only. `bf16` uses a dimension-scaled form to keep intermediate
 values near unit scale. All modes support `fused=True` with matching forward
 and backward semantics; the unchanged default FP32 path keeps its optimized
-analytical VJP. Benchmark lowered HLO and step time on the actual TPU before
-choosing a deployment mode.
+analytical VJP. Validate numerical behavior and benchmark lowered HLO and step
+time on the actual TPU before choosing a deployment mode.
 
 ## Performance Tips
 

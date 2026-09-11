@@ -1,9 +1,9 @@
 name: Sync public mirror
 
 # This file is intentionally identical in the canonical and mirror repositories.
-# It executes only in mlnomadpy/nmn, where the ephemeral GITHUB_TOKEN has write
-# access to that repository and no access to azettaai/nmn. The canonical source
-# is fetched anonymously and the mirror refuses divergent history or tag edits.
+# It executes only in mlnomadpy/nmn. A GitHub App installed only on that mirror
+# supplies a short-lived token with Contents + Workflows write permission; the
+# canonical source is fetched anonymously. See docs/mirror-sync.md.
 
 on:
   schedule:
@@ -23,39 +23,26 @@ jobs:
     if: github.repository == 'mlnomadpy/nmn'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: write
     steps:
+      # With owner/repositories omitted, the action scopes the installation
+      # token to this repository only. It is revoked automatically after use.
+      - name: Create mirror-only installation token
+        id: mirror-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.MIRROR_APP_CLIENT_ID }}
+          private-key: ${{ secrets.MIRROR_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-workflows: write
+
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Fetch and verify canonical history
+      - name: Fetch and synchronize canonical history
+        env:
+          MIRROR_PUSH_REMOTE: https://x-access-token:${{ steps.mirror-token.outputs.token }}@github.com/${{ github.repository }}.git
         run: |
           git remote add canonical https://github.com/azettaai/nmn.git
-          git fetch --prune canonical master --tags
-          mirror_head="$(git rev-parse refs/remotes/origin/master)"
-          canonical_head="$(git rev-parse refs/remotes/canonical/master)"
-          if ! git merge-base --is-ancestor "${mirror_head}" "${canonical_head}"; then
-            echo "Mirror master has diverged from canonical master." >&2
-            exit 1
-          fi
-
-      - name: Update mirror with repository-scoped authentication
-        run: |
-          git push origin refs/remotes/canonical/master:refs/heads/master
-          git push origin --tags
-
-      - name: Verify remote master and tags
-        run: |
-          canonical_head="$(git rev-parse refs/remotes/canonical/master)"
-          mirrored_head="$(git ls-remote origin refs/heads/master | awk '{print $1}')"
-          test -n "${mirrored_head}"
-          test "${mirrored_head}" = "${canonical_head}"
-
-          while IFS= read -r tag_ref; do
-            canonical_tag="$(git rev-parse "${tag_ref}")"
-            mirrored_tag="$(git ls-remote origin "${tag_ref}" | awk '{print $1}')"
-            test -n "${mirrored_tag}"
-            test "${mirrored_tag}" = "${canonical_tag}"
-          done < <(git for-each-ref --format='%(refname)' refs/tags)
+          bash scripts/sync-public-mirror.sh

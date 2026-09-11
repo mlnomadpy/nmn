@@ -4,12 +4,17 @@ from typing import Any, Callable, List, Optional, Tuple, Union
 
 import tensorflow as tf
 
+from nmn._conv_transpose import (
+    canonical_same_crop_or_pad,
+    canonical_transpose_config,
+)
 from nmn._epsilon import (
     epsilon_parameter_dtype,
     inverse_softplus,
     validate_epsilon,
     validate_epsilon_for_dtype,
 )
+from nmn._validation import validate_positive_int
 
 from ._precision import reduction_safe_upcast
 from ._yat_core import yat_score
@@ -24,8 +29,8 @@ def _epsilon_variable_dtype(layer):
 
 def _validate_groups(filters: int, groups: int) -> None:
     """Validate the statically known grouped-convolution configuration."""
-    if groups <= 0:
-        raise ValueError(f"groups must be a positive integer, got {groups}")
+    validate_positive_int(filters, "filters")
+    validate_positive_int(groups, "groups")
     if filters % groups != 0:
         raise ValueError(f"Filters ({filters}) must be divisible by groups ({groups})")
 
@@ -63,6 +68,40 @@ def _upcast_yat_operands(inputs, kernel):
     if inputs.dtype in (tf.float16, tf.bfloat16):
         return reduction_safe_upcast(inputs), reduction_safe_upcast(kernel)
     return inputs, kernel
+
+
+def _transpose_output_length(
+    input_length, kernel_size, stride, padding, dilation, output_padding
+):
+    """TensorFlow-compatible implementation of the documented shape contract."""
+    effective_kernel = dilation * (kernel_size - 1) + 1
+    if output_padding is None:
+        if padding == "SAME":
+            return input_length * stride
+        return input_length * stride + max(effective_kernel - stride, 0)
+    if padding == "SAME":
+        return input_length * stride + output_padding
+    return (input_length - 1) * stride + effective_kernel + output_padding
+
+
+def _adjust_transpose_same(value, adjustments):
+    if adjustments is None:
+        return value
+    shape = tf.shape(value)
+    begin = [0]
+    begin.extend(max(low, 0) for low, _ in adjustments)
+    begin.append(0)
+    size = [shape[0]]
+    size.extend(
+        shape[axis] - max(low, 0) - max(high, 0)
+        for axis, (low, high) in enumerate(adjustments, start=1)
+    )
+    size.append(shape[-1])
+    value = tf.slice(value, begin, size)
+    paddings = [[0, 0]]
+    paddings.extend([[max(-low, 0), max(-high, 0)] for low, high in adjustments])
+    paddings.append([0, 0])
+    return tf.pad(value, paddings)
 
 
 class YatConv1D(SingleInputSavedModelMixin, tf.Module):
@@ -108,7 +147,7 @@ class YatConv1D(SingleInputSavedModelMixin, tf.Module):
         name: Optional[str] = None,
     ):
         super().__init__(name=name)
-        self.filters = filters
+        self.filters = validate_positive_int(filters, "filters")
         self.kernel_size = kernel_size
         self.strides = strides
         self.padding = padding.upper()
@@ -305,7 +344,7 @@ class YatConv2D(SingleInputSavedModelMixin, tf.Module):
         name: Optional[str] = None,
     ):
         super().__init__(name=name)
-        self.filters = filters
+        self.filters = validate_positive_int(filters, "filters")
         self.kernel_size = (
             kernel_size
             if isinstance(kernel_size, (list, tuple))
@@ -515,7 +554,7 @@ class YatConv3D(SingleInputSavedModelMixin, tf.Module):
         name: Optional[str] = None,
     ):
         super().__init__(name=name)
-        self.filters = filters
+        self.filters = validate_positive_int(filters, "filters")
         self.kernel_size = (
             kernel_size
             if isinstance(kernel_size, (list, tuple))
@@ -692,6 +731,9 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
         kernel_size: Integer, specifying the length of the 1D convolution window.
         strides: Integer, specifying the stride length. Defaults to 1.
         padding: String, either "valid" or "same". Defaults to "same".
+        dilation_rate: Kernel dilation. Defaults to 1.
+        output_padding: Optional high-side extension. Passing it explicitly,
+            including zero, selects the canonical NMN output-shape contract.
         use_bias: Boolean, whether to add a bias to the output. Defaults to True.
         use_alpha: Boolean, whether to use alpha scaling. Defaults to True.
         epsilon: Float, small constant for numerical stability. Defaults to 1e-6.
@@ -718,12 +760,21 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
         learnable_epsilon: bool = False,
         dtype: tf.DType = tf.float32,
         name: Optional[str] = None,
+        *,
+        dilation_rate: int = 1,
+        output_padding: Optional[int] = None,
     ):
         super().__init__(name=name)
-        self.filters = filters
+        self.filters = validate_positive_int(filters, "filters")
         self.kernel_size = kernel_size
         self.strides = strides
         self.padding = padding.upper()
+        self.dilation_rate = dilation_rate
+        self.output_padding = output_padding
+        if output_padding is not None:
+            canonical_transpose_config(
+                kernel_size, strides, self.padding, dilation_rate, output_padding
+            )
         self.use_alpha = use_alpha
         self.epsilon = validate_epsilon(epsilon)
         self.learnable_epsilon = learnable_epsilon
@@ -817,18 +868,43 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
         strides = self.strides
         kernel_size = self.kernel_size
 
-        if self.padding == "SAME":
-            output_length = input_length * strides
-        else:
-            output_length = input_length * strides + tf.maximum(
-                kernel_size - strides, 0
+        output_length = _transpose_output_length(
+            input_length,
+            kernel_size,
+            strides,
+            self.padding,
+            self.dilation_rate,
+            self.output_padding,
+        )
+        same_adjustments = (
+            canonical_same_crop_or_pad(
+                kernel_size,
+                strides,
+                self.dilation_rate,
+                self.output_padding,
             )
+            if self.padding == "SAME" and self.output_padding is not None
+            else None
+        )
+        native_output_length = (
+            _transpose_output_length(
+                input_length,
+                kernel_size,
+                strides,
+                "VALID",
+                self.dilation_rate,
+                0,
+            )
+            if same_adjustments
+            else output_length
+        )
+        native_padding = "VALID" if same_adjustments else self.padding
 
         # Build output shape as a 1D tensor
         output_shape = tf.concat(
             [
                 tf.reshape(batch_size, [1]),
-                tf.reshape(output_length, [1]),
+                tf.reshape(native_output_length, [1]),
                 tf.constant([self.filters], dtype=tf.int32),
             ],
             axis=0,
@@ -837,7 +913,7 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
         output_shape_ones = tf.concat(
             [
                 tf.reshape(batch_size, [1]),
-                tf.reshape(output_length, [1]),
+                tf.reshape(native_output_length, [1]),
                 tf.constant([1], dtype=tf.int32),
             ],
             axis=0,
@@ -849,7 +925,8 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
             kernel,
             output_shape=output_shape,
             strides=strides,
-            padding=self.padding,
+            padding=native_padding,
+            dilations=self.dilation_rate,
         )
 
         # For transpose conv, compute YAT distance calculation
@@ -864,7 +941,12 @@ class YatConvTranspose1D(SingleInputSavedModelMixin, tf.Module):
             ones_kernel,
             output_shape=output_shape_ones,
             strides=strides,
-            padding=self.padding,
+            padding=native_padding,
+            dilations=self.dilation_rate,
+        )
+        dot_prod_map = _adjust_transpose_same(dot_prod_map, same_adjustments)
+        patch_sq_sum_map_raw = _adjust_transpose_same(
+            patch_sq_sum_map_raw, same_adjustments
         )
 
         patch_sq_sum_map = tf.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
@@ -888,6 +970,9 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
         kernel_size: Integer or tuple of 2 integers for kernel dimensions.
         strides: Integer or tuple of 2 integers. Defaults to (1, 1).
         padding: String, either "valid" or "same". Defaults to "same".
+        dilation_rate: Kernel dilation. Defaults to (1, 1).
+        output_padding: Optional high-side extensions. Passing it explicitly,
+            including zero, selects the canonical NMN output-shape contract.
         use_bias: Boolean, whether to add a bias to the output. Defaults to True.
         use_alpha: Boolean, whether to use alpha scaling. Defaults to True.
         epsilon: Float, small constant for numerical stability. Defaults to 1e-6.
@@ -914,9 +999,12 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
         learnable_epsilon: bool = False,
         dtype: tf.DType = tf.float32,
         name: Optional[str] = None,
+        *,
+        dilation_rate: Union[int, Tuple[int, int]] = (1, 1),
+        output_padding: Optional[Union[int, Tuple[int, int]]] = None,
     ):
         super().__init__(name=name)
-        self.filters = filters
+        self.filters = validate_positive_int(filters, "filters")
         self.kernel_size = (
             kernel_size
             if isinstance(kernel_size, (list, tuple))
@@ -926,6 +1014,28 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
             strides if isinstance(strides, (list, tuple)) else (strides, strides)
         )
         self.padding = padding.upper()
+        self.dilation_rate = (
+            dilation_rate
+            if isinstance(dilation_rate, (list, tuple))
+            else (dilation_rate, dilation_rate)
+        )
+        self.output_padding = (
+            None
+            if output_padding is None
+            else (
+                tuple(output_padding)
+                if isinstance(output_padding, (list, tuple))
+                else (output_padding, output_padding)
+            )
+        )
+        if self.output_padding is not None:
+            canonical_transpose_config(
+                self.kernel_size,
+                self.strides,
+                self.padding,
+                self.dilation_rate,
+                self.output_padding,
+            )
         self.use_alpha = use_alpha
         self.epsilon = validate_epsilon(epsilon)
         self.learnable_epsilon = learnable_epsilon
@@ -1014,19 +1124,65 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
         input_height = tf.shape(inputs)[1]
         input_width = tf.shape(inputs)[2]
 
-        # Calculate output shape
-        if self.padding == "SAME":
-            output_height = input_height * self.strides[0]
-            output_width = input_width * self.strides[1]
-        else:
-            output_height = input_height * self.strides[0] + max(
-                self.kernel_size[0] - self.strides[0], 0
-            )
-            output_width = input_width * self.strides[1] + max(
-                self.kernel_size[1] - self.strides[1], 0
-            )
+        output_height = _transpose_output_length(
+            input_height,
+            self.kernel_size[0],
+            self.strides[0],
+            self.padding,
+            self.dilation_rate[0],
+            None if self.output_padding is None else self.output_padding[0],
+        )
+        output_width = _transpose_output_length(
+            input_width,
+            self.kernel_size[1],
+            self.strides[1],
+            self.padding,
+            self.dilation_rate[1],
+            None if self.output_padding is None else self.output_padding[1],
+        )
 
-        output_shape = [batch_size, output_height, output_width, self.filters]
+        same_adjustments = (
+            canonical_same_crop_or_pad(
+                self.kernel_size,
+                self.strides,
+                self.dilation_rate,
+                self.output_padding,
+            )
+            if self.padding == "SAME" and self.output_padding is not None
+            else None
+        )
+        native_output_height = (
+            _transpose_output_length(
+                input_height,
+                self.kernel_size[0],
+                self.strides[0],
+                "VALID",
+                self.dilation_rate[0],
+                0,
+            )
+            if same_adjustments
+            else output_height
+        )
+        native_output_width = (
+            _transpose_output_length(
+                input_width,
+                self.kernel_size[1],
+                self.strides[1],
+                "VALID",
+                self.dilation_rate[1],
+                0,
+            )
+            if same_adjustments
+            else output_width
+        )
+        native_padding = "VALID" if same_adjustments else self.padding
+
+        output_shape = [
+            batch_size,
+            native_output_height,
+            native_output_width,
+            self.filters,
+        ]
 
         # Transpose convolution
         dot_prod_map = tf.nn.conv2d_transpose(
@@ -1034,7 +1190,8 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
             kernel,
             output_shape=output_shape,
             strides=[1] + list(self.strides) + [1],
-            padding=self.padding,
+            padding=native_padding,
+            dilations=[1] + list(self.dilation_rate) + [1],
         )
 
         # For transpose conv, compute YAT distance calculation
@@ -1047,9 +1204,14 @@ class YatConvTranspose2D(SingleInputSavedModelMixin, tf.Module):
         patch_sq_sum_map_raw = tf.nn.conv2d_transpose(
             inputs_squared,
             ones_kernel,
-            output_shape=[batch_size, output_height, output_width, 1],
+            output_shape=[batch_size, native_output_height, native_output_width, 1],
             strides=[1] + list(self.strides) + [1],
-            padding=self.padding,
+            padding=native_padding,
+            dilations=[1] + list(self.dilation_rate) + [1],
+        )
+        dot_prod_map = _adjust_transpose_same(dot_prod_map, same_adjustments)
+        patch_sq_sum_map_raw = _adjust_transpose_same(
+            patch_sq_sum_map_raw, same_adjustments
         )
 
         patch_sq_sum_map = tf.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)
@@ -1073,6 +1235,9 @@ class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
         kernel_size: Integer or tuple of 3 integers for kernel dimensions.
         strides: Integer or tuple of 3 integers. Defaults to (1, 1, 1).
         padding: String, either "valid" or "same". Defaults to "same".
+        dilation_rate: Kernel dilation. Defaults to (1, 1, 1).
+        output_padding: Optional high-side extensions. Passing it explicitly,
+            including zero, selects the canonical NMN output-shape contract.
         use_bias: Boolean, whether to add a bias to the output. Defaults to True.
         use_alpha: Boolean, whether to use alpha scaling. Defaults to True.
         epsilon: Float, small constant for numerical stability. Defaults to 1e-6.
@@ -1099,9 +1264,12 @@ class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
         learnable_epsilon: bool = False,
         dtype: tf.DType = tf.float32,
         name: Optional[str] = None,
+        *,
+        dilation_rate: Union[int, Tuple[int, int, int]] = (1, 1, 1),
+        output_padding: Optional[Union[int, Tuple[int, int, int]]] = None,
     ):
         super().__init__(name=name)
-        self.filters = filters
+        self.filters = validate_positive_int(filters, "filters")
         self.kernel_size = (
             kernel_size
             if isinstance(kernel_size, (list, tuple))
@@ -1113,6 +1281,28 @@ class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
             else (strides, strides, strides)
         )
         self.padding = padding.upper()
+        self.dilation_rate = (
+            dilation_rate
+            if isinstance(dilation_rate, (list, tuple))
+            else (dilation_rate, dilation_rate, dilation_rate)
+        )
+        self.output_padding = (
+            None
+            if output_padding is None
+            else (
+                tuple(output_padding)
+                if isinstance(output_padding, (list, tuple))
+                else (output_padding, output_padding, output_padding)
+            )
+        )
+        if self.output_padding is not None:
+            canonical_transpose_config(
+                self.kernel_size,
+                self.strides,
+                self.padding,
+                self.dilation_rate,
+                self.output_padding,
+            )
         self.use_alpha = use_alpha
         self.epsilon = validate_epsilon(epsilon)
         self.learnable_epsilon = learnable_epsilon
@@ -1209,27 +1399,84 @@ class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
         input_height = tf.shape(inputs)[2]
         input_width = tf.shape(inputs)[3]
 
-        # Calculate output shape
-        if self.padding == "SAME":
-            output_depth = input_depth * self.strides[0]
-            output_height = input_height * self.strides[1]
-            output_width = input_width * self.strides[2]
-        else:
-            output_depth = input_depth * self.strides[0] + max(
-                self.kernel_size[0] - self.strides[0], 0
+        output_depth = _transpose_output_length(
+            input_depth,
+            self.kernel_size[0],
+            self.strides[0],
+            self.padding,
+            self.dilation_rate[0],
+            None if self.output_padding is None else self.output_padding[0],
+        )
+        output_height = _transpose_output_length(
+            input_height,
+            self.kernel_size[1],
+            self.strides[1],
+            self.padding,
+            self.dilation_rate[1],
+            None if self.output_padding is None else self.output_padding[1],
+        )
+        output_width = _transpose_output_length(
+            input_width,
+            self.kernel_size[2],
+            self.strides[2],
+            self.padding,
+            self.dilation_rate[2],
+            None if self.output_padding is None else self.output_padding[2],
+        )
+
+        same_adjustments = (
+            canonical_same_crop_or_pad(
+                self.kernel_size,
+                self.strides,
+                self.dilation_rate,
+                self.output_padding,
             )
-            output_height = input_height * self.strides[1] + max(
-                self.kernel_size[1] - self.strides[1], 0
+            if self.padding == "SAME" and self.output_padding is not None
+            else None
+        )
+        native_output_depth = (
+            _transpose_output_length(
+                input_depth,
+                self.kernel_size[0],
+                self.strides[0],
+                "VALID",
+                self.dilation_rate[0],
+                0,
             )
-            output_width = input_width * self.strides[2] + max(
-                self.kernel_size[2] - self.strides[2], 0
+            if same_adjustments
+            else output_depth
+        )
+        native_output_height = (
+            _transpose_output_length(
+                input_height,
+                self.kernel_size[1],
+                self.strides[1],
+                "VALID",
+                self.dilation_rate[1],
+                0,
             )
+            if same_adjustments
+            else output_height
+        )
+        native_output_width = (
+            _transpose_output_length(
+                input_width,
+                self.kernel_size[2],
+                self.strides[2],
+                "VALID",
+                self.dilation_rate[2],
+                0,
+            )
+            if same_adjustments
+            else output_width
+        )
+        native_padding = "VALID" if same_adjustments else self.padding
 
         output_shape = [
             batch_size,
-            output_depth,
-            output_height,
-            output_width,
+            native_output_depth,
+            native_output_height,
+            native_output_width,
             self.filters,
         ]
 
@@ -1239,7 +1486,8 @@ class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
             kernel,
             output_shape=output_shape,
             strides=[1] + list(self.strides) + [1],
-            padding=self.padding,
+            padding=native_padding,
+            dilations=[1] + list(self.dilation_rate) + [1],
         )
 
         # For transpose conv, compute YAT distance calculation
@@ -1252,9 +1500,20 @@ class YatConvTranspose3D(SingleInputSavedModelMixin, tf.Module):
         patch_sq_sum_map_raw = tf.nn.conv3d_transpose(
             inputs_squared,
             ones_kernel,
-            output_shape=[batch_size, output_depth, output_height, output_width, 1],
+            output_shape=[
+                batch_size,
+                native_output_depth,
+                native_output_height,
+                native_output_width,
+                1,
+            ],
             strides=[1] + list(self.strides) + [1],
-            padding=self.padding,
+            padding=native_padding,
+            dilations=[1] + list(self.dilation_rate) + [1],
+        )
+        dot_prod_map = _adjust_transpose_same(dot_prod_map, same_adjustments)
+        patch_sq_sum_map_raw = _adjust_transpose_same(
+            patch_sq_sum_map_raw, same_adjustments
         )
 
         patch_sq_sum_map = tf.repeat(patch_sq_sum_map_raw, self.filters, axis=-1)

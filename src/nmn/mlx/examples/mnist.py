@@ -8,6 +8,8 @@ or:
 Trains a 2-layer YatNMN MLP for 3 epochs on Apple Silicon (Metal GPU by
 default). Uses ``torchvision`` to fetch MNIST so no tensorflow-datasets
 dependency is required.
+
+Install the runnable example with ``pip install "nmn[mlx,examples]"``.
 """
 
 from __future__ import annotations
@@ -22,9 +24,17 @@ import mlx.core as mx
 import mlx.nn as nn
 import mlx.optimizers as optim
 import numpy as np
-from torchvision import datasets, transforms
 
+from nmn._example_dependencies import lazy_example_dependency
 from nmn.mlx import YatNMN
+
+_INSTALL = "nmn[mlx,examples]"
+datasets = lazy_example_dependency(
+    "torchvision.datasets", install=_INSTALL, purpose="The MLX MNIST data loader"
+)
+transforms = lazy_example_dependency(
+    "torchvision.transforms", install=_INSTALL, purpose="The MLX MNIST data loader"
+)
 
 
 class YatMLP(nn.Module):

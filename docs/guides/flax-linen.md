@@ -57,6 +57,9 @@ No `nn.relu`. The Yat layer is non-linear by itself.
 
 ## 3. MNIST end-to-end
 
+For the runnable script, install `pip install "nmn[linen,examples]"`. Importing
+its `YatMLP` model still requires only `nmn[linen]` and does not load data.
+
 ```python
 import jax, jax.numpy as jnp
 import flax.linen as nn

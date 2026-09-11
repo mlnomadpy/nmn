@@ -3,9 +3,7 @@
 # YAT ResNet Training with Weight Tying, Weight Normalization, and Constant Alpha
 #
 # To run this script, you'll need to install the following packages:
-# pip install torch torchvision torchaudio
-# pip install datasets nmn-pytorch # For the original YAT models and TinyImageNet
-# pip install wandb matplotlib seaborn scikit-learn
+# pip install "nmn[torch,examples]"
 #
 # Example usage:
 #
@@ -38,20 +36,40 @@ import time
 import warnings
 from io import BytesIO
 
-import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import wandb
-from datasets import load_dataset
-from PIL import Image
-from sklearn.metrics import confusion_matrix
 from torch.utils.data import DataLoader
-from torchvision import datasets as torchvision_datasets
-from torchvision import transforms
+
+from nmn._example_dependencies import lazy_example_dependency
+
+_INSTALL = "nmn[torch,examples]"
+plt = lazy_example_dependency(
+    "matplotlib.pyplot", install=_INSTALL, purpose="The ResNet reporting example"
+)
+sns = lazy_example_dependency(
+    "seaborn", install=_INSTALL, purpose="The ResNet reporting example"
+)
+wandb = lazy_example_dependency(
+    "wandb", install=_INSTALL, purpose="The ResNet experiment logger"
+)
+huggingface_datasets = lazy_example_dependency(
+    "datasets", install=_INSTALL, purpose="The ResNet Hugging Face data loader"
+)
+pillow_image = lazy_example_dependency(
+    "PIL.Image", install=_INSTALL, purpose="The ResNet image data loader"
+)
+sklearn_metrics = lazy_example_dependency(
+    "sklearn.metrics", install=_INSTALL, purpose="The ResNet reporting example"
+)
+torchvision_datasets = lazy_example_dependency(
+    "torchvision.datasets", install=_INSTALL, purpose="The ResNet data loader"
+)
+transforms = lazy_example_dependency(
+    "torchvision.transforms", install=_INSTALL, purpose="The ResNet data loader"
+)
 
 warnings.filterwarnings("ignore", category=UserWarning, module="datasets.builder")
 
@@ -70,14 +88,16 @@ class HuggingFaceDataset(torch.utils.data.IterableDataset):
     """Generic wrapper for streaming image classification datasets from Hugging Face Hub."""
 
     def __init__(self, dataset_name, split, transform=None, shuffle_buffer_size=50000):
-        self.dataset = load_dataset(dataset_name, split=split, streaming=True)
+        self.dataset = huggingface_datasets.load_dataset(
+            dataset_name, split=split, streaming=True
+        )
         if split == "train":
             # Shuffle the training data with a large buffer for better randomness
             self.dataset = self.dataset.shuffle(
                 buffer_size=shuffle_buffer_size, seed=int(time.time())
             )
         self.transform = transform
-        self.info = load_dataset(dataset_name, split=split).info
+        self.info = huggingface_datasets.load_dataset(dataset_name, split=split).info
 
     def __iter__(self):
         for sample in self.dataset:
@@ -91,7 +111,7 @@ class HuggingFaceDataset(torch.utils.data.IterableDataset):
                 )
 
             img_data = sample[image_key]
-            if not isinstance(img_data, Image.Image):
+            if not isinstance(img_data, pillow_image.Image):
                 img = img_data.convert("RGB")
             else:
                 img = img_data
@@ -461,7 +481,7 @@ def plot_confusion_matrix(all_preds, all_targets, class_names, use_wandb=False):
     if not use_wandb:
         return
 
-    cm = confusion_matrix(all_targets, all_preds)
+    cm = sklearn_metrics.confusion_matrix(all_targets, all_preds)
     plt.figure(figsize=(15, 15))
     sns.heatmap(
         cm,

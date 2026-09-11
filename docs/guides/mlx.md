@@ -63,6 +63,9 @@ No activation function — the non-linearity is baked into the layer.
 
 ## 3. MNIST end-to-end
 
+For the runnable script, install `pip install "nmn[mlx,examples]"`. Importing
+its `YatMLP` model still requires only `nmn[mlx]` and does not load data.
+
 ```python
 import mlx.core as mx
 import mlx.nn as nn

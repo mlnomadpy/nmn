@@ -133,12 +133,14 @@ Each of the six framework backends — `nmn.torch`, `nmn.nnx`, `nmn.linen`, `nmn
 
 | Extra | Installs | Backend(s) it enables |
 | --- | --- | --- |
-| `nmn[torch]` | torch, torchvision | `nmn.torch` |
+| `nmn[torch]` | torch | `nmn.torch` |
 | `nmn[nnx]` | jax, jaxlib, flax | `nmn.nnx` |
 | `nmn[linen]` | jax, jaxlib, flax | `nmn.linen` |
 | `nmn[keras]` | keras | `nmn.keras` (select a Keras backend separately) |
 | `nmn[tf]` | tensorflow | `nmn.tf` |
 | `nmn[mlx]` | mlx (Apple Silicon) | `nmn.mlx` |
+| `nmn[data]` | torchvision, tensorflow-datasets, datasets | Example data loaders |
+| `nmn[examples]` | data loaders and training/evaluation tools | Runnable examples |
 
 Practical consequences for contributors:
 
@@ -181,8 +183,8 @@ you need finer control.
 # Single framework
 pytest tests/test_torch/ -v
 
-# Cross-framework consistency (requires all frameworks installed)
-pytest tests/integration/ -v
+# Cross-framework oracle conformance (unavailable backends skip safely)
+pytest tests/conformance/ -v
 
 # A single file or test
 pytest tests/test_torch/test_nmn.py -v
@@ -204,7 +206,11 @@ are unavailable are skipped safely.
 ### Writing tests
 
 - Place tests in the framework directory matching the code you changed (e.g. a fix in `src/nmn/torch/` → test in `tests/test_torch/`).
-- For new layers, add a **cross-framework consistency test** in `tests/integration/` that initializes the same weights in two or more frameworks and asserts max absolute error `< 1e-5` for fp32 inputs.
+- For new layers, add an exact profile to
+  `src/nmn/conformance_manifest.json`, implement its independent NumPy oracle
+  and backend adapters under `tests/conformance/`, and use the dtype tolerance
+  declared by the manifest. A dtype is not conformance-tested merely because
+  the backend accepts it.
 - Prefer small, deterministic inputs (`torch.manual_seed(0)`, `jax.random.PRNGKey(0)`) over flaky randomness.
 
 ---
@@ -256,7 +262,8 @@ Layers should reach **all 6 frameworks** before being considered complete. The r
 2. **PyTorch** (`src/nmn/torch/layers/` or top-level). Mirror parameter names where possible.
 3. **Keras / TF** (`src/nmn/keras/`, `src/nmn/tf/`).
 4. **Flax Linen** (`src/nmn/linen/`). Linen is most similar to NNX — usually a thin port.
-5. **Cross-framework consistency test** in `tests/integration/`.
+5. **Cross-framework oracle profile** in `tests/conformance/`, with its tested
+   dtype/mode/evidence cell in `src/nmn/conformance_manifest.json`.
 6. **Per-framework unit tests** in `tests/test_<framework>/`.
 7. **Update**:
    - [`README.md`](README.md) Layer reference

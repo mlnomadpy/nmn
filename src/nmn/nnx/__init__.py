@@ -64,7 +64,6 @@ Quick Start
 # =============================================================================
 # Core YAT Layers
 # =============================================================================
-
 # Attention Masks
 # Standard Dot-Product Attention
 # MAY / RAY bias-aware linear-attention feature maps
@@ -72,11 +71,13 @@ Quick Start
 # Rotary YAT Attention (RoPE + YAT)
 # YAT Attention Functions
 # Multi-Head Attention Module
-from nmn.nnx.layers import (  # Layers; Utilities
+from . import _dependency as _dependency
+from .layers import (  # Layers; Utilities
     ATTENTION_DEFAULT_CONSTANT_ALPHA,
     CONV_DEFAULT_CONSTANT_ALPHA,
     Embed,
     FrozenParam,
+    KernelBank,
     MultiHeadAttention,
     RotaryYatAttention,
     YatConv,
@@ -163,6 +164,7 @@ __all__ = [
     # -------------------------------------------------------------------------
     "YatNMN",
     "FrozenParam",
+    "KernelBank",
     "Embed",
     "YatEmbed",  # alias of Embed for cross-framework consistency
     # -------------------------------------------------------------------------

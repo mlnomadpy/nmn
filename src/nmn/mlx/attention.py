@@ -20,6 +20,9 @@ from typing import Optional, Tuple, Union
 import mlx.core as mx
 import mlx.nn as nn
 
+from nmn._epsilon import validate_epsilon
+from nmn._validation import validate_positive_int, validate_rate
+
 __all__ = [
     "normalize_qk",
     "yat_attention_weights",
@@ -60,6 +63,7 @@ def yat_attention_weights(
     Inputs use the (batch, length, num_heads, head_dim) convention, the
     output mask the (batch, heads, q_len, kv_len) convention.
     """
+    dropout_rate = validate_rate(dropout_rate, "dropout_rate")
     head_dim = query.shape[-1]
     dim_scale = math.sqrt(head_dim)
 
@@ -199,14 +203,15 @@ class MultiHeadYatAttention(nn.Module):
         epsilon: float = 1e-5,
         dtype: mx.Dtype = mx.float32,
     ) -> None:
+        embed_dim = validate_positive_int(embed_dim, "embed_dim")
+        num_heads = validate_positive_int(num_heads, "num_heads")
+        dropout = validate_rate(dropout, "dropout")
         super().__init__()
         if embed_dim % num_heads != 0:
             raise ValueError(
-                f"embed_dim ({embed_dim}) must be divisible by "
-                f"num_heads ({num_heads})."
+                f"embed_dim ({embed_dim}) must be divisible by num_heads ({num_heads})."
             )
-        if epsilon <= 0:
-            raise ValueError(f"epsilon must be positive, got {epsilon}")
+        epsilon = validate_epsilon(epsilon)
 
         self.embed_dim = embed_dim
         self.num_heads = num_heads

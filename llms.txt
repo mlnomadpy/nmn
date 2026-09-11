@@ -5,8 +5,10 @@
 > `y = (x·W)² / (||x − W||² + ε) · alpha`, so no ReLU/GELU/Sigmoid is needed. The
 > same `YatNMN` layer (plus YAT conv, embedding, and attention) ships across six
 > frameworks — PyTorch, Flax NNX, Flax Linen, Keras 3, TensorFlow, and MLX (Apple
-> Silicon) — with numerically equivalent outputs. Each backend is an independent
-> optional install (`pip install nmn[<framework>]`). Release information is
+> Silicon). The packaged conformance manifest records the exact float32 profiles,
+> execution modes, and tolerances tested across them; other capabilities are
+> declared separately. Each backend is an independent optional install
+> (`pip install nmn[<framework>]`). Release information is
 > maintained on [PyPI](https://pypi.org/project/nmn/) and
 > [GitHub Releases](https://github.com/azettaai/nmn/releases).
 

@@ -28,6 +28,7 @@ from nmn._epsilon import (
     validate_epsilon,
     validate_epsilon_for_dtype,
 )
+from nmn._validation import validate_rate
 
 from .._precision import saturating_downcast, saturating_upcast
 
@@ -135,7 +136,7 @@ def setup_yat_attrs(
         )
     else:
         layer.register_parameter("epsilon_param", None)
-    layer.drop_rate = drop_rate
+    layer.drop_rate = validate_rate(drop_rate, "drop_rate")
 
     # Alpha. Priority: constant_alpha > use_alpha.
     layer._constant_alpha_value = None

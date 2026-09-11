@@ -5,6 +5,24 @@ on:
     paths:
       - 'pyproject.toml'
       - '.github/workflows/minimum-versions.yml'
+      - 'scripts/select_minimum_version_jobs.py'
+      - 'src/nmn/*.py'
+      - 'src/nmn/torch/**'
+      - 'src/nmn/tf/**'
+      - 'src/nmn/keras/**'
+      - 'src/nmn/mlx/**'
+      - 'tests/__init__.py'
+      - 'tests/_isolated_backend.py'
+      - 'tests/conftest.py'
+      - 'tests/integration/**'
+      - 'tests/test_torch/**'
+      - 'tests/test_torch_*.py'
+      - 'tests/test_tf/**'
+      - 'tests/test_tf_*.py'
+      - 'tests/test_keras/**'
+      - 'tests/test_keras_*.py'
+      - 'tests/test_mlx/**'
+      - 'tests/test_mlx_*.py'
   schedule:
     - cron: '23 8 * * 1'
   workflow_dispatch:
@@ -13,8 +31,40 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Select affected minimum-version jobs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      torch: ${{ steps.filter.outputs.torch }}
+      tensorflow: ${{ steps.filter.outputs.tensorflow }}
+      keras: ${{ steps.filter.outputs.keras }}
+      mlx: ${{ steps.filter.outputs.mlx }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+      - name: Select jobs
+        id: filter
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git diff --name-only -z "$BASE_SHA" "$HEAD_SHA" \
+              | python scripts/select_minimum_version_jobs.py >> "$GITHUB_OUTPUT"
+          else
+            python scripts/select_minimum_version_jobs.py --all >> "$GITHUB_OUTPUT"
+          fi
+
   torch:
     name: PyTorch 1.11 minimum smoke
+    needs: changes
+    if: needs.changes.outputs.torch == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -23,17 +73,21 @@ jobs:
         with:
           python-version: '3.10'
           cache: pip
+      - name: Create clean virtual environment
+        run: python -m venv .venv-minimum
       - name: Install declared lower bound
         run: |
-          pip install numpy pytest
-          pip install -e . --no-deps
-          pip install 'torch==1.11.0+cpu' 'torchvision==0.12.0+cpu' --extra-index-url https://download.pytorch.org/whl/cpu
-          pip check
+          .venv-minimum/bin/python -m pip install numpy pytest
+          .venv-minimum/bin/python -m pip install -e . --no-deps
+          .venv-minimum/bin/python -m pip install 'torch==1.11.0+cpu' 'torchvision==0.12.0+cpu' --extra-index-url https://download.pytorch.org/whl/cpu
+          .venv-minimum/bin/python -m pip check
       - name: Exercise representative public APIs
-        run: pytest tests/test_torch/test_yat_nmn.py tests/test_torch/test_attention.py -q
+        run: .venv-minimum/bin/python -m pytest tests/test_torch/test_yat_nmn.py tests/test_torch/test_attention.py -q
 
   tensorflow:
     name: TensorFlow 2.10 minimum smoke
+    needs: changes
+    if: needs.changes.outputs.tensorflow == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -42,17 +96,21 @@ jobs:
         with:
           python-version: '3.10'
           cache: pip
+      - name: Create clean virtual environment
+        run: python -m venv .venv-minimum
       - name: Install declared lower bound
         run: |
           # TensorFlow 2.10 predates NumPy 2's binary ABI.
-          pip install pytest 'numpy<2' 'tensorflow==2.10.0'
-          pip install -e . --no-deps
-          pip check
+          .venv-minimum/bin/python -m pip install pytest 'numpy<2' 'tensorflow==2.10.0'
+          .venv-minimum/bin/python -m pip install -e . --no-deps
+          .venv-minimum/bin/python -m pip check
       - name: Exercise representative public APIs
-        run: pytest tests/test_tf/test_basic.py tests/test_tf/test_attention.py -q
+        run: .venv-minimum/bin/python -m pytest tests/test_tf/test_basic.py tests/test_tf/test_attention.py -q
 
   keras:
     name: Keras 3.0 minimum smoke
+    needs: changes
+    if: needs.changes.outputs.keras == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -63,17 +121,21 @@ jobs:
         with:
           python-version: '3.10'
           cache: pip
+      - name: Create clean virtual environment
+        run: python -m venv .venv-minimum
       - name: Install declared lower bound
         run: |
-          pip install numpy pytest 'keras==3.0.0'
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install -e . --no-deps
-          pip check
+          .venv-minimum/bin/python -m pip install numpy pytest 'keras==3.0.0'
+          .venv-minimum/bin/python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          .venv-minimum/bin/python -m pip install -e . --no-deps
+          .venv-minimum/bin/python -m pip check
       - name: Exercise representative public APIs
-        run: pytest tests/test_keras/test_basic.py tests/test_keras/test_attention.py -q
+        run: .venv-minimum/bin/python -m pytest tests/test_keras/test_basic.py tests/test_keras/test_attention.py -q
 
   mlx:
     name: MLX 0.18.1 minimum smoke
+    needs: changes
+    if: needs.changes.outputs.mlx == 'true'
     runs-on: macos-15
     timeout-minutes: 15
     steps:
@@ -82,10 +144,12 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
+      - name: Create clean virtual environment
+        run: python -m venv .venv-minimum
       - name: Install declared lower bound
         run: |
-          pip install numpy pytest 'mlx==0.18.1'
-          pip install -e . --no-deps
-          pip check
+          .venv-minimum/bin/python -m pip install numpy pytest 'mlx==0.18.1'
+          .venv-minimum/bin/python -m pip install -e . --no-deps
+          .venv-minimum/bin/python -m pip check
       - name: Exercise representative public APIs on Apple Silicon
-        run: pytest tests/test_mlx/test_basic.py tests/test_mlx/test_attention.py -q
+        run: .venv-minimum/bin/python -m pytest tests/test_mlx/test_basic.py tests/test_mlx/test_attention.py -q

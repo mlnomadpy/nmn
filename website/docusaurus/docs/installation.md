@@ -103,8 +103,10 @@ print("✓ Flax NNX backend ready")
 | TensorFlow | `nmn.tf` | `nmn[tf]` | TF / SavedModel pipelines |
 | MLX | `nmn.mlx` | `nmn[mlx]` | Apple Silicon, on-device |
 
-All six backends implement the same YAT math with numerically equivalent
-outputs (< 1e-6 fp32).
+All six backends implement the same YAT math. See the
+[generated conformance contract](/docs/conformance) for the exact float32
+profiles and tolerances enforced by the oracle and fixture suites; untested
+dtypes and API variants are explicitly identified there.
 
 ## Next Steps
 

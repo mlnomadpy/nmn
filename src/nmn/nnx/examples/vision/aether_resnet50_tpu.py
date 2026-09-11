@@ -1,41 +1,65 @@
+"""TPU ResNet example.
+
+Install training and dataset dependencies with ``pip install "nmn[nnx,examples]"``.
+The model definitions themselves require only ``nmn[nnx]``.
+"""
+
+from __future__ import annotations
+
 import argparse
+import importlib.util
 import os
 import sys
 import warnings
-from typing import List, Optional
+from typing import Any, List, Optional
 
 # JAX / Flax / Optax / Sharding
 import jax
 import jax.numpy as jnp
-import optax
-
-# Checkpointing & Logging
-import orbax.checkpoint as ocp
-import wandb
+import numpy as np
 from flax import nnx
 from jax.experimental import mesh_utils
 from jax.sharding import Mesh, NamedSharding
 from jax.sharding import PartitionSpec as P
 
-# Data Loading
-try:
-    import grain.python as grain
-
-    GRAIN_AVAILABLE = True
-except ImportError:
-    GRAIN_AVAILABLE = False
-    from PIL import PngImagePlugin
-    from torch.utils.data import DataLoader, Dataset, IterableDataset
-    from torchvision import transforms
-
-    PngImagePlugin.MAX_TEXT_CHUNK = 100 * (1024**2)
-
-import numpy as np
-from datasets import load_dataset
-from tqdm import tqdm
-
+from nmn._example_dependencies import lazy_example_dependency
 from nmn.nnx.layers import YatNMN
 from nmn.nnx.layers.conv import YatConv
+
+_INSTALL = "nmn[nnx,examples]"
+optax = lazy_example_dependency(
+    "optax", install=_INSTALL, purpose="The TPU ResNet training example"
+)
+ocp = lazy_example_dependency(
+    "orbax.checkpoint", install=_INSTALL, purpose="The TPU ResNet checkpoint example"
+)
+wandb = lazy_example_dependency(
+    "wandb", install=_INSTALL, purpose="The TPU ResNet logging example"
+)
+datasets = lazy_example_dependency(
+    "datasets", install=_INSTALL, purpose="The TPU ResNet data example"
+)
+grain: Any = lazy_example_dependency(
+    "grain.python", install=_INSTALL, purpose="The TPU ResNet Grain data example"
+)
+torch_data: Any = lazy_example_dependency(
+    "torch.utils.data", install=_INSTALL, purpose="The TPU ResNet fallback data example"
+)
+png_image_plugin: Any = lazy_example_dependency(
+    "PIL.PngImagePlugin",
+    install=_INSTALL,
+    purpose="The TPU ResNet fallback data example",
+)
+transforms = lazy_example_dependency(
+    "torchvision.transforms",
+    install=_INSTALL,
+    purpose="The TPU ResNet fallback data example",
+)
+tqdm_module = lazy_example_dependency(
+    "tqdm", install=_INSTALL, purpose="The TPU ResNet progress display"
+)
+
+GRAIN_AVAILABLE = importlib.util.find_spec("grain") is not None
 
 # Training Monitor
 try:
@@ -343,151 +367,123 @@ class ResNet(nnx.Module):
 # 2. Data Loading
 # -----------------------------------------------------------------------------
 
-if GRAIN_AVAILABLE:
-    # Grain-based data pipeline (optimized for TPU)
-    class HFDataSource(grain.RandomAccessDataSource):
-        """Grain data source wrapping HuggingFace dataset."""
 
-        def __init__(self, split="train", cache_dir=None):
-            self.dataset = load_dataset(
-                "mlnomad/imagenet-1k-224",
-                split=split,
-                streaming=False,
-                cache_dir=cache_dir,
-            )
+class HFDataSource:
+    """Grain-compatible data source wrapping HuggingFace datasets."""
 
-        def __len__(self):
-            return len(self.dataset)
+    def __init__(self, split="train", cache_dir=None):
+        self.dataset = datasets.load_dataset(
+            "mlnomad/imagenet-1k-224",
+            split=split,
+            streaming=False,
+            cache_dir=cache_dir,
+        )
 
-        def __getitem__(self, idx):
-            sample = self.dataset[idx]
-            image = sample["image"]
-            label = sample["label"]
-            # Convert PIL to numpy (HWC format)
-            if image.mode != "RGB":
-                image = image.convert("RGB")
-            image_np = np.array(image, dtype=np.uint8)
-            return {"image": image_np, "label": label}
+    def __len__(self):
+        return len(self.dataset)
 
-    class PreprocessOp(grain.MapTransform):
-        """JAX-native preprocessing operations."""
+    def __getitem__(self, idx):
+        sample = self.dataset[idx]
+        image = sample["image"]
+        label = sample["label"]
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        return {"image": np.array(image, dtype=np.uint8), "label": label}
 
-        def __init__(self, is_train=True, image_size=224):
-            self.is_train = is_train
-            self.image_size = image_size
-            self.mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-            self.std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
-        def map(self, element):
-            image = element["image"]
-            label = element["label"]
+class PreprocessOp:
+    """JAX-native preprocessing implementation, adapted to Grain at runtime."""
 
-            # Random crop/resize
-            if self.is_train:
-                # Simple random crop for now (could add more augmentations)
-                h, w = image.shape[:2]
-                if h > self.image_size or w > self.image_size:
-                    # Center crop as fallback
-                    top = (h - self.image_size) // 2
-                    left = (w - self.image_size) // 2
-                    image = image[
-                        top : top + self.image_size, left : left + self.image_size
-                    ]
-            else:
-                # Center crop
-                h, w = image.shape[:2]
-                top = (h - self.image_size) // 2
-                left = (w - self.image_size) // 2
-                image = image[
-                    top : top + self.image_size, left : left + self.image_size
-                ]
+    def __init__(self, is_train=True, image_size=224):
+        self.is_train = is_train
+        self.image_size = image_size
+        self.mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+        self.std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
-            # Normalize
-            image = image.astype(np.float32) / 255.0
-            image = (image - self.mean) / self.std
+    def map(self, element):
+        image = element["image"]
+        label = element["label"]
+        h, w = image.shape[:2]
+        if not self.is_train or h > self.image_size or w > self.image_size:
+            top = (h - self.image_size) // 2
+            left = (w - self.image_size) // 2
+            image = image[top : top + self.image_size, left : left + self.image_size]
+        image = image.astype(np.float32) / 255.0
+        return {"image": (image - self.mean) / self.std, "label": label}
 
-            return {"image": image, "label": label}
 
-else:
-    # Fallback to PyTorch DataLoader
-    class ImageNetStreamDataset(IterableDataset):
-        def __init__(self, split="train", transform=None):
-            self.dataset = load_dataset(
-                "mlnomad/imagenet-1k-224", split=split, streaming=True
-            )
-            self.transform = transform
+class ImageNetStreamDataset:
+    def __init__(self, split="train", transform=None):
+        self.dataset = datasets.load_dataset(
+            "mlnomad/imagenet-1k-224", split=split, streaming=True
+        )
+        self.transform = transform
 
-        def __iter__(self):
-            for sample in self.dataset:
-                try:
-                    image = sample["image"]
-                    label = sample["label"]
-                    if image.mode != "RGB":
-                        image = image.convert("RGB")
-                    if self.transform:
-                        image = self.transform(image)
-                    yield image, label
-                except Exception:
-                    continue
-
-    class ImageNetMapDataset(Dataset):
-        def __init__(
-            self, split="train", transform=None, cache_dir=None, keep_in_memory=False
-        ):
-            self.dataset = load_dataset(
-                "mlnomad/imagenet-1k-224",
-                split=split,
-                streaming=False,
-                cache_dir=cache_dir,
-                keep_in_memory=keep_in_memory,
-            )
-            self.transform = transform
-
-        def __len__(self):
-            return len(self.dataset)
-
-        def __getitem__(self, idx):
+    def __iter__(self):
+        for sample in self.dataset:
             try:
-                sample = self.dataset[idx]
                 image = sample["image"]
                 label = sample["label"]
                 if image.mode != "RGB":
                     image = image.convert("RGB")
                 if self.transform:
                     image = self.transform(image)
-                return image, label
-            except Exception as e:
-                raise e
+                yield image, label
+            except Exception:
+                continue
 
-    def get_transforms(is_train=True):
-        if is_train:
-            return transforms.Compose(
-                [
-                    transforms.RandomResizedCrop(224),
-                    transforms.RandomHorizontalFlip(),
-                    transforms.ToTensor(),
-                    transforms.Normalize(
-                        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-                    ),
-                ]
-            )
-        else:
-            return transforms.Compose(
-                [
-                    transforms.CenterCrop(224),
-                    transforms.ToTensor(),
-                    transforms.Normalize(
-                        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-                    ),
-                ]
-            )
 
-    def get_numpy_batch(batch):
-        images, labels = batch
-        # PyTorch NCHW -> JAX NHWC
-        images_np = images.numpy().transpose(0, 2, 3, 1)
-        labels_np = labels.numpy()
-        return images_np, labels_np
+class ImageNetMapDataset:
+    def __init__(
+        self, split="train", transform=None, cache_dir=None, keep_in_memory=False
+    ):
+        self.dataset = datasets.load_dataset(
+            "mlnomad/imagenet-1k-224",
+            split=split,
+            streaming=False,
+            cache_dir=cache_dir,
+            keep_in_memory=keep_in_memory,
+        )
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        sample = self.dataset[idx]
+        image = sample["image"]
+        label = sample["label"]
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        if self.transform:
+            image = self.transform(image)
+        return image, label
+
+
+def get_transforms(is_train=True):
+    if is_train:
+        return transforms.Compose(
+            [
+                transforms.RandomResizedCrop(224),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+                ),
+            ]
+        )
+    return transforms.Compose(
+        [
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
+    )
+
+
+def get_numpy_batch(batch):
+    images, labels = batch
+    return images.numpy().transpose(0, 2, 3, 1), labels.numpy()
 
 
 def create_grain_dataloader(
@@ -522,8 +518,14 @@ def create_grain_dataloader(
             )
 
         # Create transformations (including batching)
+        preprocess = PreprocessOp(is_train=is_train)
+
+        class GrainPreprocessOp(grain.MapTransform):
+            def map(self, element):
+                return preprocess.map(element)
+
         transformations = [
-            PreprocessOp(is_train=is_train),
+            GrainPreprocessOp(),
             grain.Batch(batch_size=batch_size, drop_remainder=True),
         ]
 
@@ -986,8 +988,13 @@ def main():
         print("Grain is REQUIRED for TPU training. Install with: pip install grain")
         print("Falling back to PyTorch DataLoader (significantly slower on TPU)")
         print("!" * 80 + "\n")
+        png_image_plugin.MAX_TEXT_CHUNK = 100 * (1024**2)
 
-        # Setup PyTorch DataLoader fallback with in-memory option
+        # Setup PyTorch DataLoader fallback with in-memory option. These two
+        # variables intentionally hold either the streaming adapter or the
+        # map-style dataset selected below.
+        train_dataset: Any
+        val_dataset: Any
         if args.streaming:
             print("Using Streaming Dataset")
             train_dataset = ImageNetStreamDataset(
@@ -996,6 +1003,16 @@ def main():
             val_dataset = ImageNetStreamDataset(
                 split="validation", transform=get_transforms(False)
             )
+
+            class TorchIterableAdapter(torch_data.IterableDataset):
+                def __init__(self, dataset):
+                    self.dataset = dataset
+
+                def __iter__(self):
+                    return iter(self.dataset)
+
+            train_dataset = TorchIterableAdapter(train_dataset)
+            val_dataset = TorchIterableAdapter(val_dataset)
         else:
             print(f"Using Map-Style Dataset")
             if args.in_memory:
@@ -1120,14 +1137,14 @@ def main():
         else:
             # PyTorch DataLoader fallback
             try:
-                train_loader = DataLoader(
+                train_loader = torch_data.DataLoader(
                     train_dataset,
                     batch_size=args.batch_size // num_devices,
                     num_workers=0,
                     drop_last=True,
                     shuffle=True,
                 )
-                val_loader = DataLoader(
+                val_loader = torch_data.DataLoader(
                     val_dataset,
                     batch_size=args.batch_size // num_devices,
                     num_workers=0,
@@ -1150,7 +1167,9 @@ def main():
         epoch_metrics = []  # Accuracy
 
         print(f"Starting training for epoch {epoch}...")
-        pbar = tqdm(train_loader, desc=f"Epoch {epoch}", total=iterations_per_epoch)
+        pbar = tqdm_module.tqdm(
+            train_loader, desc=f"Epoch {epoch}", total=iterations_per_epoch
+        )
         for batch_idx, batch in enumerate(pbar):
             iter_start_time = time.time()
             global_step += 1
@@ -1246,7 +1265,7 @@ def main():
         total_loss = []
         val_batch_idx = 0
         for val_batch_idx, batch in enumerate(
-            tqdm(val_loader, desc="Val", total=val_iterations_per_epoch)
+            tqdm_module.tqdm(val_loader, desc="Val", total=val_iterations_per_epoch)
         ):
             imgs_np, lbls_np = process_batch(batch)
 

@@ -315,7 +315,7 @@ See [`architecture.md` § Lazy mode](architecture.md#10-lazy-mode--freezing-only
 4. Remove redundant `BatchNorm` between Yat layers; keep at the input/output boundaries.
 5. Run cross-framework consistency check (if reproducing across stacks):
    ```bash
-   pytest tests/integration/test_cross_framework_consistency.py -v
+   pytest tests/conformance -v
    ```
 6. Train. If NaN within first 100 steps → bump `epsilon` an order of magnitude.
 

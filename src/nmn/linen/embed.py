@@ -7,12 +7,16 @@ weight-sharing between embedding and output layers in language models.
 from __future__ import annotations
 
 import math
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 import jax.numpy as jnp
 from flax import linen as nn
 from flax.linen.dtypes import promote_dtype
 from flax.linen.module import Module, compact
+
+from nmn._validation import validate_positive_int
+
+from ._yat_core import reduction_safe_upcast, saturating_downcast
 
 __all__ = ["YatEmbed"]
 
@@ -54,6 +58,11 @@ class YatEmbed(Module):
     param_dtype: Any = jnp.float32
     embedding_init: Any = default_embed_init
     alpha_init: Any = lambda key, shape, dtype: jnp.ones(shape, dtype)
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        validate_positive_int(self.num_embeddings, "num_embeddings")
+        validate_positive_int(self.features, "features")
 
     @compact
     def __call__(self, inputs):
@@ -112,13 +121,18 @@ class YatEmbed(Module):
         else:
             alpha = None
 
-        if self.weight_normalized:
-            norms = jnp.sqrt(jnp.sum(embedding**2, axis=1, keepdims=True))
-            embedding = embedding / (norms + 1e-8)
-
         query, embedding, alpha = promote_dtype(
             query, embedding, alpha, dtype=self.dtype
         )
+        output_dtype = query.dtype
+        if output_dtype in (jnp.float16, jnp.bfloat16):
+            query = reduction_safe_upcast(query)
+            embedding = reduction_safe_upcast(embedding)
+            alpha = reduction_safe_upcast(alpha) if alpha is not None else None
+
+        if self.weight_normalized:
+            norms = jnp.sqrt(jnp.sum(embedding**2, axis=1, keepdims=True))
+            embedding = embedding / (norms + 1e-8)
 
         # Spherical normalization
         if self.spherical:
@@ -132,7 +146,7 @@ class YatEmbed(Module):
 
         # Distances
         if self.spherical:
-            distances = 2.0 - 2.0 * y
+            distances = jnp.maximum(2.0 - 2.0 * y, 0.0)
         else:
             query_sq = jnp.sum(query**2, axis=-1, keepdims=True)
             embed_sq = jnp.sum(embedding**2, axis=1, keepdims=True).T
@@ -149,4 +163,4 @@ class YatEmbed(Module):
         elif alpha is not None:
             y = y * alpha
 
-        return y
+        return saturating_downcast(y, output_dtype)

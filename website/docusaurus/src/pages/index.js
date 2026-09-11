@@ -23,7 +23,7 @@ function HomepageHeader() {
                 </Heading>
                 <p className={styles.heroSubtitle}>
                     Activation-free <span className={styles.yatSymbol}>ⵟ</span>YAT layers.
-                    One library, six frameworks, numerically equivalent.
+                    One library, six frameworks, manifest-verified conformance.
                 </p>
                 <p className={styles.heroDescription}>
                     The <span className={styles.yatSymbol}>ⵟ</span>-product fuses alignment and
@@ -70,8 +70,8 @@ function Frameworks() {
             <div className="container">
                 <h2 className={styles.sectionTitle}>Six frameworks, one kernel</h2>
                 <p className={styles.sectionSubtitle}>
-                    Each backend is an independent, optional install. The YAT math stays
-                    numerically equivalent across all of them.
+                    Each backend is an independent, optional install. Exact tested profiles,
+                    modes, and tolerances live in the generated conformance contract.
                 </p>
                 <div className={styles.frameworkGrid}>
                     {frameworks.map((fw) => (
@@ -103,7 +103,7 @@ function HomepageFeatures() {
         {
             title: 'Six Frameworks',
             icon: '🧩',
-            description: 'PyTorch, Flax NNX, Flax Linen, Keras, TensorFlow, and MLX — independent optional installs, numerically equivalent YAT layers everywhere.',
+            description: 'PyTorch, Flax NNX, Flax Linen, Keras, TensorFlow, and MLX — independent optional installs with manifest-scoped conformance evidence.',
         },
         {
             title: 'YAT Geometric Kernel',
@@ -205,7 +205,7 @@ export default function Home() {
     return (
         <Layout
             title={`${siteConfig.title}`}
-            description="Activation-free YAT layers. One library, six frameworks, numerically equivalent.">
+            description="Activation-free YAT layers. One library, six frameworks, manifest-verified conformance.">
             <HomepageHeader />
             <main>
                 <Stats />

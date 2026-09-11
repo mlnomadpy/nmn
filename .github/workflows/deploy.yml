@@ -9,6 +9,7 @@ on:
     paths:
       - 'website/**'
       - '.github/workflows/deploy.yml'
+      - '.github/workflows/website.yml'
   
   # Allow manual trigger
   workflow_dispatch:
@@ -24,38 +25,11 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: website/docusaurus/package-lock.json
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v6
-
-      - name: Prepare static website assets
-        run: bash website/prepare-docusaurus-static.sh
-
-      - name: Install Docusaurus dependencies
-        working-directory: website/docusaurus
-        run: npm ci
-
-      - name: Build Docusaurus
-        working-directory: website/docusaurus
-        run: npm run build
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: 'website/docusaurus/build'
+    # Audit, build, and upload in the reusable validation workflow. The deploy
+    # job consumes that run's artifact and never performs a second build.
+    uses: ./.github/workflows/website.yml
+    permissions:
+      contents: read
 
   deploy:
     environment:

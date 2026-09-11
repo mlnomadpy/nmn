@@ -3,8 +3,8 @@
 The suite is organized by the boundary it verifies:
 
 - `test_<backend>/` — backend-specific unit and regression tests;
-- `integration/` — numerical parity and cross-framework behavior;
-- `benchmarks/` — small performance assertions that are safe in CI;
+- `conformance/` — manifest-driven NumPy-oracle and fixture conformance;
+- `integration/` — package-level behavior spanning multiple components;
 - `test_cli.py` — import-light command-line behavior;
 - `test_collection_policy.py` — optional-backend and collection isolation;
 - `test_documentation_policy.py` — installation and release-metadata invariants;
@@ -19,6 +19,7 @@ Useful commands:
 ```bash
 python -m pytest -q -m "not slow"
 python -m pytest tests/test_nnx -q
+python -m pytest tests/conformance -q
 python -m pytest tests/integration -q
 python -m pytest \
   tests/test_workflow_policy.py \
@@ -37,6 +38,23 @@ owns its errors consistently across the supported backend-version matrix.
 Tests for unavailable optional backends are skipped before importing that
 backend. Keep new optional-backend imports inside their backend tree or guarded
 with `pytest.importorskip`.
+
+## Benchmark policy
+
+Wall-clock measurements are not correctness tests and are never part of the
+default pytest or coverage runs. Run the explicit JAX attention benchmark with:
+
+```bash
+make benchmark-attention
+```
+
+The same command is available through the manually dispatched **Attention
+Benchmarks** workflow. A run fails if any required implementation raises or
+does not produce samples. Its JSON artifact records hardware and dependency
+versions, the untimed warmup used to exclude lazy compilation, synchronization,
+raw timing samples, and descriptive statistics. Compare artifacts only from
+equivalent hardware and protocol metadata; timing ratios are reports, not merge
+gates.
 
 ## Dependency and accelerator policy
 

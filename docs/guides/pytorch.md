@@ -54,6 +54,9 @@ The non-linearity is baked into the layer. No `ReLU` needed.
 
 ## 3. MNIST end-to-end
 
+For the runnable script, install `pip install "nmn[torch,examples]"`. Importing
+its `YatMLP` model still requires only `nmn[torch]` and does not load data.
+
 A minimal trainable model. Drop into a Python file and run.
 
 ```python

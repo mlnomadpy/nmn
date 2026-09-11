@@ -18,6 +18,7 @@ This module contains all YAT (You Are There) layer implementations and related c
 # Rotary YAT Attention (RoPE + YAT)
 # YAT Attention Functions
 # Multi-Head Attention Module
+from nmn.nnx.kernel_bank import KernelBank
 from nmn.nnx.layers.attention import (
     DEFAULT_CONSTANT_ALPHA as ATTENTION_DEFAULT_CONSTANT_ALPHA,
 )
@@ -97,6 +98,7 @@ __all__ = [
     # Core Layers
     # -------------------------------------------------------------------------
     "YatNMN",
+    "KernelBank",
     "FrozenParam",
     "Embed",
     # -------------------------------------------------------------------------

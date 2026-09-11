@@ -15,6 +15,8 @@ from keras.src import initializers, ops
 from keras.src.layers.layer import Layer
 from keras.src.saving.object_registration import register_keras_serializable
 
+from nmn._validation import validate_positive_int, validate_rate
+
 from ._yat_core import reduction_safe_upcast
 
 __all__ = [
@@ -63,6 +65,7 @@ def yat_attention_weights(
     Returns:
         Attention weights (batch, num_heads, q_len, kv_len).
     """
+    dropout_rate = validate_rate(dropout_rate, "dropout_rate")
     output_dtype = query.dtype
     query = reduction_safe_upcast(query)
     key = reduction_safe_upcast(key)
@@ -228,12 +231,14 @@ class MultiHeadYatAttention(Layer):
         kernel_initializer: str = "glorot_normal",
         **kwargs,
     ):
+        embed_dim = validate_positive_int(embed_dim, "embed_dim")
+        num_heads = validate_positive_int(num_heads, "num_heads")
+        dropout = validate_rate(dropout, "dropout")
         super().__init__(**kwargs)
 
         if embed_dim % num_heads != 0:
             raise ValueError(
-                f"embed_dim ({embed_dim}) must be divisible by "
-                f"num_heads ({num_heads})."
+                f"embed_dim ({embed_dim}) must be divisible by num_heads ({num_heads})."
             )
 
         self.embed_dim = embed_dim

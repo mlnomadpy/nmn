@@ -14,6 +14,8 @@ from flax.typing import (
     PromoteDtypeFn,
 )
 
+from nmn._validation import validate_positive_int
+
 from ._numerics import finite_cast, fp32_if_low_precision, inverse_softplus
 
 Array = jax.Array
@@ -106,6 +108,8 @@ class Embed(Module):
         alpha_init: Initializer = default_alpha_init,
         rngs: rnglib.Rngs,
     ):
+        num_embeddings = validate_positive_int(num_embeddings, "num_embeddings")
+        features = validate_positive_int(features, "features")
         self.embedding = nnx.Param(
             embedding_init(rngs.params(), (num_embeddings, features), param_dtype)
         )

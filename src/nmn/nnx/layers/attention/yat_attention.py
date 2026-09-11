@@ -40,6 +40,7 @@ from flax.typing import Dtype, PrecisionLike
 from jax import Array, random
 
 from nmn._attention_shape import validate_attention_inputs
+from nmn._validation import validate_rate
 from nmn.nnx.layers._numerics import fp32_if_low_precision
 from nmn.nnx.layers.squashers import softermax
 
@@ -95,13 +96,14 @@ def yat_attention_weights(
             or a float value (constant). If None, no alpha scaling is applied.
         normalization: Normalization method for attention weights. One of:
             - ``"softmax"`` (default): standard softmax normalization.
-            - ``"l1"``: L1 normalization (score / sum(scores)). More natural
-              for YAT since scores are already non-negative — no exp() overflow.
-            - ``"softermax"``: softermax normalization (requires use_softermax=True).
+            - ``"l1"``: clip signed biased scores to non-negative values, then
+              divide by their row sum (with a uniform eligible-row fallback).
+            - ``"softermax"``: softermax normalization.
 
     Returns:
         Attention weights of shape [..., num_heads, q_length, kv_length]
     """
+    dropout_rate = validate_rate(dropout_rate, "dropout_rate")
     query, key = promote_dtype((query, key), dtype=dtype)
     dtype = query.dtype
 
@@ -326,6 +328,7 @@ def yat_attention_normalized(
     Returns:
         Output of shape [..., q_length, num_heads, v_dim].
     """
+    dropout_rate = validate_rate(dropout_rate, "dropout_rate")
     query, key, value = promote_dtype((query, key, value), dtype=dtype)
     dtype = query.dtype
 
@@ -495,6 +498,7 @@ def yat_performer_attention(
     Returns:
         Output of shape [..., q_length, num_heads, v_dim].
     """
+    dropout_rate = validate_rate(dropout_rate, "dropout_rate")
     query, key, value = promote_dtype((query, key, value), dtype=dtype)
     dtype = query.dtype
 

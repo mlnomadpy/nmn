@@ -4,6 +4,7 @@ import functools
 import math
 import threading
 import typing as tp
+import weakref
 
 import jax
 import jax.numpy as jnp
@@ -20,6 +21,10 @@ from flax.typing import (
 )
 from jax import lax
 
+from nmn._kernel_bank import initializer_signature
+from nmn._validation import validate_positive_int, validate_rate
+
+from ..kernel_bank import KernelBank, _BankParam
 from ._numerics import fp32_if_low_precision, inverse_softplus
 
 Array: tp.TypeAlias = jax.Array
@@ -125,11 +130,15 @@ class YatNMN(Module):
         ``out_features`` for the creating instance. Bank capacity is immutable;
         declare the largest required size on the first consumer.
       kernel_bank_id: optional bank namespace to control sharing groups.
+      kernel_bank: optional explicit owner for shared banks. Reuse one object
+        within a model; separate objects isolate model lifecycles.
       rngs: rng key.
     """
 
     __data__ = ("kernel", "bias", "alpha", "epsilon_param", "dropconnect_key")
-    _KERNEL_BANKS: dict[tuple[tp.Any, ...], nnx.Param] = {}
+    _KERNEL_BANKS: weakref.WeakValueDictionary[tuple[tp.Any, ...], _BankParam] = (
+        weakref.WeakValueDictionary()
+    )
     _KERNEL_BANKS_LOCK = threading.Lock()
 
     # Default constant alpha value (sqrt(2))
@@ -167,16 +176,15 @@ class YatNMN(Module):
         tie_kernel_bank: bool = False,
         kernel_bank_size: tp.Optional[int] = None,
         kernel_bank_id: str = "default",
+        kernel_bank: tp.Optional[KernelBank] = None,
         lazy: bool = False,
         freeze_kernel: tp.Optional[bool] = None,
         rngs: rnglib.Rngs,
     ):
 
-        if not 0.0 <= drop_rate < 1.0:
-            raise ValueError(
-                "drop_rate must be in the half-open interval [0, 1), "
-                f"got {drop_rate}"
-            )
+        in_features = validate_positive_int(in_features, "in_features")
+        out_features = validate_positive_int(out_features, "out_features")
+        drop_rate = validate_rate(drop_rate, "drop_rate")
 
         # ── Lazy mode (issue #37): freeze ONLY the kernel ───────────────────────
         # `freeze_kernel` is an alias for `lazy`. When enabled, the kernel is stored
@@ -211,15 +219,25 @@ class YatNMN(Module):
 
             bank_shape = (in_features, bank_out_features)
             bank_key = (
+                "dense",
                 kernel_bank_id,
                 in_features,
                 param_dtype,
-                kernel_init,
+                initializer_signature(kernel_init),
                 positive_init,
             )
 
-            with YatNMN._KERNEL_BANKS_LOCK:
-                shared_kernel = YatNMN._KERNEL_BANKS.get(bank_key)
+            lock = (
+                kernel_bank._lock
+                if kernel_bank is not None
+                else YatNMN._KERNEL_BANKS_LOCK
+            )
+            with lock:
+                shared_kernel = (
+                    kernel_bank._get(bank_key)
+                    if kernel_bank is not None
+                    else YatNMN._KERNEL_BANKS.get(bank_key)
+                )
                 if shared_kernel is None:
                     # The first consumer fixes capacity. Resizing a live Param can
                     # invalidate gradients and optimizer moments that already hold
@@ -230,8 +248,11 @@ class YatNMN(Module):
                     kernel_val = kernel_init(kernel_key, bank_shape, param_dtype)
                     if positive_init:
                         kernel_val = jnp.abs(kernel_val)
-                    shared_kernel = nnx.Param(kernel_val)
-                    YatNMN._KERNEL_BANKS[bank_key] = shared_kernel
+                    shared_kernel = _BankParam(kernel_val)
+                    if kernel_bank is not None:
+                        kernel_bank._set(bank_key, shared_kernel)
+                    else:
+                        YatNMN._KERNEL_BANKS[bank_key] = shared_kernel
                 else:
                     existing_shape = shared_kernel[...].shape
                     existing_bank_size = existing_shape[-1]
@@ -256,6 +277,9 @@ class YatNMN(Module):
             # In lazy mode the kernel is a FrozenParam (excluded from trainable state);
             # otherwise a normal trainable nnx.Param.
             self.kernel = _kernel_var(kernel_val)
+        # Assign after ``kernel`` so NNX keeps the backward-compatible state path
+        # and records the bank's copy as a graph reference to the same variable.
+        self.kernel_bank = kernel_bank
         self.bias: nnx.Param[jax.Array] | None
         self._constant_bias_value: tp.Optional[float] = None
         if constant_bias is not None and constant_bias is not False:

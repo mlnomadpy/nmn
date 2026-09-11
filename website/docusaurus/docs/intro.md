@@ -56,9 +56,12 @@ y = layer(x)
 
 ## Six Frameworks, One Layer
 
-The same YAT layer family ships across **six independent backends** with
-numerically equivalent outputs (< 1e-6 fp32). Each backend is a **separate
-optional install** — installing one does not install the others.
+The same YAT layer family ships across **six independent backends**. The
+[generated conformance contract](/docs/conformance) records the exact
+float32 operation profiles, execution modes, and enforced tolerances; other
+dtype and API capabilities are clearly marked as declared rather than tested.
+Each backend is a **separate optional install** — installing one does not
+install the others.
 
 | Framework | Import root | `pip install` | `YatNMN` size argument |
 |-----------|-------------|---------------|------------------------|

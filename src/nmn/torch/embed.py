@@ -14,6 +14,8 @@ import torch.nn as nn
 from torch import Tensor
 from torch.nn.parameter import Parameter
 
+from nmn._validation import validate_positive_int
+
 from ._precision import saturating_downcast, saturating_upcast
 
 __all__ = ["YatEmbed"]
@@ -64,6 +66,8 @@ class YatEmbed(nn.Module):
         device=None,
         dtype=None,
     ):
+        num_embeddings = validate_positive_int(num_embeddings, "num_embeddings")
+        features = validate_positive_int(features, "features")
         super().__init__()
         self.num_embeddings = num_embeddings
         self.features = features

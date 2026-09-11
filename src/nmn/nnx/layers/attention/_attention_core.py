@@ -19,12 +19,10 @@ yat_attention_weights runs the score math in float32 and casts bias to
 float32 before the helper call).
 
 ``normalization`` is one of ``"softmax"`` / ``"l1"`` / ``"softermax"``.
-``"l1"`` uses the YAT-friendly "scores are already non-negative" path:
-masked positions are zeroed (not set to -inf) and the final divide is
-``score / (sum + epsilon)``. Only ``yat_attention_weights`` exposes this
-normalization mode today; the other two callers always pass
-``"softmax"`` (and the ``use_softermax`` shortcut for backward
-compatibility).
+``"l1"`` uses the YAT-friendly non-negative path: after additive bias,
+negative scores are clipped to zero, masked positions are zeroed, and each
+nonzero row is divided by its sum.  This keeps the attention measure
+non-negative even when callers supply signed relative-position biases.
 
 Boolean masks and negative-infinity additive-bias entries follow one policy:
 masked weights are exact zero, and a query row with no eligible keys has zero
@@ -41,9 +39,25 @@ from flax import nnx
 from flax.nnx.module import Module
 from jax import Array, random
 
+from nmn._validation import validate_rate
 from nmn.nnx.layers.squashers import softermax
 
-__all__ = ["finalize_attention_weights"]
+SUPPORTED_ATTENTION_NORMALIZATIONS = ("softmax", "l1", "softermax")
+
+__all__ = [
+    "SUPPORTED_ATTENTION_NORMALIZATIONS",
+    "finalize_attention_weights",
+    "validate_attention_normalization",
+]
+
+
+def validate_attention_normalization(normalization: str) -> None:
+    """Validate the shared public attention normalization enum."""
+    if normalization not in SUPPORTED_ATTENTION_NORMALIZATIONS:
+        choices = ", ".join(repr(name) for name in SUPPORTED_ATTENTION_NORMALIZATIONS)
+        raise ValueError(
+            f"normalization must be one of {choices}; got {normalization!r}"
+        )
 
 
 def finalize_attention_weights(
@@ -78,7 +92,8 @@ def finalize_attention_weights(
         normalization: ``"softmax"`` (default), ``"l1"``, or ``"softermax"``.
         use_softermax: Legacy alias — if True forces softermax.
         power: ``softermax`` power parameter (used iff softermax is selected).
-        epsilon: L1 denominator epsilon (used iff ``normalization="l1"``).
+        epsilon: Retained for API compatibility with callers that also use it
+            in YAT score construction.
         broadcast_dropout / dropout_rng / dropout_rate / deterministic:
             Standard dropout knobs. Dropout is broadcast across batch dims
             when ``broadcast_dropout=True``.
@@ -88,6 +103,8 @@ def finalize_attention_weights(
     Returns:
         Normalized attention weights of the same shape, cast to ``dtype``.
     """
+    validate_attention_normalization(normalization)
+    dropout_rate = validate_rate(dropout_rate, "dropout_rate")
     if alpha is not None:
         attn_weights = attn_weights * alpha
 
@@ -122,8 +139,34 @@ def finalize_attention_weights(
             attn_weights = jnp.where(row_has_key, attn_weights, 0.0)
 
     if normalization == "l1":
-        attn_sum = jnp.sum(attn_weights, axis=-1, keepdims=True)
-        attn_weights = (attn_weights / (attn_sum + epsilon)).astype(dtype)
+        # Additive attention biases are conventionally signed.  Clipping here
+        # defines L1 attention as a non-negative measure instead of allowing a
+        # negative bias to create negative "weights".  Scale by the row maximum
+        # before summing to avoid overflow for large but finite scores.
+        attn_weights = jnp.maximum(attn_weights, 0.0)
+        row_max = jnp.max(attn_weights, axis=-1, keepdims=True)
+        safe_max = jnp.where(row_max > 0.0, row_max, 1.0)
+        scaled_weights = attn_weights / safe_max
+        attn_sum = jnp.sum(scaled_weights, axis=-1, keepdims=True)
+        safe_sum = jnp.where(attn_sum > 0.0, attn_sum, 1.0)
+        normalized_weights = scaled_weights / safe_sum
+
+        # ReLU can erase an entire otherwise-valid row when every signed
+        # biased score is non-positive.  L1 normalization is undefined there,
+        # so use the unique uninformative probability measure: uniform over
+        # eligible keys.  A truly all-masked row has no eligible keys and stays
+        # exact zero, preserving the public masking policy.
+        eligible = (
+            jnp.ones_like(attn_weights, dtype=jnp.bool_)
+            if effective_mask is None
+            else effective_mask
+        )
+        eligible_count = jnp.sum(eligible, axis=-1, keepdims=True)
+        safe_count = jnp.where(eligible_count > 0, eligible_count, 1)
+        uniform_weights = eligible.astype(attn_weights.dtype) / safe_count
+        attn_weights = jnp.where(
+            attn_sum > 0.0, normalized_weights, uniform_weights
+        ).astype(dtype)
     elif use_softermax or normalization == "softermax":
         attn_weights = softermax(attn_weights, n=power).astype(dtype)
     else:

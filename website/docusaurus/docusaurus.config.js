@@ -13,7 +13,7 @@ import rehypeKatex from 'rehype-katex';
 /** @type {import('@docusaurus/types').Config} */
 const config = {
     title: 'Neural Matter Networks',
-    tagline: 'Activation-free YAT layers — one library, six frameworks, numerically equivalent',
+    tagline: 'Activation-free YAT layers — one library, six frameworks, manifest-verified conformance',
     favicon: 'img/favicon.ico',
 
     // Set the production url of your site here

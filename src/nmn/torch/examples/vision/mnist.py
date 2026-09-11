@@ -7,6 +7,8 @@ or:
 
 Trains a 2-layer YatNMN MLP for 3 epochs and prints train loss + test accuracy.
 On CPU (Apple Silicon, batch size 128) ~30-60s per epoch.
+
+Install the runnable example with ``pip install "nmn[torch,examples]"``.
 """
 
 from __future__ import annotations
@@ -20,9 +22,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from torchvision import datasets, transforms
 
+from nmn._example_dependencies import lazy_example_dependency
 from nmn.torch import YatNMN
+
+_INSTALL = "nmn[torch,examples]"
+datasets = lazy_example_dependency(
+    "torchvision.datasets", install=_INSTALL, purpose="The PyTorch MNIST data loader"
+)
+transforms = lazy_example_dependency(
+    "torchvision.transforms", install=_INSTALL, purpose="The PyTorch MNIST data loader"
+)
 
 
 class YatMLP(nn.Module):
@@ -55,6 +65,14 @@ def evaluate(model: nn.Module, loader: DataLoader, device: str) -> tuple[float, 
     return total_loss / n, correct / n
 
 
+def load_mnist(root: str):
+    """Load MNIST after resolving the example-only torchvision dependency."""
+    transform = transforms.ToTensor()
+    train = datasets.MNIST(root, train=True, download=True, transform=transform)
+    test = datasets.MNIST(root, train=False, download=True, transform=transform)
+    return train, test
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="YatNMN MNIST training (PyTorch)")
     parser.add_argument("--epochs", type=int, default=3)
@@ -70,9 +88,7 @@ def main() -> None:
     torch.manual_seed(args.seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    tfm = transforms.ToTensor()
-    train_ds = datasets.MNIST(args.data_root, train=True, download=True, transform=tfm)
-    test_ds = datasets.MNIST(args.data_root, train=False, download=True, transform=tfm)
+    train_ds, test_ds = load_mnist(args.data_root)
     train_dl = DataLoader(
         train_ds, batch_size=args.batch_size, shuffle=True, num_workers=0
     )

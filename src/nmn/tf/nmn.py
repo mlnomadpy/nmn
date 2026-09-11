@@ -11,6 +11,7 @@ from nmn._epsilon import (
     validate_epsilon,
     validate_epsilon_for_dtype,
 )
+from nmn._validation import validate_positive_int
 
 from ._precision import reduction_safe_upcast, saturating_downcast
 from .saved_model import SingleInputSavedModelMixin
@@ -99,6 +100,7 @@ class YatNMN(SingleInputSavedModelMixin, tf.Module):
         freeze_kernel: bool = False,
         name: Optional[str] = None,
     ):
+        features = validate_positive_int(features, "features")
         super().__init__(name=name)
         self.features = features
         self.dtype = dtype

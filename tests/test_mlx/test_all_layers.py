@@ -89,6 +89,53 @@ def _explicit_same_transpose_reference(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize(
+    "layer_cls,input_shape,kernel,strides,output_padding,expected",
+    [
+        (YatConvTranspose1D, (1, 3, 1), 2, 3, 0, (1, 8, 1)),
+        (
+            YatConvTranspose2D,
+            (1, 2, 3, 1),
+            (2, 3),
+            (3, 2),
+            (0, 0),
+            (1, 5, 7, 1),
+        ),
+        (
+            YatConvTranspose3D,
+            (1, 2, 2, 2, 1),
+            (2, 3, 2),
+            (3, 2, 4),
+            (0, 0, 0),
+            (1, 5, 5, 6, 1),
+        ),
+    ],
+)
+def test_conv_transpose_valid_stride_gap_shapes_and_gradients(
+    layer_cls, input_shape, kernel, strides, output_padding, expected
+):
+    layer = layer_cls(
+        filters=1,
+        kernel_size=kernel,
+        strides=strides,
+        padding="valid",
+        output_padding=output_padding,
+        use_bias=False,
+        use_alpha=False,
+    )
+    inputs = mx.reshape(mx.linspace(-0.7, 0.9, int(np.prod(input_shape))), input_shape)
+    output = layer(inputs)
+    input_grad = mx.grad(lambda value: mx.sum(layer(value)))(inputs)
+    _, parameter_grads = mlx_nn.value_and_grad(
+        layer, lambda model: mx.sum(model(inputs))
+    )(layer)
+    mx.eval(output, input_grad, parameter_grads)
+
+    assert output.shape == expected
+    assert bool(mx.all(mx.isfinite(input_grad)))
+    assert bool(mx.all(mx.isfinite(parameter_grads["kernel"])))
+
+
 def test_conv1d_valid_shape():
     layer = YatConv1D(filters=16, kernel_size=3)
     x = mx.random.normal(shape=(2, 10, 4))
