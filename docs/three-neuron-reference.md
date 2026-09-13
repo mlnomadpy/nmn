@@ -113,6 +113,36 @@ contract. Target-change counts are descriptive. Exit 1 denotes a protection
 failure; exit 2 denotes invalid configuration. `--leaky` cannot be combined
 with `--model`: specify the readout in the model file instead.
 
-`demo`, bundle replay and vault export still use the original fixed reference
-schema. Configured verification emits standalone JSON; configurable bundle
-creation/replay is not implemented, and the CLI must not imply otherwise.
+Configured verification emits standalone JSON. Use `demo --model` to create a
+portable bundle with the model, evidence and report:
+
+```bash
+nmn research demo --model model.json --output runs/configured
+nmn research reproduce runs/configured
+nmn research export runs/configured --output /path/to/vault/Generated/Configured-NMN
+```
+
+The configured schema `nmn.configured-bundle.v1` contains model.json,
+evidence.json, Report.md and manifest.json. The manifest records Python version,
+hashes of all three artifacts and the model/reference/bundle implementation
+files. Replay checks the schema, file inventory and hashes, validates the saved
+model, and recomputes every case and report. Export copies the validated bytes,
+preserving original provenance. No source model file outside the bundle is needed.
+
+Failed contracts are valid evidence: successful replay returns exit 0 with
+`verification_status: counterexample-found` when it reproduces a recorded
+failure. `verify --model` still returns exit 1 for that protection failure.
+This distinction separates command/reproduction success from scientific outcome.
+
+Output directories must not exist. The configured writer reserves a new
+directory exclusively and writes its completion manifest last; failed writes
+are cleaned up. Do not consume a directory without a valid manifest. Readers
+reject missing files, symlinked artifacts, duplicate JSON keys, unexpected
+manifest paths, source-version mismatch and changed/rehashed false evidence.
+Hashes are not signatures. An attacker replacing all data and recomputing a
+consistent experiment can create a different valid bundle; this is not proof
+of the original author's identity.
+
+Existing fixed-reference bundles remain supported by schema dispatch. Changing
+evaluator source requires its matching implementation for strict replay; this
+release does not provide automatic source installation or schema migration.

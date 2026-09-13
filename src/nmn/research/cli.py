@@ -8,9 +8,10 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
+from .bundles import create_configured, export_any, reproduce_any
 from .comparison import compare
 from .model import default_model, load, model_compare, model_trace, model_verify
-from .reference import architecture, experiment, rational, replay, trace, write_bundle
+from .reference import architecture, experiment, rational, trace, write_bundle
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -46,6 +47,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "demo", help="write evidence, failure witness and report"
     )
     demo.add_argument("--output", type=Path, required=True)
+    demo.add_argument("--model", type=Path)
     reproduce = commands.add_parser("reproduce", help="check hashes and rerun a bundle")
     reproduce.add_argument("bundle", type=Path)
     export = commands.add_parser(
@@ -116,11 +118,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                 else 1
             )
         elif args.command == "reproduce":
-            result = replay(args.bundle)
+            result = reproduce_any(args.bundle)
         elif args.command == "export":
-            replay(args.bundle)
-            write_bundle(args.output)
-            result = {"status": "exported", "report": str(args.output / "Report.md")}
+            result = export_any(args.bundle, args.output)
+        elif args.model:
+            result = create_configured(load(args.model), args.output)
         else:
             write_bundle(args.output)
             result = {
@@ -130,6 +132,6 @@ def main(argv: Optional[List[str]] = None) -> int:
             }
         print(json.dumps(result, indent=2))
         return 0
-    except (ValueError, OSError, KeyError, TypeError) as exc:
+    except (ValueError, OSError, KeyError, TypeError, UnicodeError) as exc:
         print(f"research error: {exc}", file=sys.stderr)
         return 2
