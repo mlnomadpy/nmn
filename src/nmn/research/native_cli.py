@@ -37,6 +37,26 @@ def main(argv=None):
         "--end", required=True, help="comma-separated gates in module order"
     )
     path.add_argument("--steps", type=int, default=32)
+    checkpoint = commands.add_parser(
+        "checkpoint", help="extract one selected training checkpoint"
+    )
+    checkpoint.add_argument("--run", type=Path, required=True)
+    checkpoint.add_argument("--seed", type=int, required=True)
+    checkpoint.add_argument("--output", type=Path, required=True)
+    training = commands.add_parser(
+        "train", help="explicitly run a bounded native training protocol"
+    )
+    training.add_argument("--model", type=Path, required=True)
+    training.add_argument("--dataset", type=Path, required=True)
+    training.add_argument("--targets", type=Path, required=True)
+    training.add_argument("--config", type=Path, required=True)
+    training.add_argument("--contract", type=Path, required=True)
+    training.add_argument("--target-provenance", required=True)
+    training.add_argument(
+        "--seeds", default="0", help="comma-separated minibatch sampling seeds"
+    )
+    training.add_argument("--pairs", type=Path)
+    training.add_argument("--output", type=Path, required=True)
     benchmark = commands.add_parser(
         "benchmark", help="compare saved native models under one replay contract"
     )
@@ -113,6 +133,7 @@ def main(argv=None):
                     "parameters",
                     "model_sha256",
                     "source_sha256",
+                    "trainability",
                 )
             }
             result.update(
@@ -121,6 +142,32 @@ def main(argv=None):
                     "initialization_seed": args.seed,
                     "trained": False,
                 }
+            )
+        elif args.command == "checkpoint":
+            record = _read(args.run)
+            if record.get("schema") != "nmn.native-training.v1":
+                raise ValueError("expected a native training record")
+            matches = [run for run in record["runs"] if run["seed"] == args.seed]
+            if len(matches) != 1 or matches[0]["selected_checkpoint"] is None:
+                raise ValueError("seed has no unique valid selected checkpoint")
+            result = matches[0]["selected_checkpoint"]
+            model_from_snapshot(result)
+        elif args.command == "train":
+            from ..torch.training import TrainingConfig, train_native
+
+            result = train_native(
+                _read(args.model),
+                ResearchDataset.from_dict(_read(args.dataset)),
+                _read(args.targets),
+                config=TrainingConfig(**_read(args.config)),
+                architecture_contract=_read(args.contract),
+                target_provenance=args.target_provenance,
+                seeds=[int(seed) for seed in args.seeds.split(",")],
+                pairs=(
+                    []
+                    if args.pairs is None
+                    else [DonorPair(**p) for p in _read(args.pairs)]
+                ),
             )
         elif args.command == "benchmark":
             from ..torch.benchmark import benchmark_models
@@ -283,15 +330,20 @@ def main(argv=None):
                         ),
                     }
         save_research_data(result, args.output)
-        print(
-            json.dumps(
+        summary = {
+            "status": "written",
+            "output": str(args.output),
+            "schema": result["schema"],
+        }
+        if result["schema"] == "nmn.native-training.v1":
+            summary["runs"] = [
                 {
-                    "status": "written",
-                    "output": str(args.output),
-                    "schema": result["schema"],
+                    key: run[key]
+                    for key in ("seed", "status", "steps_completed", "best_step")
                 }
-            )
-        )
+                for run in result["runs"]
+            ]
+        print(json.dumps(summary))
         return 0
     except ImportError as exc:
         print(f"native research requires nmn[torch]: {exc}", file=sys.stderr)

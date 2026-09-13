@@ -66,3 +66,8 @@ settings and finite-data interpretation.
 
 `nmn research native benchmark` compares saved models under one declared dataset
 and edit contract. See [baseline comparisons](native-baseline-comparisons.md).
+
+
+`nmn research native train` is an explicit bounded optimization command;
+`native checkpoint` extracts a selected model for later research commands. See
+[training protocols](native-training.md). Read-only commands never invoke training.

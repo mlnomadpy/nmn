@@ -243,6 +243,7 @@ def collect_research_data(
         "assurance": "floating-point observations",
         "configuration": configuration,
         "parameters": dict(model.named_parameters()),
+        "trainability": {name: p.requires_grad for name, p in model.named_parameters()},
         "source_sha256": {
             str(p.name): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in (
@@ -407,6 +408,13 @@ def model_from_snapshot(snapshot: dict, *, device=None, dtype=torch.float64):
     targets = dict(model.named_parameters())
     if set(params) != set(targets):
         raise ValueError("snapshot parameter names do not match model")
+    trainability = snapshot.get("trainability", {name: True for name in targets})
+    if set(trainability) != set(targets) or any(
+        not isinstance(v, bool) for v in trainability.values()
+    ):
+        raise ValueError("invalid parameter trainability declaration")
+    for name, parameter in targets.items():
+        parameter.requires_grad_(trainability[name])
     tensors = {
         name: torch.as_tensor(value, device=device, dtype=dtype)
         for name, value in params.items()
