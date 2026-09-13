@@ -141,6 +141,13 @@ status = nmn.doctor()     # prints the report AND returns {framework: version_st
 
 ---
 
+## Exact research reference
+
+Run `nmn research demo --output runs/three-neuron` to record a three-neuron
+intervention, exhaustive finite-domain checks and a protection failure using
+exact rational arithmetic. No ML backend or training is required.
+See [the reference walkthrough](docs/three-neuron-reference.md).
+
 ## 60-second tour
 
 The same MLP in every framework. Pick one, copy, run.

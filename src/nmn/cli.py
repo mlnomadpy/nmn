@@ -452,13 +452,20 @@ def _build_parser() -> argparse.ArgumentParser:
     sub.add_parser("doctor", help="report which backends import + their versions")
     sub.add_parser("examples", help="where to find runnable examples")
 
+    sub.add_parser("research", help="exact three-neuron reference experiments")
+
     return parser
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     """CLI entry point. Returns a process exit code (0 on success)."""
+    arguments = sys.argv[1:] if argv is None else argv
+    if arguments and arguments[0] == "research":
+        from .research.cli import main as research_main
+
+        return research_main(arguments[1:])
     parser = _build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(arguments)
 
     command = args.command or "info"
 
