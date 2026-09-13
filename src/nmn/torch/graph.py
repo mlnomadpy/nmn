@@ -45,6 +45,11 @@ class YatGraph(nn.Module):
     zero. Readout selects named state coordinates without a hidden learned head.
     Replacement overrides a module's write vector, not the entire state slot.
 
+    Optional read_patches map receiving modules to slot replacements. They alter
+    only that module's read, leaving the shared residual state and other readers
+    intact. Scalars/batch-shaped values broadcast over the selected coordinate;
+    tensor gradients are retained. Module write controls apply after patched reads.
+
     Trace and intervention keys are globally unique module names. State snapshots
     are under ``state.0``, ``state.1``, etc. Routing is checkpointed and mismatched
     routing is rejected when loading state_dict, even if tensor shapes agree.
@@ -172,6 +177,8 @@ class YatGraph(nn.Module):
         self,
         x: torch.Tensor,
         interventions: Optional[Mapping[str, Intervention]] = None,
+        *,
+        read_patches: Optional[Mapping[str, Mapping[str, torch.Tensor]]] = None,
     ):
         if (
             x.ndim < 1
@@ -187,6 +194,19 @@ class YatGraph(nn.Module):
             raise ValueError(f"unknown intervention modules: {sorted(unknown)}")
         if any(not isinstance(c, Intervention) for c in controls.values()):
             raise TypeError("controls must be Intervention objects")
+        patches = {} if read_patches is None else dict(read_patches)
+        specifications = {
+            spec.name: spec for layer in self.layer_specs for spec in layer
+        }
+        if set(patches) - set(specifications):
+            raise ValueError("unknown read-patch module")
+        for name, slots in patches.items():
+            if not isinstance(slots, Mapping) or set(slots) - set(
+                specifications[name].reads
+            ):
+                raise ValueError(
+                    "read patches must name input slots of the receiving module"
+                )
         inputs = {name: x[..., i] for i, name in enumerate(self.input_names)}
         zero = torch.zeros_like(x[..., 0])
         state = torch.stack([inputs.get(name, zero) for name in self.slots], dim=-1)
@@ -194,7 +214,25 @@ class YatGraph(nn.Module):
         for layer_index, layer in enumerate(self.layer_specs):
             writes: List[List[torch.Tensor]] = [[] for _ in self.slots]
             for spec in layer:
-                read = state[..., [self._slot_indices[name] for name in spec.reads]]
+                original_read = state[
+                    ..., [self._slot_indices[name] for name in spec.reads]
+                ]
+                replacements = patches.get(spec.name, {})
+                read = (
+                    torch.stack(
+                        [
+                            (
+                                _control(replacements[slot], original_read[..., i])
+                                if slot in replacements
+                                else original_read[..., i]
+                            )
+                            for i, slot in enumerate(spec.reads)
+                        ],
+                        dim=-1,
+                    )
+                    if replacements
+                    else original_read
+                )
                 contributions = cast(
                     YatExpansion, self.blocks[spec.name]
                 ).contributions(read)
@@ -207,6 +245,7 @@ class YatGraph(nn.Module):
                 )
                 trace.update(
                     {
+                        f"{spec.name}.input_original": original_read,
                         f"{spec.name}.input": read,
                         f"{spec.name}.contributions": contributions,
                         f"{spec.name}.raw": raw,
@@ -222,5 +261,5 @@ class YatGraph(nn.Module):
         output = state[..., [self._slot_indices[name] for name in self.output_names]]
         return output, trace
 
-    def forward(self, x, interventions=None):
-        return self.forward_with_trace(x, interventions)[0]
+    def forward(self, x, interventions=None, *, read_patches=None):
+        return self.forward_with_trace(x, interventions, read_patches=read_patches)[0]

@@ -106,6 +106,11 @@ def main(argv=None):
         "donor", help="run declared donor pairs and reference labels"
     )
     donor.add_argument("--pairs", type=Path, required=True)
+    donor.add_argument(
+        "--read-slots",
+        type=Path,
+        help="optional receiving-module to read-slot lists JSON (YatGraph)",
+    )
     donor.add_argument("--protected", nargs="*", default=[])
     donor.add_argument("--match-semantics", nargs="*", default=[])
     donor.add_argument("--allow-cross-split", action="store_true")
@@ -284,6 +289,9 @@ def main(argv=None):
                     protected_outputs=args.protected,
                     match_semantics=args.match_semantics,
                     allow_cross_split=args.allow_cross_split,
+                    read_slots=(
+                        None if args.read_slots is None else _read(args.read_slots)
+                    ),
                 )
             else:
                 ids = dataset.sample_ids(split=args.split)

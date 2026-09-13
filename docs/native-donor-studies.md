@@ -70,3 +70,38 @@ a separate arithmetic reference, without training. Save returned records with
 `nmn.torch.research.save_research_data`. Remaining work includes coordinate/edge
 patching, donor resampling policies, semantic alignment search, candidate-selection
 history, population risk validation and source-faithful benchmark adapters.
+
+## Patch one receiving module's read
+
+`YatGraph.forward_with_trace(x, read_patches={"b": {"h": values}})` replaces
+only `b`'s read of slot `h`. The shared residual state and other readers remain
+unchanged. `b` and downstream modules recompute from that patched read. Values
+broadcast to the selected coordinate's batch shape and retain tensor gradients.
+Write gates/replacements, if supplied, apply after this computation.
+
+The trace distinguishes `b.input_original` from `b.input`. This patches the
+receiving slot value, not a single producer's contribution to a residual sum.
+It does not implement arbitrary edge/path isolation or recursive scrubbing.
+
+For unchanged-donor values, supply `read_slots={"b": ["h"]}` to `donor_study`,
+or pass `--read-slots routes.json` to `nmn research native donor`. The routes file
+maps receiving module names to lists of their read slots. Routes must cover
+exactly the modules referenced across donor pairs. Omit this option to retain
+whole-write replacement. Read-slot mode requires `YatGraph`.
+
+Each pair saves the injected `donor_reads`, original and edited traces, expected
+outputs, reference errors and protected changes. In read mode `donor_writes` is
+empty, and `protocol.donor_execution` identifies receiving-slot replacement.
+Existing split, group, semantic matching and reference-provenance rules apply.
+
+Run the arithmetic example:
+
+```bash
+python examples/research/native_read_patches.py --output read-patches.json
+nmn research native export read-patches.json --output read-patch-note
+```
+
+Two modules share `h`; transferring a zero donor value into only one reader
+changes its output from one to zero while the other reader still outputs one.
+The self-donor control preserves both outputs. These are finite numerical
+observations, not a general protected-edit guarantee.

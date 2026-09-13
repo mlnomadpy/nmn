@@ -8,6 +8,7 @@ from typing import Callable, Mapping, Optional, Sequence
 import torch
 
 from ..research.datasets import DonorPair, ResearchDataset, ResearchSample
+from .graph import YatGraph
 from .interpretable import Intervention
 from .research import _json_value, collect_research_data
 
@@ -24,6 +25,7 @@ def donor_study(
     reference_id: Optional[str] = None,
     allow_cross_split: bool = False,
     match_semantics: Sequence[str] = (),
+    read_slots: Optional[Mapping[str, Sequence[str]]] = None,
 ):
     """Run actual donor replacements and compare supplied reference measurements.
 
@@ -31,6 +33,12 @@ def donor_study(
     base replay. All requested modules are replaced together, with descendants
     recomputed. On YatGraph, replacement applies to a module WRITE vector, not
     an entire residual state slot. Each row retains donor/base/edited traces.
+
+    With read_slots on YatGraph, modules instead receive the listed donor input
+    coordinates from their unchanged donor trace. Other readers and shared state
+    are untouched; the receiving module and descendants recompute. Routes must
+    cover exactly the modules named across pairs. This is a receiving-slot patch,
+    not isolation of a particular producer's contribution to a residual sum.
 
     Reference callbacks receive data records, never the model or its outputs.
     Supply a stable versioned reference_id; callbacks are not discovered semantic
@@ -58,6 +66,25 @@ def donor_study(
         unknown = set(pair.modules) - set(model.state_names)
         if unknown:
             raise ValueError(f"unknown donor modules: {sorted(unknown)}")
+    routes: Optional[dict[str, tuple]] = None
+    if read_slots is not None:
+        if not isinstance(model, YatGraph):
+            raise ValueError("read-slot donor patching requires YatGraph")
+        specifications = {
+            spec.name: spec for layer in model.layer_specs for spec in layer
+        }
+        if set(read_slots) != {name for pair in pairs for name in pair.modules}:
+            raise ValueError("read-slot routes must cover exactly the paired modules")
+        routes = {}
+        for name, slots in read_slots.items():
+            if (
+                isinstance(slots, str)
+                or not slots
+                or len(set(slots)) != len(slots)
+                or not set(slots) <= set(specifications[name].reads)
+            ):
+                raise ValueError("routes require unique receiving-module read slots")
+            routes[name] = tuple(slots)
     parameter = next(model.parameters())
     ids = tuple(
         dict.fromkeys(sid for pair in pairs for sid in (pair.base_id, pair.donor_id))
@@ -89,7 +116,21 @@ def donor_study(
                 )
                 for name in pair.modules
             }
-            edited, trace = model.forward_with_trace(inputs[b : b + 1], controls)
+            read_patches = {}
+            if routes is not None:
+                controls = {}
+                for name in pair.modules:
+                    read_patches[name] = {
+                        slot: population_trace[f"{name}.input"][
+                            d : d + 1, specifications[name].reads.index(slot)
+                        ].clone()
+                        for slot in routes[name]
+                    }
+                edited, trace = model.forward_with_trace(
+                    inputs[b : b + 1], read_patches=read_patches
+                )
+            else:
+                edited, trace = model.forward_with_trace(inputs[b : b + 1], controls)
             expected = (
                 dict(reference(base, donor, tuple(pair.modules)))
                 if reference
@@ -132,6 +173,7 @@ def donor_study(
                         - baseline[output_index[name]]
                         for name in protected_outputs
                     },
+                    "donor_reads": read_patches,
                     "donor_writes": {
                         name: control.replacement for name, control in controls.items()
                     },
@@ -159,7 +201,12 @@ def donor_study(
                 "protected_outputs": list(protected_outputs),
                 "allow_cross_split": allow_cross_split,
                 "match_semantics": list(match_semantics),
-                "donor_execution": "unchanged-model; full module-write replacement",
+                "donor_execution": (
+                    "unchanged-model; receiving-module read-slot replacement"
+                    if routes is not None
+                    else "unchanged-model; full module-write replacement"
+                ),
+                "read_slots": routes,
             },
             "rows": rows,
             "limitations": [
