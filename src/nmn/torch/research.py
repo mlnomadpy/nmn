@@ -10,10 +10,11 @@ import math
 import platform
 import time
 from pathlib import Path
-from typing import Mapping, Optional, Sequence, Union, cast
+from typing import Mapping, Optional, Sequence, Union
 
 import torch
 
+from .baselines import baseline_geometry
 from .graph import YatGraph
 from .interpretable import Intervention, ThreeNeuronYat, YatExpansion
 
@@ -209,17 +210,19 @@ def collect_research_data(
     started = time.perf_counter()
     with torch.no_grad():
         observations = intervention_table(model, inputs, edits)
-        geometry = {
-            name: expansion_geometry(
-                (
-                    cast(YatExpansion, model.blocks[name])
-                    if isinstance(model, YatGraph)
-                    else getattr(model, name)
-                ),
-                observations["baseline_trace"][f"{name}.input"],
+        geometry = {}
+        for name in model.state_names:
+            block = (
+                model.blocks[name]
+                if isinstance(model, YatGraph)
+                else getattr(model, name)
             )
-            for name in model.state_names
-        }
+            points = observations["baseline_trace"][f"{name}.input"]
+            geometry[name] = (
+                expansion_geometry(block, points)
+                if isinstance(block, YatExpansion)
+                else baseline_geometry(block, points)
+            )
     configuration = (
         model.configuration()
         if isinstance(model, YatGraph)
@@ -246,6 +249,7 @@ def collect_research_data(
                 Path(__file__),
                 Path(__file__).with_name("interpretable.py"),
                 Path(__file__).with_name("graph.py"),
+                Path(__file__).with_name("baselines.py"),
                 Path(__file__).parent / "nmn" / "yat_nmn.py",
             )
         },

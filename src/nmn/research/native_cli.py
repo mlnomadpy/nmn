@@ -37,6 +37,25 @@ def main(argv=None):
         "--end", required=True, help="comma-separated gates in module order"
     )
     path.add_argument("--steps", type=int, default=32)
+    benchmark = commands.add_parser(
+        "benchmark", help="compare saved native models under one replay contract"
+    )
+    benchmark.add_argument(
+        "--models",
+        type=Path,
+        required=True,
+        help="JSON map of method names to model paths",
+    )
+    benchmark.add_argument("--dataset", type=Path, required=True)
+    benchmark.add_argument("--edits", type=Path, required=True)
+    benchmark.add_argument(
+        "--expected", type=Path, help="optional baseline target matrix JSON"
+    )
+    benchmark.add_argument("--protected", nargs="*", default=[])
+    benchmark.add_argument("--split")
+    benchmark.add_argument("--repeats", type=int, default=5)
+    benchmark.add_argument("--warmup", type=int, default=1)
+    benchmark.add_argument("--output", type=Path, required=True)
     diagnose = commands.add_parser(
         "diagnose", help="inspect a module kernel and sensor geometry"
     )
@@ -103,6 +122,33 @@ def main(argv=None):
                     "trained": False,
                 }
             )
+        elif args.command == "benchmark":
+            from ..torch.benchmark import benchmark_models
+
+            paths = _read(args.models)
+            models = {
+                name: model_from_snapshot(_read(args.models.parent / path))
+                for name, path in paths.items()
+            }
+            controls = _read(args.edits)
+            edits = {
+                name: {
+                    state: Intervention(**control) for state, control in mapping.items()
+                }
+                for name, mapping in controls.items()
+            }
+            result = benchmark_models(
+                models,
+                ResearchDataset.from_dict(_read(args.dataset)),
+                edits=edits,
+                expected_outputs=(
+                    None if args.expected is None else _read(args.expected)
+                ),
+                protected_outputs=args.protected,
+                split=args.split,
+                repeats=args.repeats,
+                warmup=args.warmup,
+            )
         else:
             model = model_from_snapshot(_read(args.model))
             if args.command == "inspect":
@@ -164,6 +210,10 @@ def main(argv=None):
                             else getattr(model, args.module)
                         ),
                     )
+                    if not isinstance(block, YatExpansion):
+                        raise ValueError(
+                            "diagnose supports yat modules; collect exposes baseline feature geometry"
+                        )
                     with torch.no_grad():
                         _, trace = model.forward_with_trace(inputs)
                         points = trace[f"{args.module}.input"]

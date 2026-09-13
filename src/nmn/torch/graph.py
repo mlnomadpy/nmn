@@ -6,6 +6,7 @@ from typing import List, Mapping, Optional, Sequence, cast
 import torch
 from torch import nn
 
+from .baselines import IMQExpansion, TanhMLPBlock
 from .interpretable import Intervention, YatExpansion, _control
 
 
@@ -18,8 +19,11 @@ class YatModuleSpec:
     writes: tuple
     num_centers: int = 1
     epsilon: float = 1.0
+    family: str = "yat"
 
     def __post_init__(self):
+        if self.family not in ("yat", "imq", "tanh"):
+            raise ValueError("family must be yat, imq or tanh")
         object.__setattr__(self, "reads", tuple(self.reads))
         object.__setattr__(self, "writes", tuple(self.writes))
         if not self.name or not self.name.isidentifier():
@@ -84,7 +88,10 @@ class YatGraph(nn.Module):
         for spec in specs:
             if not set(spec.reads + spec.writes) <= set(self.slots):
                 raise ValueError(f"unknown slot in module {spec.name}")
-            self.blocks[spec.name] = YatExpansion(
+            factory = {"yat": YatExpansion, "imq": IMQExpansion, "tanh": TanhMLPBlock}[
+                spec.family
+            ]
+            self.blocks[spec.name] = factory(
                 len(spec.reads),
                 len(spec.writes),
                 spec.num_centers,

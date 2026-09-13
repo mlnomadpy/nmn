@@ -15,6 +15,7 @@ from .attention import (
     yat_attention,
     yat_attention_weights,
 )
+from .baselines import IMQExpansion, TanhMLPBlock
 
 # Import embedding
 from .embed import YatEmbed
@@ -51,6 +52,8 @@ __all__ = [
     "ThreeNeuronYat",
     "Intervention",
     "YatGraph",
+    "IMQExpansion",
+    "TanhMLPBlock",
     "YatModuleSpec",
     # YAT Attention
     "MultiHeadYatAttention",

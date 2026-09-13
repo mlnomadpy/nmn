@@ -136,7 +136,8 @@ output, including residual paths; it makes no semantic or numeric pruning claim.
 `configuration()` exports the complete graph specification, including per-module
 epsilon. Reconstruct with `YatGraph.from_configuration(config)` before loading
 weights. The graph's `state_dict()` includes configuration and rejects mismatched
-routing on load. These are fixed coordinate maps; learned routing, normalization,
+routing on load. Use `YatModuleSpec(family="imq")` or `family="tanh"` for explicit baseline blocks.
+These are fixed coordinate maps; learned routing, normalization,
 attention and arbitrary user-defined block types are not implemented here.
 
 `collect_research_data`, `intervention_table`, `gate_derivatives` and
@@ -154,3 +155,8 @@ checks, supplied semantic references and actual donor replacement protocols.
 [Joint gate paths and candidate selection](native-gate-paths.md) provide numerical
 finite-effect comparisons and a selection/validation ledger. Research expansions
 now use direct squared distances to preserve curvature at prototype matches.
+
+
+[Baseline comparisons](native-baseline-comparisons.md) describe IMQ/tanh modules
+and the common replay runner. Baseline feature geometry is labeled separately
+from ⵟ RKHS data in collected observations.

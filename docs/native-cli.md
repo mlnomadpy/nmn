@@ -62,3 +62,7 @@ API. See [datasets and donor studies](native-donor-studies.md),
 --module y --output diagnostics.json` exposes scoped kernel and sensor measurements.
 See [kernel diagnostics](native-kernel-diagnostics.md) for the supported layer
 settings and finite-data interpretation.
+
+
+`nmn research native benchmark` compares saved models under one declared dataset
+and edit contract. See [baseline comparisons](native-baseline-comparisons.md).
