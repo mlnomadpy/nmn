@@ -56,3 +56,9 @@ model from validated JSON parameter/configuration identity. The CLI uses this sa
 API. See [datasets and donor studies](native-donor-studies.md),
 [gate-path analysis](native-gate-paths.md), and
 [native models and data](native-interpretable-torch.md).
+
+
+`nmn research native diagnose --model native-model.json --dataset dataset.json
+--module y --output diagnostics.json` exposes scoped kernel and sensor measurements.
+See [kernel diagnostics](native-kernel-diagnostics.md) for the supported layer
+settings and finite-data interpretation.

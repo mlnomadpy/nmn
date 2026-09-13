@@ -4,6 +4,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import cast
 
 
 def _read(path):
@@ -36,6 +37,11 @@ def main(argv=None):
         "--end", required=True, help="comma-separated gates in module order"
     )
     path.add_argument("--steps", type=int, default=32)
+    diagnose = commands.add_parser(
+        "diagnose", help="inspect a module kernel and sensor geometry"
+    )
+    diagnose.add_argument("--module", required=True)
+    diagnose.add_argument("--noise-radius", type=float, default=0.0)
     donor = commands.add_parser(
         "donor", help="run declared donor pairs and reference labels"
     )
@@ -43,11 +49,11 @@ def main(argv=None):
     donor.add_argument("--protected", nargs="*", default=[])
     donor.add_argument("--match-semantics", nargs="*", default=[])
     donor.add_argument("--allow-cross-split", action="store_true")
-    for command in (collect, path, donor):
+    for command in (collect, path, donor, diagnose):
         command.add_argument("--model", type=Path, required=True)
         command.add_argument("--dataset", type=Path, required=True)
         command.add_argument("--output", type=Path, required=True)
-    for command in (collect, path):
+    for command in (collect, path, diagnose):
         command.add_argument("--split", help="restrict to one named dataset split")
     args = parser.parse_args(argv)
     try:
@@ -56,7 +62,7 @@ def main(argv=None):
         # Keep --help and the base CLI available without optional ML backends.
         import torch
 
-        from ..torch import Intervention, ThreeNeuronYat, YatGraph
+        from ..torch import Intervention, ThreeNeuronYat, YatExpansion, YatGraph
         from ..torch.paths import gate_path
         from ..torch.research import (
             _json_value,
@@ -143,7 +149,50 @@ def main(argv=None):
                     "split": args.split,
                     "dataset_provenance": dataset.to_dict()["provenance"],
                 }
-                if args.command == "collect":
+                if args.command == "diagnose":
+                    import hashlib
+
+                    from ..torch import diagnostics
+
+                    if args.module not in model.state_names:
+                        raise ValueError("unknown diagnostic module")
+                    block = cast(
+                        YatExpansion,
+                        (
+                            model.blocks[args.module]
+                            if isinstance(model, YatGraph)
+                            else getattr(model, args.module)
+                        ),
+                    )
+                    with torch.no_grad():
+                        _, trace = model.forward_with_trace(inputs)
+                        points = trace[f"{args.module}.input"]
+                    result = {
+                        "schema": "nmn.kernel-diagnostics.v1",
+                        "dataset": dataset.to_dict(),
+                        "sample_ids": ids,
+                        "module": args.module,
+                        "model_snapshot": collect_research_data(
+                            model,
+                            inputs,
+                            sample_ids=ids,
+                            metadata=metadata,
+                            derivatives=False,
+                        ),
+                        "layer": _json_value(diagnostics.diagnose_layer(block, points)),
+                        "sensors": _json_value(
+                            diagnostics.sensor_diagnostics(
+                                block.centers,
+                                points,
+                                epsilon=block.kernel.epsilon,
+                                noise_radius=args.noise_radius,
+                            )
+                        ),
+                        "source_sha256": hashlib.sha256(
+                            Path(diagnostics.__file__).read_bytes()
+                        ).hexdigest(),
+                    }
+                elif args.command == "collect":
                     controls = {} if args.edits is None else _read(args.edits)
                     edits = {
                         name: {
