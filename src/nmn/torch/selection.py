@@ -34,6 +34,8 @@ def select_edit(
     Candidate limits cover sorted candidates; unexecuted candidates stay visible.
     No optimizer or statistical/population certificate is invoked.
     """
+    candidates = json.loads(json.dumps(candidates, allow_nan=False))
+    targets = json.loads(json.dumps(targets, allow_nan=False))
     if (
         selection_split == validation_split
         or not selection_split

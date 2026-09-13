@@ -153,7 +153,7 @@ def render_native_note(record):
                 ],
             ),
             "",
-            f"Validation: {_text({k:v for k,v in (record['validation'] or {}).items() if k not in ('trace','outputs')})}.",
+            f"Validation: {_text({k: v for k, v in (record['validation'] or {}).items() if k not in ('trace', 'outputs')})}.",
             "",
             "The frozen winner is never changed using validation outcomes. This is finite empirical selection, not a statistical certificate.",
             "",
