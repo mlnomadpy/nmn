@@ -119,10 +119,15 @@ class YatNMN(nn.Module):
         alpha_init: Optional[Callable[[torch.Tensor], object]] = None,
         device=None,
         kernel_bank: Optional[KernelBank] = None,
+        distance_mode: str = "expanded",
     ):
         in_features = validate_positive_int(in_features, "in_features")
         out_features = validate_positive_int(out_features, "out_features")
         super().__init__()
+
+        if distance_mode not in ("expanded", "direct"):
+            raise ValueError("distance_mode must be expanded or direct")
+        self.distance_mode = distance_mode
 
         # Store attributes
         self.in_features = in_features
@@ -463,8 +468,11 @@ class YatNMN(nn.Module):
         if bias is not None:
             y = y + bias
 
-        # Compute squared distances
-        if self.spherical:
+        # Direct differences avoid cancellation and clamp-boundary curvature.
+        # This costs an (..., out_features, in_features) temporary.
+        if self.distance_mode == "direct":
+            distances = (x.unsqueeze(-2) - kernel).square().sum(dim=-1)
+        elif self.spherical:
             # Spherical: inputs and kernel are normalized
             # ||x - W||² = ||x||² + ||W||² - 2(x·W) = 1 + 1 - 2(x·W) = 2 - 2(x·W)
             # Reuse y (before bias) since it equals x · W^T
@@ -532,6 +540,7 @@ class YatNMN(nn.Module):
             f"constant_alpha={self.constant_alpha}, "
             f"lazy={self.lazy}, "
             f"spherical={self.spherical}, "
+            f"distance_mode={self.distance_mode}, "
             f"dtype={self.dtype}, "
             f"param_dtype={self.param_dtype}"
         )

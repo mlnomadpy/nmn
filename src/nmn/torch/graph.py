@@ -113,6 +113,7 @@ class YatGraph(nn.Module):
                 for layer in self.layer_specs
             ],
             "update": "simultaneous-residual-add",
+            "distance_mode": "direct",
         }
 
     @classmethod
@@ -120,6 +121,7 @@ class YatGraph(nn.Module):
         """Reconstruct topology before loading tensor weights."""
         if config.get("class") != "nmn.torch.YatGraph" or (
             config.get("update") != "simultaneous-residual-add"
+            or config.get("distance_mode") != "direct"
         ):
             raise ValueError("unsupported graph configuration")
         layers = [

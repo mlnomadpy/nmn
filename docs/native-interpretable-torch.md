@@ -149,3 +149,8 @@ an executable graph and complete observation snapshot.
 
 [Native donor studies](native-donor-studies.md) add explicit populations, split/group
 checks, supplied semantic references and actual donor replacement protocols.
+
+
+[Joint gate paths and candidate selection](native-gate-paths.md) provide numerical
+finite-effect comparisons and a selection/validation ledger. Research expansions
+now use direct squared distances to preserve curvature at prototype matches.

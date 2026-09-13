@@ -73,6 +73,7 @@ class YatExpansion(nn.Module):
             bias=False,
             alpha=False,
             epsilon=epsilon,
+            distance_mode="direct",
             device=device,
             param_dtype=dtype,
         )

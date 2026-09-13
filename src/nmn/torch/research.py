@@ -225,6 +225,7 @@ def collect_research_data(
         if isinstance(model, YatGraph)
         else {
             "class": "nmn.torch.ThreeNeuronYat",
+            "distance_mode": "direct",
             "num_centers": model.h.num_centers,
             "epsilon": {
                 name: getattr(model, name).kernel.epsilon for name in model.state_names
