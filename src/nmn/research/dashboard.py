@@ -14,9 +14,10 @@ FINITE = "nmn.finite-contract-evidence.v1"
 
 def _summary(record, source, now):
     schema = record["schema"]
-    snapshot = record.get("model_snapshot", record)
+    execution = record.get("execution", record)
+    snapshot = execution.get("model_snapshot", execution)
     configuration = snapshot.get("configuration", {})
-    label = record.get("dataset", {}).get("name") or (
+    label = execution.get("dataset", {}).get("name") or (
         source.parent.name
         if source.name in ("data.json", "evidence.json")
         else source.stem
@@ -67,7 +68,7 @@ def _summary(record, source, now):
             else snapshot.get("runtime", {}).get("torch", "PyTorch record")
         ),
         "contract": record.get(
-            "contract_sha256", record.get("protocol", "not declared")
+            "contract_sha256", execution.get("protocol", "not declared")
         ),
         "model": snapshot.get(
             "model_sha256", record.get("initial_model_sha256", "multiple / embedded")
@@ -178,6 +179,68 @@ def build_dashboard(sources, destination):
                             "compared_fields",
                             "mismatches",
                         )
+                    }
+                elif record["schema"] == "nmn.coalition-study.v1":
+                    summary["details"] = {
+                        key: record[key]
+                        for key in ("coverage", "reason", "protocol", "cost")
+                    }
+                    summary["details"]["coefficient_table_available"] = (
+                        record["subset_coefficients"] is not None
+                    )
+                elif record["schema"] == "nmn.protection-study.v1":
+                    rows = []
+                    for task, edits in record["results"].items():
+                        for edit, result in edits.items():
+                            for group in result["strata"]:
+                                rows.append(
+                                    {
+                                        "task": task,
+                                        "edit": edit,
+                                        "stratum": {
+                                            key: group[key]
+                                            for key in ("field", "value", "missing")
+                                        },
+                                        **{
+                                            key: group["metrics"][key]
+                                            for key in (
+                                                "count",
+                                                "originally_correct_count",
+                                                "accuracy_before",
+                                                "accuracy_after",
+                                                "conditional_damage_rate",
+                                                "disagreement_rate",
+                                            )
+                                        },
+                                    }
+                                )
+                    summary["details"] = {
+                        "rows_total": len(rows),
+                        "first_25_rows": rows[:25],
+                        "null_damage_rate": "No originally correct examples; not zero damage.",
+                    }
+                elif record["schema"] == "nmn.donor-study.v1":
+                    summary["details"] = {
+                        "protocol": record["protocol"],
+                        "pairs_total": len(record["rows"]),
+                        "first_25_pairs": [
+                            {
+                                "pair_id": row["pair"]["pair_id"],
+                                "base_id": row["pair"]["base_id"],
+                                "donor_id": row["pair"]["donor_id"],
+                                **{
+                                    key: row[key]
+                                    for key in (
+                                        "self_donor",
+                                        "expected",
+                                        "edited_outputs",
+                                        "absolute_reference_error",
+                                        "protected_delta",
+                                    )
+                                },
+                            }
+                            for row in record["rows"][:25]
+                        ],
                     }
                 elif record["schema"] == FINITE:
                     summary["details"] = {

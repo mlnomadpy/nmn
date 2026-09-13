@@ -28,3 +28,5 @@ Labels are rendered as text, embedded JSON is escaped, and no remote assets are
 loaded. This report indexes supplied evidence, not every paper's research
 protocol. See [the requirements map](research-data-requirements.md) for outstanding
 measurement and inference capabilities.
+
+Result previews expose coalition coverage and coefficient availability, donor transfer outcomes, and separate protection accuracy/damage/disagreement rates. Donor/protection previews show at most 25 rows with the full row count; copied JSON retains every row. Replay entries inherit their executed model architecture for filtering.
