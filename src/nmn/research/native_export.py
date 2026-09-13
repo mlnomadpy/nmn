@@ -1,0 +1,329 @@
+"""Backend-independent Obsidian notes for native numerical research records."""
+
+import hashlib
+import html
+import json
+import math
+import shutil
+from pathlib import Path
+
+SCHEMAS = {
+    "nmn.native-model.v1": "Native model",
+    "nmn.native-research.v1": "Native model observations",
+    "nmn.donor-study.v1": "Native donor study",
+    "nmn.gate-path-study.v1": "Joint gate-path comparison",
+    "nmn.kernel-diagnostics.v1": "Kernel and sensor diagnostics",
+    "nmn.native-benchmark.v1": "Native model comparison",
+    "nmn.native-training.v1": "Native training record",
+}
+
+
+def _text(value):
+    return (
+        html.escape(str(value))
+        .replace("|", "&#124;")
+        .replace("\n", " ")
+        .replace("\r", " ")
+    )
+
+
+def _maximum(value):
+    values = []
+
+    def visit(item):
+        if isinstance(item, dict):
+            for child in item.values():
+                visit(child)
+        elif isinstance(item, (list, tuple)):
+            for child in item:
+                visit(child)
+        elif (
+            isinstance(item, (int, float))
+            and not isinstance(item, bool)
+            and math.isfinite(item)
+        ):
+            values.append(abs(item))
+        else:
+            raise ValueError("not a finite numeric measurement")
+
+    try:
+        visit(value)
+    except ValueError:
+        return "unavailable/nonfinite"
+    return f"{max(values):.8g}" if values else "not measured"
+
+
+def _table(headers, rows):
+    return "\n".join(
+        [
+            "| " + " | ".join(headers) + " |",
+            "| " + " | ".join("---" for _ in headers) + " |",
+            *["| " + " | ".join(_text(cell) for cell in row) + " |" for row in rows],
+        ]
+    )
+
+
+def _check_identities(value):
+    if isinstance(value, dict):
+        if value.get("schema") in ("nmn.native-model.v1", "nmn.native-research.v1"):
+            identity = {key: value[key] for key in ("configuration", "parameters")}
+            digest = hashlib.sha256(
+                json.dumps(identity, sort_keys=True, allow_nan=False).encode()
+            ).hexdigest()
+            if value.get("model_sha256") != digest:
+                raise ValueError("embedded model content identity mismatch")
+        for child in value.values():
+            _check_identities(child)
+    elif isinstance(value, list):
+        for child in value:
+            _check_identities(child)
+
+
+def render_native_note(record):
+    """Summarize recorded observations without rerunning or upgrading assurance."""
+    schema = record.get("schema")
+    if schema not in SCHEMAS:
+        raise ValueError("unsupported native record schema")
+    _check_identities(record)
+    lines = [
+        "---",
+        "type: experiment-report",
+        "status: recorded-observations",
+        "tags: [research/nmn, research/intervention]",
+        "---",
+        f"# {SCHEMAS[schema]}",
+        "",
+        "[Complete data](data.json) · [File hashes](manifest.json)",
+        "",
+        f"Record schema: `{schema}`.",
+        "",
+        "This note summarizes saved data. Export does not execute the model, certify a claim, "
+        "or establish semantic meaning. Model identity checks cover stored configuration and parameters.",
+        "",
+    ]
+    snapshot = (
+        record
+        if schema in ("nmn.native-model.v1", "nmn.native-research.v1")
+        else record.get("model_snapshot")
+    )
+    if snapshot:
+        lines += [
+            f"Model identity: `{_text(snapshot['model_sha256'])}`.",
+            "",
+            f"Architecture: {_text(snapshot['configuration']['class'])}.",
+            "",
+        ]
+        if "sample_ids" in snapshot:
+            lines += [f"Recorded samples: {len(snapshot['sample_ids'])}.", ""]
+    if record.get("dataset"):
+        ds = record["dataset"]
+        lines += [
+            f"Dataset: {_text(ds.get('name', 'not named'))}.",
+            "",
+            f"Data/semantic provenance: {_text(ds.get('provenance', 'not recorded'))}.",
+            "",
+        ]
+    if schema == "nmn.native-research.v1":
+        rows = [
+            [name, _maximum(row["delta"])]
+            for name, row in record["observations"]["edits"].items()
+        ]
+        lines += [
+            "## Executed edits",
+            "",
+            _table(["Edit", "Maximum absolute output change"], rows),
+            "",
+            "Per-output/per-example values and raw/effective states remain in the complete data. "
+            "An output change alone does not indicate target success or a protection violation.",
+            "",
+        ]
+    elif schema == "nmn.donor-study.v1":
+        rows = [
+            [
+                row["pair"]["pair_id"],
+                row["pair"]["base_id"],
+                row["pair"]["donor_id"],
+                _maximum(row["absolute_reference_error"]),
+                _maximum(row["protected_delta"]),
+            ]
+            for row in record["rows"]
+        ]
+        lines += [
+            "## Donor effects",
+            "",
+            _table(
+                [
+                    "Pair",
+                    "Base",
+                    "Donor",
+                    "Max reference error",
+                    "Max protected change",
+                ],
+                rows,
+            ),
+            "",
+            "Reference labels and donor eligibility are supplied by the study. These errors have no implicit acceptance tolerance.",
+            "",
+        ]
+    elif schema == "nmn.gate-path-study.v1":
+        path = record["path"]
+        rows = [
+            [name, _maximum(residual)] for name, residual in path["residuals"].items()
+        ]
+        lines += [
+            "## Prediction residuals",
+            "",
+            _table(["Method", "Maximum absolute endpoint residual"], rows),
+            "",
+            f"Quadrature intervals: {_text(path['cost']['intervals'])}; model calls: {_text(path['cost']['model_forward_calls'])}.",
+            "",
+            "Residuals compare numerical predictions with actual endpoint effects; they are not uniform error bounds.",
+            "",
+        ]
+    elif schema == "nmn.kernel-diagnostics.v1":
+        layer, sensors = record["layer"], record["sensors"]
+        lines += [
+            f"Module: {_text(record['module'])}.",
+            "",
+            f"Function-space scope: {_text(layer['scope'])}.",
+            "",
+            f"Empirical minimum separation ratio: {_text(sensors['empirical_minimum_separation_ratio'])}.",
+            "",
+            f"Supplied observation noise radius: {_text(sensors['noise_radius'])}.",
+            "",
+            "Finite spectra and separation observations do not establish global PSD or stable state recovery.",
+            "",
+        ]
+    elif schema == "nmn.native-benchmark.v1":
+        rows = []
+        for name, method in record["methods"].items():
+            rows.append(
+                [
+                    name,
+                    method["status"],
+                    method.get("parameter_count", "unavailable"),
+                    (
+                        method.get("baseline_mse")
+                        if method.get("baseline_mse") is not None
+                        else "not measured"
+                    ),
+                    method.get("error", ""),
+                ]
+            )
+        lines += [
+            "## All methods",
+            "",
+            _table(["Method", "Status", "Parameters", "Baseline MSE", "Error"], rows),
+            "",
+            f"Timing budget: {_text(record['contract']['warmup'])} warmup and {_text(record['contract']['repeats'])} measured batches per case.",
+            "",
+            "Different parameter counts, competence and fitting histories remain relevant. No winner is selected by this note.",
+            "",
+        ]
+    elif schema == "nmn.native-training.v1":
+        rows = [
+            [
+                run["seed"],
+                run["status"],
+                run["steps_completed"],
+                run["best_step"],
+                run.get("best_validation_mse"),
+                run.get("error") or run.get("checkpoint_error") or "",
+            ]
+            for run in record["runs"]
+        ]
+        lines += [
+            f"Training protocol: {_text(record['protocol'])}.",
+            "",
+            f"Target provenance: {_text(record['target_provenance'])}.",
+            "",
+            "## All seed outcomes",
+            "",
+            _table(
+                ["Seed", "Status", "Steps", "Selected step", "Selection MSE", "Error"],
+                rows,
+            ),
+            "",
+            f"Selection rule: {_text(record['selection_rule'])}.",
+            "",
+            f"Seed scope: {_text(record['seed_scope'])}.",
+            "",
+            "Validation selects checkpoints; it is not untouched final evaluation. Routing and supplied semantics are imposed, not identified by low loss.",
+            "",
+        ]
+    limitations = list(record.get("limitations", []))
+    if schema == "nmn.gate-path-study.v1":
+        limitations += record["path"].get("limitations", [])
+    if limitations:
+        lines += (
+            ["## Recorded limitations", ""]
+            + [f"- {_text(item)}" for item in limitations]
+            + [""]
+        )
+    return "\n".join(lines)
+
+
+def export_native_record(source, destination):
+    """Copy exact JSON bytes and a note into a new directory, with file hashes.
+
+    The manifest supports integrity checking, not model replay or authorship.
+    No frameworks are imported and no vault indexes or existing files are changed.
+    """
+    source, destination = Path(source), Path(destination)
+    data = source.read_bytes()
+    record = json.loads(data)
+    note = render_native_note(record).encode("utf-8")
+    payload = {"data.json": data, "Report.md": note}
+    manifest = {
+        "schema": "nmn.native-export.v1",
+        "record_schema": record["schema"],
+        "files": {
+            name: hashlib.sha256(content).hexdigest()
+            for name, content in payload.items()
+        },
+        "exporter_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "assurance": "stored file integrity; no computational replay",
+    }
+    payload["manifest.json"] = (
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+    ).encode()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.mkdir()
+    try:
+        for name, content in payload.items():
+            (destination / name).write_bytes(content)
+    except BaseException:
+        shutil.rmtree(destination)
+        raise
+    return {
+        "status": "exported",
+        "output": str(destination),
+        "schema": record["schema"],
+    }
+
+
+def verify_native_export(directory):
+    """Check the exported files and embedded model identities without execution."""
+    directory = Path(directory)
+    manifest = json.loads((directory / "manifest.json").read_bytes())
+    if manifest.get("schema") != "nmn.native-export.v1" or set(manifest["files"]) != {
+        "data.json",
+        "Report.md",
+    }:
+        raise ValueError("unsupported native export manifest")
+    for name, expected in manifest["files"].items():
+        if hashlib.sha256((directory / name).read_bytes()).hexdigest() != expected:
+            raise ValueError(f"file content mismatch: {name}")
+    record = json.loads((directory / "data.json").read_bytes())
+    if (
+        record.get("schema") not in SCHEMAS
+        or record["schema"] != manifest["record_schema"]
+    ):
+        raise ValueError("record schema mismatch")
+    _check_identities(record)
+    return {
+        "status": "integrity-checked",
+        "output": str(directory),
+        "schema": record["schema"],
+        "recomputed": False,
+    }

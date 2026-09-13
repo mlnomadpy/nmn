@@ -71,3 +71,9 @@ and edit contract. See [baseline comparisons](native-baseline-comparisons.md).
 `nmn research native train` is an explicit bounded optimization command;
 `native checkpoint` extracts a selected model for later research commands. See
 [training protocols](native-training.md). Read-only commands never invoke training.
+
+
+`nmn research native export record.json --output vault/new-run` writes an Obsidian
+note beside the untouched JSON and file hashes. `native verify-export vault/new-run`
+checks stored integrity without model replay; neither requires PyTorch. See
+[native vault export](native-vault-export.md).

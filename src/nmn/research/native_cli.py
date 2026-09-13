@@ -14,6 +14,15 @@ def _read(path):
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="nmn research native")
     commands = parser.add_subparsers(dest="command", required=True)
+    export = commands.add_parser(
+        "export", help="write an Obsidian note and exact native data copy"
+    )
+    export.add_argument("record", type=Path)
+    export.add_argument("--output", type=Path, required=True)
+    integrity = commands.add_parser(
+        "verify-export", help="check exported native files without replay"
+    )
+    integrity.add_argument("directory", type=Path)
     initialize = commands.add_parser(
         "init", help="write a native reference or graph model"
     )
@@ -98,6 +107,16 @@ def main(argv=None):
     try:
         if hasattr(args, "output") and args.output.exists():
             raise ValueError("output already exists; choose a new evidence path")
+        if args.command == "verify-export":
+            from .native_export import verify_native_export
+
+            print(json.dumps(verify_native_export(args.directory)))
+            return 0
+        if args.command == "export":
+            from .native_export import export_native_record
+
+            print(json.dumps(export_native_record(args.record, args.output)))
+            return 0
         # Keep --help and the base CLI available without optional ML backends.
         import torch
 
