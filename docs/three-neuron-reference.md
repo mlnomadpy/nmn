@@ -1,7 +1,7 @@
 # Three-neuron exact reference
 
-This first research CLI slice implements one fixed model, not a general
-architecture loader. It requires only Python's standard library. No model is
+This research CLI slice supports a fixed three-neuron topology with configurable
+parameters. It is not a general architecture loader. It requires only Python's standard library. No model is
 trained, downloaded or fit. Parameters and meanings are supplied by construction.
 
 ## Model and contract
@@ -79,3 +79,40 @@ A comparison is pointwise evidence, not the exhaustive contract implemented by
 `verify`. A changed target is not automatically a successful target intervention.
 The command exits 0 when the comparison completes, including when collateral
 effects are reported, and exits 2 on invalid input.
+
+## Configurable three-neuron models
+
+Create the default JSON model and validate or execute it:
+
+```bash
+nmn research model > model.json
+nmn research model model.json
+nmn research inspect --model model.json
+nmn research trace --model model.json --u 1 --v 1 --gate 0
+nmn research compare --model model.json --gate 1/2
+nmn research verify --model model.json
+```
+
+The schema `nmn.three-neuron-model.v1` requires exactly `schema`, `epsilon`,
+`neurons` and `protected_leak`. Each of h, p and y requires a center array and
+a coefficient. Their input dimensions remain 1, 1 and 2. All numbers must be
+rational strings, epsilon must be positive, and duplicate/unknown keys are
+rejected. Model files are limited to 64 KiB and individual numbers to 64
+characters. Signed centers and coefficients are supported; intermediate states
+need not lie in [0,1]. Inputs, gates and optional h replacements remain in [0,1].
+
+The protected readout is `p + protected_leak*y`. Set `protected_leak` to `"1"`
+to expose the downstream protection failure. Runnable examples live in
+`examples/research/three-neuron.json` and `three-neuron-leaky.json`.
+
+Configured verification enumerates the same 25 inputs for the shared gate edit
+1 → 0, testing exact equality of the configured protected output. It records
+all traces and the first counterexample, with a hash of normalized model
+parameters. There is **no target-success requirement** in this configured
+contract. Target-change counts are descriptive. Exit 1 denotes a protection
+failure; exit 2 denotes invalid configuration. `--leaky` cannot be combined
+with `--model`: specify the readout in the model file instead.
+
+`demo`, bundle replay and vault export still use the original fixed reference
+schema. Configured verification emits standalone JSON; configurable bundle
+creation/replay is not implemented, and the CLI must not imply otherwise.
