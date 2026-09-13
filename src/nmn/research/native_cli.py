@@ -95,6 +95,14 @@ def main(argv=None):
     )
     diagnose.add_argument("--module", required=True)
     diagnose.add_argument("--noise-radius", type=float, default=0.0)
+    coalition = commands.add_parser(
+        "coalitions", help="replay a budgeted module-deletion lattice"
+    )
+    coalition.add_argument("--modules", nargs="+", required=True)
+    coalition.add_argument("--max-evaluations", type=int, required=True)
+    coalition.add_argument(
+        "--background", type=Path, help="module to scalar background gate JSON"
+    )
     protection = commands.add_parser(
         "protect", help="measure declared classification protection tasks"
     )
@@ -114,11 +122,11 @@ def main(argv=None):
     donor.add_argument("--protected", nargs="*", default=[])
     donor.add_argument("--match-semantics", nargs="*", default=[])
     donor.add_argument("--allow-cross-split", action="store_true")
-    for command in (collect, path, donor, diagnose, protection):
+    for command in (collect, path, donor, diagnose, protection, coalition):
         command.add_argument("--model", type=Path, required=True)
         command.add_argument("--dataset", type=Path, required=True)
         command.add_argument("--output", type=Path, required=True)
-    for command in (collect, path, diagnose, protection):
+    for command in (collect, path, diagnose, protection, coalition):
         command.add_argument("--split", help="restrict to one named dataset split")
     args = parser.parse_args(argv)
     try:
@@ -261,7 +269,20 @@ def main(argv=None):
                 )
                 return 0
             dataset = ResearchDataset.from_dict(_read(args.dataset))
-            if args.command == "protect":
+            if args.command == "coalitions":
+                from ..torch.coalitions import coalition_study
+
+                result = coalition_study(
+                    model,
+                    dataset,
+                    modules=args.modules,
+                    max_evaluations=args.max_evaluations,
+                    background=(
+                        None if args.background is None else _read(args.background)
+                    ),
+                    split=args.split,
+                )
+            elif args.command == "protect":
                 from ..torch.protection import protection_study
 
                 edits = {

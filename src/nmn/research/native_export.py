@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.coalition-study.v1": "Native coalition study",
     "nmn.protection-study.v1": "Native classification protection study",
     "nmn.native-model.v1": "Native model",
     "nmn.native-research.v1": "Native model observations",
@@ -124,7 +125,22 @@ def render_native_note(record):
             f"Data/semantic provenance: {_text(ds.get('provenance', 'not recorded'))}.",
             "",
         ]
-    if schema == "nmn.protection-study.v1":
+    if schema == "nmn.coalition-study.v1":
+        lines += [
+            "## Coalition coverage",
+            "",
+            f"Saved status: {_text(record['status'])}; {_text(record['reason'])}.",
+            "",
+            f"Evaluated {record['coverage']['evaluated']} of {record['coverage']['total']} coalitions.",
+            "",
+            f"Module order: {_text(record['protocol']['modules'])}.",
+            "",
+            f"Background gates: {_text(record['protocol']['background_gates'])}.",
+            "",
+            "Per-example responses, subset coefficients (when complete), reconstruction residuals and costs remain in the data. Missing coalitions are not zero effects.",
+            "",
+        ]
+    elif schema == "nmn.protection-study.v1":
         rows = []
         for task, edits in record["results"].items():
             for edit, result in edits.items():

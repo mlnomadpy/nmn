@@ -306,6 +306,8 @@ def coalition_effects(model: ThreeNeuronYat, inputs: torch.Tensor):
     Coefficients reconstruct each queried coalition by summing over its subsets.
     No unqueried-background or interaction-sparsity claim is made.
     """
+    if not isinstance(model, ThreeNeuronYat):
+        raise TypeError("use coalition_study for general graph coalitions")
     with torch.no_grad():
         values = torch.stack(
             [
