@@ -145,3 +145,7 @@ attention and arbitrary user-defined block types are not implemented here.
 with graph size. The exhaustive `coalition_effects` helper remains specific to
 `ThreeNeuronYat`. Run `examples/research/native_graph.py --output graph.json` for
 an executable graph and complete observation snapshot.
+
+
+[Native donor studies](native-donor-studies.md) add explicit populations, split/group
+checks, supplied semantic references and actual donor replacement protocols.
