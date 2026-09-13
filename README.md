@@ -141,6 +141,23 @@ status = nmn.doctor()     # prints the report AND returns {framework: version_st
 
 ---
 
+## Native interpretable networks and research data
+
+`nmn.torch.ThreeNeuronYat` is a trainable network built from `YatNMN` kernel
+expansions, with named states, tensor gates and native state replacement.
+`nmn.torch.research` exposes local kernel geometry, derivatives, joint edit
+responses and per-example protection measurements for research.
+
+```python
+from nmn.torch import Intervention, ThreeNeuronYat
+model = ThreeNeuronYat.reference()
+outputs, trace = model.forward_with_trace(inputs)
+edited = model(inputs, {"h": Intervention(gate=0)})
+```
+
+See [native architecture and data APIs](docs/native-interpretable-torch.md) and
+[the vault-driven capability map](docs/research-data-requirements.md).
+
 ## Exact research reference
 
 Run `nmn research demo --output runs/three-neuron` to record a three-neuron
