@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.protection-study.v1": "Native classification protection study",
     "nmn.native-model.v1": "Native model",
     "nmn.native-research.v1": "Native model observations",
     "nmn.donor-study.v1": "Native donor study",
@@ -123,7 +124,51 @@ def render_native_note(record):
             f"Data/semantic provenance: {_text(ds.get('provenance', 'not recorded'))}.",
             "",
         ]
-    if schema == "nmn.native-research.v1":
+    if schema == "nmn.protection-study.v1":
+        rows = []
+        for task, edits in record["results"].items():
+            for edit, result in edits.items():
+                for group in result["strata"]:
+                    m = group["metrics"]
+                    rows.append(
+                        [
+                            task,
+                            edit,
+                            (
+                                "all"
+                                if group["field"] is None
+                                else str(
+                                    {k: group[k] for k in ("field", "value", "missing")}
+                                )
+                            ),
+                            m["count"],
+                            m["originally_correct_count"],
+                            m["accuracy_after"],
+                            m["conditional_damage_rate"],
+                            m["disagreement_rate"],
+                        ]
+                    )
+        lines += [
+            "## Protection measurements",
+            "",
+            _table(
+                [
+                    "Task",
+                    "Edit",
+                    "Stratum",
+                    "Count",
+                    "Eligible",
+                    "Accuracy after",
+                    "Conditional damage",
+                    "Disagreement",
+                ],
+                rows,
+            ),
+            "",
+            "An undefined conditional damage rate means no originally correct examples; it is not zero damage.",
+            "",
+        ]
+    elif schema == "nmn.native-research.v1":
         rows = [
             [name, _maximum(row["delta"])]
             for name, row in record["observations"]["edits"].items()

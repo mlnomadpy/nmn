@@ -17,7 +17,7 @@ note. `catalog.json` exposes the index to other tools. Directory scans skip
 unrelated JSON schemas; missing, malformed or unsupported explicit inputs appear
 as unavailable. Identical evidence bytes are indexed once.
 
-Supported inputs are the seven native model/research schemas and
+Supported inputs are the native model/research schemas and
 `nmn.finite-contract-evidence.v1`. Native model identities and supplied native
 export manifests are checked. Exact finite outcomes retain their saved status;
 the dashboard does not replay them or issue certificates. Source modification

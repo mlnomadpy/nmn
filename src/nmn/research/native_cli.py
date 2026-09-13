@@ -95,6 +95,13 @@ def main(argv=None):
     )
     diagnose.add_argument("--module", required=True)
     diagnose.add_argument("--noise-radius", type=float, default=0.0)
+    protection = commands.add_parser(
+        "protect", help="measure declared classification protection tasks"
+    )
+    protection.add_argument("--edits", type=Path, required=True)
+    protection.add_argument("--tasks", type=Path, required=True)
+    protection.add_argument("--provenance", required=True)
+    protection.add_argument("--strata", nargs="*", default=[])
     donor = commands.add_parser(
         "donor", help="run declared donor pairs and reference labels"
     )
@@ -102,11 +109,11 @@ def main(argv=None):
     donor.add_argument("--protected", nargs="*", default=[])
     donor.add_argument("--match-semantics", nargs="*", default=[])
     donor.add_argument("--allow-cross-split", action="store_true")
-    for command in (collect, path, donor, diagnose):
+    for command in (collect, path, donor, diagnose, protection):
         command.add_argument("--model", type=Path, required=True)
         command.add_argument("--dataset", type=Path, required=True)
         command.add_argument("--output", type=Path, required=True)
-    for command in (collect, path, diagnose):
+    for command in (collect, path, diagnose, protection):
         command.add_argument("--split", help="restrict to one named dataset split")
     args = parser.parse_args(argv)
     try:
@@ -249,7 +256,26 @@ def main(argv=None):
                 )
                 return 0
             dataset = ResearchDataset.from_dict(_read(args.dataset))
-            if args.command == "donor":
+            if args.command == "protect":
+                from ..torch.protection import protection_study
+
+                edits = {
+                    name: {
+                        state: Intervention(**control)
+                        for state, control in mapping.items()
+                    }
+                    for name, mapping in _read(args.edits).items()
+                }
+                result = protection_study(
+                    model,
+                    dataset,
+                    edits=edits,
+                    tasks=_read(args.tasks),
+                    provenance=args.provenance,
+                    split=args.split,
+                    strata=args.strata,
+                )
+            elif args.command == "donor":
                 pairs = [DonorPair(**pair) for pair in _read(args.pairs)]
                 result = donor_study(
                     model,
