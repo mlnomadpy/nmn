@@ -36,4 +36,4 @@ and one candidate attempt when a winner exists. No optimization or training is
 performed. This is finite empirical selection; it does not establish independence,
 population risk, semantic label validity or a multiple-comparison guarantee.
 
-The shipped arithmetic fixture deliberately gives different targets to the two splits. The selected edit remains frozen even though validation favors another candidate. Selection records support Obsidian export; their replay adapter is not yet implemented.
+The shipped arithmetic fixture deliberately gives different targets to the two splits. The selected edit remains frozen even though validation favors another candidate. Selection records support Obsidian export and `native replay`. Replay repeats the declared selection and frozen validation, checking the winner, measured candidate set, ledger event order and validation observations. A matched replay does not mean the selected edit passed validation.

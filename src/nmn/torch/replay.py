@@ -15,6 +15,7 @@ from .interpretable import Intervention, YatExpansion
 from .paths import gate_path
 from .protection import protection_study
 from .research import _json_value, collect_research_data, model_from_snapshot
+from .selection import select_edit
 from .semantics import semantic_study
 from .studies import donor_study
 from .suffix import suffix_study
@@ -39,6 +40,7 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
             raise ValueError("tolerances must be finite nonnegative numbers")
     supported = {
         "nmn.native-research.v1",
+        "nmn.edit-selection.v1",
         "nmn.semantic-study.v1",
         "nmn.suffix-study.v1",
         "nmn.gate-path-study.v1",
@@ -154,7 +156,23 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
         if dataset.sha256 != record["dataset_sha256"]:
             raise ValueError("dataset content hash mismatch")
         protocol = record.get("protocol", {})
-        if schema == "nmn.semantic-study.v1":
+        if schema == "nmn.edit-selection.v1":
+            actual = select_edit(
+                model,
+                dataset,
+                candidates=record["candidates"],
+                targets=record["targets"],
+                **protocol,
+            )
+            keys = [
+                "status",
+                "selection",
+                "selected",
+                "unexecuted",
+                "validation",
+                "ledger",
+            ]
+        elif schema == "nmn.semantic-study.v1":
             actual = semantic_study(
                 model,
                 dataset,
@@ -301,6 +319,18 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
             actual["model_snapshot"]["observations"]["baseline"],
             "/model_snapshot/observations/baseline",
         )
+    if schema == "nmn.edit-selection.v1":
+        saved_validation = record["validation_snapshot"]
+        current_validation = actual["validation_snapshot"]
+        if saved_validation is None or current_validation is None:
+            compare(saved_validation, current_validation, "/validation_snapshot")
+        else:
+            for field in ("model_sha256", "sample_ids", "inputs", "observations"):
+                compare(
+                    saved_validation[field],
+                    current_validation[field],
+                    "/validation_snapshot/" + field,
+                )
     return {
         "schema": "nmn.native-replay.v1",
         "status": "matched" if not mismatches else "mismatch",
@@ -314,7 +344,12 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
             "rtol": rtol,
             "rule": "abs(saved-replayed) <= atol + rtol*abs(saved)",
         },
-        "compared_fields": keys,
+        "compared_fields": keys
+        + (
+            ["validation_snapshot/{model_sha256,sample_ids,inputs,observations}"]
+            if schema == "nmn.edit-selection.v1"
+            else []
+        ),
         "ignored_paths": sorted(ignored_paths),
         "checked_nodes": checked,
         "maximum_absolute_error": maximum_error,

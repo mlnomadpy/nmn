@@ -180,6 +180,26 @@ def build_dashboard(sources, destination):
                             "mismatches",
                         )
                     }
+                elif record["schema"] == "nmn.edit-selection.v1":
+                    summary["details"] = {
+                        "selected": record["selected"],
+                        "unexecuted": record["unexecuted"],
+                        "selection": {
+                            name: {
+                                key: value
+                                for key, value in row.items()
+                                if key not in ("trace", "outputs")
+                            }
+                            for name, row in record["selection"].items()
+                        },
+                        "validation": {
+                            key: value
+                            for key, value in (record["validation"] or {}).items()
+                            if key not in ("trace", "outputs")
+                        },
+                        "freeze": record["ledger"]["selected"],
+                        "interpretation": "Selection status is not a validation-success or population-risk guarantee.",
+                    }
                 elif record["schema"] == "nmn.coalition-study.v1":
                     summary["details"] = {
                         key: record[key]

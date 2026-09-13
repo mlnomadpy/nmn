@@ -1,9 +1,12 @@
 """Validation cannot retroactively choose a different candidate."""
 
+import copy
+
 import torch
 
 from nmn.research.datasets import ResearchDataset, ResearchSample
 from nmn.torch import ThreeNeuronYat
+from nmn.torch.replay import replay_native_record
 from nmn.torch.selection import select_edit
 
 
@@ -43,3 +46,12 @@ def test_freeze_precedes_validation_even_when_validation_prefers_identity():
     assert ledger["events"][-1]["candidate_id"] == "remove-h"
     assert result["validation_snapshot"]["sample_ids"] == ["v"]
     assert result["model_snapshot"]["sample_ids"] == ["t"]
+
+    assert replay_native_record(result)["status"] == "matched"
+    changed = copy.deepcopy(result)
+    changed["ledger"]["selected"]["after_event"] = -1
+    replay = replay_native_record(changed)
+    assert replay["status"] == "mismatch"
+    assert any(
+        row["path"] == "/ledger/selected/after_event" for row in replay["mismatches"]
+    )
