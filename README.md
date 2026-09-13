@@ -12,7 +12,7 @@
   <a href="https://github.com/azettaai/nmn/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/azettaai/nmn/test.yml?style=flat-square&label=tests" alt="Tests"></a>
   <a href="https://codecov.io/gh/azettaai/nmn"><img src="https://img.shields.io/codecov/c/github/azettaai/nmn?branch=master&style=flat-square" alt="Coverage"></a>
   <a href="https://pypi.org/project/nmn/"><img src="https://img.shields.io/pypi/pyversions/nmn?style=flat-square" alt="Python"></a>
-  <a href="https://pypi.org/project/nmn/"><img src="https://img.shields.io/pypi/l/nmn?style=flat-square&color=green" alt="License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue?style=flat-square" alt="Source available: PolyForm Noncommercial 1.0.0"></a>
 </p>
 
 <p align="center">
@@ -466,7 +466,11 @@ Security issue? → see [SECURITY.md](SECURITY.md) for private disclosure.
 
 ## License
 
-**[AGPL-3.0](LICENSE)** — free for personal, academic, and commercial use with attribution. If you modify and deploy on a network, you must share the source.
+**Source available under [PolyForm Noncommercial 1.0.0](LICENSE).**
+The license permits noncommercial purposes and the organizational uses it expressly defines.
+Uses outside those permissions require a separate commercial agreement; contact
+[taha@azetta.ai](mailto:taha@azetta.ai). See [LICENSING.md](LICENSING.md) for scope,
+commercial inquiries and the continued licensing of earlier AGPL releases.
 
 For alternative licensing, contact **taha@azetta.ai**.
 

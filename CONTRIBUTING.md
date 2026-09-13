@@ -2,7 +2,12 @@
 
 Thanks for your interest in contributing to **Neural Matter Networks (NMN)**. This document explains how to set up your development environment, run tests, and submit a pull request.
 
-> By contributing, you agree that your contributions will be licensed under the project's [AGPL-3.0](LICENSE) license.
+> Contributions to this version are offered under [PolyForm Noncommercial 1.0.0](LICENSE).
+> Contributors must have the rights to submit their work. This statement is not a
+> copyright assignment or a grant to relicense contributions commercially. Before
+> accepting external code for inclusion in commercially licensed versions, the
+> maintainer must arrange an appropriate separate contributor agreement. See
+> [LICENSING.md](LICENSING.md).
 
 ---
 
