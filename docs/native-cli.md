@@ -89,3 +89,5 @@ measurements. Exit 1 denotes a saved numerical mismatch; see
 [native replay](native-replay.md) for fields compared and tolerance semantics.
 `native report SOURCES... --output dashboard` creates a portable offline index;
 see [the dashboard](native-dashboard.md).
+
+`native suffix` compares supplied intermediate graph states with the unchanged boundary state and executes the remaining network. See [suffix studies](native-suffix.md). These records support native replay and Obsidian export.

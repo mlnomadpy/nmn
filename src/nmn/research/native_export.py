@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.suffix-study.v1": "Native suffix-state study",
     "nmn.native-replay.v1": "Native numerical replay",
     "nmn.coalition-study.v1": "Native coalition study",
     "nmn.protection-study.v1": "Native classification protection study",
@@ -126,7 +127,28 @@ def render_native_note(record):
             f"Data/semantic provenance: {_text(ds.get('provenance', 'not recorded'))}.",
             "",
         ]
-    if schema == "nmn.native-replay.v1":
+    if schema == "nmn.suffix-study.v1":
+        lines += [
+            "## State boundary and downstream effects",
+            "",
+            f"Protocol: {_text(record['protocol'])}.",
+            "",
+            _table(
+                [
+                    "Variant",
+                    "Maximum absolute state change",
+                    "Maximum absolute output change",
+                ],
+                [
+                    [name, _maximum(row["state_delta"]), _maximum(row["output_delta"])]
+                    for name, row in record["variants"].items()
+                ],
+            ),
+            "",
+            "Full states and downstream traces remain in the data. Supplied states need not be reachable from model inputs.",
+            "",
+        ]
+    elif schema == "nmn.native-replay.v1":
         lines += [
             "## Numerical replay",
             "",

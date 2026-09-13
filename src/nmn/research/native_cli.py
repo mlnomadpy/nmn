@@ -102,6 +102,12 @@ def main(argv=None):
     )
     diagnose.add_argument("--module", required=True)
     diagnose.add_argument("--noise-radius", type=float, default=0.0)
+    suffix = commands.add_parser(
+        "suffix", help="measure downstream responses to supplied graph states"
+    )
+    suffix.add_argument("--states", type=Path, required=True)
+    suffix.add_argument("--start-layer", type=int, required=True)
+    suffix.add_argument("--provenance", required=True)
     coalition = commands.add_parser(
         "coalitions", help="replay a budgeted module-deletion lattice"
     )
@@ -129,11 +135,11 @@ def main(argv=None):
     donor.add_argument("--protected", nargs="*", default=[])
     donor.add_argument("--match-semantics", nargs="*", default=[])
     donor.add_argument("--allow-cross-split", action="store_true")
-    for command in (collect, path, donor, diagnose, protection, coalition):
+    for command in (collect, path, donor, diagnose, protection, coalition, suffix):
         command.add_argument("--model", type=Path, required=True)
         command.add_argument("--dataset", type=Path, required=True)
         command.add_argument("--output", type=Path, required=True)
-    for command in (collect, path, diagnose, protection, coalition):
+    for command in (collect, path, diagnose, protection, coalition, suffix):
         command.add_argument("--split", help="restrict to one named dataset split")
     args = parser.parse_args(argv)
     try:
@@ -282,7 +288,18 @@ def main(argv=None):
                 )
                 return 0
             dataset = ResearchDataset.from_dict(_read(args.dataset))
-            if args.command == "coalitions":
+            if args.command == "suffix":
+                from ..torch.suffix import suffix_study
+
+                result = suffix_study(
+                    model,
+                    dataset,
+                    start_layer=args.start_layer,
+                    states=_read(args.states),
+                    provenance=args.provenance,
+                    split=args.split,
+                )
+            elif args.command == "coalitions":
                 from ..torch.coalitions import coalition_study
 
                 result = coalition_study(

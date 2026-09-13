@@ -188,15 +188,50 @@ class YatGraph(nn.Module):
             raise ValueError(
                 f"expected floating input with last dimension {len(self.input_names)}"
             )
+        inputs = {name: x[..., i] for i, name in enumerate(self.input_names)}
+        zero = torch.zeros_like(x[..., 0])
+        state = torch.stack([inputs.get(name, zero) for name in self.slots], dim=-1)
+        return self.forward_from_state(
+            state, start_layer=0, interventions=interventions, read_patches=read_patches
+        )
+
+    def forward_from_state(
+        self, state, *, start_layer, interventions=None, read_patches=None
+    ):
+        """Execute a suffix from an explicit residual state and retain its trace.
+
+        Boundary k is immediately before layer k (state.k in a full trace).
+        k=len(layers) executes only fixed readout. State is never detached or
+        mutated; gradients reach supplied state and executed module parameters.
+        Controls targeting skipped modules are rejected, never silently ignored.
+        """
+        if (
+            isinstance(start_layer, bool)
+            or not isinstance(start_layer, int)
+            or not 0 <= start_layer <= len(self.layer_specs)
+        ):
+            raise ValueError("start_layer must identify a graph boundary")
+        if (
+            state.ndim < 1
+            or state.shape[-1] != len(self.slots)
+            or not state.is_floating_point()
+        ):
+            raise ValueError(
+                "state must be floating with one coordinate per graph slot"
+            )
         controls = {} if interventions is None else dict(interventions)
-        unknown = set(controls) - set(self.state_names)
+        unknown = set(controls) - {
+            spec.name for layer in self.layer_specs[start_layer:] for spec in layer
+        }
         if unknown:
             raise ValueError(f"unknown intervention modules: {sorted(unknown)}")
         if any(not isinstance(c, Intervention) for c in controls.values()):
             raise TypeError("controls must be Intervention objects")
         patches = {} if read_patches is None else dict(read_patches)
         specifications = {
-            spec.name: spec for layer in self.layer_specs for spec in layer
+            spec.name: spec
+            for layer in self.layer_specs[start_layer:]
+            for spec in layer
         }
         if set(patches) - set(specifications):
             raise ValueError("unknown read-patch module")
@@ -207,11 +242,11 @@ class YatGraph(nn.Module):
                 raise ValueError(
                     "read patches must name input slots of the receiving module"
                 )
-        inputs = {name: x[..., i] for i, name in enumerate(self.input_names)}
-        zero = torch.zeros_like(x[..., 0])
-        state = torch.stack([inputs.get(name, zero) for name in self.slots], dim=-1)
-        trace = {"state.0": state}
-        for layer_index, layer in enumerate(self.layer_specs):
+        zero = torch.zeros_like(state[..., 0])
+        trace = {f"state.{start_layer}": state}
+        for layer_index, layer in enumerate(
+            self.layer_specs[start_layer:], start=start_layer
+        ):
             writes: List[List[torch.Tensor]] = [[] for _ in self.slots]
             for spec in layer:
                 original_read = state[

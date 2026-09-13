@@ -15,6 +15,7 @@ from .paths import gate_path
 from .protection import protection_study
 from .research import _json_value, collect_research_data, model_from_snapshot
 from .studies import donor_study
+from .suffix import suffix_study
 
 
 def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
@@ -36,6 +37,7 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
             raise ValueError("tolerances must be finite nonnegative numbers")
     supported = {
         "nmn.native-research.v1",
+        "nmn.suffix-study.v1",
         "nmn.gate-path-study.v1",
         "nmn.kernel-diagnostics.v1",
         "nmn.donor-study.v1",
@@ -169,6 +171,27 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
                 if "donor_reads" not in saved:
                     current.pop("donor_reads", None)
             keys = ["rows"]
+        elif schema == "nmn.suffix-study.v1":
+            actual = suffix_study(
+                model,
+                dataset,
+                start_layer=protocol["start_layer"],
+                states={
+                    name: dict(zip(record["sample_ids"], row["state"]))
+                    for name, row in record["variants"].items()
+                },
+                provenance=protocol["provenance"],
+                split=protocol["split"],
+            )
+            keys = [
+                "sample_ids",
+                "original_state",
+                "baseline_outputs",
+                "baseline_suffix_outputs",
+                "baseline_reconstruction_error",
+                "baseline_suffix_trace",
+                "variants",
+            ]
         elif schema == "nmn.protection-study.v1":
             actual = protection_study(
                 model,
