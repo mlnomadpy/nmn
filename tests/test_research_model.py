@@ -41,6 +41,7 @@ def test_leak_and_changed_parameters_are_executed():
     "edit",
     [
         lambda m: m.update(epsilon="0"),
+        lambda m: m.update(epsilon="1e999999999"),
         lambda m: m.update(epsilon="-1"),
         lambda m: m.update(epsilon=1.0),
         lambda m: m.update(extra=True),
@@ -89,3 +90,25 @@ def test_cli_configured_scope_and_exit_codes(tmp_path, capsys):
     path.write_text(json.dumps(model))
     assert main(["research", "verify", "--model", str(path)]) == 1
     assert main(["research", "verify", "--model", str(path), "--leaky"]) == 2
+
+
+def test_inspection_uses_configured_parameters_and_tracks_leak():
+    from nmn.research.inspection import inspect_model
+
+    model = default_model()
+    model["epsilon"] = "2"
+    assert inspect_model(model)["neurons"][0]["epsilon"] == "2"
+    assert inspect_model(model)["h_to_protected_paths"] == []
+    model["protected_leak"] = "1"
+    assert inspect_model(model)["h_to_protected_paths"] == [["h", "y", "protected"]]
+
+
+def test_computation_has_a_nonadditive_interaction():
+    from fractions import Fraction as F
+
+    model = default_model()
+
+    def y(u, v):
+        return F(model_trace(model, F(u), F(v))["outputs"]["target"])
+
+    assert y(1, 1) - y(0, 1) - y(1, 0) + y(0, 0) == 3

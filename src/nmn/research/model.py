@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from fractions import Fraction
 from itertools import product
 from pathlib import Path
@@ -19,7 +20,11 @@ def _fields(value: Any, expected: set, location: str) -> None:
 
 
 def _number(value: Any, location: str) -> Fraction:
-    if not isinstance(value, str) or len(value) > 64:
+    if (
+        not isinstance(value, str)
+        or len(value) > 64
+        or not re.fullmatch(r"[+-]?(?:\d+(?:/\d+|\.\d*)?|\.\d+)", value)
+    ):
         raise ValueError(
             f"{location}: expected a rational string of at most 64 characters"
         )

@@ -14,8 +14,9 @@ from .contract_bundles import create_contract_bundle
 from .contract_bundles import export as export_bundle
 from .contract_bundles import reproduce as reproduce_bundle
 from .contracts import check, default_contract, load_contract
+from .inspection import inspect_model
 from .model import default_model, load, model_compare, model_trace, model_verify
-from .reference import architecture, experiment, rational, trace, write_bundle
+from .reference import experiment, rational, trace, write_bundle
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -76,13 +77,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         elif args.command == "model":
             result = load(args.path) if args.path else default_model()
         elif args.command == "inspect":
-            result = architecture()
-            if args.model:
-                result = {
-                    "topology": architecture(),
-                    "parameters": load(args.model),
-                    "note": "Parameters override the default constants; protected readout is p + protected_leak*y.",
-                }
+            result = inspect_model(load(args.model) if args.model else default_model())
         elif args.command == "trace":
             evaluator = (
                 trace

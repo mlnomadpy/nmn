@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import platform
+import re
 import shutil
 import tempfile
 from fractions import Fraction
@@ -20,8 +21,14 @@ SCHEMA = "nmn.three-neuron.v1"
 
 def rational(value: str) -> Fraction:
     """Parse bounded textual rational inputs without floating-point conversion."""
-    if len(value) > 64:
-        raise ValueError("rational input exceeds 64 characters")
+    if (
+        not isinstance(value, str)
+        or len(value) > 64
+        or not re.fullmatch(r"[+-]?(?:\d+(?:/\d+|\.\d*)?|\.\d+)", value)
+    ):
+        raise ValueError(
+            "expected a rational/decimal string up to 64 characters, without exponents"
+        )
     try:
         result = Fraction(value)
     except (ValueError, ZeroDivisionError) as exc:

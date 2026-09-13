@@ -209,3 +209,37 @@ contract checker and bundle implementation; strict replay requires the matching
 source version. Existing fixed and configured-model schemas remain supported
 without changing their original contract semantics. No migration or automatic
 source installation occurs.
+
+## Reproducible first-result acceptance workflow
+
+Build and install the wheel into a fresh virtual environment, then run the
+repository script against that interpreter:
+
+```bash
+python -m build
+python -m venv /tmp/nmn-clean
+/tmp/nmn-clean/bin/pip install --no-deps dist/*.whl
+/tmp/nmn-clean/bin/python scripts/research_smoke.py --output /tmp/nmn-first-result
+```
+
+The script removes PYTHONPATH, executes outside the checkout, and exercises
+model/contract validation, inspection, native edits, comparisons, all three
+verification outcomes, the three bundle schemas, replay and example vault
+exports. It records individual CLI wall times in timings.json as local run
+measurements, not comparative performance claims. CPU CI runs this workflow
+and uploads the first-result evidence; research-test coverage joins the existing
+combined coverage gate. The package requires no ML backend for these commands.
+
+`inspect` now reports configured parameters directly, fixed read/write layers,
+conservative dependency edges and paths from h to the target/protected outputs.
+A nonzero readout leak exposes the path h → y → protected. Degenerate coefficients
+can remove actual influence despite a displayed conservative path.
+
+The fixed function has a genuine nonadditive interaction: on Boolean inputs,
+y(1,1)-y(0,1)-y(1,0)+y(0,0)=3. This is an exact property of the supplied
+computation, not a learned semantic finding.
+
+All externally supplied numeric strings reject exponent notation before parsing
+to bound computational cost. Strict source-hash replay means bundles created
+before a parser or evaluator change require their original revision. Preserve
+old evidence rather than rewriting it to appear current.

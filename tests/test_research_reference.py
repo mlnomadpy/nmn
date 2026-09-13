@@ -31,7 +31,9 @@ def test_exhaustive_coverage_and_zero_response():
     assert trace(F(0), F(1), F(0))["outputs"] == trace(F(0), F(1))["outputs"]
 
 
-@pytest.mark.parametrize("value", ["nan", "inf", "1/0", "-1", "2", "x", "1" * 65])
+@pytest.mark.parametrize(
+    "value", ["nan", "inf", "1e999999999", "1/0", "-1", "2", "x", "1" * 65]
+)
 def test_invalid_inputs(value):
     with pytest.raises(ValueError):
         rational(value)
