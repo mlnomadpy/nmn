@@ -1,37 +1,23 @@
-# Public mirror synchronization
+# Independent repository maintenance
 
-The `mlnomadpy/nmn` mirror synchronizes from the public canonical history with
-the hourly and manually dispatched `Sync public mirror` workflow. The workflow
-fetches `azettaai/nmn` anonymously and can write only to the mirror.
+As of the 2026-09-13 separation, `mlnomadpy/nmn` is maintained independently
+from `azettaai/nmn`. Neither repository is the canonical upstream of the other.
+The former scheduled/manual mirror workflow and synchronization script have
+been removed. No branches or tags are automatically imported from the other
+repository. Existing history and published tags are preserved.
 
-## Mirror-only GitHub App
+Open issues and pull requests in `mlnomadpy/nmn` for this distribution.
+Future cross-repository changes require an explicit reviewed contribution with
+compatible licensing; do not restore automatic branch or tag synchronization.
 
-GitHub's workflow `GITHUB_TOKEN` cannot update files below `.github/workflows/`.
-Configure a GitHub App as follows instead:
+The old mirror documentation URL is retained to explain the transition.
+Changes in this repository do not relicense or modify `azettaai/nmn`.
 
-1. Grant the app repository-level **Contents: write** and **Workflows: write**
-   permissions, with no organization permissions.
-2. Install it on **only** `mlnomadpy/nmn`.
-3. Set the mirror repository variable `MIRROR_APP_CLIENT_ID` to the app's client
-   ID and the Actions secret `MIRROR_APP_PRIVATE_KEY` to its private key.
+## External integrations
 
-The workflow requests a short-lived installation token with only those two
-permissions. It deliberately omits `owner` and `repositories` from
-`actions/create-github-app-token`, which scopes the token to the current mirror
-repository. The action revokes the token after the job. The workflow's own
-`GITHUB_TOKEN` remains read-only.
-
-Checkout credential persistence is disabled. The installation token is passed
-only in a dedicated HTTPS push URL for `mlnomadpy/nmn`; neither the anonymous
-canonical fetch nor the remote-ref verification inherits an authorization
-header.
-
-## Safety properties
-
-`scripts/sync-public-mirror.sh` refuses a non-fast-forward `master` update.
-Canonical tags are fetched without force, so an attempt to change an existing
-tag fails before the push. The branch and tags are then sent in one atomic push:
-if GitHub rejects any ref, none are updated. After pushing, the script verifies
-the remote branch and every canonical tag by object ID. A canonical commit that
-changes a workflow file is otherwise an ordinary fast-forward and is supported
-by the mirror-only app's Workflows permission.
+Repository links and GitHub Pages configuration target `mlnomadpy/nmn`.
+Codecov upload steps retain their previous repository guard and therefore stay
+inactive here until enrollment for this repository is verified; the local
+coverage gate still runs. Package publishing remains tag-triggered; this
+separation does not create a release, change PyPI ownership or configure new
+trusted publishers. Published packages retain the license shipped with them.

@@ -64,7 +64,7 @@ def test_agent_docs_link_to_release_sources_instead_of_hard_coding_version():
         content = (ROOT / relative_path).read_text(encoding="utf-8")
         assert "Current release:" not in content
         assert "https://pypi.org/project/nmn/" in content
-        assert "https://github.com/azettaai/nmn/releases" in content
+        assert "https://github.com/mlnomadpy/nmn/releases" in content
 
 
 def test_changelog_has_unreleased_and_descending_dated_releases():

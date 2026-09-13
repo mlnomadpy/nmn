@@ -36,13 +36,13 @@ This project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participatin
 
 Good first contributions:
 
-- 🐛 **Bug fixes** — see [open issues](https://github.com/azettaai/nmn/issues) labeled `good first issue`.
+- 🐛 **Bug fixes** — see [open issues](https://github.com/mlnomadpy/nmn/issues) labeled `good first issue`.
 - 📚 **Documentation** — typo fixes, clarifications, new examples, new guides under [`docs/`](docs/).
 - ✅ **Tests** — increasing coverage in `tests/test_*/`, adding edge cases, cross-framework consistency checks.
 - ⚡ **Examples** — new application examples under `src/nmn/<framework>/examples/`.
 - ✨ **New layers** — implementing parity for a layer that exists in one framework but not another (see the [Layer Reference](README.md#layer-reference)).
 
-Larger work (new layer families, new framework backends, kernel optimizations) should start with an issue or [discussion](https://github.com/azettaai/nmn/discussions) so we can align on the design.
+Larger work (new layer families, new framework backends, kernel optimizations) should start with an issue or [discussion](https://github.com/mlnomadpy/nmn/discussions) so we can align on the design.
 
 ---
 
@@ -53,7 +53,7 @@ Larger work (new layer families, new framework backends, kernel optimizations) s
 ```bash
 git clone https://github.com/<your-username>/nmn.git
 cd nmn
-git remote add upstream https://github.com/azettaai/nmn.git
+git remote add upstream https://github.com/mlnomadpy/nmn.git
 ```
 
 ### 2. Create a virtual environment
@@ -315,8 +315,8 @@ The [`publish.yml`](.github/workflows/publish.yml) workflow runs automatically o
 
 ## Questions?
 
-- 💬 **General**: [GitHub Discussions](https://github.com/azettaai/nmn/discussions)
-- 🐛 **Bugs**: [GitHub Issues](https://github.com/azettaai/nmn/issues)
+- 💬 **General**: [GitHub Discussions](https://github.com/mlnomadpy/nmn/discussions)
+- 🐛 **Bugs**: [GitHub Issues](https://github.com/mlnomadpy/nmn/issues)
 - 📧 **Maintainer**: taha@azetta.ai
 
 Thanks for contributing! 🧠

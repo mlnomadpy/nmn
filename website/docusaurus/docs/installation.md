@@ -47,7 +47,7 @@ pip install "nmn[nnx]"
 To install from source for development:
 
 ```bash
-git clone https://github.com/azettaai/nmn.git
+git clone https://github.com/mlnomadpy/nmn.git
 cd nmn
 pip install -e ".[dev]"
 ```

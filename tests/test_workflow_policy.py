@@ -163,7 +163,6 @@ def test_policy_ci_runs_for_every_pull_request_and_push():
 def test_release_and_deployment_permissions_are_job_scoped_and_bounded():
     publish = (WORKFLOWS / "publish.yml").read_text()
     deploy = (WORKFLOWS / "deploy.yml").read_text()
-    mirror = (WORKFLOWS / "mirror.yml").read_text()
 
     publish_global = publish.split("jobs:", 1)[0]
     deploy_global = deploy.split("jobs:", 1)[0]
@@ -181,7 +180,6 @@ def test_release_and_deployment_permissions_are_job_scoped_and_bounded():
     assert publish.count("timeout-minutes:") == 3
     assert deploy.count("timeout-minutes:") == 1
     assert (WORKFLOWS / "website.yml").read_text().count("timeout-minutes:") == 1
-    assert mirror.count("timeout-minutes:") == 1
 
 
 def test_minimum_backend_policy_is_scheduled_and_matches_metadata():
@@ -358,37 +356,14 @@ def test_sdist_excludes_the_local_dacli_evidence_ledger():
     assert "/.dacli" in sdist["exclude"]
 
 
-def test_mirror_uses_repository_scoped_self_sync_and_verifies_every_ref():
-    workflow = (WORKFLOWS / "mirror.yml").read_text()
-    sync_script = (ROOT / "scripts" / "sync-public-mirror.sh").read_text()
-
-    assert "github.repository == 'mlnomadpy/nmn'" in workflow
-    assert "actions/create-github-app-token@v3" in workflow
-    assert "client-id: ${{ vars.MIRROR_APP_CLIENT_ID }}" in workflow
-    assert "private-key: ${{ secrets.MIRROR_APP_PRIVATE_KEY }}" in workflow
-    assert "permission-contents: write" in workflow
-    assert "permission-workflows: write" in workflow
-    token_step = workflow.split("id: mirror-token", 1)[1].split("\n\n", 1)[0]
-    assert "owner:" not in token_step
-    assert "repositories:" not in token_step
-    assert "persist-credentials: false" in workflow
-    assert "MIRROR_PUSH_REMOTE: https://x-access-token:" in workflow
-    assert "${{ github.repository }}.git" in workflow
-    assert workflow.count("${{ steps.mirror-token.outputs.token }}") == 1
-    assert 'mirror_push_remote="${MIRROR_PUSH_REMOTE:-${mirror_remote}}"' in sync_script
-    assert workflow.count("contents: read") == 1
-    assert "\n      contents: write\n" not in workflow
-    assert "MIRROR_PAT" not in workflow
-    assert "DEPLOY_KEY" not in workflow
-    assert "https://github.com/azettaai/nmn.git" in workflow
-    assert "bash scripts/sync-public-mirror.sh" in workflow
-    assert "git merge-base --is-ancestor" in sync_script
-    assert 'git push --atomic "${mirror_push_remote}"' in sync_script
-    assert '"${canonical_ref}:refs/heads/${branch}" --tags' in sync_script
-    assert "git ls-remote" in sync_script
-    assert "mirrored_head" in sync_script
-    assert "mirrored_tag" in sync_script
-    assert "continue-on-error" not in workflow
+def test_independent_repository_has_no_upstream_sync():
+    assert not (WORKFLOWS / "mirror.yml").exists()
+    assert not (ROOT / "scripts" / "sync-public-mirror.sh").exists()
+    for path in WORKFLOWS.glob("*.yml"):
+        text = path.read_text()
+        assert "MIRROR_APP_PRIVATE_KEY" not in text
+        assert "sync-public-mirror.sh" not in text
+        assert "git remote add canonical" not in text
 
 
 def test_website_is_built_on_pull_requests_with_node24():

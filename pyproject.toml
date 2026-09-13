@@ -27,9 +27,8 @@ classifiers = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/azettaai/nmn"
-"Bug Tracker" = "https://github.com/azettaai/nmn/issues"
-"Original Repository" = "https://github.com/mlnomadpy/nmn"
+"Homepage" = "https://github.com/mlnomadpy/nmn"
+"Bug Tracker" = "https://github.com/mlnomadpy/nmn/issues"
 
 [project.scripts]
 nmn = "nmn.cli:main"

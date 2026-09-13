@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Changed
+- Separated `mlnomadpy/nmn` from `azettaai/nmn`: removed automatic upstream
+  branch/tag synchronization and updated repository/documentation links.
 - Changed the license for versions containing this update from AGPLv3 to
   PolyForm Noncommercial 1.0.0, with separate commercial licensing inquiries.
   Previously released AGPL versions retain their original permissions.

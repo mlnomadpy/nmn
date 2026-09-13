@@ -2,7 +2,7 @@
 
 This page explains the core operation behind NMN — the **Yat-Product** (ⵟ) — and the design choices that follow from it: numerical stability, parameter semantics, and where NMN layers fit into a modern architecture.
 
-For practical usage, see the [per-platform guides](guides/). For research depth, see the [project paper](https://azettaai.github.io/nmn/paper/).
+For practical usage, see the [per-platform guides](guides/). For research depth, see the [project paper](https://mlnomadpy.github.io/nmn/paper/).
 
 ---
 
@@ -297,4 +297,4 @@ See [`EXAMPLES.md` § Lazy Mode](../EXAMPLES.md#lazy-mode--freeze-the-kernel-tra
 - [`docs/migration.md`](migration.md) — drop-in replacement cheat sheet
 - [`docs/guides/`](guides/) — full per-platform walkthroughs
 - [`EXAMPLES.md`](../EXAMPLES.md) — example code per framework
-- [Paper website](https://azettaai.github.io/nmn/paper/) — full theory & experiments
+- [Paper website](https://mlnomadpy.github.io/nmn/paper/) — full theory & experiments

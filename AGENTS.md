@@ -39,7 +39,7 @@ frameworks. Exact oracle/fixture-tested float32 profiles, execution modes, and
 tolerances are recorded in [`src/nmn/conformance_manifest.json`](src/nmn/conformance_manifest.json);
 other dtype and API capabilities must not be described as tested. Release
 information is maintained on [PyPI](https://pypi.org/project/nmn/) and
-[GitHub Releases](https://github.com/azettaai/nmn/releases).
+[GitHub Releases](https://github.com/mlnomadpy/nmn/releases).
 
 ## Pick a framework
 

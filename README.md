@@ -9,8 +9,8 @@
 <p align="center">
   <a href="https://pypi.org/project/nmn/"><img src="https://img.shields.io/pypi/v/nmn.svg?style=flat-square&color=blue" alt="PyPI version"></a>
   <a href="https://pepy.tech/project/nmn"><img src="https://static.pepy.tech/badge/nmn?style=flat-square" alt="Downloads"></a>
-  <a href="https://github.com/azettaai/nmn/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/azettaai/nmn/test.yml?style=flat-square&label=tests" alt="Tests"></a>
-  <a href="https://codecov.io/gh/azettaai/nmn"><img src="https://img.shields.io/codecov/c/github/azettaai/nmn?branch=master&style=flat-square" alt="Coverage"></a>
+  <a href="https://github.com/mlnomadpy/nmn/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/mlnomadpy/nmn/test.yml?style=flat-square&label=tests" alt="Tests"></a>
+  <a href="https://codecov.io/gh/mlnomadpy/nmn"><img src="https://img.shields.io/codecov/c/github/mlnomadpy/nmn?branch=master&style=flat-square" alt="Coverage"></a>
   <a href="https://pypi.org/project/nmn/"><img src="https://img.shields.io/pypi/pyversions/nmn?style=flat-square" alt="Python"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue?style=flat-square" alt="Source available: PolyForm Noncommercial 1.0.0"></a>
 </p>
@@ -24,13 +24,12 @@
   <a href="docs/guides/mlx.md"><strong>🍎 MLX</strong></a> ·
   <a href="docs/architecture.md"><strong>🧮 Theory</strong></a> ·
   <a href="docs/migration.md"><strong>🔄 Migrate</strong></a> ·
-  <a href="https://azettaai.github.io/nmn/paper/"><strong>📄 Paper</strong></a>
+  <a href="https://mlnomadpy.github.io/nmn/paper/"><strong>📄 Paper</strong></a>
 </p>
 
 <p align="center">
   <sub>
-    Canonical repo: <a href="https://github.com/azettaai/nmn">azettaai/nmn</a> ·
-    Mirror of the original <a href="https://github.com/mlnomadpy/nmn">mlnomadpy/nmn</a> ·
+    Repository: <a href="https://github.com/mlnomadpy/nmn">mlnomadpy/nmn</a> ·
     Install from <a href="https://pypi.org/project/nmn/">PyPI</a> (<code>pip install nmn</code>)
   </sub>
 </p>
@@ -425,13 +424,13 @@ We welcome contributions of all sizes — from typo fixes to new framework backe
 Quick start:
 
 ```bash
-git clone https://github.com/azettaai/nmn.git
+git clone https://github.com/mlnomadpy/nmn.git
 cd nmn
 pip install -e ".[dev,torch]"      # or ".[dev,nnx]", etc.
 pytest tests/test_torch/ -v
 ```
 
-Found a bug? → [open an issue](https://github.com/azettaai/nmn/issues).
+Found a bug? → [open an issue](https://github.com/mlnomadpy/nmn/issues).
 Security issue? → see [SECURITY.md](SECURITY.md) for private disclosure.
 
 ---
@@ -443,7 +442,7 @@ Security issue? → see [SECURITY.md](SECURITY.md) for private disclosure.
   author = {Bouhsine, Taha},
   title  = {NMN: Neural Matter Networks},
   year   = {2024},
-  url    = {https://github.com/azettaai/nmn}
+  url    = {https://github.com/mlnomadpy/nmn}
 }
 
 @article{bouhsine2024dl2,
@@ -457,8 +456,8 @@ Security issue? → see [SECURITY.md](SECURITY.md) for private disclosure.
 
 ## Community
 
-- 💬 **Discussions** — [GitHub Discussions](https://github.com/azettaai/nmn/discussions)
-- 🐛 **Issues** — [GitHub Issues](https://github.com/azettaai/nmn/issues)
+- 💬 **Discussions** — [GitHub Discussions](https://github.com/mlnomadpy/nmn/discussions)
+- 🐛 **Issues** — [GitHub Issues](https://github.com/mlnomadpy/nmn/issues)
 - 🌐 **Company** — [azetta.ai](https://azetta.ai)
 - 📧 **Contact** — taha@azetta.ai
 

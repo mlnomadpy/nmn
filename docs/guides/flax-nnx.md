@@ -114,7 +114,7 @@ PYTHONPATH=src python -m nmn.nnx.examples.vision.mnist \
 | 2     | 0.1710     | 0.1477    | **95.39 %** |
 
 3 epochs ≈ 1.7 s on CPU — JAX's JIT is ~3× faster than PyTorch eager here on
-the same model. See the [cross-framework benchmark blog post](https://github.com/azettaai/nmn/blob/master/website/blog-pages/20-cross-framework-mnist.html) for a side-by-side.
+the same model. See the [cross-framework benchmark blog post](https://github.com/mlnomadpy/nmn/blob/master/website/blog-pages/20-cross-framework-mnist.html) for a side-by-side.
 
 ---
 
