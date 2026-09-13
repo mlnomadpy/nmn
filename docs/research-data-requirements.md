@@ -45,3 +45,7 @@ against a concrete source protocol before describing a benchmark as reproduced.
 
 This is package work driven by research questions. Adding more test counts or
 artifact copies is not a substitute for these capabilities.
+
+## Inspecting evidence in the vault
+
+Use [native exports](native-vault-export.md) and the [offline dashboard](native-dashboard.md) to retain raw records beside their scopes and limitations. The report command filters supplied evidence; it does not assert coverage of unimplemented literature protocols.

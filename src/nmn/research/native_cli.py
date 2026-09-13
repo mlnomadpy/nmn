@@ -14,6 +14,11 @@ def _read(path):
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="nmn research native")
     commands = parser.add_subparsers(dest="command", required=True)
+    dashboard = commands.add_parser(
+        "report", help="build an offline evidence dashboard"
+    )
+    dashboard.add_argument("sources", nargs="+", type=Path)
+    dashboard.add_argument("--output", type=Path, required=True)
     export = commands.add_parser(
         "export", help="write an Obsidian note and exact native data copy"
     )
@@ -107,6 +112,11 @@ def main(argv=None):
     try:
         if hasattr(args, "output") and args.output.exists():
             raise ValueError("output already exists; choose a new evidence path")
+        if args.command == "report":
+            from .dashboard import build_dashboard
+
+            print(json.dumps(build_dashboard(args.sources, args.output)))
+            return 0
         if args.command == "verify-export":
             from .native_export import verify_native_export
 
