@@ -102,6 +102,18 @@ def main(argv=None):
     )
     diagnose.add_argument("--module", required=True)
     diagnose.add_argument("--noise-radius", type=float, default=0.0)
+    selection = commands.add_parser(
+        "select", help="select an edit then validate only the frozen candidate"
+    )
+    selection.add_argument("--candidates", type=Path, required=True)
+    selection.add_argument("--targets", type=Path, required=True)
+    selection.add_argument("--target-outputs", nargs="+", required=True)
+    selection.add_argument("--protected-outputs", nargs="*", default=[])
+    selection.add_argument("--protection-tolerance", type=float, required=True)
+    selection.add_argument("--max-candidates", type=int, required=True)
+    selection.add_argument("--provenance", required=True)
+    selection.add_argument("--selection-split", default="tuning")
+    selection.add_argument("--validation-split", default="validation")
     semantic = commands.add_parser(
         "semantics",
         help="compare supplied semantic references with native counterfactuals",
@@ -151,6 +163,7 @@ def main(argv=None):
         coalition,
         suffix,
         semantic,
+        selection,
     ):
         command.add_argument("--model", type=Path, required=True)
         command.add_argument("--dataset", type=Path, required=True)
@@ -304,7 +317,23 @@ def main(argv=None):
                 )
                 return 0
             dataset = ResearchDataset.from_dict(_read(args.dataset))
-            if args.command == "semantics":
+            if args.command == "select":
+                from ..torch.selection import select_edit
+
+                result = select_edit(
+                    model,
+                    dataset,
+                    candidates=_read(args.candidates),
+                    targets=_read(args.targets),
+                    target_outputs=args.target_outputs,
+                    protected_outputs=args.protected_outputs,
+                    protection_tolerance=args.protection_tolerance,
+                    provenance=args.provenance,
+                    max_candidates=args.max_candidates,
+                    selection_split=args.selection_split,
+                    validation_split=args.validation_split,
+                )
+            elif args.command == "semantics":
                 from ..torch.semantics import semantic_study
                 from .semantics import TabulatedReference
 

@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.edit-selection.v1": "Frozen native edit selection",
     "nmn.semantic-study.v1": "Supplied semantic correspondence study",
     "nmn.suffix-study.v1": "Native suffix-state study",
     "nmn.native-replay.v1": "Native numerical replay",
@@ -128,7 +129,36 @@ def render_native_note(record):
             f"Data/semantic provenance: {_text(ds.get('provenance', 'not recorded'))}.",
             "",
         ]
-    if schema == "nmn.semantic-study.v1":
+    if schema == "nmn.edit-selection.v1":
+        lines += [
+            "## Frozen edit selection",
+            "",
+            f"Selected: {_text(record['selected'])}. Unexecuted candidates: {_text(record['unexecuted'])}.",
+            "",
+            _table(
+                [
+                    "Candidate",
+                    "Status",
+                    "Selection MSE",
+                    "Selection protection satisfied",
+                ],
+                [
+                    [
+                        name,
+                        row["status"],
+                        row.get("target_mse"),
+                        row.get("protection_satisfied"),
+                    ]
+                    for name, row in record["selection"].items()
+                ],
+            ),
+            "",
+            f"Validation: {_text({k:v for k,v in (record['validation'] or {}).items() if k not in ('trace','outputs')})}.",
+            "",
+            "The frozen winner is never changed using validation outcomes. This is finite empirical selection, not a statistical certificate.",
+            "",
+        ]
+    elif schema == "nmn.semantic-study.v1":
         lines += [
             "## Declared semantic correspondence",
             "",
