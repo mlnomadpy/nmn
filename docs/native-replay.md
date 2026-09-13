@@ -8,7 +8,7 @@ nmn research native export replay.json --output replay-note
 
 Unlike `verify-export`, this command executes the saved model. It supports
 native observation collections, donor studies (including read-slot patches),
-classification protection and coalition records. Other schemas are rejected.
+classification protection, coalition, gate-path and kernel diagnostic records. Other schemas are rejected.
 CPU float32/float64 execution follows the saved dtype. No training, pickle
 loading or executable reference callbacks are invoked.
 
@@ -16,7 +16,7 @@ Replay checks embedded model identities and, for composite studies, dataset
 identity. It recomputes the declared measurements and compares their structure,
 values and statuses. Observation records compare traces, geometry and recorded
 derivatives. Composite studies compare their result tables and the unchanged
-population inputs, IDs and outputs. Runtime/source versions, metadata and timing
+population inputs, IDs and outputs. Gate-path replay also compares derivatives, predictions, residuals and deterministic call counts; the report lists ignored source-hash and timing paths. Kernel replay reconstructs the selected module inputs and repeats layer/sensor measurements at the saved noise radius. Runtime/source versions, metadata and timing
 are not equality targets. Older trace schemas can produce a mismatch when the
 current implementation exposes additional fields; these are not silently ignored.
 
@@ -35,3 +35,5 @@ model's discrepancy from those numbers, not the semantic reference calculation.
 Replaying an inconclusive coalition record repeats its declared budget and can
 match without completing the lattice. Agreement verifies reproducibility of saved
 measurements; it does not certify a mathematical or population claim.
+
+Path records without a separate dataset can replay their saved snapshot inputs and IDs. If a path/diagnostic dataset is present, replay checks its identity when recorded and verifies selected inputs after conversion to the saved precision. Training and benchmark records remain unsupported; replay never silently launches optimization.

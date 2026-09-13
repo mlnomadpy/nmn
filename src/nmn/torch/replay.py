@@ -9,9 +9,11 @@ import torch
 from ..research.datasets import DonorPair, ResearchDataset
 from ..research.native_export import _check_identities
 from .coalitions import coalition_study
-from .interpretable import Intervention
+from .graph import YatGraph
+from .interpretable import Intervention, YatExpansion
+from .paths import gate_path
 from .protection import protection_study
-from .research import collect_research_data, model_from_snapshot
+from .research import _json_value, collect_research_data, model_from_snapshot
 from .studies import donor_study
 
 
@@ -19,7 +21,8 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
     """Recompute saved measurements on CPU without training or executable loaders.
 
     Supports native observations, donor studies (saved reference expectations),
-    classification protection and coalition studies. Match means agreement with
+    classification protection, coalition, gate-path and kernel diagnostic studies.
+    Match means agreement with
     stored measurements within explicit tolerances, not a scientific certificate.
     Timings/source versions are retained in the new execution but not compared.
     """
@@ -33,6 +36,8 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
             raise ValueError("tolerances must be finite nonnegative numbers")
     supported = {
         "nmn.native-research.v1",
+        "nmn.gate-path-study.v1",
+        "nmn.kernel-diagnostics.v1",
         "nmn.donor-study.v1",
         "nmn.protection-study.v1",
         "nmn.coalition-study.v1",
@@ -70,6 +75,75 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
         keys = ["observations", "geometry"] + [
             k for k in ("input_jacobian", "gate_derivatives") if k in record
         ]
+    elif schema in ("nmn.gate-path-study.v1", "nmn.kernel-diagnostics.v1"):
+        inputs = torch.tensor(snapshot["inputs"], dtype=dtypes[dtype_name])
+        ids = snapshot["sample_ids"]
+        if "dataset" in record:
+            dataset = ResearchDataset.from_dict(record["dataset"])
+            expected_hash = record.get(
+                "dataset_sha256", snapshot.get("metadata", {}).get("dataset_sha256")
+            )
+            if expected_hash is not None and dataset.sha256 != expected_hash:
+                raise ValueError("dataset content hash mismatch")
+            if not torch.equal(
+                torch.tensor(
+                    [dataset.sample(s).inputs for s in ids], dtype=dtypes[dtype_name]
+                ),
+                inputs,
+            ):
+                raise ValueError("snapshot inputs differ from declared dataset")
+        actual = {
+            "schema": schema,
+            "model_snapshot": collect_research_data(
+                model, inputs, sample_ids=ids, derivatives=False
+            ),
+        }
+        if "dataset" in record:
+            actual["dataset"] = record["dataset"]
+        if schema == "nmn.gate-path-study.v1":
+            path = record["path"]
+            actual["path"] = _json_value(
+                gate_path(
+                    model,
+                    inputs,
+                    path["start"],
+                    path["end"],
+                    steps=path["cost"]["intervals"],
+                )
+            )
+            keys = ["path"]
+        else:
+            from .diagnostics import diagnose_layer, sensor_diagnostics
+
+            name = record["module"]
+            if name not in model.state_names:
+                raise ValueError("unknown diagnostic module")
+            block = (
+                model.blocks[name]
+                if isinstance(model, YatGraph)
+                else getattr(model, name)
+            )
+            if not isinstance(block, YatExpansion):
+                raise ValueError("kernel replay requires a YatExpansion module")
+            with torch.no_grad():
+                _, trace = model.forward_with_trace(inputs)
+                points = trace[f"{name}.input"]
+            actual.update(
+                {
+                    "module": name,
+                    "sample_ids": ids,
+                    "layer": _json_value(diagnose_layer(block, points)),
+                    "sensors": _json_value(
+                        sensor_diagnostics(
+                            block.centers,
+                            points,
+                            epsilon=block.kernel.epsilon,
+                            noise_radius=record["sensors"]["noise_radius"],
+                        )
+                    ),
+                }
+            )
+            keys = ["layer", "sensors"]
     else:
         dataset = ResearchDataset.from_dict(record["dataset"])
         if dataset.sha256 != record["dataset_sha256"]:
@@ -124,12 +198,19 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
                 "subset_coefficients",
                 "reconstruction_error",
             ]
+    ignored_paths = (
+        {"/path/source_sha256", "/path/cost/seconds"}
+        if schema == "nmn.gate-path-study.v1"
+        else set()
+    )
     mismatches = []
     checked = 0
     maximum_error = 0.0
 
     def compare(saved, current, path):
         nonlocal checked, maximum_error
+        if path in ignored_paths:
+            return
         checked += 1
         if isinstance(saved, dict) and isinstance(current, dict):
             if set(saved) != set(current):
@@ -199,6 +280,7 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
             "rule": "abs(saved-replayed) <= atol + rtol*abs(saved)",
         },
         "compared_fields": keys,
+        "ignored_paths": sorted(ignored_paths),
         "checked_nodes": checked,
         "maximum_absolute_error": maximum_error,
         "mismatches": mismatches,
