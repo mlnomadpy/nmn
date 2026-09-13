@@ -156,7 +156,7 @@ edited = model(inputs, {"h": Intervention(gate=0)})
 ```
 
 Use `nmn research native --help` for model initialization, observation collection,
-donor studies, joint gate paths, comparisons, explicit training and vault export. See [the native CLI workflow](docs/native-cli.md).
+donor/read-slot studies, protection tasks, coalition effects, joint gate paths, comparisons, explicit training, numerical replay and vault export. See [the native CLI workflow](docs/native-cli.md).
 
 See [native architecture and data APIs](docs/native-interpretable-torch.md) and
 [the vault-driven capability map](docs/research-data-requirements.md).

@@ -46,6 +46,8 @@ def _summary(record, source, now):
             else "floating-point observations"
         )
     )
+    if schema == "nmn.native-replay.v1":
+        scope = "numerical replay comparison"
     return {
         "title": str(label),
         "schema": schema,
@@ -166,7 +168,18 @@ def build_dashboard(sources, destination):
                     }
                 )
                 # Keep a compact structured preview, with full traces in the copied data.
-                if record["schema"] == FINITE:
+                if record["schema"] == "nmn.native-replay.v1":
+                    summary["details"] = {
+                        key: record[key]
+                        for key in (
+                            "source_schema",
+                            "record_sha256",
+                            "tolerances",
+                            "compared_fields",
+                            "mismatches",
+                        )
+                    }
+                elif record["schema"] == FINITE:
                     summary["details"] = {
                         key: record.get(key)
                         for key in (

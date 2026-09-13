@@ -28,6 +28,13 @@ def main(argv=None):
         "verify-export", help="check exported native files without replay"
     )
     integrity.add_argument("directory", type=Path)
+    replay = commands.add_parser(
+        "replay", help="recompute supported native records on CPU"
+    )
+    replay.add_argument("record", type=Path)
+    replay.add_argument("--atol", type=float, default=1e-10)
+    replay.add_argument("--rtol", type=float, default=1e-8)
+    replay.add_argument("--output", type=Path, required=True)
     initialize = commands.add_parser(
         "init", help="write a native reference or graph model"
     )
@@ -161,7 +168,13 @@ def main(argv=None):
         from ..torch.studies import donor_study
         from .datasets import DonorPair, ResearchDataset
 
-        if args.command == "init":
+        if args.command == "replay":
+            from ..torch.replay import replay_native_record
+
+            result = replay_native_record(
+                _read(args.record), atol=args.atol, rtol=args.rtol
+            )
+        elif args.command == "init":
             torch.manual_seed(args.seed)
             model = (
                 YatGraph.from_configuration(_read(args.graph), dtype=torch.float64)
@@ -427,8 +440,10 @@ def main(argv=None):
                 }
                 for run in result["runs"]
             ]
+        if args.command == "replay":
+            summary["replay_status"] = result["status"]
         print(json.dumps(summary))
-        return 0
+        return 1 if args.command == "replay" and result["status"] == "mismatch" else 0
     except ImportError as exc:
         print(f"native research requires nmn[torch]: {exc}", file=sys.stderr)
         return 2

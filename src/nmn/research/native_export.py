@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.native-replay.v1": "Native numerical replay",
     "nmn.coalition-study.v1": "Native coalition study",
     "nmn.protection-study.v1": "Native classification protection study",
     "nmn.native-model.v1": "Native model",
@@ -125,7 +126,24 @@ def render_native_note(record):
             f"Data/semantic provenance: {_text(ds.get('provenance', 'not recorded'))}.",
             "",
         ]
-    if schema == "nmn.coalition-study.v1":
+    if schema == "nmn.native-replay.v1":
+        lines += [
+            "## Numerical replay",
+            "",
+            f"Saved replay status: {_text(record['status'])}.",
+            "",
+            f"Source record: `{_text(record['record_sha256'])}`.",
+            "",
+            f"Compared fields: {_text(record['compared_fields'])}.",
+            "",
+            f"Tolerances: {_text(record['tolerances'])}.",
+            "",
+            f"Mismatch count: {len(record['mismatches'])}.",
+            "",
+            "The complete data retains mismatch paths and the new execution. Agreement is not a scientific certificate.",
+            "",
+        ]
+    elif schema == "nmn.coalition-study.v1":
         lines += [
             "## Coalition coverage",
             "",

@@ -55,3 +55,5 @@ artifact copies is not a substitute for these capabilities.
 Use [native exports](native-vault-export.md) and the [offline dashboard](native-dashboard.md) to retain raw records beside their scopes and limitations. The report command filters supplied evidence; it does not assert coverage of unimplemented literature protocols.
 
 [Native coalition studies](native-coalitions.md) retain partial coverage and per-example responses; absent coefficients in an incomplete lattice are not zero effects.
+
+[Native replay](native-replay.md) recomputes supported saved observation, donor, protection and coalition records with explicit tolerances. File integrity, numerical reproduction and scientific validity are separate checks.

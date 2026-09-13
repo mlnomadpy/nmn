@@ -77,3 +77,15 @@ and edit contract. See [baseline comparisons](native-baseline-comparisons.md).
 note beside the untouched JSON and file hashes. `native verify-export vault/new-run`
 checks stored integrity without model replay; neither requires PyTorch. See
 [native vault export](native-vault-export.md).
+
+`native protect` executes declared classification tasks and preserves per-example
+damage, repairs and eligible counts; see [protection studies](native-protection.md).
+`native coalitions` measures module-subset interactions under explicit budgets;
+see [coalition studies](native-coalitions.md). `native donor --read-slots` patches
+selected reads of receiving graph modules; see [donor studies](native-donor-studies.md).
+
+`native replay record.json --output replay.json` recomputes supported native
+measurements. Exit 1 denotes a saved numerical mismatch; see
+[native replay](native-replay.md) for fields compared and tolerance semantics.
+`native report SOURCES... --output dashboard` creates a portable offline index;
+see [the dashboard](native-dashboard.md).
