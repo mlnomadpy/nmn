@@ -33,8 +33,8 @@ DESCRIPTION = (
     "for six frameworks."
 )
 
-ONLINE_GUIDES = "https://github.com/azettaai/nmn/tree/master/docs/guides"
-ONLINE_EXAMPLES = "https://github.com/azettaai/nmn/blob/master/EXAMPLES.md"
+ONLINE_GUIDES = "https://github.com/mlnomadpy/nmn/tree/master/docs/guides"
+ONLINE_EXAMPLES = "https://github.com/mlnomadpy/nmn/blob/master/EXAMPLES.md"
 
 # Canonical framework order. Each entry: pip extra, import line, the YatNMN
 # constructor signature for that framework, and the doctor probe module(s).

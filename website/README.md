@@ -73,12 +73,12 @@ The final deployed website combines both components. The **Interactive Paper** i
 3.  **Builds Docusaurus**: Compiles the documentation site.
 4.  **Merges**:
     *   The Visual Paper (`index.html`, `css/`, `js/`, `assets/`) is copied into the Docusaurus `static/paper/` directory.
-    *   This makes the visual paper accessible at `https://azettaai.github.io/nmn/paper/`.
+    *   This makes the visual paper accessible at `https://mlnomadpy.github.io/nmn/paper/`.
 5.  **Deploys the audited artifact**: GitHub Pages consumes the artifact emitted
     by that same build; deployment does not reinstall dependencies or rebuild
     the site. An audit or build failure therefore blocks artifact creation and
     deployment.
 
 ### Key Links
-*   **Documentation Home**: [https://azettaai.github.io/nmn/](https://azettaai.github.io/nmn/)
-*   **Visual Paper**: [https://azettaai.github.io/nmn/paper/](https://azettaai.github.io/nmn/paper/)
+*   **Documentation Home**: [https://mlnomadpy.github.io/nmn/](https://mlnomadpy.github.io/nmn/)
+*   **Visual Paper**: [https://mlnomadpy.github.io/nmn/paper/](https://mlnomadpy.github.io/nmn/paper/)

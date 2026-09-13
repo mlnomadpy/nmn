@@ -10,7 +10,7 @@
 > declared separately. Each backend is an independent optional install
 > (`pip install nmn[<framework>]`). Release information is
 > maintained on [PyPI](https://pypi.org/project/nmn/) and
-> [GitHub Releases](https://github.com/azettaai/nmn/releases).
+> [GitHub Releases](https://github.com/mlnomadpy/nmn/releases).
 
 ## Docs
 
