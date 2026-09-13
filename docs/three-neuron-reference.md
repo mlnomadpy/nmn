@@ -183,7 +183,29 @@ not evaluated, passed or failed). Case budgets change execution coverage, not
 the identity of the declared contract. `--max-cases` requires `--contract`.
 Without `--model`, explicit-contract verification uses the default model.
 
-Explicit-contract evidence currently emits standalone JSON. The older bundle
-schemas still cover their own prescribed quarter-grid gate-1-to-0 contracts;
-they do not store or replay these custom contracts. No custom-contract bundle
-support is implied by `demo` or `export`.
+Explicit-contract runs can also be bundled:
+
+```bash
+nmn research demo --model model.json --contract contract.json --output runs/complete
+nmn research demo --model model.json --contract contract.json --max-cases 10 --output runs/partial
+nmn research reproduce runs/partial
+nmn research export runs/partial --output /path/to/vault/Generated/Partial-NMN
+```
+
+The new `nmn.contract-bundle.v1` schema stores model.json, contract.json,
+run.json (the original case budget), evidence.json, Report.md and manifest.json.
+Replay validates all files and regenerates the result with exactly the saved
+contract and budget. An inconclusive ten-case run stays a ten-case inconclusive
+run; reproduction does not silently complete or strengthen it. To check more
+cases, explicitly create a new run with a larger budget.
+
+`demo` and `reproduce` return 0 for successful artifact creation/reproduction,
+including a faithfully recorded counterexample or inconclusive result; the
+scientific outcome remains explicit in `verification_status`. `verify` keeps
+its contract-oriented exit codes (0 pass, 1 failure, 3 inconclusive).
+
+Export preserves all recorded bytes and provenance. Source hashes include the
+contract checker and bundle implementation; strict replay requires the matching
+source version. Existing fixed and configured-model schemas remain supported
+without changing their original contract semantics. No migration or automatic
+source installation occurs.

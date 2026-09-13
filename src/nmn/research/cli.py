@@ -8,8 +8,11 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from .bundles import create_configured, export_any, reproduce_any
+from .bundles import create_configured
 from .comparison import compare
+from .contract_bundles import create_contract_bundle
+from .contract_bundles import export as export_bundle
+from .contract_bundles import reproduce as reproduce_bundle
 from .contracts import check, default_contract, load_contract
 from .model import default_model, load, model_compare, model_trace, model_verify
 from .reference import architecture, experiment, rational, trace, write_bundle
@@ -49,6 +52,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     demo.add_argument("--output", type=Path, required=True)
     demo.add_argument("--model", type=Path)
+    demo.add_argument("--contract", type=Path)
+    demo.add_argument("--max-cases", type=int)
     reproduce = commands.add_parser("reproduce", help="check hashes and rerun a bundle")
     reproduce.add_argument("bundle", type=Path)
     export = commands.add_parser(
@@ -145,9 +150,18 @@ def main(argv: Optional[List[str]] = None) -> int:
                 else 1
             )
         elif args.command == "reproduce":
-            result = reproduce_any(args.bundle)
+            result = reproduce_bundle(args.bundle)
         elif args.command == "export":
-            result = export_any(args.bundle, args.output)
+            result = export_bundle(args.bundle, args.output)
+        elif args.contract:
+            result = create_contract_bundle(
+                load(args.model) if args.model else default_model(),
+                load_contract(args.contract),
+                args.output,
+                4096 if args.max_cases is None else args.max_cases,
+            )
+        elif args.max_cases is not None:
+            raise ValueError("--max-cases requires --contract")
         elif args.model:
             result = create_configured(load(args.model), args.output)
         else:
