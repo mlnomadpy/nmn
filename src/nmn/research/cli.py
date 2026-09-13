@@ -10,6 +10,7 @@ from typing import List, Optional
 
 from .bundles import create_configured, export_any, reproduce_any
 from .comparison import compare
+from .contracts import check, default_contract, load_contract
 from .model import default_model, load, model_compare, model_trace, model_verify
 from .reference import architecture, experiment, rational, trace, write_bundle
 
@@ -57,9 +58,17 @@ def main(argv: Optional[List[str]] = None) -> int:
     export.add_argument("--output", type=Path, required=True)
     for command_parser in (tracing, comparison, verify):
         command_parser.add_argument("--model", type=Path)
+    contract_parser = commands.add_parser(
+        "contract", help="emit or validate a finite intervention contract"
+    )
+    contract_parser.add_argument("path", type=Path, nargs="?")
+    verify.add_argument("--contract", type=Path)
+    verify.add_argument("--max-cases", type=int)
     args = parser.parse_args(argv)
     try:
-        if args.command == "model":
+        if args.command == "contract":
+            result = load_contract(args.path) if args.path else default_contract()
+        elif args.command == "model":
             result = load(args.path) if args.path else default_model()
         elif args.command == "inspect":
             result = architecture()
@@ -94,6 +103,24 @@ def main(argv: Optional[List[str]] = None) -> int:
                 None if args.replace_h is None else rational(args.replace_h),
             )
         elif args.command == "verify":
+            if args.contract:
+                if args.leaky:
+                    raise ValueError(
+                        "set protected_leak in the model instead of --leaky"
+                    )
+                evidence = check(
+                    load(args.model) if args.model else default_model(),
+                    load_contract(args.contract),
+                    4096 if args.max_cases is None else args.max_cases,
+                )
+                print(json.dumps(evidence, indent=2))
+                return {
+                    "certified-under-assumptions": 0,
+                    "counterexample-found": 1,
+                    "inconclusive": 3,
+                }[evidence["status"]]
+            if args.max_cases is not None:
+                raise ValueError("--max-cases requires --contract")
             if args.model:
                 if args.leaky:
                     raise ValueError(

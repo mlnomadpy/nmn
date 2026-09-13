@@ -1,0 +1,29 @@
+{
+  "schema": "nmn.finite-intervention-contract.v1",
+  "inputs": {
+    "u": [
+      "0",
+      "1/4",
+      "1/2",
+      "3/4",
+      "1"
+    ],
+    "v": [
+      "0",
+      "1/4",
+      "1/2",
+      "3/4",
+      "1"
+    ]
+  },
+  "gate": {
+    "baseline": "1",
+    "edited": "0"
+  },
+  "protected_tolerance": "0",
+  "target": {
+    "u": "1",
+    "v": "1",
+    "minimum_decrease": "7/2"
+  }
+}

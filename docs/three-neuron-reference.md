@@ -146,3 +146,44 @@ of the original author's identity.
 Existing fixed-reference bundles remain supported by schema dispatch. Changing
 evaluator source requires its matching implementation for strict replay; this
 release does not provide automatic source installation or schema migration.
+
+## Explicit finite intervention contracts
+
+```bash
+nmn research contract > contract.json
+nmn research contract contract.json
+nmn research verify --model model.json --contract contract.json
+nmn research verify --model model.json --contract contract.json --max-cases 10
+```
+
+The last command returns exit **3 (inconclusive)** if ten checked cases contain
+no violation and cases remain. A real counterexample already found still
+justifies exit 1, even if other cases remain unchecked. Reports retain checked
+and total counts and never label incomplete coverage as a certificate.
+
+The `nmn.finite-intervention-contract.v1` schema defines:
+
+- Separate finite u/v grids, each containing 1–64 unique rational values in [0,1].
+- A shared baseline and edited gate in [0,1].
+- Nonnegative absolute protected-output tolerance (inclusive boundary).
+- Optional `target`: a declared grid witness (u,v) and nonnegative
+  `minimum_decrease`, interpreted as baseline y minus edited y. Set target to
+  null to request only protection.
+
+The default contract requires exact protection everywhere on the quarter grid
+and a target decrease of at least 7/2 at (1,1). Target success is required only
+at that witness; other target changes remain unconstrained. Rational values
+must be strings without exponent notation. Grids are sorted canonically;
+numerically duplicate values are rejected. Input files are capped at 64 KiB.
+
+Case budgets must be in [1,4096]. Case order is lexicographic in normalized u/v.
+The output contains the normalized model and contract, hashes, all checked
+traces, first failure, coverage and a distinct target status (not requested,
+not evaluated, passed or failed). Case budgets change execution coverage, not
+the identity of the declared contract. `--max-cases` requires `--contract`.
+Without `--model`, explicit-contract verification uses the default model.
+
+Explicit-contract evidence currently emits standalone JSON. The older bundle
+schemas still cover their own prescribed quarter-grid gate-1-to-0 contracts;
+they do not store or replay these custom contracts. No custom-contract bundle
+support is implied by `demo` or `export`.
