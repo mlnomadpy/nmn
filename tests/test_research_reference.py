@@ -111,3 +111,27 @@ def test_research_imports_no_backend():
         env={**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src")},
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_comparison_exact_deltas_and_replacement():
+    from nmn.research.comparison import compare
+
+    changed = compare(F(1), F(1))
+    assert changed["output_deltas"] == {
+        "target": "-7/2",
+        "protected": "0",
+        "leaky": "-7/2",
+    }
+    assert changed["protected_unchanged"]
+    assert not changed["leaky_readout_unchanged"]
+    assert compare(F(1), F(1), F(0), F(1))["output_deltas"]["target"] == "0"
+    assert not compare(F(0), F(1))["target_changed"]
+
+
+def test_compare_cli_fractional_gate(capsys):
+    assert main(["research", "compare", "--gate", "1/2"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["edited"]["outputs"]["target"] == "9/5"
+    assert result["output_deltas"]["target"] == "-11/5"
+    assert result["protected_unchanged"]
+    assert "one specified input" in result["scope"]

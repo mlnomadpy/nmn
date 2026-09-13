@@ -30,6 +30,7 @@ From an installed version containing this feature:
 nmn research inspect
 nmn research trace --u 1 --v 1 --gate 0
 nmn research trace --u 1 --v 1 --gate 0 --replace-h 1
+nmn research compare --u 1 --v 1 --gate 1/2
 nmn research verify
 nmn research verify --leaky  # expected exit 1: protection contract fails
 nmn research demo --output runs/three-neuron
@@ -65,3 +66,16 @@ but the CLI is not a general structural proof engine.
 General YAML architecture schemas, arbitrary checkpoints, learned semantics,
 interval certification, training and backend adapters remain separate roadmap
 items. See https://github.com/mlnomadpy/nmn/issues/28.
+
+## Compare a chosen edit
+
+`nmn research compare` uses the unedited gate-one model as baseline. It returns
+both complete traces, signed edited-minus-baseline deltas, and separate flags
+for target change, protected-p equality and leaky-readout equality. Its default
+action disables h; pass `--gate` or `--replace-h` for a different native action.
+At (1,1), gate 1/2 produces y=9/5, a target delta of -11/5, while p stays 1.
+
+A comparison is pointwise evidence, not the exhaustive contract implemented by
+`verify`. A changed target is not automatically a successful target intervention.
+The command exits 0 when the comparison completes, including when collateral
+effects are reported, and exits 2 on invalid input.

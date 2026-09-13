@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
+from .comparison import compare
 from .reference import architecture, experiment, rational, replay, trace, write_bundle
 
 
@@ -22,6 +23,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     tracing.add_argument(
         "--replace-h", help="replace h after gating at the layer-one cut"
     )
+    comparison = commands.add_parser(
+        "compare", help="compare a native edit with the unedited model"
+    )
+    comparison.add_argument("--u", default="1")
+    comparison.add_argument("--v", default="1")
+    comparison.add_argument("--gate", default="0")
+    comparison.add_argument("--replace-h", help="replace h after gating")
     verify = commands.add_parser("verify", help="exhaust the fixed 25-input contract")
     verify.add_argument(
         "--leaky", action="store_true", help="check the failing p+y readout"
@@ -43,6 +51,13 @@ def main(argv: Optional[List[str]] = None) -> int:
             result = architecture()
         elif args.command == "trace":
             result = trace(
+                rational(args.u),
+                rational(args.v),
+                rational(args.gate),
+                None if args.replace_h is None else rational(args.replace_h),
+            )
+        elif args.command == "compare":
+            result = compare(
                 rational(args.u),
                 rational(args.v),
                 rational(args.gate),
