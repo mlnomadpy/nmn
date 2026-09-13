@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.response-space.v1": "Finite edit-response subspace",
     "nmn.edit-selection.v1": "Frozen native edit selection",
     "nmn.semantic-study.v1": "Supplied semantic correspondence study",
     "nmn.suffix-study.v1": "Native suffix-state study",
@@ -129,7 +130,30 @@ def render_native_note(record):
             f"Data/semantic provenance: {_text(ds.get('provenance', 'not recorded'))}.",
             "",
         ]
-    if schema == "nmn.edit-selection.v1":
+    if schema == "nmn.response-space.v1":
+        lines += [
+            "## Observed response subspace",
+            "",
+            f"Protocol: {_text(record['protocol'])}.",
+            "",
+            f"Numerical rank: {_text(record['numerical_rank'])}.",
+            "",
+            _table(
+                ["Population", "Residual norm", "Relative residual"],
+                [
+                    [
+                        name,
+                        record[name]["residual_norm"],
+                        record[name]["relative_residual"],
+                    ]
+                    for name in ("fit", "evaluation")
+                ],
+            ),
+            "",
+            "Evaluation uses full measured responses; this is not an unseen-edit prediction or uniform rank certificate.",
+            "",
+        ]
+    elif schema == "nmn.edit-selection.v1":
         lines += [
             "## Frozen edit selection",
             "",

@@ -7,7 +7,7 @@ existing curated vault notes; their reading-depth qualifications remain binding.
 
 | Research family and vault sources | Required data/interface | Current native NMN support | Remaining implementation |
 |---|---|---|---|
-| KG01 response spaces; finite edit coverage | Frozen model/input/edit identities, complete output responses, local bank geometry/norms, preparation/query costs | Native collector, replay table, local Gram/norm data | Reduced-response spaces, valid whole-response norm budgets, matched cost benchmarks |
+| KG01 response spaces; finite edit coverage | Frozen model/input/edit identities, complete output responses, local bank geometry/norms, preparation/query costs | Native collector, replay table, local Gram/norm data, split-aware finite response subspace measurements | Valid whole-response norm budgets, unseen-edit prediction, matched cost benchmarks |
 | KG02 closure through depth; predictive-state/reduction literature | Read/write maps, full pre/post states, action, reduced summaries, actual next state and summary residual | Explicit-state residual graphs, dependency maps, resumable suffixes, supplied-state response studies and full layer/module traces | Summary adapters, invariant-domain and defect propagation |
 | KG03 stable observability; kernel sensors; LEACE | Raw activations, sensor outputs, bank spectra, labels, covariance/noise/separation data | Kernel/sensor values, spectra, Jacobians, covariance, sampled separation and supplied noise-radius diagnostics | Probe fitting, sensor acquisition, stochastic-noise protocols, stable inverse bounds |
 | KG04 interaction structure; Integrated Hessians; HVP patching correction | Joint effects, background-dependent finite differences, gradients, mixed curvature, path and quadrature data | Budgeted module-subset lattices on native graphs, explicit background gates, full-lattice subset coefficients, gate derivatives and joint directional path integration | Scalable HVP batching, sparse recovery and certified residuals |
@@ -63,3 +63,5 @@ Use [native exports](native-vault-export.md) and the [offline dashboard](native-
 [Semantic correspondence studies](native-semantics.md) separate ordinary predictions from counterfactual tests under supplied tables; unique identification and symbolic reference models remain open.
 
 [Edit selection](native-selection.md) performs selection and frozen validation on separate declared splits. Statistical validation and acquisition algorithms remain separate open capabilities.
+
+[Finite response-space measurements](native-response-space.md) record a fit-only SVD basis and evaluation residuals; they do not establish whole-response rank or reduce the number of evaluated edits.

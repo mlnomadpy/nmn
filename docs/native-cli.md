@@ -95,3 +95,5 @@ see [the dashboard](native-dashboard.md).
 `native semantics` checks supplied finite reference tables and variable-to-module correspondences. See [semantic studies](native-semantics.md); successful ordinary predictions do not imply counterfactual agreement.
 
 `native select` evaluates candidate edits on one split, freezes a feasible winner and measures it on another. See [edit selection](native-selection.md); this is empirical selection without a population guarantee.
+
+`native response-space` fits a finite edit-coordinate basis on one split and measures reconstruction error on another. See [response-space measurements](native-response-space.md).

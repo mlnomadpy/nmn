@@ -102,6 +102,13 @@ def main(argv=None):
     )
     diagnose.add_argument("--module", required=True)
     diagnose.add_argument("--noise-radius", type=float, default=0.0)
+    response = commands.add_parser(
+        "response-space", help="fit and evaluate a finite edit-response subspace"
+    )
+    response.add_argument("--edits", type=Path, required=True)
+    response.add_argument("--rank", type=int, required=True)
+    response.add_argument("--fit-split", default="tuning")
+    response.add_argument("--evaluation-split", default="validation")
     selection = commands.add_parser(
         "select", help="select an edit then validate only the frozen candidate"
     )
@@ -164,6 +171,7 @@ def main(argv=None):
         suffix,
         semantic,
         selection,
+        response,
     ):
         command.add_argument("--model", type=Path, required=True)
         command.add_argument("--dataset", type=Path, required=True)
@@ -317,7 +325,25 @@ def main(argv=None):
                 )
                 return 0
             dataset = ResearchDataset.from_dict(_read(args.dataset))
-            if args.command == "select":
+            if args.command == "response-space":
+                from ..torch.response_space import response_space_study
+
+                edits = {
+                    name: {
+                        module: Intervention(**control)
+                        for module, control in mapping.items()
+                    }
+                    for name, mapping in _read(args.edits).items()
+                }
+                result = response_space_study(
+                    model,
+                    dataset,
+                    edits=edits,
+                    rank=args.rank,
+                    fit_split=args.fit_split,
+                    evaluation_split=args.evaluation_split,
+                )
+            elif args.command == "select":
                 from ..torch.selection import select_edit
 
                 result = select_edit(
