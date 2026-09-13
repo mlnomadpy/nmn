@@ -20,8 +20,16 @@ from .reference import experiment, rational, trace, write_bundle
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments and arguments[0] == "native":
+        from .native_cli import main as native_main
+
+        return native_main(arguments[1:])
     parser = argparse.ArgumentParser(prog="nmn research")
     commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser(
+        "native", help="native model data, donor studies and gate paths"
+    )
     inspection = commands.add_parser(
         "inspect", help="describe the three-neuron architecture"
     )

@@ -361,3 +361,56 @@ def protection_metrics(before: torch.Tensor, after: torch.Tensor, labels: torch.
         ),
         "disagreement_rate": (before != after).double().mean(),
     }
+
+
+def model_from_snapshot(snapshot: dict, *, device=None, dtype=torch.float64):
+    """Restore a native research model from JSON configuration and parameters.
+
+    No pickle or executable model code is loaded. The content hash and parameter
+    names/shapes are checked. Historical expanded-distance research snapshots are
+    rejected rather than silently reinterpreted as direct-distance models.
+    """
+    if snapshot.get("schema") not in ("nmn.native-research.v1", "nmn.native-model.v1"):
+        raise ValueError("unsupported native snapshot schema")
+    config, params = snapshot["configuration"], snapshot["parameters"]
+    identity = {"configuration": config, "parameters": params}
+    digest = hashlib.sha256(
+        json.dumps(identity, sort_keys=True, allow_nan=False).encode()
+    ).hexdigest()
+    if snapshot.get("model_sha256") != digest:
+        raise ValueError("model content hash mismatch")
+    if config.get("distance_mode") != "direct":
+        raise ValueError("snapshot does not declare direct-distance execution")
+    if config.get("class") == "nmn.torch.YatGraph":
+        model = YatGraph.from_configuration(config, device=device, dtype=dtype)
+    elif config.get("class") == "nmn.torch.ThreeNeuronYat":
+        model = ThreeNeuronYat(config["num_centers"], device=device, dtype=dtype)
+        for name in model.state_names:
+            epsilon = config["epsilon"][name]
+            if not math.isfinite(epsilon) or epsilon <= 0:
+                raise ValueError("snapshot epsilon must be finite and positive")
+            getattr(model, name).kernel.epsilon = epsilon
+        if config["state_names"] != list(model.state_names) or config[
+            "output_names"
+        ] != list(model.output_names):
+            raise ValueError("snapshot names do not match the reference architecture")
+        if config["routing"] != {"h": ["u"], "p": ["v"], "y": ["h", "v"]}:
+            raise ValueError(
+                "snapshot routing does not match the reference architecture"
+            )
+    else:
+        raise ValueError("unsupported native model class")
+    targets = dict(model.named_parameters())
+    if set(params) != set(targets):
+        raise ValueError("snapshot parameter names do not match model")
+    tensors = {
+        name: torch.as_tensor(value, device=device, dtype=dtype)
+        for name, value in params.items()
+    }
+    for name, value in tensors.items():
+        if value.shape != targets[name].shape or not bool(torch.isfinite(value).all()):
+            raise ValueError(f"invalid shape or nonfinite parameter: {name}")
+    with torch.no_grad():
+        for name, value in tensors.items():
+            targets[name].copy_(value)
+    return model

@@ -1,0 +1,33 @@
+{
+  "schema": "nmn.research-dataset.v1",
+  "name": "native CLI scalar transfer",
+  "provenance": "Supplied arithmetic values; diagnostic example, not trained semantics",
+  "samples": [
+    {
+      "sample_id": "base",
+      "inputs": [
+        1.0,
+        1.0
+      ],
+      "split": "evaluation",
+      "group_id": "entity-a",
+      "semantics": {
+        "u": 1.0,
+        "v": 1.0
+      }
+    },
+    {
+      "sample_id": "donor",
+      "inputs": [
+        0.0,
+        1.0
+      ],
+      "split": "evaluation",
+      "group_id": "entity-b",
+      "semantics": {
+        "u": 0.0,
+        "v": 1.0
+      }
+    }
+  ]
+}
