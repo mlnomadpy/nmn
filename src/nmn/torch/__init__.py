@@ -18,6 +18,7 @@ from .attention import (
 
 # Import embedding
 from .embed import YatEmbed
+from .graph import YatGraph, YatModuleSpec
 from .interpretable import Intervention, ThreeNeuronYat, YatExpansion
 from .kernel_bank import KernelBank
 from .layers import (
@@ -49,6 +50,8 @@ __all__ = [
     "YatExpansion",
     "ThreeNeuronYat",
     "Intervention",
+    "YatGraph",
+    "YatModuleSpec",
     # YAT Attention
     "MultiHeadYatAttention",
     "yat_attention",

@@ -66,7 +66,7 @@ data = collect_research_data(
 save_research_data(data, "observations.json")  # refuses overwrite
 ```
 
-The collector currently supports `ThreeNeuronYat`. Geometry works for any
+The collector supports `ThreeNeuronYat` and `YatGraph`. Geometry works for any
 `YatExpansion`; the standalone Jacobian helper supports sample-independent
 PyTorch modules. Other NMN architectures and backends need explicit adapters.
 This is not yet a universal NMN model recorder.
@@ -75,7 +75,7 @@ This is not yet a universal NMN model recorder.
 |---|---|---|
 | `expansion_geometry` | centers, coefficients, dots, squared distances, kernel values, center Gram, eigenvalues, numerical rank/condition, RKHS inner products | Fixed unbiased shared-epsilon module; float64 diagnostics |
 | `input_jacobian` | per-example output/input derivatives | Singleton execution; no batch-coupled guarantee |
-| `gate_derivatives` | output derivatives and full mixed Hessian in h,p,y gates | Local, three shared gates, no finite-path bound |
+| `gate_derivatives` | output derivatives and full mixed Hessian in h,p,y gates | Local shared module gates, no finite-path bound |
 | `intervention_table` | baseline/edited outputs, signed and absolute effects, raw/effective traces | Actual independent replays of caller-specified edits |
 | `coalition_effects` | all eight deletion responses and subset coefficients | Exhaustive three-state family; no sparse recovery claim |
 | `protection_metrics` | per-example correctness, break/fix/disagreement, both accuracies, conditional damage | Caller-supplied class labels; run separately per declared stratum |
@@ -99,3 +99,49 @@ weights or assume the diagnostic grid is a held-out validation population.
 
 The vault-facing implementation matrix is in
 [research data requirements](research-data-requirements.md).
+
+## General explicit-state graphs
+
+`YatGraph` implements the vault's residual update with fixed coordinate read/write
+maps. It supports arbitrary state width, layer depth, module count and per-module
+center counts/epsilon. Modules within a layer read the same incoming state;
+all writes add simultaneously. Two writes to the same slot add rather than
+silently overwrite. The encoder places inputs in named slots and initializes
+other slots to zero; readout selects slots without a hidden learned head.
+
+```python
+from nmn.torch import YatGraph, YatModuleSpec
+
+model = YatGraph(
+    slots=["u", "v", "h", "p", "y"],
+    input_names=["u", "v"], output_names=["y", "p"],
+    layers=[
+        [YatModuleSpec("hidden", ["u"], ["h"], num_centers=8),
+         YatModuleSpec("protected", ["v"], ["p"], num_centers=4)],
+        [YatModuleSpec("target", ["h", "v"], ["y"], num_centers=8)],
+    ],
+)
+outputs, trace = model.forward_with_trace(x)
+edited = model(x, {"hidden": Intervention(gate=0)})
+print(model.dependencies())
+```
+
+An intervention addresses a **module write**, not a whole state coordinate:
+replacing a write does not erase the previous residual state or other writes to
+the same slot. `trace["state.0"]` is the encoded input; subsequent state snapshots
+follow each complete layer. Module traces use the same keys as `ThreeNeuronYat`.
+`dependencies()` reports conservative structural input/module ancestors of each
+output, including residual paths; it makes no semantic or numeric pruning claim.
+
+`configuration()` exports the complete graph specification, including per-module
+epsilon. Reconstruct with `YatGraph.from_configuration(config)` before loading
+weights. The graph's `state_dict()` includes configuration and rejects mismatched
+routing on load. These are fixed coordinate maps; learned routing, normalization,
+attention and arbitrary user-defined block types are not implemented here.
+
+`collect_research_data`, `intervention_table`, `gate_derivatives` and
+`input_jacobian` support these graphs. Gate derivatives now have shapes
+`(N, outputs, modules)` and `(N, outputs, modules, modules)`; full Hessian cost grows
+with graph size. The exhaustive `coalition_effects` helper remains specific to
+`ThreeNeuronYat`. Run `examples/research/native_graph.py --output graph.json` for
+an executable graph and complete observation snapshot.

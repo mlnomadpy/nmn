@@ -8,7 +8,7 @@ existing curated vault notes; their reading-depth qualifications remain binding.
 | Research family and vault sources | Required data/interface | Current native NMN support | Remaining implementation |
 |---|---|---|---|
 | KG01 response spaces; finite edit coverage | Frozen model/input/edit identities, complete output responses, local bank geometry/norms, preparation/query costs | Native collector, replay table, local Gram/norm data | Reduced-response spaces, valid whole-response norm budgets, matched cost benchmarks |
-| KG02 closure through depth; predictive-state/reduction literature | Read/write maps, full pre/post states, action, reduced summaries, actual next state and summary residual | Explicit three-state routing and full traces | General residual module graph, summary adapters, invariant-domain and defect propagation |
+| KG02 closure through depth; predictive-state/reduction literature | Read/write maps, full pre/post states, action, reduced summaries, actual next state and summary residual | Explicit-state residual graphs, dependency maps and full layer/module traces | Summary adapters, invariant-domain and defect propagation |
 | KG03 stable observability; kernel sensors; LEACE | Raw activations, sensor outputs, bank spectra, labels, covariance/noise/separation data | Kernel values, center spectra, input Jacobians, caller metadata | Sensor-bank API, covariance/probe fitting, noise protocols, stable inverse bounds |
 | KG04 interaction structure; Integrated Hessians; HVP patching correction | Joint effects, background-dependent finite differences, gradients, mixed curvature, path and quadrature data | All eight three-state coalitions, subset coefficients, gate Jacobian/Hessian | Path integration, directional HVP for larger graphs, sparse recovery and certified residuals |
 | KG05 native protected edits; RAVEL; ACDC/EAP-IG | Native edit and donor coordinates, recomputed descendants, per-example target/protection outputs, eligibility | Native gates/replacements, full traces and effects, separate classification protection metrics | Donor-pair provenance/schema, arbitrary edge patching, native feasibility search, source-faithful comparator adapters |
@@ -36,7 +36,7 @@ against a concrete source protocol before describing a benchmark as reproduced.
 
 1. Native trainable model and numerical observations (implemented for PyTorch's
    three-module reference in this change).
-2. General explicit-state residual graph plus dataset/reference-model interfaces.
+2. General explicit-state residual graph (implemented), then dataset/reference-model interfaces.
 3. Donor/interchange and gate-path comparisons against direct replay, with a
    candidate ledger and split checks.
 4. Training/evaluation lifecycle and matched module baselines once the task and

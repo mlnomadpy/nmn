@@ -10,10 +10,11 @@ import math
 import platform
 import time
 from pathlib import Path
-from typing import Mapping, Optional, Sequence
+from typing import Mapping, Optional, Sequence, Union, cast
 
 import torch
 
+from .graph import YatGraph
 from .interpretable import Intervention, ThreeNeuronYat, YatExpansion
 
 
@@ -90,22 +91,25 @@ def input_jacobian(model, inputs: torch.Tensor):
         )
 
 
-def gate_derivatives(model: ThreeNeuronYat, inputs: torch.Tensor, *, gates=None):
-    """Jacobians and Hessians of outputs under three shared scalar gates.
+def gate_derivatives(
+    model: Union[ThreeNeuronYat, YatGraph], inputs: torch.Tensor, *, gates=None
+):
+    """Jacobians and Hessians of outputs under shared scalar module gates.
 
-    Returns Jacobian ``(N, 2, 3)`` and Hessian ``(N, 2, 3, 3)`` in h,p,y order.
+    Returns Jacobian ``(N, O, M)`` and Hessian ``(N, O, M, M)`` for O outputs
+    and M modules, in model.state_names order.
     These are local derivatives at the supplied gates, not finite-edit bounds.
     The Hessian includes mixed downstream effects through actual execution.
     """
     if inputs.ndim != 2 or inputs.shape[0] == 0:
         raise ValueError("inputs must be a nonempty 2D tensor")
     g = (
-        inputs.new_ones(3)
+        inputs.new_ones(len(model.state_names))
         if gates is None
         else torch.as_tensor(gates, dtype=inputs.dtype, device=inputs.device)
     )
-    if g.shape != (3,):
-        raise ValueError("gates must contain three values in h,p,y order")
+    if g.shape != (len(model.state_names),):
+        raise ValueError("provide one gate per model.state_names entry")
     jacobians, hessians = [], []
     with torch.enable_grad():
         for row in inputs:
@@ -122,7 +126,7 @@ def gate_derivatives(model: ThreeNeuronYat, inputs: torch.Tensor, *, gates=None)
                 torch.stack(
                     [
                         torch.autograd.functional.hessian(lambda v: execute(v)[j], g)
-                        for j in range(2)
+                        for j in range(len(model.output_names))
                     ]
                 )
             )
@@ -134,7 +138,7 @@ def gate_derivatives(model: ThreeNeuronYat, inputs: torch.Tensor, *, gates=None)
 
 
 def intervention_table(
-    model: ThreeNeuronYat,
+    model: Union[ThreeNeuronYat, YatGraph],
     inputs: torch.Tensor,
     edits: Mapping[str, Mapping[str, Intervention]],
 ):
@@ -171,7 +175,7 @@ def _json_value(value):
 
 
 def collect_research_data(
-    model: ThreeNeuronYat,
+    model: Union[ThreeNeuronYat, YatGraph],
     inputs: torch.Tensor,
     *,
     sample_ids: Sequence[str],
@@ -181,16 +185,22 @@ def collect_research_data(
 ):
     """Collect a JSON-ready native-model research snapshot.
 
+    Supports ThreeNeuronYat and explicit-state YatGraph networks.
     Caller supplies sample IDs and task/split/semantic metadata. The snapshot
     records all parameters, architecture configuration, input values and IDs,
     edit controls, local geometry, responses and optional derivatives. Collection
     does not train, modify parameters or fill their gradient buffers. Designed
     for small research banks: full Gram matrices/Hessians can be expensive.
     """
-    if not isinstance(model, ThreeNeuronYat):
-        raise TypeError("collector currently supports ThreeNeuronYat only")
-    if inputs.ndim != 2 or inputs.shape[0] == 0 or inputs.shape[1] != 2:
-        raise ValueError("inputs must have nonempty shape (N, 2)")
+    if not isinstance(model, (ThreeNeuronYat, YatGraph)):
+        raise TypeError("collector supports ThreeNeuronYat and YatGraph")
+    if (
+        inputs.ndim != 2
+        or inputs.shape[0] == 0
+        or inputs.shape[1]
+        != (len(model.input_names) if isinstance(model, YatGraph) else 2)
+    ):
+        raise ValueError("inputs must be nonempty and match the model input dimension")
     if len(sample_ids) != len(inputs) or len(set(sample_ids)) != len(sample_ids):
         raise ValueError("provide one unique sample ID per input")
     if any(not isinstance(s, str) or not s for s in sample_ids):
@@ -201,20 +211,29 @@ def collect_research_data(
         observations = intervention_table(model, inputs, edits)
         geometry = {
             name: expansion_geometry(
-                getattr(model, name), observations["baseline_trace"][f"{name}.input"]
+                (
+                    cast(YatExpansion, model.blocks[name])
+                    if isinstance(model, YatGraph)
+                    else getattr(model, name)
+                ),
+                observations["baseline_trace"][f"{name}.input"],
             )
             for name in model.state_names
         }
-    configuration = {
-        "class": "nmn.torch.ThreeNeuronYat",
-        "num_centers": model.h.num_centers,
-        "epsilon": {
-            name: getattr(model, name).kernel.epsilon for name in model.state_names
-        },
-        "state_names": model.state_names,
-        "output_names": model.output_names,
-        "routing": {"h": ["u"], "p": ["v"], "y": ["h", "v"]},
-    }
+    configuration = (
+        model.configuration()
+        if isinstance(model, YatGraph)
+        else {
+            "class": "nmn.torch.ThreeNeuronYat",
+            "num_centers": model.h.num_centers,
+            "epsilon": {
+                name: getattr(model, name).kernel.epsilon for name in model.state_names
+            },
+            "state_names": model.state_names,
+            "output_names": model.output_names,
+            "routing": {"h": ["u"], "p": ["v"], "y": ["h", "v"]},
+        }
+    )
     payload = {
         "schema": "nmn.native-research.v1",
         "assurance": "floating-point observations",
@@ -225,6 +244,7 @@ def collect_research_data(
             for p in (
                 Path(__file__),
                 Path(__file__).with_name("interpretable.py"),
+                Path(__file__).with_name("graph.py"),
                 Path(__file__).parent / "nmn" / "yat_nmn.py",
             )
         },
