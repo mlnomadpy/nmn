@@ -8,12 +8,14 @@ import torch
 
 from ..research.datasets import DonorPair, ResearchDataset
 from ..research.native_export import _check_identities
+from ..research.semantics import TabulatedReference
 from .coalitions import coalition_study
 from .graph import YatGraph
 from .interpretable import Intervention, YatExpansion
 from .paths import gate_path
 from .protection import protection_study
 from .research import _json_value, collect_research_data, model_from_snapshot
+from .semantics import semantic_study
 from .studies import donor_study
 from .suffix import suffix_study
 
@@ -37,6 +39,7 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
             raise ValueError("tolerances must be finite nonnegative numbers")
     supported = {
         "nmn.native-research.v1",
+        "nmn.semantic-study.v1",
         "nmn.suffix-study.v1",
         "nmn.gate-path-study.v1",
         "nmn.kernel-diagnostics.v1",
@@ -150,8 +153,17 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
         dataset = ResearchDataset.from_dict(record["dataset"])
         if dataset.sha256 != record["dataset_sha256"]:
             raise ValueError("dataset content hash mismatch")
-        protocol = record["protocol"]
-        if schema == "nmn.donor-study.v1":
+        protocol = record.get("protocol", {})
+        if schema == "nmn.semantic-study.v1":
+            actual = semantic_study(
+                model,
+                dataset,
+                reference=TabulatedReference(record["reference"]),
+                correspondence=record["correspondence"],
+                tolerance=record["tolerance"],
+            )
+            keys = ["status", "baseline", "cases", "coverage"]
+        elif schema == "nmn.donor-study.v1":
             pairs = [
                 DonorPair(**{**row["pair"], "expected": row["expected"]})
                 for row in record["rows"]

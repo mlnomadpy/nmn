@@ -8,7 +8,7 @@ nmn research native export replay.json --output replay-note
 
 Unlike `verify-export`, this command executes the saved model. It supports
 native observation collections, donor studies (including read-slot patches),
-classification protection, coalition, suffix-state, gate-path and kernel diagnostic records. Other schemas are rejected.
+classification protection, coalition, supplied-semantic, suffix-state, gate-path and kernel diagnostic records. Other schemas are rejected.
 CPU float32/float64 execution follows the saved dtype. No training, pickle
 loading or executable reference callbacks are invoked.
 

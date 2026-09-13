@@ -91,3 +91,5 @@ measurements. Exit 1 denotes a saved numerical mismatch; see
 see [the dashboard](native-dashboard.md).
 
 `native suffix` compares supplied intermediate graph states with the unchanged boundary state and executes the remaining network. See [suffix studies](native-suffix.md). These records support native replay and Obsidian export.
+
+`native semantics` checks supplied finite reference tables and variable-to-module correspondences. See [semantic studies](native-semantics.md); successful ordinary predictions do not imply counterfactual agreement.

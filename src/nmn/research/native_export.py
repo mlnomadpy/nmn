@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.semantic-study.v1": "Supplied semantic correspondence study",
     "nmn.suffix-study.v1": "Native suffix-state study",
     "nmn.native-replay.v1": "Native numerical replay",
     "nmn.coalition-study.v1": "Native coalition study",
@@ -127,7 +128,31 @@ def render_native_note(record):
             f"Data/semantic provenance: {_text(ds.get('provenance', 'not recorded'))}.",
             "",
         ]
-    if schema == "nmn.suffix-study.v1":
+    if schema == "nmn.semantic-study.v1":
+        lines += [
+            "## Declared semantic correspondence",
+            "",
+            f"Origin: {_text(record['correspondence']['origin'])}. Status: {_text(record['status'])}.",
+            "",
+            f"Coverage: {_text(record['coverage'])}.",
+            "",
+            _table(
+                ["Case", "Variables", "Native modules", "Agrees"],
+                [
+                    [
+                        row["case_id"],
+                        row["variables"],
+                        row["native_modules"],
+                        row["agrees"],
+                    ]
+                    for row in record["cases"]
+                ],
+            ),
+            "",
+            "Agreement checks a supplied table and does not identify a unique mechanism.",
+            "",
+        ]
+    elif schema == "nmn.suffix-study.v1":
         lines += [
             "## State boundary and downstream effects",
             "",

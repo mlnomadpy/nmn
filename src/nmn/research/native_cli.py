@@ -102,6 +102,13 @@ def main(argv=None):
     )
     diagnose.add_argument("--module", required=True)
     diagnose.add_argument("--noise-radius", type=float, default=0.0)
+    semantic = commands.add_parser(
+        "semantics",
+        help="compare supplied semantic references with native counterfactuals",
+    )
+    semantic.add_argument("--reference", type=Path, required=True)
+    semantic.add_argument("--correspondence", type=Path, required=True)
+    semantic.add_argument("--tolerance", type=float, default=1e-8)
     suffix = commands.add_parser(
         "suffix", help="measure downstream responses to supplied graph states"
     )
@@ -135,7 +142,16 @@ def main(argv=None):
     donor.add_argument("--protected", nargs="*", default=[])
     donor.add_argument("--match-semantics", nargs="*", default=[])
     donor.add_argument("--allow-cross-split", action="store_true")
-    for command in (collect, path, donor, diagnose, protection, coalition, suffix):
+    for command in (
+        collect,
+        path,
+        donor,
+        diagnose,
+        protection,
+        coalition,
+        suffix,
+        semantic,
+    ):
         command.add_argument("--model", type=Path, required=True)
         command.add_argument("--dataset", type=Path, required=True)
         command.add_argument("--output", type=Path, required=True)
@@ -288,7 +304,18 @@ def main(argv=None):
                 )
                 return 0
             dataset = ResearchDataset.from_dict(_read(args.dataset))
-            if args.command == "suffix":
+            if args.command == "semantics":
+                from ..torch.semantics import semantic_study
+                from .semantics import TabulatedReference
+
+                result = semantic_study(
+                    model,
+                    dataset,
+                    reference=TabulatedReference(_read(args.reference)),
+                    correspondence=_read(args.correspondence),
+                    tolerance=args.tolerance,
+                )
+            elif args.command == "suffix":
                 from ..torch.suffix import suffix_study
 
                 result = suffix_study(
