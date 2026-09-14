@@ -55,3 +55,11 @@ Probe previews separate baseline, frozen edited, and optionally refitted edited
 accuracy. They retain eligibility counts and conditional damage. Missing refitted
 results are null, not zero accuracy. At most 25 edits are previewed; copied JSON
 retains every edit, score, prediction and trace.
+
+Donor details explicitly label full-write, whole-read-slot and producer-edge
+interventions. Pair previews include their recorded donor writes, reads or edge
+values; absent fields in older records remain empty. Explicit edge-study previews
+show condition patches and the first 25 output/delta rows for up to 25 conditions,
+with total counts and output order. Linked JSON retains all rows and traces.
+Intervention labels in replay entries describe their saved executed study; the
+dashboard does not rerun that study or infer semantic meaning from its effects.

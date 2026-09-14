@@ -82,6 +82,15 @@ def _summary(record, source, now):
         "schema": schema,
         "status": status,
         "scope": scope,
+        "intervention": (
+            execution.get("protocol", {}).get("donor_execution", "not declared")
+            if execution.get("schema") == "nmn.donor-study.v1"
+            else (
+                "explicit producer-specific residual edge replacement"
+                if execution.get("schema") == "nmn.edge-study.v1"
+                else "see recorded protocol"
+            )
+        ),
         "evidence_handling": (
             "Saved checker outcome; checker was not rerun by this dashboard"
             if schema == "nmn.interval-check.v1"
@@ -342,6 +351,23 @@ def build_dashboard(sources, destination):
                         "first_25_rows": rows[:25],
                         "null_damage_rate": "No originally correct examples; not zero damage.",
                     }
+                elif record["schema"] == "nmn.edge-study.v1":
+                    summary["details"] = {
+                        "protocol": record["protocol"],
+                        "sample_ids": record["sample_ids"],
+                        "conditions_total": len(record["results"]),
+                        "first_25_conditions": [
+                            {
+                                "condition": name,
+                                "patches": record["patches"][name],
+                                "samples_total": len(row["outputs"]),
+                                "first_25_outputs": row["outputs"][:25],
+                                "first_25_output_deltas": row["delta"][:25],
+                            }
+                            for name, row in list(record["results"].items())[:25]
+                        ],
+                        "interpretation": "Explicit producer replacements; donor origins and protection predicates are not inferred.",
+                    }
                 elif record["schema"] == "nmn.donor-study.v1":
                     summary["details"] = {
                         "protocol": record["protocol"],
@@ -351,6 +377,9 @@ def build_dashboard(sources, destination):
                                 "pair_id": row["pair"]["pair_id"],
                                 "base_id": row["pair"]["base_id"],
                                 "donor_id": row["pair"]["donor_id"],
+                                "donor_reads": row.get("donor_reads", {}),
+                                "donor_writes": row.get("donor_writes", {}),
+                                "donor_edges": row.get("donor_edges", {}),
                                 **{
                                     key: row[key]
                                     for key in (
