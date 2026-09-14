@@ -176,6 +176,17 @@ def main(argv=None) -> int:
     selection.add_argument("--provenance", required=True)
     selection.add_argument("--selection-split", default="tuning")
     selection.add_argument("--validation-split", default="validation")
+    alignment = commands.add_parser(
+        "align",
+        help="fit a finite native semantic assignment and evaluate its frozen winner",
+    )
+    alignment.add_argument("--reference", type=Path, required=True)
+    alignment.add_argument("--module-pool", nargs="+", required=True)
+    alignment.add_argument("--max-candidates", type=int, required=True)
+    alignment.add_argument("--provenance", required=True)
+    alignment.add_argument("--selection-split", default="tuning")
+    alignment.add_argument("--evaluation-split", default="validation")
+    alignment.add_argument("--tolerance", type=float, default=1e-8)
     semantic = commands.add_parser(
         "semantics",
         help="compare supplied semantic references with native counterfactuals",
@@ -303,6 +314,7 @@ def main(argv=None) -> int:
         fitted_reduction,
         probe,
         semantic,
+        alignment,
         selection,
         gate_search,
         response,
@@ -691,6 +703,21 @@ def main(argv=None) -> int:
                     max_candidates=args.max_candidates,
                     selection_split=args.selection_split,
                     validation_split=args.validation_split,
+                )
+            elif args.command == "align":
+                from ..torch.alignment import alignment_study
+                from .semantics import TabulatedReference
+
+                result = alignment_study(
+                    model,
+                    dataset,
+                    reference=TabulatedReference(_read(args.reference)),
+                    module_pool=args.module_pool,
+                    max_candidates=args.max_candidates,
+                    provenance=args.provenance,
+                    selection_split=args.selection_split,
+                    evaluation_split=args.evaluation_split,
+                    tolerance=args.tolerance,
                 )
             elif args.command == "semantics":
                 from ..torch.semantics import semantic_study

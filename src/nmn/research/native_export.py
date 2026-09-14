@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.alignment-study.v1": "Supervised native semantic alignment search",
     "nmn.preimage-execution.v1": "Executed native preimage read interventions",
     "nmn.preimage-study.v1": "Dataset-linked native preimage proposals",
     "nmn.preimage-search.v1": "Bounded finite-kernel preimage search",
@@ -347,6 +348,21 @@ def render_native_note(record):
             f"Validation: {_text({k: v for k, v in (record['validation'] or {}).items() if k not in ('trace', 'outputs')})}.",
             "",
             "The frozen winner is never changed using validation outcomes. This is finite empirical selection, not a statistical certificate.",
+            "",
+        ]
+    elif schema == "nmn.alignment-study.v1":
+        lines += [
+            "## Frozen semantic assignment",
+            "",
+            f"Search: {_text(record['status'])}. Coverage: {_text(record['coverage'])}.",
+            "",
+            f"Selected: {_text(record['selected'])}. Exact ties: {_text(record['exact_ties'])}.",
+            "",
+            f"Held-out counterfactual MSE: {_text(record['evaluation']['mse'])}.",
+            "",
+            "Raw candidate interventions and the frozen winner's held-out execution remain in data.json.",
+            "",
+            "This is supervised finite mapping selection, not unique causal identification.",
             "",
         ]
     elif schema == "nmn.semantic-study.v1":

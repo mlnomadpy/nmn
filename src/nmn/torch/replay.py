@@ -9,6 +9,7 @@ import torch
 from ..research.datasets import DonorPair, ResearchDataset
 from ..research.native_export import _check_identities
 from ..research.semantics import TabulatedReference
+from .alignment import alignment_study
 from .benchmark import benchmark_models
 from .coalitions import coalition_study
 from .edges import edge_study
@@ -44,6 +45,7 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
         ):
             raise ValueError("tolerances must be finite nonnegative numbers")
     supported = {
+        "nmn.alignment-study.v1",
         "nmn.preimage-execution.v1",
         "nmn.native-research.v1",
         "nmn.response-space.v1",
@@ -239,6 +241,31 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
                 "unexecuted",
                 "validation",
                 "ledger",
+            ]
+        elif schema == "nmn.alignment-study.v1":
+            actual = alignment_study(
+                model,
+                dataset,
+                reference=TabulatedReference(record["reference"]),
+                **{
+                    k: record["protocol"][k]
+                    for k in (
+                        "module_pool",
+                        "max_candidates",
+                        "provenance",
+                        "selection_split",
+                        "evaluation_split",
+                        "tolerance",
+                    )
+                },
+            )
+            keys = [
+                "status",
+                "coverage",
+                "candidates",
+                "selected",
+                "exact_ties",
+                "evaluation",
             ]
         elif schema == "nmn.semantic-study.v1":
             actual = semantic_study(
@@ -507,6 +534,26 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
                 actual["evaluation_snapshot"][field],
                 "/evaluation_snapshot/" + field,
             )
+    if schema == "nmn.alignment-study.v1":
+
+        def measurements(value):
+            return {
+                "baseline": value["baseline"],
+                "cases": value["cases"],
+                "donor_rows": value["donor_execution"]["rows"],
+                "observations": value["model_snapshot"]["observations"],
+            }
+
+        compare(
+            [measurements(v) for v in record["selection_executions"]],
+            [measurements(v) for v in actual["selection_executions"]],
+            "/selection_executions/measurements",
+        )
+        compare(
+            measurements(record["evaluation_execution"]),
+            measurements(actual["evaluation_execution"]),
+            "/evaluation_execution/measurements",
+        )
     if schema == "nmn.probe-study.v1":
         compare(
             snapshot["observations"],
@@ -555,6 +602,11 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
             "rule": "abs(saved-replayed) <= atol + rtol*abs(saved)",
         },
         "compared_fields": keys
+        + (
+            ["selection_executions/measurements", "evaluation_execution/measurements"]
+            if schema == "nmn.alignment-study.v1"
+            else []
+        )
         + (
             ["validation_snapshot/{model_sha256,sample_ids,inputs,observations}"]
             if schema == "nmn.edit-selection.v1"

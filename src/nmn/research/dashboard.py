@@ -500,6 +500,18 @@ def build_dashboard(sources, destination):
                             "counterexample",
                         )
                     }
+                elif record["schema"] == "nmn.alignment-study.v1":
+                    summary["details"] = {
+                        key: record[key]
+                        for key in (
+                            "protocol",
+                            "coverage",
+                            "candidates",
+                            "selected",
+                            "exact_ties",
+                            "evaluation",
+                        )
+                    }
                 elif record["schema"] == "nmn.native-training.v1":
                     summary["details"] = {
                         "protocol": record.get("protocol", "not recorded"),
