@@ -43,7 +43,7 @@ Complete graph means this fixed architecture's graph is known; it does not make
 its floating-point observations a structural or continuous-domain certificate.
 The collector rejects nonfinite serialized results and has no cached execution.
 Suffix replay, arbitrary external-model conversion, statistical guarantees and
-interval certification are unsupported. Torch replay does not accept this schema.
+interval certification are unsupported. The native replay command dispatches this schema to JAX without importing Torch.
 
 Run the self-contained four-point fixture, then use the backend-independent
 export/dashboard commands with its observations:
@@ -56,3 +56,23 @@ nmn research native report /tmp/nnx-evidence/observations.json --output /tmp/nnx
 The example writes `observations.json` and an Obsidian directory containing the
 exact data, a Markdown note and integrity manifest. Existing destinations fail.
 The fixture is an arithmetic check, not a trained task or literature reproduction.
+
+
+## Restore and replay saved evidence
+
+```bash
+JAX_ENABLE_X64=1 nmn research native replay /tmp/nnx-evidence/observations.json --output /tmp/nnx-replay.json
+nmn research native export /tmp/nnx-replay.json --output /tmp/nnx-replay-note
+```
+
+`nmn.nnx.replay.model_from_snapshot(record)` restores saved parameters without
+pickle or executable loaders. It validates content identity, the exact supported
+routing/arithmetic, parameter shape and representability in the saved dtype.
+`replay_native_record` additionally checks dataset identity and reruns the saved
+population, edits, geometry and optional derivatives on CPU. It compares complete
+measurement trees, retaining mismatch paths and a fresh execution. Source hashes,
+runtime versions and timings are retained but excluded from numerical comparison.
+Defaults are atol=1e-10 and rtol=1e-8; callers can declare different tolerances.
+The CLI exits 0 for agreement, 1 for a written mismatch, and 2 for an invalid or
+unsupported record. Float64 records require caller-enabled JAX x64; no silent
+precision downgrade occurs. Replay establishes numerical agreement only.

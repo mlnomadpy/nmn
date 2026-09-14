@@ -292,6 +292,7 @@ def main(argv=None) -> int:
     ):
         command.add_argument("--split", help="restrict to one named dataset split")
     args = parser.parse_args(argv)
+    required_backend = "torch"
     try:
         if getattr(args, "output", None) is not None and args.output.exists():
             raise ValueError("output already exists; choose a new evidence path")
@@ -356,6 +357,29 @@ def main(argv=None) -> int:
 
             print(json.dumps(export_native_record(args.record, args.output)))
             return 0
+        if (
+            args.command == "replay"
+            and _read(args.record).get("schema") == "nmn.nnx-research.v1"
+        ):
+            required_backend = "nnx"
+            from ..nnx.replay import replay_native_record as replay_nnx_record
+
+            result = replay_nnx_record(
+                _read(args.record), atol=args.atol, rtol=args.rtol
+            )
+            with args.output.open("x", encoding="utf-8") as stream:
+                stream.write(json.dumps(result, indent=2, allow_nan=False) + "\n")
+            print(
+                json.dumps(
+                    {
+                        "status": "written",
+                        "output": str(args.output),
+                        "schema": result["schema"],
+                        "replay_status": result["status"],
+                    }
+                )
+            )
+            return 1 if result["status"] == "mismatch" else 0
         # Keep --help and the base CLI available without optional ML backends.
         import torch
 
@@ -817,7 +841,9 @@ def main(argv=None) -> int:
         print(json.dumps(summary))
         return 1 if args.command == "replay" and result["status"] == "mismatch" else 0
     except ImportError as exc:
-        print(f"native research requires nmn[torch]: {exc}", file=sys.stderr)
+        print(
+            f"native research requires nmn[{required_backend}]: {exc}", file=sys.stderr
+        )
         return 2
     except (
         ValueError,

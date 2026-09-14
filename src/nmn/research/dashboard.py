@@ -129,7 +129,7 @@ def _summary(record, source, now):
                 )
                 else (
                     "JAX " + snapshot.get("runtime", {}).get("jax", "unknown")
-                    if schema == "nmn.nnx-research.v1"
+                    if execution.get("schema") == "nmn.nnx-research.v1"
                     else snapshot.get("runtime", {}).get("torch", "PyTorch record")
                 )
             )

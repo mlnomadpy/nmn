@@ -107,4 +107,4 @@ replay mismatches or unavailable report records fail the command.
 
 The optional [NNX research adapter](nnx-research.md) exports live model data from
 JAX experiments. Its dedicated schema works with native `export`, `verify-export`
-and `report`; native Torch `replay` does not support it.
+and `report`; `replay` dispatches its schema to JAX without importing Torch.
