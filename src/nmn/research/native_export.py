@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.nnx-model.v1": "NNX native model definition",
     "nmn.nnx-research.v1": "NNX native kernel observations",
     "nmn.gate-search.v1": "Native gate proposal search and frozen selection",
     "nmn.donor-plan.v1": "Declared donor selection plan",
@@ -87,6 +88,7 @@ def _check_identities(value):
             "nmn.native-model.v1",
             "nmn.native-research.v1",
             "nmn.nnx-research.v1",
+            "nmn.nnx-model.v1",
         ):
             identity = {key: value[key] for key in ("configuration", "parameters")}
             digest = hashlib.sha256(
@@ -156,7 +158,18 @@ def render_native_note(record):
             f"Data/semantic provenance: {_text(ds.get('provenance', 'not recorded'))}.",
             "",
         ]
-    if schema == "nmn.nnx-research.v1":
+    if schema == "nmn.nnx-model.v1":
+        lines += [
+            "## NNX model definition",
+            "",
+            f"Model identity: `{_text(record['model_sha256'])}`.",
+            "",
+            f"Configuration: {_text(record['configuration'])}.",
+            "",
+            "Parameters are stored in data.json. This definition contains no measured observations.",
+            "",
+        ]
+    elif schema == "nmn.nnx-research.v1":
         lines += [
             "## NNX observations",
             "",

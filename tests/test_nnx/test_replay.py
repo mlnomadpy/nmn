@@ -78,3 +78,43 @@ def test_identity_and_unsupported_routing_rejected():
     record["dataset"]["samples"][0]["inputs"][0] = 2.0
     with pytest.raises(ValueError, match="dataset identity"):
         replay_native_record(record)
+
+
+def test_cli_model_definition_collect_and_inspect(tmp_path, capsys):
+    from nmn.research.native_cli import main
+
+    model = tmp_path / "model.json"
+    dataset = tmp_path / "dataset.json"
+    observations = tmp_path / "observations.json"
+    dataset.write_text(json.dumps(fixture_record()["dataset"]))
+    assert (
+        main(["init", "--backend", "nnx", "--dtype", "float32", "--output", str(model)])
+        == 0
+    )
+    definition = json.loads(model.read_text())
+    assert definition["schema"] == "nmn.nnx-model.v1"
+    assert "outputs" not in definition
+    assert (
+        main(
+            [
+                "collect",
+                "--model",
+                str(model),
+                "--dataset",
+                str(dataset),
+                "--split",
+                "evaluation",
+                "--no-derivatives",
+                "--output",
+                str(observations),
+            ]
+        )
+        == 0
+    )
+    assert json.loads(observations.read_text())["sample_ids"] == ["eval"]
+    assert main(["inspect", "--model", str(model)]) == 0
+    assert (
+        main(["init", "--backend", "nnx", "--dtype", "float32", "--output", str(model)])
+        == 2
+    )
+    capsys.readouterr()

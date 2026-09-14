@@ -26,7 +26,12 @@ def _read_components(source):
     # Only components with a documented consumer are exposed. In particular,
     # probe result tables are not standalone replay records or saved classifiers.
     available = {}
-    if record["schema"] in ("nmn.native-model.v1", "nmn.native-research.v1"):
+    if record["schema"] in (
+        "nmn.native-model.v1",
+        "nmn.native-research.v1",
+        "nmn.nnx-model.v1",
+        "nmn.nnx-research.v1",
+    ):
         available["model"] = record
     for name in ("model", "dataset", "evaluation-model"):
         key = _FIELDS[name]

@@ -84,6 +84,10 @@ def main(argv=None) -> int:
         "init", help="write a native reference or graph model"
     )
     initialize.add_argument("--graph", type=Path, help="YatGraph configuration JSON")
+    initialize.add_argument("--backend", choices=("torch", "nnx"), default="torch")
+    initialize.add_argument(
+        "--dtype", choices=("float32", "float64"), default="float64"
+    )
     initialize.add_argument("--seed", type=int, default=0)
     initialize.add_argument("--output", type=Path, required=True)
     inspect = commands.add_parser(
@@ -380,6 +384,57 @@ def main(argv=None) -> int:
                 )
             )
             return 1 if result["status"] == "mismatch" else 0
+        nnx_schema = ("nmn.nnx-model.v1", "nmn.nnx-research.v1")
+        nnx_init = args.command == "init" and args.backend == "nnx"
+        nnx_saved = (
+            args.command in ("inspect", "collect")
+            and _read(args.model).get("schema") in nnx_schema
+        )
+        if nnx_init or nnx_saved:
+            required_backend = "nnx"
+            from ..nnx import ThreeNeuronYat as NNXThreeNeuronYat
+            from ..nnx.replay import model_from_snapshot as restore_nnx
+            from ..nnx.research import collect_research_data as collect_nnx
+            from ..nnx.research import model_snapshot as snapshot_nnx
+            from .datasets import ResearchDataset as NNXDataset
+
+            if nnx_init:
+                if args.graph is not None:
+                    raise ValueError(
+                        "NNX init supports the fixed three-neuron reference only"
+                    )
+                model_nnx = NNXThreeNeuronYat.reference(dtype=args.dtype)
+                result = snapshot_nnx(model_nnx)
+                result.update(
+                    {
+                        "initialization": "all-ones reference; no sampled parameters",
+                        "trained": False,
+                    }
+                )
+            else:
+                model_nnx = restore_nnx(_read(args.model))
+                if args.command == "inspect":
+                    print(json.dumps(snapshot_nnx(model_nnx), allow_nan=False))
+                    return 0
+                result = collect_nnx(
+                    model_nnx,
+                    NNXDataset.from_dict(_read(args.dataset)),
+                    split=args.split,
+                    edits={} if args.edits is None else _read(args.edits),
+                    derivatives=not args.no_derivatives,
+                )
+            with args.output.open("x", encoding="utf-8") as stream:
+                stream.write(json.dumps(result, indent=2, allow_nan=False) + "\n")
+            print(
+                json.dumps(
+                    {
+                        "status": "written",
+                        "output": str(args.output),
+                        "schema": result["schema"],
+                    }
+                )
+            )
+            return 0
         # Keep --help and the base CLI available without optional ML backends.
         import torch
 
@@ -428,14 +483,16 @@ def main(argv=None) -> int:
         elif args.command == "init":
             torch.manual_seed(args.seed)
             model = (
-                YatGraph.from_configuration(_read(args.graph), dtype=torch.float64)
+                YatGraph.from_configuration(
+                    _read(args.graph), dtype=getattr(torch, args.dtype)
+                )
                 if args.graph
-                else ThreeNeuronYat.reference(dtype=torch.float64)
+                else ThreeNeuronYat.reference(dtype=getattr(torch, args.dtype))
             )
             width = len(model.input_names) if isinstance(model, YatGraph) else 2
             data = collect_research_data(
                 model,
-                torch.zeros(1, width, dtype=torch.float64),
+                torch.zeros(1, width, dtype=getattr(torch, args.dtype)),
                 sample_ids=["initialization-placeholder"],
                 derivatives=False,
             )

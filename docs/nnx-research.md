@@ -76,3 +76,31 @@ Defaults are atol=1e-10 and rtol=1e-8; callers can declare different tolerances.
 The CLI exits 0 for agreement, 1 for a written mismatch, and 2 for an invalid or
 unsupported record. Float64 records require caller-enabled JAX x64; no silent
 precision downgrade occurs. Replay establishes numerical agreement only.
+
+## CLI-only dataset workflow
+
+A model definition is now a separate `nmn.nnx-model.v1` record: no placeholder
+observation is executed or exported when initializing a model.
+
+```bash
+JAX_ENABLE_X64=1 nmn research native init --backend nnx --output nnx-model.json
+JAX_ENABLE_X64=1 nmn research native inspect --model nnx-model.json
+JAX_ENABLE_X64=1 nmn research native collect --model nnx-model.json --dataset dataset.json --split evaluation --edits edits.json --output observations.json
+JAX_ENABLE_X64=1 nmn research native replay observations.json --output replay.json
+nmn research native export observations.json --output obsidian-observations
+nmn research native report nnx-model.json observations.json replay.json --output dashboard
+```
+
+Use a shared `nmn.research-dataset.v1` dataset and named edit dictionaries as in
+the Python API. `--split` selects one population; omitting it explicitly collects
+all samples in the dataset. `--no-derivatives` omits local derivatives.
+`init --dtype float32` works without enabling JAX x64; initialization defaults to
+float64 for both backends. The NNX reference is deterministically all ones, so
+`--seed` does not change its parameters. `--graph` is rejected for NNX rather than
+silently changing the requested architecture. Torch remains the default backend.
+
+`collect` and `inspect` choose the backend from the saved schema; they accept
+both NNX definitions and observation records. `extract --component model` exposes
+the reusable model record from either schema. Restoring a model still validates
+its identity and strict execution configuration. Unsupported Torch research
+commands have not been ported to JAX by this dispatch.

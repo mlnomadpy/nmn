@@ -23,28 +23,11 @@ def _json(value):
     return value
 
 
-def collect_research_data(model, dataset, *, split, edits=None, derivatives=True):
-    """Collect per-example traces, center geometry and optional local derivatives.
-
-    No cached execution, semantic inference, statistical or interval assurance is
-    supplied. Input/gate Jacobians and gate Hessians are evaluated at baseline.
-    Collection is synchronous and rejects nonfinite JSON before returning.
-    """
+def model_snapshot(model):
+    """Serialize a strict NNX model without running an observation or using pickle."""
     if type(model) is not ThreeNeuronYat:
         raise TypeError("only the strict NNX ThreeNeuronYat is supported")
-    ids = dataset.sample_ids(split=split)
-    if not ids or dataset.input_width != 2:
-        raise ValueError("split must contain two-dimensional samples")
-    edits = {} if edits is None else edits
-    if not isinstance(edits, dict) or any(
-        not isinstance(k, str) or not k for k in edits
-    ):
-        raise ValueError("edits must map nonempty names to controls")
-    # Reject nonfinite controls even if replacement would override a gate.
-    json.dumps(_json(edits), allow_nan=False)
-    start = time.perf_counter()
     dtype = model.h.centers.dtype
-    x = jnp.asarray([dataset.sample(sid).inputs for sid in ids], dtype=dtype)
     configuration = {
         "architecture": "three-neuron-yat",
         "backend": "flax-nnx",
@@ -70,6 +53,34 @@ def collect_research_data(model, dataset, *, split, edits=None, derivatives=True
     digest = hashlib.sha256(
         json.dumps(identity, sort_keys=True, allow_nan=False).encode()
     ).hexdigest()
+    return {"schema": "nmn.nnx-model.v1", **identity, "model_sha256": digest}
+
+
+def collect_research_data(model, dataset, *, split, edits=None, derivatives=True):
+    """Collect per-example traces, center geometry and optional local derivatives.
+
+    No cached execution, semantic inference, statistical or interval assurance is
+    supplied. Input/gate Jacobians and gate Hessians are evaluated at baseline.
+    Collection is synchronous and rejects nonfinite JSON before returning.
+    """
+    if type(model) is not ThreeNeuronYat:
+        raise TypeError("only the strict NNX ThreeNeuronYat is supported")
+    ids = dataset.sample_ids(split=split)
+    if not ids or dataset.input_width != 2:
+        raise ValueError("split must contain two-dimensional samples")
+    edits = {} if edits is None else edits
+    if not isinstance(edits, dict) or any(
+        not isinstance(k, str) or not k for k in edits
+    ):
+        raise ValueError("edits must map nonempty names to controls")
+    # Reject nonfinite controls even if replacement would override a gate.
+    json.dumps(_json(edits), allow_nan=False)
+    start = time.perf_counter()
+    dtype = model.h.centers.dtype
+    x = jnp.asarray([dataset.sample(sid).inputs for sid in ids], dtype=dtype)
+    snapshot = model_snapshot(model)
+    identity = {key: snapshot[key] for key in ("configuration", "parameters")}
+    digest = snapshot["model_sha256"]
     outputs, trace = model.forward_with_trace(x)
     geometry = {}
     for name in model.state_names:

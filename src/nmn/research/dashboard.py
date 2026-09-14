@@ -44,7 +44,7 @@ def _summary(record, source, now):
         else source.stem
     )
     status = record.get("status", "observed")
-    if schema == "nmn.native-model.v1":
+    if schema in ("nmn.native-model.v1", "nmn.nnx-model.v1"):
         status = "definition"
     elif schema == "nmn.native-training.v1":
         statuses = {run["status"] for run in record["runs"]}
@@ -129,7 +129,8 @@ def _summary(record, source, now):
                 )
                 else (
                     "JAX " + snapshot.get("runtime", {}).get("jax", "unknown")
-                    if execution.get("schema") == "nmn.nnx-research.v1"
+                    if execution.get("schema")
+                    in ("nmn.nnx-research.v1", "nmn.nnx-model.v1")
                     else snapshot.get("runtime", {}).get("torch", "PyTorch record")
                 )
             )

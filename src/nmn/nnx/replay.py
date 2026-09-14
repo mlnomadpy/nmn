@@ -22,7 +22,7 @@ def model_from_snapshot(record):
     checked. JAX x64 must already be enabled for float64 records. This is not a
     converter for general NNX layers; only the explicit research schema loads.
     """
-    if record.get("schema") != "nmn.nnx-research.v1":
+    if record.get("schema") not in ("nmn.nnx-research.v1", "nmn.nnx-model.v1"):
         raise ValueError("unsupported NNX snapshot schema")
     _check_identities(record)
     config = record["configuration"]
