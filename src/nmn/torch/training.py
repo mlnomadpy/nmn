@@ -23,8 +23,11 @@ class TrainingConfig:
     evaluate_every: int = 10
     max_seconds: float = 60.0
     intervention_weight: float = 0.0
+    separate_pair_rng: bool = False
 
     def validate(self):
+        if type(self.separate_pair_rng) is not bool:
+            raise ValueError("separate_pair_rng must be a boolean")
         for name in ("max_steps", "batch_size", "evaluate_every"):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int) or value < 1:
@@ -156,6 +159,12 @@ def train_native(
         with torch.random.fork_rng(devices=[]):
             model = model_from_snapshot(initial_snapshot)
         generator = torch.Generator(device="cpu").manual_seed(seed)
+        pair_seed = (seed + 2**32) % 2**63
+        pair_generator = (
+            torch.Generator(device="cpu").manual_seed(pair_seed)
+            if config.separate_pair_rng
+            else generator
+        )
         optimizer = torch.optim.Adam(
             [p for p in model.parameters() if p.requires_grad], lr=config.learning_rate
         )
@@ -187,7 +196,7 @@ def train_native(
                 intervention_loss = task_loss.new_zeros(())
                 if pairs:
                     losses = []
-                    chosen = torch.randperm(len(pairs), generator=generator)[
+                    chosen = torch.randperm(len(pairs), generator=pair_generator)[
                         : config.batch_size
                     ]
                     for idx in chosen.tolist():
@@ -295,7 +304,11 @@ def train_native(
                 "task-only" if not pairs else "task-and-detached-donor-supervision"
             ),
             "donor_pairs": [asdict(pair) for pair in pairs],
-            "seed_scope": "minibatch/pair order; common initialization",
+            "seed_scope": (
+                "minibatches use seed; pairs use (seed + 2**32) modulo 2**63; common initialization"
+                if config.separate_pair_rng
+                else "minibatch/pair order; common initialization"
+            ),
             "selection_rule": "lowest observed validation MSE; strict improvement; ties retain earlier checkpoint",
             "runs": runs,
             "source_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),

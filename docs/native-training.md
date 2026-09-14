@@ -72,3 +72,11 @@ explicitly runs two optimizer steps for each of two sampling seeds, with the
 protected branch frozen. It is a synthetic implementation fixture, not a research
 training result. The package checks also exercise task/donor loss separation,
 frozen-weight preservation and rejection of validation donor access.
+
+For controlled task-only versus donor-supervised comparisons, set
+`"separate_pair_rng": true` in the training config. This preserves the same
+minibatch stream when pair sampling is enabled; pair seeds are derived by the
+recorded offset policy. The default shared-stream behavior is unchanged.
+See [the runnable comparison](intervention-training.md) for a fresh-data study
+that retains a negative donor-supervision result and distinguishes update from
+compute budgets.
