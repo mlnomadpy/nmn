@@ -8,6 +8,8 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.interval-certificate.v1": "Rational box range certificate",
+    "nmn.interval-check.v1": "Rational box certificate check",
     "nmn.rational-enclosure.v1": "Rational real-function enclosure",
     "nmn.response-space.v1": "Finite edit-response subspace",
     "nmn.edit-selection.v1": "Frozen native edit selection",
@@ -131,7 +133,33 @@ def render_native_note(record):
             f"Data/semantic provenance: {_text(ds.get('provenance', 'not recorded'))}.",
             "",
         ]
-    if schema == "nmn.rational-enclosure.v1":
+    if schema == "nmn.interval-certificate.v1":
+        lines += [
+            "## Saved range-contract outcome",
+            "",
+            f"Saved status: {_text(record['status'])}.",
+            "",
+            _text(record["assurance"]),
+            "",
+            f"Budget: {_text(record['budget'])}.",
+            "",
+            "Use native check-box to verify the complete saved partition, enclosures and any claimed point witness. Export alone does not check this certificate.",
+            "",
+        ]
+    elif schema == "nmn.interval-check.v1":
+        lines += [
+            "## Checked partition outcome",
+            "",
+            f"Outcome: {_text(record['outcome'])}.",
+            "",
+            f"Leaf/node counts: {_text(record['counts'])}.",
+            "",
+            f"Certificate identity: {_text(record['certificate_sha256'])}.",
+            "",
+            _text(record["assurance"]),
+            "",
+        ]
+    elif schema == "nmn.rational-enclosure.v1":
         lines += [
             "## Exact rational enclosure",
             "",

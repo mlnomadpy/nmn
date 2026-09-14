@@ -48,9 +48,7 @@ in a layer read the same enclosed incoming state before residual writes are adde
 
 This proof concerns inclusion, not tightness. Repeated use of a variable loses
 correlation, so bounds can be loose. A bound that crosses a desired threshold is
-not a pointwise counterexample. Branch-and-bound, contract predicates, complete
-leaf coverage and an independent certificate checker remain separate work under
-issue #44.
+not a pointwise counterexample. The [range-contract checker](native-interval-contract.md) adds bounded subdivision and search-independent partition checking for closed output ranges. General relational predicates and runtime-roundoff coverage remain outside this subset.
 
 Validation includes exact reference-point evaluation using a separate rational
 kernel implementation, zero-crossing arithmetic, exact binary-float conversion,

@@ -28,6 +28,18 @@ def main(argv=None):
         "verify-export", help="check exported native files without replay"
     )
     integrity.add_argument("directory", type=Path)
+    box_verify = commands.add_parser(
+        "verify-box", help="search a rational continuous range contract"
+    )
+    box_verify.add_argument("--model", type=Path, required=True)
+    box_verify.add_argument("--contract", type=Path, required=True)
+    box_verify.add_argument("--max-boxes", type=int, required=True)
+    box_verify.add_argument("--output", type=Path, required=True)
+    box_check = commands.add_parser(
+        "check-box", help="check a saved rational box partition certificate"
+    )
+    box_check.add_argument("certificate", type=Path)
+    box_check.add_argument("--output", type=Path, required=True)
     enclosure = commands.add_parser(
         "enclose",
         help="bound supported real-valued models with exact rational intervals",
@@ -219,7 +231,17 @@ def main(argv=None):
         from ..torch.studies import donor_study
         from .datasets import DonorPair, ResearchDataset
 
-        if args.command == "enclose":
+        if args.command == "verify-box":
+            from ..torch.interval_contract import verify_box
+
+            result = verify_box(
+                _read(args.model), _read(args.contract), max_boxes=args.max_boxes
+            )
+        elif args.command == "check-box":
+            from ..torch.interval_contract import check_box_certificate
+
+            result = check_box_certificate(_read(args.certificate))
+        elif args.command == "enclose":
             from ..torch.enclosure import enclose_native
 
             result = enclose_native(

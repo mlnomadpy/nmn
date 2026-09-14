@@ -47,6 +47,8 @@ def _summary(record, source, now):
             else "floating-point observations"
         )
     )
+    if schema in ("nmn.interval-certificate.v1", "nmn.interval-check.v1"):
+        scope = "rational real-function range contract"
     if schema == "nmn.rational-enclosure.v1":
         scope = "exact rational real-function enclosure"
         status = "enclosed"
@@ -182,6 +184,23 @@ def build_dashboard(sources, destination):
                             "compared_fields",
                             "mismatches",
                         )
+                    }
+                elif record["schema"] in (
+                    "nmn.interval-certificate.v1",
+                    "nmn.interval-check.v1",
+                ):
+                    summary["details"] = {
+                        key: record[key]
+                        for key in (
+                            "status",
+                            "outcome",
+                            "contract",
+                            "budget",
+                            "counts",
+                            "certificate_sha256",
+                            "assurance",
+                        )
+                        if key in record
                     }
                 elif record["schema"] == "nmn.rational-enclosure.v1":
                     summary["details"] = {

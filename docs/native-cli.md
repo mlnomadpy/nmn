@@ -31,6 +31,7 @@ curvature semantics silently.
 | `collect` | Full traces, kernel geometry, derivatives and executed edit effects |
 | `donor` | [Declared donor pairs and receiving-module read patches](native-donor-studies.md) |
 | `path` | [Joint gate paths, numerical curvature and quadrature residuals](native-gate-paths.md) |
+| `verify-box`, `check-box` | [Bounded range contracts and partition checking](native-interval-contract.md) |
 | `enclose` | [Exact rational real-function bounds](native-enclosure.md) |
 | `diagnose` | [Kernel and sensor measurements](native-kernel-diagnostics.md) |
 | `protect` | [Classification accuracy, damage, repairs and eligibility](native-protection.md) |

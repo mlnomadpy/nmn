@@ -16,7 +16,7 @@ existing curated vault notes; their reading-depth qualifications remain binding.
 | KG07 semantics; causal abstraction/scrubbing; patching illusion | Semantic variables/reference outputs, donor equivalence groups, correspondence hypotheses, predicted/unforced outcomes | Supplied semantic dataset records, finite reference/correspondence tables, versioned reference callback, native donor transfer and counterfactual mismatch reports | Recursive scrubbing, semantic alignment and ambiguity controls |
 | Kernelized erasure / preimage reconstruction | Feature projections, realizable native edits, residual feature and nonlinear suffix error | Kernel bank features and executed suffix responses | Projection/preimage solver and utility/probe comparators |
 | NAM / IMQ / generic smooth comparison | Matched task, topology, supervision, fit budget, effects and serving costs | Native IMQ/tanh alternatives, CPU replay and explicit bounded training, parameter/precision/cost records | Task-matched fitting studies, acquisition/certification baselines |
-| Formal verification literature (AutoBound, Beta-CROWN, certified fidelity) | Domain, arithmetic assurance, sound bounds, counterexamples and unresolved results | Exact rational one-box enclosures for fixed Yat/IMQ native graphs, separate from numerical observations | Contract branch-and-bound, independent coverage checking and runtime-roundoff bounds |
+| Formal verification literature (AutoBound, Beta-CROWN, certified fidelity) | Domain, arithmetic assurance, sound bounds, counterexamples and unresolved results | Exact rational enclosures, bounded output-range verification and search-independent partition checking for fixed Yat/IMQ graphs | Relational/protection contracts, additional operations and runtime-roundoff bounds |
 | Repetition/sequence protection literature | Tokenizer/model revision, prompts, decoding law, prefixes, rollout IDs, EOS/length and per-task losses | Not supported by the three-neuron collector | Sequence-model adapter and frozen decoding/evaluation contract |
 
 ## Common observation record
@@ -67,3 +67,5 @@ Use [native exports](native-vault-export.md) and the [offline dashboard](native-
 [Finite response-space measurements](native-response-space.md) record a fit-only SVD basis and evaluation residuals; they do not establish whole-response rank or reduce the number of evaluated edits.
 
 [Native rational enclosures](native-enclosure.md) implement the supported arithmetic subset for issue #44. The local containment derivation and limitations are explicit; this does not complete the certificate/search requirements.
+
+[Box range verification](native-interval-contract.md) adds complete partition records, exact witness checks and derived verified/counterexample/inconclusive outcomes. Its checker shares the rational arithmetic primitives; no external proof-assistant review is claimed.
