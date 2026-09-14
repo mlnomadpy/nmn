@@ -46,7 +46,42 @@ the first producer also changes the other reader. These are distinct experiments
 This API isolates explicit additive residual contributions. It does not discover
 causal edges or implement recursive causal scrubbing. If a producer influences
 another writer upstream of the receiver, that indirect effect remains in the
-other writer's current contribution. Donor selection, experiment schemas,
-collector/CLI integration and numerical replay for edge-patch studies remain
-separate work; the existing donor `--read-slots` option still replaces whole read
-coordinates. No continuous-domain or semantic guarantee is inferred.
+other writer's current contribution. Donor selection and recursive path protocols remain separate work. The existing
+donor `--read-slots` option still replaces whole read coordinates. No
+continuous-domain or semantic guarantee is inferred.
+
+## Save and replay an edge study
+
+```bash
+nmn research native edges --model graph.json --dataset dataset.json \
+  --patches edge-patches.json --split evaluation \
+  --provenance "Supplied producer replacements" --output edges.json
+nmn research native replay edges.json --output replay.json
+nmn research native export edges.json --output vault/edges
+```
+
+The patch file adds an outer condition name to the API mapping:
+
+```json
+{"remove-a-at-b": {"b": {"h": {"a": 0.0}}}}
+```
+
+`nmn.torch.edges.edge_study` executes all named conditions against the unchanged
+graph. Each replacement is a finite scalar or array following the graph's
+broadcast rules. Arrays follow the selected sample-ID order, which is saved in
+the record; they do not trigger a donor lookup. The study does not currently
+combine background interventions or whole-slot patches with edge patches.
+
+`nmn.edge-study.v1` retains model/data identities, sample IDs, normalized numeric
+patch values, baseline outputs, per-condition signed and absolute output deltas,
+and complete traces including receiver edge corrections. Output columns follow
+`protocol.output_order`. The provenance is supplied, not independently verified.
+Nonfinite executed tensors are labeled `nonfinite-observation` when a record can
+be produced; invalid arithmetic or snapshot construction can instead fail.
+
+Replay reconstructs the model and executes the saved edge conditions, comparing
+all outputs, deltas and trace values with declared tolerances. Export creates an
+Obsidian note and raw data copy; the report command recognizes the schema. No
+semantic reference, threshold, protected-output predicate, or population guarantee
+is inferred from zero observed deltas. Cost counts one baseline forward and one
+forward per condition; kernel geometry in snapshot collection is additional.

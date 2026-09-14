@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.edge-study.v1": "Producer-specific residual edge study",
     "nmn.probe-study.v1": "Frozen internal-state classification probe",
     "nmn.fitted-reduction.v1": "Fitted state summary and held-out residuals",
     "nmn.reduction-study.v1": "State summaries and reduced dynamics",
@@ -271,6 +272,23 @@ def render_native_note(record):
             ),
             "",
             "Agreement checks a supplied table and does not identify a unique mechanism.",
+            "",
+        ]
+    elif schema == "nmn.edge-study.v1":
+        lines += [
+            "## Residual edge effects",
+            "",
+            f"Protocol: {_text(record['protocol'])}.",
+            "",
+            _table(
+                ["Condition", "Maximum absolute output change"],
+                [
+                    [name, _maximum(row["delta"])]
+                    for name, row in record["results"].items()
+                ],
+            ),
+            "",
+            "Full per-example outputs, receiver corrections and traces remain in data.json. This does not establish semantic causality.",
             "",
         ]
     elif schema == "nmn.probe-study.v1":

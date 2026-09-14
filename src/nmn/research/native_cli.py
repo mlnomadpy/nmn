@@ -188,6 +188,11 @@ def main(argv=None) -> int:
     fitted_reduction.add_argument("--ridge", type=float, required=True)
     fitted_reduction.add_argument("--fit-split", default="tuning")
     fitted_reduction.add_argument("--evaluation-split", default="validation")
+    edge = commands.add_parser(
+        "edges", help="measure producer-specific residual read replacements"
+    )
+    edge.add_argument("--patches", type=Path, required=True)
+    edge.add_argument("--provenance", required=True)
     reduction = commands.add_parser(
         "reduce", help="evaluate supplied state summaries and reduced dynamics"
     )
@@ -236,6 +241,7 @@ def main(argv=None) -> int:
         coalition,
         suffix,
         reduction,
+        edge,
         fitted_reduction,
         probe,
         semantic,
@@ -245,7 +251,16 @@ def main(argv=None) -> int:
         command.add_argument("--model", type=Path, required=True)
         command.add_argument("--dataset", type=Path, required=True)
         command.add_argument("--output", type=Path, required=True)
-    for command in (collect, path, diagnose, protection, coalition, suffix, reduction):
+    for command in (
+        collect,
+        path,
+        diagnose,
+        protection,
+        coalition,
+        suffix,
+        reduction,
+        edge,
+    ):
         command.add_argument("--split", help="restrict to one named dataset split")
     args = parser.parse_args(argv)
     try:
@@ -519,6 +534,16 @@ def main(argv=None) -> int:
                     ridge=args.ridge,
                     fit_split=args.fit_split,
                     evaluation_split=args.evaluation_split,
+                )
+            elif args.command == "edges":
+                from ..torch.edges import edge_study
+
+                result = edge_study(
+                    model,
+                    dataset,
+                    patches=_read(args.patches),
+                    provenance=args.provenance,
+                    split=args.split,
                 )
             elif args.command == "reduce":
                 from ..torch.reduction import reduction_study

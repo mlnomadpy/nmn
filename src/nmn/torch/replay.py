@@ -11,6 +11,7 @@ from ..research.native_export import _check_identities
 from ..research.semantics import TabulatedReference
 from .benchmark import benchmark_models
 from .coalitions import coalition_study
+from .edges import edge_study
 from .graph import YatGraph
 from .interpretable import Intervention, YatExpansion
 from .paths import gate_path
@@ -50,6 +51,7 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
         "nmn.semantic-study.v1",
         "nmn.suffix-study.v1",
         "nmn.reduction-study.v1",
+        "nmn.edge-study.v1",
         "nmn.probe-study.v1",
         "nmn.gate-path-study.v1",
         "nmn.kernel-diagnostics.v1",
@@ -288,6 +290,23 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
                 "probe",
                 "fit",
                 "evaluation",
+                "cost",
+            ]
+        elif schema == "nmn.edge-study.v1":
+            actual = edge_study(
+                model,
+                dataset,
+                patches=record["patches"],
+                provenance=protocol["provenance"],
+                split=protocol["split"],
+            )
+            keys = [
+                "status",
+                "sample_ids",
+                "patches",
+                "baseline_outputs",
+                "protocol",
+                "results",
                 "cost",
             ]
         elif schema == "nmn.reduction-study.v1":

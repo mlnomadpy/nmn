@@ -29,6 +29,7 @@ curvature semantics silently.
 |---|---|
 | `init`, `inspect` | [Native models, routing and data](native-interpretable-torch.md) |
 | `collect` | Full traces, kernel geometry, derivatives and executed edit effects |
+| `edges` | [Producer-specific residual replacement studies](native-edge-patches.md) |
 | `donor` | [Declared donor pairs and receiving-module read patches](native-donor-studies.md) |
 | `path` | [Joint gate paths, numerical curvature and quadrature residuals](native-gate-paths.md) |
 | `verify-box`, `check-box` | [Bounded range contracts and partition checking](native-interval-contract.md) |

@@ -50,3 +50,28 @@ def test_residual_edge_isolation_uses_current_effective_write():
         model.forward_from_state(trace["state.1"], start_layer=1, edge_patches=edges)
     with pytest.raises(ValueError, match="earlier"):
         model(x, edge_patches={"a": {"x": {"c": 0}}})
+    # The same graph produces portable research rows and detects altered evidence.
+    import copy
+
+    from nmn.research.datasets import ResearchDataset, ResearchSample
+    from nmn.torch.edges import edge_study
+    from nmn.torch.replay import replay_native_record
+
+    dataset = ResearchDataset(
+        [ResearchSample("one", [1.0], "evaluation", "one", {})],
+        name="edge fixture",
+        provenance="supplied arithmetic input",
+    )
+    record = edge_study(
+        model,
+        dataset,
+        patches={"remove-a-at-b": edges},
+        provenance="supplied zero replacement",
+        split="evaluation",
+    )
+    assert record["results"]["remove-a-at-b"]["delta"][0][1] == 0.0
+    assert record["results"]["remove-a-at-b"]["trace"]["b.input"] == [[2.0]]
+    assert replay_native_record(record)["status"] == "matched"
+    altered = copy.deepcopy(record)
+    altered["results"]["remove-a-at-b"]["outputs"][0][0] += 1
+    assert replay_native_record(altered)["status"] == "mismatch"
