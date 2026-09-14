@@ -1,0 +1,11 @@
+{
+  "modules": ["h"],
+  "target_outputs": ["target"],
+  "protected_outputs": ["protected"],
+  "protection_tolerance": 0.0,
+  "provenance": "Supplied reference gate search; finite arithmetic fixture",
+  "max_steps": 12,
+  "max_seconds": 30.0,
+  "learning_rate": 0.1,
+  "protection_weight": 1.0
+}

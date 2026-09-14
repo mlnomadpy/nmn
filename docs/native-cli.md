@@ -42,6 +42,7 @@ curvature semantics silently.
 | `probe` | [Frozen and refitted internal-state decoding comparisons](native-probes.md) |
 | `suffix` | [Supplied intermediate states and downstream responses](native-suffix.md) |
 | `semantics` | [Supplied references and counterfactual correspondence checks](native-semantics.md) |
+| `search-gates` | [Bounded gradient proposals, measured selection and frozen validation](native-gate-search.md) |
 | `select` | [Candidate selection followed by frozen-winner validation](native-selection.md) |
 | `response-space` | [Fit-only response bases and evaluation reconstruction errors](native-response-space.md) |
 | `benchmark` | [Saved-model comparison under a shared replay contract](native-baseline-comparisons.md) |

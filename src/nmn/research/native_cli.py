@@ -154,6 +154,12 @@ def main(argv=None) -> int:
     response.add_argument("--rank", type=int, required=True)
     response.add_argument("--fit-split", default="tuning")
     response.add_argument("--evaluation-split", default="validation")
+    gate_search = commands.add_parser(
+        "search-gates",
+        help="generate bounded gradient gate proposals then select and validate",
+    )
+    gate_search.add_argument("--targets", type=Path, required=True)
+    gate_search.add_argument("--config", type=Path, required=True)
     selection = commands.add_parser(
         "select", help="select an edit then validate only the frozen candidate"
     )
@@ -268,6 +274,7 @@ def main(argv=None) -> int:
         probe,
         semantic,
         selection,
+        gate_search,
         response,
     ):
         command.add_argument("--model", type=Path, required=True)
@@ -519,6 +526,12 @@ def main(argv=None) -> int:
                     rank=args.rank,
                     fit_split=args.fit_split,
                     evaluation_split=args.evaluation_split,
+                )
+            elif args.command == "search-gates":
+                from ..torch.gate_search import search_gates
+
+                result = search_gates(
+                    model, dataset, targets=_read(args.targets), **_read(args.config)
                 )
             elif args.command == "select":
                 from ..torch.selection import select_edit

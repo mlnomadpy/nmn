@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.gate-search.v1": "Native gate proposal search and frozen selection",
     "nmn.donor-plan.v1": "Declared donor selection plan",
     "nmn.edge-study.v1": "Producer-specific residual edge study",
     "nmn.probe-study.v1": "Frozen internal-state classification probe",
@@ -284,6 +285,19 @@ def render_native_note(record):
             ),
             "",
             "Agreement checks a supplied table and does not identify a unique mechanism.",
+            "",
+        ]
+    elif schema == "nmn.gate-search.v1":
+        lines += [
+            "## Gate proposals and measured selection",
+            "",
+            f"Generation: {_text(record['status'])}; proposals: {len(record['proposals'])}.",
+            "",
+            f"Protocol: {_text(record['protocol'])}.",
+            "",
+            f"Selection outcome: {_text(record['selection']['status'])}; selected: {_text(record['selection']['selected'])}.",
+            "",
+            "All proposals and the full selection/validation study are embedded in data.json. Proposal completion is not global feasibility or a validation-success claim.",
             "",
         ]
     elif schema == "nmn.donor-plan.v1":
