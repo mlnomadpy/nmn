@@ -10,7 +10,7 @@ import torch
 from nmn.research.dashboard import build_dashboard
 from nmn.research.datasets import DonorPair, ResearchDataset, ResearchSample
 from nmn.research.native_export import export_native_record
-from nmn.torch import YatGraph, YatModuleSpec
+from nmn.torch import Intervention, YatGraph, YatModuleSpec
 from nmn.torch.replay import replay_native_record
 from nmn.torch.research import (
     collect_research_data,
@@ -21,10 +21,14 @@ from nmn.torch.studies import donor_study
 from nmn.torch.training import TrainingConfig, train_native
 
 
-def run(destination, *, gradient_comparison=False):
+def run(destination, *, gradient_comparison=False, fixed_edit_comparison=False):
     destination = Path(destination)
     destination.mkdir(parents=True, exist_ok=False)
-    data_seed = 20260916 if gradient_comparison else 20260915
+    data_seed = (
+        20260919
+        if fixed_edit_comparison
+        else (20260916 if gradient_comparison else 20260915)
+    )
     generator = torch.Generator().manual_seed(data_seed)
     samples, targets = [], {}
     for split, count in [("train", 128), ("validation", 32), ("evaluation", 128)]:
@@ -39,9 +43,13 @@ def run(destination, *, gradient_comparison=False):
     dataset = ResearchDataset(
         samples,
         name=(
-            "Donor gradient comparison"
-            if gradient_comparison
-            else "Detached donor supervision ablation"
+            "Fixed edit supervision comparison"
+            if fixed_edit_comparison
+            else (
+                "Donor gradient comparison"
+                if gradient_comparison
+                else "Detached donor supervision ablation"
+            )
         ),
         provenance=f"Fresh analytic polynomial task, deterministic seed {data_seed}",
     )
@@ -121,17 +129,51 @@ def run(destination, *, gradient_comparison=False):
         )
         for name, weight, detach in conditions
     }
+    fixed_objective = None
+    if fixed_edit_comparison:
+        fixed_objective = {
+            "schema": "nmn.fixed-edit-objective.v1",
+            "controls": {"h": {"gate": 0.0}},
+            "output_names": ["target"],
+            "protected_outputs": ["protected"],
+            "targets": {
+                s.sample_id: [0.5 * s.inputs[1]]
+                for s in samples
+                if s.split != "evaluation"
+            },
+            "provenance": "Analytic h deletion target=0.5v; evaluation labels excluded",
+        }
+        contract["intervention_specification"] = (
+            "Set h gate to zero; edited target=0.5v; retain protected output"
+        )
+        configs = {
+            name: TrainingConfig(
+                max_steps=300,
+                batch_size=16,
+                learning_rate=0.01,
+                evaluate_every=20,
+                max_seconds=60.0,
+                separate_pair_rng=True,
+                fixed_edit_weight=weight,
+                protection_weight=weight,
+                checkpoint_objective="task-plus-fixed-edit" if weight else "task",
+            )
+            for name, weight in [("task-only", 0.0), ("task-plus-fixed-edit", 1.0)]
+        }
     save_research_data(
         {
             "configs": {k: asdict(v) for k, v in configs.items()},
             "contract": contract,
             "data_seed": data_seed,
             "comparison": (
-                "donor-gradient" if gradient_comparison else "donor-supervision"
+                "fixed-edit-supervision"
+                if fixed_edit_comparison
+                else "donor-gradient" if gradient_comparison else "donor-supervision"
             ),
             "initialization_seed": 17,
             "seeds": [0, 1, 2],
-            "selection": "checkpoint by ordinary validation MSE only; no donor evaluation access",
+            "selection": "Per-config checkpoint objective on validation only; evaluation excluded. Fixed-edit comparison changes both training loss and selection objective.",
+            "fixed_objective": fixed_objective,
         },
         destination / "protocol.json",
     )
@@ -152,6 +194,7 @@ def run(destination, *, gradient_comparison=False):
             target_provenance="Analytic task and declared donor correspondence",
             seeds=(0, 1, 2),
             pairs=training_pairs if config.intervention_weight else (),
+            fixed_edit=fixed_objective if config.fixed_edit_weight else None,
         )
         path = destination / (condition + "-training.json")
         save_research_data(training, path)
@@ -164,7 +207,11 @@ def run(destination, *, gradient_comparison=False):
                 [dataset.sample(s).inputs for s in ids], dtype=torch.float64
             )
             observations = collect_research_data(
-                fitted, x, sample_ids=ids, derivatives=False
+                fitted,
+                x,
+                sample_ids=ids,
+                derivatives=False,
+                edits={"remove-h": {"h": Intervention(gate=0.0)}},
             )
             output = torch.tensor(
                 observations["observations"]["baseline"], dtype=torch.float64
@@ -179,6 +226,8 @@ def run(destination, *, gradient_comparison=False):
             reference = torch.tensor(
                 [p.expected["target"] for p in evaluation_pairs], dtype=torch.float64
             )
+            with torch.no_grad():
+                removed = fitted(x, {"h": Intervention(gate=0.0)})
             rows.append(
                 {
                     "condition": condition,
@@ -187,6 +236,12 @@ def run(destination, *, gradient_comparison=False):
                     "steps": result["steps_completed"],
                     "selected_step": result["best_step"],
                     "task_mse": ((output - expected) ** 2).mean(0).tolist(),
+                    "removed_h_target_mse": float(
+                        ((removed[:, 0] - 0.5 * x[:, 1]) ** 2).mean()
+                    ),
+                    "removed_h_protected_change_mse": float(
+                        ((removed[:, 1] - output[:, 1]) ** 2).mean()
+                    ),
                     "donor_target_mse": float(((transferred - reference) ** 2).mean()),
                 }
             )
@@ -210,6 +265,12 @@ def run(destination, *, gradient_comparison=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path)
-    parser.add_argument("--gradient-comparison", action="store_true")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--gradient-comparison", action="store_true")
+    modes.add_argument("--fixed-edit-comparison", action="store_true")
     args = parser.parse_args()
-    run(args.output, gradient_comparison=args.gradient_comparison)
+    run(
+        args.output,
+        gradient_comparison=args.gradient_comparison,
+        fixed_edit_comparison=args.fixed_edit_comparison,
+    )

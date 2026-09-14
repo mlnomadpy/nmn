@@ -170,3 +170,47 @@ def test_joint_donor_gradient_reaches_donor_only_parameters():
         assert record["configuration"]["detach_donor"] is detached
     assert coefficients[0] == 1.0
     assert coefficients[1] > coefficients[0]
+
+
+def test_fixed_edit_checkpoint_selection_and_evaluation_exclusion():
+    snapshot, data, contract = fixture()
+    objective = {
+        "schema": "nmn.fixed-edit-objective.v1",
+        "controls": {"h": {"gate": 0.0}},
+        "output_names": ["target"],
+        "protected_outputs": ["protected"],
+        "targets": {s: [0.0] for s in ("a", "b", "v")},
+        "provenance": "Synthetic deletion target",
+    }
+    args = dict(
+        config=TrainingConfig(
+            max_steps=3,
+            evaluate_every=1,
+            fixed_edit_weight=2.0,
+            protection_weight=1.0,
+            checkpoint_objective="task-plus-fixed-edit",
+        ),
+        architecture_contract=contract,
+        target_provenance="fixture",
+        seeds=[0],
+    )
+    targets = {s: [0.0, 1.0] for s in ("a", "b", "v")}
+    record = train_native(snapshot, data, targets, fixed_edit=objective, **args)
+    run = record["runs"][0]
+    assert run["status"] == "completed"
+    for h in run["history"]:
+        assert h["validation_selection_score"] == pytest.approx(
+            h["validation_mse"]
+            + 2 * h["validation_fixed_edit_mse"]
+            + h["validation_protection_mse"]
+        )
+    assert run["best_selection_score"] == min(
+        h["validation_selection_score"] for h in run["history"]
+    )
+    assert (
+        run["history"][-1]["validation_fixed_edit_mse"]
+        < run["history"][0]["validation_fixed_edit_mse"]
+    )
+    objective["targets"]["untouched"] = [0.0]
+    with pytest.raises(ValueError, match="exactly training"):
+        train_native(snapshot, data, targets, fixed_edit=objective, **args)

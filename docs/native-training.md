@@ -82,3 +82,49 @@ recorded offset policy. The default shared-stream behavior is unchanged.
 See [the runnable comparison](intervention-training.md) for a fresh-data study
 that retains a negative donor-supervision result and distinguishes update from
 compute budgets.
+
+## Supervise a fixed native edit
+
+Pass `fixed_edit=objective` to `train_native`, or `--fixed-edit objective.json`
+to `nmn research native train`. Set `fixed_edit_weight` to a positive number
+and optionally `protection_weight` in `TrainingConfig`. The objective is:
+
+```json
+{
+  "schema": "nmn.fixed-edit-objective.v1",
+  "controls": {"h": {"gate": 0.0}},
+  "output_names": ["target"],
+  "protected_outputs": ["protected"],
+  "targets": {"train-0": [0.5], "validation-0": [0.25]},
+  "provenance": "Declared analytic counterfactual target"
+}
+```
+
+Replace the example target map with exactly every training and checkpoint-selection
+sample ID, excluding evaluation IDs. Controls are fixed, shared scalar gates in
+[0,1]. Outputs name native output coordinates. This version does not optimize
+replacement vectors or input-dependent controls.
+
+The loss adds edited-output target MSE and protected edited-versus-baseline MSE
+to ordinary task MSE, with separately configured weights. Protection gradients
+flow through both executions. A protected output can still be inaccurate; ordinary
+supervision and held-out measurements remain necessary. Donor supervision can be
+used concurrently, with its separate existing gradient policy.
+
+`checkpoint_objective="task"` retains ordinary validation selection. Explicitly
+choose `"task-plus-fixed-edit"` to select by the weighted task, edit and protection
+validation losses. Records retain each component, the selection score, supplied
+objective and selected checkpoint. They do not assert semantic correctness.
+
+Run the matched example with:
+
+```sh
+python examples/research/intervention_training.py results --fixed-edit-comparison
+```
+
+It compares task-only against fixed h-deletion supervision on fresh seed 20260919,
+with 128 training, 32 selection and 128 evaluation samples. Three minibatch seeds
+share the same 28-parameter initialization, 300-update budget and data. The
+protocol changes both the training loss and checkpoint criterion; it is not an
+isolated estimate of the effect of the loss alone. Raw evaluation observations
+include the actual h-deleted execution, alongside donor studies and replay.

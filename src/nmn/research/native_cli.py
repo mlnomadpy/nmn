@@ -128,6 +128,9 @@ def main(argv=None) -> int:
         "--seeds", default="0", help="comma-separated minibatch sampling seeds"
     )
     training.add_argument("--pairs", type=Path)
+    training.add_argument(
+        "--fixed-edit", type=Path, help="shared gate objective with edited targets"
+    )
     training.add_argument("--output", type=Path, required=True)
     benchmark = commands.add_parser(
         "benchmark", help="compare saved native models under one replay contract"
@@ -601,6 +604,7 @@ def main(argv=None) -> int:
                 ResearchDataset.from_dict(_read(args.dataset)),
                 _read(args.targets),
                 config=TrainingConfig(**_read(args.config)),
+                fixed_edit=None if args.fixed_edit is None else _read(args.fixed_edit),
                 architecture_contract=_read(args.contract),
                 target_provenance=args.target_provenance,
                 seeds=[int(seed) for seed in args.seeds.split(",")],

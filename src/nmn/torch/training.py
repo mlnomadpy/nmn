@@ -25,8 +25,22 @@ class TrainingConfig:
     intervention_weight: float = 0.0
     separate_pair_rng: bool = False
     detach_donor: bool = True
+    fixed_edit_weight: float = 0.0
+    protection_weight: float = 0.0
+    checkpoint_objective: str = "task"
 
     def validate(self):
+        for name in ("fixed_edit_weight", "protection_weight"):
+            value = getattr(self, name)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or value < 0
+            ):
+                raise ValueError(f"{name} must be finite and nonnegative")
+        if self.checkpoint_objective not in ("task", "task-plus-fixed-edit"):
+            raise ValueError("unsupported checkpoint objective")
         if type(self.detach_donor) is not bool:
             raise ValueError("detach_donor must be a boolean")
         if type(self.separate_pair_rng) is not bool:
@@ -61,6 +75,7 @@ def train_native(
     target_provenance: str,
     seeds=(0,),
     pairs=(),
+    fixed_edit=None,
 ):
     """Explicitly fit independent copies of a supplied native model on CPU.
 
@@ -128,6 +143,25 @@ def train_native(
         prototype = model_from_snapshot(initial_snapshot)
     if not any(p.requires_grad for p in prototype.parameters()):
         raise ValueError("model has no trainable parameters")
+    if (fixed_edit is not None) != bool(config.fixed_edit_weight):
+        raise ValueError(
+            "fixed_edit and a positive fixed_edit_weight are required together"
+        )
+    if fixed_edit is None and (
+        config.protection_weight or config.checkpoint_objective != "task"
+    ):
+        raise ValueError(
+            "protection and joint checkpoint selection require a fixed edit objective"
+        )
+    fixed_controls, fixed_indices, fixed_targets = {}, {}, None
+    if fixed_edit is not None:
+        from .fixed_training import prepare_fixed_objective
+
+        fixed_edit, fixed_controls, fixed_indices, fixed_targets = (
+            prepare_fixed_objective(fixed_edit, prototype, train_ids + validation_ids)
+        )
+        if config.protection_weight and not fixed_indices["protected_outputs"]:
+            raise ValueError("positive protection_weight requires protected outputs")
     outputs = tuple(prototype.output_names)
     target_tensor = torch.as_tensor(
         [targets[sid] for sid in train_ids + validation_ids], dtype=torch.float64
@@ -157,6 +191,50 @@ def train_native(
         target_tensor[len(train_ids) :],
     )
     train_index = {sid: i for i, sid in enumerate(train_ids)}
+
+    def fixed_losses(model, x, baseline, expected):
+        zero = baseline.new_zeros(())
+        if fixed_edit is None:
+            return zero, zero
+        edited = model(x, fixed_controls)
+        target_loss = (
+            (edited[:, fixed_indices["output_names"]] - expected).square().mean()
+        )
+        protected = fixed_indices["protected_outputs"]
+        protection_loss = (
+            (edited[:, protected] - baseline[:, protected]).square().mean()
+            if protected
+            else zero
+        )
+        return target_loss, protection_loss
+
+    def validate_checkpoint(model):
+        with torch.no_grad():
+            baseline = model(x_validation)
+            task = (baseline - y_validation).square().mean()
+            edit, protection = fixed_losses(
+                model,
+                x_validation,
+                baseline,
+                None if fixed_targets is None else fixed_targets[len(train_ids) :],
+            )
+            score = (
+                task
+                if config.checkpoint_objective == "task"
+                else task
+                + config.fixed_edit_weight * edit
+                + config.protection_weight * protection
+            )
+        values = dict(
+            validation_mse=task.item(),
+            validation_fixed_edit_mse=edit.item(),
+            validation_protection_mse=protection.item(),
+            validation_selection_score=score.item(),
+        )
+        if not all(math.isfinite(v) for v in values.values()):
+            raise ValueError("nonfinite validation loss")
+        return values
+
     runs = []
     for seed in seeds:
         with torch.random.fork_rng(devices=[]):
@@ -177,16 +255,13 @@ def train_native(
         started = time.perf_counter()
         error = None
         best_loss = None
+        best_score = None
         model.train()
         try:
-            with torch.no_grad():
-                initial_validation = (
-                    ((model(x_validation) - y_validation) ** 2).mean().item()
-                )
-            if not math.isfinite(initial_validation):
-                raise ValueError("nonfinite initial validation loss")
-            best_loss = initial_validation
-            history.append({"step": 0, "validation_mse": best_loss})
+            initial_validation = validate_checkpoint(model)
+            best_loss = initial_validation["validation_mse"]
+            best_score = initial_validation["validation_selection_score"]
+            history.append({"step": 0, **initial_validation})
             for step in range(1, config.max_steps + 1):
                 if time.perf_counter() - started >= config.max_seconds:
                     status = "budget-stopped"
@@ -195,7 +270,14 @@ def train_native(
                     : config.batch_size
                 ]
                 optimizer.zero_grad(set_to_none=True)
-                task_loss = ((model(x_train[indices]) - y_train[indices]) ** 2).mean()
+                baseline = model(x_train[indices])
+                task_loss = ((baseline - y_train[indices]) ** 2).mean()
+                fixed_loss, protection_loss = fixed_losses(
+                    model,
+                    x_train[indices],
+                    baseline,
+                    None if fixed_targets is None else fixed_targets[indices],
+                )
                 intervention_loss = task_loss.new_zeros(())
                 if pairs:
                     losses = []
@@ -231,7 +313,12 @@ def train_native(
                             (prediction[0, coordinate_ids] - expected).square().mean()
                         )
                     intervention_loss = torch.stack(losses).mean()
-                loss = task_loss + config.intervention_weight * intervention_loss
+                loss = (
+                    task_loss
+                    + config.intervention_weight * intervention_loss
+                    + config.fixed_edit_weight * fixed_loss
+                    + config.protection_weight * protection_loss
+                )
                 if not bool(torch.isfinite(loss)):
                     raise ValueError("nonfinite training loss")
                 loss.backward()
@@ -243,22 +330,20 @@ def train_native(
                 optimizer.step()
                 completed = step
                 if step % config.evaluate_every == 0 or step == config.max_steps:
-                    with torch.no_grad():
-                        validation = (
-                            ((model(x_validation) - y_validation) ** 2).mean().item()
-                        )
-                    if not math.isfinite(validation):
-                        raise ValueError("nonfinite validation loss")
+                    validation = validate_checkpoint(model)
                     history.append(
                         {
                             "step": step,
                             "pre_update_task_mse": task_loss.item(),
                             "pre_update_intervention_mse": intervention_loss.item(),
-                            "validation_mse": validation,
+                            "pre_update_fixed_edit_mse": fixed_loss.item(),
+                            "pre_update_protection_mse": protection_loss.item(),
+                            **validation,
                         }
                     )
-                    if validation < best_loss:
-                        best_loss, best_step = validation, step
+                    if validation["validation_selection_score"] < best_score:
+                        best_loss, best_step = validation["validation_mse"], step
+                        best_score = validation["validation_selection_score"]
                         best_state = copy.deepcopy(model.state_dict())
         except (ValueError, RuntimeError) as exc:
             status, error = "failed", str(exc)
@@ -286,6 +371,7 @@ def train_native(
                 "steps_completed": completed,
                 "best_step": best_step,
                 "best_validation_mse": best_loss,
+                "best_selection_score": best_score,
                 "optimization_seconds": optimization_seconds,
                 "history": history,
                 "selected_checkpoint": snapshot,
@@ -308,21 +394,31 @@ def train_native(
             "train_ids": train_ids,
             "checkpoint_selection_ids": validation_ids,
             "protocol": (
-                "task-only"
-                if not pairs
+                "task-and-fixed-edit-supervision"
+                if fixed_edit is not None and not pairs
                 else (
-                    "task-and-detached-donor-supervision"
-                    if config.detach_donor
-                    else "task-and-joint-donor-supervision"
+                    "task-fixed-edit-and-donor-supervision"
+                    if fixed_edit is not None
+                    else (
+                        "task-only"
+                        if not pairs
+                        else (
+                            "task-and-detached-donor-supervision"
+                            if config.detach_donor
+                            else "task-and-joint-donor-supervision"
+                        )
+                    )
                 )
             ),
             "donor_pairs": [asdict(pair) for pair in pairs],
+            "fixed_edit": fixed_edit,
+            "fixed_edit_gradient_policy": "joint gradients through baseline and edited protected outputs",
             "seed_scope": (
                 "minibatches use seed; pairs use (seed + 2**32) modulo 2**63; common initialization"
                 if config.separate_pair_rng
                 else "minibatch/pair order; common initialization"
             ),
-            "selection_rule": "lowest observed validation MSE; strict improvement; ties retain earlier checkpoint",
+            "selection_rule": f"lowest observed {config.checkpoint_objective} validation score; strict improvement; ties retain earlier checkpoint",
             "runs": runs,
             "source_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             "limitations": [
