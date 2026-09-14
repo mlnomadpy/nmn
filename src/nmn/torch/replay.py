@@ -12,6 +12,7 @@ from ..research.semantics import TabulatedReference
 from .alignment import alignment_study
 from .benchmark import benchmark_models
 from .coalitions import coalition_study
+from .curvature import curvature_study
 from .edges import edge_study
 from .graph import YatGraph
 from .interpretable import Intervention, YatExpansion
@@ -45,6 +46,7 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
         ):
             raise ValueError("tolerances must be finite nonnegative numbers")
     supported = {
+        "nmn.curvature-study.v1",
         "nmn.alignment-study.v1",
         "nmn.preimage-execution.v1",
         "nmn.native-research.v1",
@@ -241,6 +243,29 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
                 "unexecuted",
                 "validation",
                 "ledger",
+            ]
+        elif schema == "nmn.curvature-study.v1":
+            curvature_protocol = dict(record["protocol"])
+            if len(set(record["direction_names"])) != len(
+                record["direction_names"]
+            ) or set(record["direction_names"]) != set(
+                curvature_protocol["directions"]
+            ):
+                raise ValueError(
+                    "curvature direction names must match the saved protocol"
+                )
+            curvature_protocol["directions"] = {
+                name: curvature_protocol["directions"][name]
+                for name in record["direction_names"]
+            }
+            actual = curvature_study(model, dataset, **curvature_protocol)
+            keys = [
+                "sample_ids",
+                "module_names",
+                "output_names",
+                "direction_names",
+                "observations",
+                "axes",
             ]
         elif schema == "nmn.alignment-study.v1":
             actual = alignment_study(

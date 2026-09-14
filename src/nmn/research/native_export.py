@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.curvature-study.v1": "Native directional gate curvature",
     "nmn.alignment-study.v1": "Supervised native semantic alignment search",
     "nmn.preimage-execution.v1": "Executed native preimage read interventions",
     "nmn.preimage-study.v1": "Dataset-linked native preimage proposals",
@@ -348,6 +349,21 @@ def render_native_note(record):
             f"Validation: {_text({k: v for k, v in (record['validation'] or {}).items() if k not in ('trace', 'outputs')})}.",
             "",
             "The frozen winner is never changed using validation outcomes. This is finite empirical selection, not a statistical certificate.",
+            "",
+        ]
+    elif schema == "nmn.curvature-study.v1":
+        lines += [
+            "## Directional derivatives and executed finite edits",
+            "",
+            f"Directions: {_text(record['direction_names'])}. Modules: {_text(record['module_names'])}.",
+            "",
+            f"Tensor axes: {_text(record['axes'])}.",
+            "",
+            f"Execution cost: {_text(record['cost'])}.",
+            "",
+            "Hessian-vector products, cross-direction curvature and signed finite-edit residuals remain in data.json.",
+            "",
+            "Local second-order predictions need not improve finite edits; no uniform certificate is supplied.",
             "",
         ]
     elif schema == "nmn.alignment-study.v1":

@@ -176,6 +176,17 @@ def main(argv=None) -> int:
     selection.add_argument("--provenance", required=True)
     selection.add_argument("--selection-split", default="tuning")
     selection.add_argument("--validation-split", default="validation")
+    curvature = commands.add_parser(
+        "curvature",
+        help="measure directional gate Hessian products and finite edit residuals",
+    )
+    curvature.add_argument("--directions", type=Path, required=True)
+    curvature.add_argument(
+        "--background", type=Path, help="JSON gate vector; default all ones"
+    )
+    curvature.add_argument("--provenance", required=True)
+    curvature.add_argument("--max-directions", type=int, default=16)
+    curvature.add_argument("--split")
     alignment = commands.add_parser(
         "align",
         help="fit a finite native semantic assignment and evaluate its frozen winner",
@@ -315,6 +326,7 @@ def main(argv=None) -> int:
         probe,
         semantic,
         alignment,
+        curvature,
         selection,
         gate_search,
         response,
@@ -703,6 +715,20 @@ def main(argv=None) -> int:
                     max_candidates=args.max_candidates,
                     selection_split=args.selection_split,
                     validation_split=args.validation_split,
+                )
+            elif args.command == "curvature":
+                from ..torch.curvature import curvature_study
+
+                result = curvature_study(
+                    model,
+                    dataset,
+                    directions=_read(args.directions),
+                    background=(
+                        None if args.background is None else _read(args.background)
+                    ),
+                    provenance=args.provenance,
+                    split=args.split,
+                    max_directions=args.max_directions,
                 )
             elif args.command == "align":
                 from ..torch.alignment import alignment_study

@@ -500,6 +500,19 @@ def build_dashboard(sources, destination):
                             "counterexample",
                         )
                     }
+                elif record["schema"] == "nmn.curvature-study.v1":
+                    summary["details"] = {
+                        "directions": record["protocol"]["directions"],
+                        "module_names": record["module_names"],
+                        "axes": record["axes"],
+                        "cost": record["cost"],
+                        "first_order_residual": record["observations"][
+                            "first_order_residual"
+                        ],
+                        "second_order_residual": record["observations"][
+                            "second_order_residual"
+                        ],
+                    }
                 elif record["schema"] == "nmn.alignment-study.v1":
                     summary["details"] = {
                         key: record[key]
