@@ -47,6 +47,9 @@ def _summary(record, source, now):
             else "floating-point observations"
         )
     )
+    if schema == "nmn.rational-enclosure.v1":
+        scope = "exact rational real-function enclosure"
+        status = "enclosed"
     if schema == "nmn.native-replay.v1":
         scope = "numerical replay comparison"
     return {
@@ -64,7 +67,7 @@ def _summary(record, source, now):
         ),
         "backend": (
             "exact rational"
-            if schema == FINITE
+            if schema in (FINITE, "nmn.rational-enclosure.v1")
             else snapshot.get("runtime", {}).get("torch", "PyTorch record")
         ),
         "contract": record.get(
@@ -178,6 +181,16 @@ def build_dashboard(sources, destination):
                             "tolerances",
                             "compared_fields",
                             "mismatches",
+                        )
+                    }
+                elif record["schema"] == "nmn.rational-enclosure.v1":
+                    summary["details"] = {
+                        key: record[key]
+                        for key in (
+                            "input_box",
+                            "controls",
+                            "output_bounds",
+                            "assurance",
                         )
                     }
                 elif record["schema"] == "nmn.edit-selection.v1":

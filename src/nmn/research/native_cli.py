@@ -28,6 +28,14 @@ def main(argv=None):
         "verify-export", help="check exported native files without replay"
     )
     integrity.add_argument("directory", type=Path)
+    enclosure = commands.add_parser(
+        "enclose",
+        help="bound supported real-valued models with exact rational intervals",
+    )
+    enclosure.add_argument("--model", type=Path, required=True)
+    enclosure.add_argument("--box", type=Path, required=True)
+    enclosure.add_argument("--controls", type=Path)
+    enclosure.add_argument("--output", type=Path, required=True)
     replay = commands.add_parser(
         "replay", help="recompute supported native records on CPU"
     )
@@ -211,7 +219,15 @@ def main(argv=None):
         from ..torch.studies import donor_study
         from .datasets import DonorPair, ResearchDataset
 
-        if args.command == "replay":
+        if args.command == "enclose":
+            from ..torch.enclosure import enclose_native
+
+            result = enclose_native(
+                _read(args.model),
+                _read(args.box),
+                controls=None if args.controls is None else _read(args.controls),
+            )
+        elif args.command == "replay":
             from ..torch.replay import replay_native_record
 
             result = replay_native_record(

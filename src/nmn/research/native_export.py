@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.rational-enclosure.v1": "Rational real-function enclosure",
     "nmn.response-space.v1": "Finite edit-response subspace",
     "nmn.edit-selection.v1": "Frozen native edit selection",
     "nmn.semantic-study.v1": "Supplied semantic correspondence study",
@@ -130,7 +131,23 @@ def render_native_note(record):
             f"Data/semantic provenance: {_text(ds.get('provenance', 'not recorded'))}.",
             "",
         ]
-    if schema == "nmn.response-space.v1":
+    if schema == "nmn.rational-enclosure.v1":
+        lines += [
+            "## Exact rational enclosure",
+            "",
+            _text(record["assurance"]),
+            "",
+            f"Input box: {_text(record['input_box'])}.",
+            "",
+            _table(
+                ["Output", "Lower", "Upper"],
+                [[name, *bounds] for name, bounds in record["output_bounds"].items()],
+            ),
+            "",
+            "These are real-function bounds, not a contract verdict or floating-runtime certificate.",
+            "",
+        ]
+    elif schema == "nmn.response-space.v1":
         lines += [
             "## Observed response subspace",
             "",
