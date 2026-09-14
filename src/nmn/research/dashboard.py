@@ -129,8 +129,7 @@ def _summary(record, source, now):
                 )
                 else (
                     "JAX " + snapshot.get("runtime", {}).get("jax", "unknown")
-                    if execution.get("schema")
-                    in ("nmn.nnx-research.v1", "nmn.nnx-model.v1")
+                    if configuration.get("backend") == "flax-nnx"
                     else snapshot.get("runtime", {}).get("torch", "PyTorch record")
                 )
             )
@@ -250,6 +249,64 @@ def build_dashboard(sources, destination):
                             "compared_fields",
                             "mismatches",
                         )
+                    }
+                elif record["schema"] == "nmn.nnx-research.v1":
+                    summary["details"] = {
+                        "sample_ids_first_25": record["sample_ids"][:25],
+                        "output_order": record["output_names"],
+                        "outputs_first_25": record["outputs"][:25],
+                        "derivatives_recorded": record["derivatives"] is not None,
+                        "capabilities": record["capabilities"],
+                        "edits_total": len(record["edits"]),
+                        "edits_first_25": {
+                            name: {
+                                "controls": row["controls"],
+                                "outputs_first_25": row["outputs"][:25],
+                                "delta_first_25": row["delta"][:25],
+                            }
+                            for name, row in list(record["edits"].items())[:25]
+                        },
+                    }
+                elif record["schema"] == "nmn.nnx-suffix-study.v1":
+                    summary["details"] = {
+                        "protocol": record["protocol"],
+                        "reconstruction_error_first_25": record[
+                            "baseline_reconstruction_error"
+                        ][:25],
+                        "variants_total": len(record["variants"]),
+                        "variants_first_25": {
+                            name: {
+                                "state_first_25": row["state"][:25],
+                                "outputs_first_25": row["outputs"][:25],
+                                "output_delta_first_25": row["output_delta"][:25],
+                            }
+                            for name, row in list(record["variants"].items())[:25]
+                        },
+                    }
+                elif record["schema"] in (
+                    "nmn.preimage-search.v1",
+                    "nmn.preimage-study.v1",
+                ):
+                    search = record.get("search", record)
+                    summary["details"] = {
+                        "module": record.get("module", "standalone kernel bank"),
+                        "protocol": search["protocol"],
+                        "selected_step": search["selected_step"],
+                        "sample_ids_first_25": search["sample_ids"][:25],
+                        "selected_inputs_first_25": search["selected_inputs"][:25],
+                        "feature_residuals_first_25": search["feature_residuals"][:25],
+                        "interpretation": "Proposals only; native effects require a separate execution record.",
+                    }
+                elif record["schema"] == "nmn.preimage-execution.v1":
+                    summary["details"] = {
+                        "proposal_sha256": record["proposal_sha256"],
+                        "module": record["module"],
+                        "read_slots": record["read_slots"],
+                        "sample_ids_first_25": record["sample_ids"][:25],
+                        "outputs_first_25": record["outputs"][:25],
+                        "output_delta_first_25": record["output_delta"][:25],
+                        "feature_residuals_first_25": record["feature_residuals"][:25],
+                        "interpretation": "Executed receiver-read edits; effects do not imply global reachability or erasure.",
                     }
                 elif record["schema"] in (
                     "nmn.interval-certificate.v1",

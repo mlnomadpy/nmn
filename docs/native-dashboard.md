@@ -70,3 +70,14 @@ counts. Budget-stopped plans retain their partial status. Executed studies with
 embedded selection plans expose the saved plan hash, status and coverage; the
 dashboard does not revalidate them. Up to 25 pairs/decisions are previewed, with
 complete records linked. Complete finite selection is not scientific validation.
+
+NNX observation previews show output order, sample IDs, baseline/edit outputs,
+recorded derivative availability and capability metadata. NNX suffix previews
+show boundary protocol, reconstruction residuals and supplied-state effects.
+Backend labels derive from the saved architecture configuration, including nested
+NNX suffix models; missing runtime versions remain explicitly unknown.
+
+Preimage previews distinguish bounded input proposals from executed receiver-read
+interventions. Proposals show the selected iterate and feature residuals;
+executions show their proposal identity, receiving module/slots and output deltas.
+Previews retain at most 25 samples or variants; copied records remain complete.
