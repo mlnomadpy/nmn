@@ -75,3 +75,5 @@ Use [native exports](native-vault-export.md) and the [offline dashboard](native-
 [Internal-state probes](native-probes.md) preserve feature/label rows, fit-only ridge coefficients, held-out decoding, confusion counts and conditional damage. Probe failure is not an erasure certificate.
 
 [Native preimage search](native-preimage.md) proposes bounded input coordinates for supplied finite-bank feature targets and preserves residuals. The executable example separately measures the selected native edit; feature fitting alone does not imply protection or erasure.
+
+[Matched training](matched-training.md) runs bounded Yat/IMQ/tanh fits on one shared synthetic task with separate checkpoint-selection and final evaluation populations. It retains failures, selected models, raw native effects and replay; a single small task does not establish kernel superiority or source-faithful benchmark reproduction.
