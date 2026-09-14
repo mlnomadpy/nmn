@@ -1,99 +1,64 @@
-# Native NMN research from the CLI
+# Native NMN research workflow
 
-Install `nmn[torch]`. All native commands run on CPU in float64. The ordinary NMN
-CLI and `nmn research native --help` remain available without PyTorch.
+Install `nmn[torch]` for model execution. Native CLI execution uses CPU float64;
+replay follows saved float32/float64 precision. Help, export, integrity checking
+and offline reports work without a PyTorch installation. All output paths must
+be new so saved evidence is never overwritten.
 
-The commands below use the JSON examples shipped in `examples/research/`.
-Each output path must be new; existing evidence is never overwritten.
+From the repository, run a first observation/export workflow:
 
 ```bash
 nmn research native init --output native-model.json
 nmn research native inspect --model native-model.json
-
 nmn research native collect --model native-model.json \
   --dataset examples/research/native-dataset.json \
   --edits examples/research/native-edits.json --output observations.json
-
-nmn research native donor --model native-model.json \
-  --dataset examples/research/native-dataset.json \
-  --pairs examples/research/native-pairs.json \
-  --protected protected --output donor-study.json
-
-nmn research native path --model native-model.json \
-  --dataset examples/research/native-dataset.json \
-  --start 1,1,1 --end 0,1,1 --steps 64 --output gate-path.json
+nmn research native replay observations.json --output replay.json
+nmn research native export observations.json --output observation-note
+nmn research native report observations.json replay.json --output dashboard
 ```
 
-`init` creates the all-ones reference. Pass `--graph configuration.json --seed 0`
-to initialize a general graph from `YatGraph.configuration()` JSON. This is
-initialization, not training. Model files contain parameters, configuration,
-identity and source hashes, without a pickle payload or arbitrary Python loader.
-Both model files and full native research snapshots can be supplied to `--model`.
+`init` constructs the all-ones reference. `--graph configuration.json --seed 0`
+constructs a general graph. It does not train. Saved models use checked JSON
+configuration and parameters, without pickle or executable model loaders.
+`--model` accepts both a model definition and a complete native model snapshot.
+Historical expanded-distance snapshots are rejected rather than changing their
+curvature semantics silently.
 
-`collect` runs every named edit on the chosen population and exports model data,
-module geometry, traces, derivatives and per-example effects. Use `--split NAME`
-to restrict samples and `--no-derivatives` to omit costly Jacobian/Hessian data.
+| Command | Purpose and detailed guide |
+|---|---|
+| `init`, `inspect` | [Native models, routing and data](native-interpretable-torch.md) |
+| `collect` | Full traces, kernel geometry, derivatives and executed edit effects |
+| `donor` | [Declared donor pairs and receiving-module read patches](native-donor-studies.md) |
+| `path` | [Joint gate paths, numerical curvature and quadrature residuals](native-gate-paths.md) |
+| `diagnose` | [Kernel and sensor measurements](native-kernel-diagnostics.md) |
+| `protect` | [Classification accuracy, damage, repairs and eligibility](native-protection.md) |
+| `coalitions` | [Budgeted module-subset interaction measurements](native-coalitions.md) |
+| `suffix` | [Supplied intermediate states and downstream responses](native-suffix.md) |
+| `semantics` | [Supplied references and counterfactual correspondence checks](native-semantics.md) |
+| `select` | [Candidate selection followed by frozen-winner validation](native-selection.md) |
+| `response-space` | [Fit-only response bases and evaluation reconstruction errors](native-response-space.md) |
+| `benchmark` | [Saved-model comparison under a shared replay contract](native-baseline-comparisons.md) |
+| `train`, `checkpoint` | [Explicit bounded optimization and selected checkpoint extraction](native-training.md) |
+| `replay` | [Numerical reproduction with declared tolerances](native-replay.md) |
+| `export`, `verify-export` | [Obsidian notes, raw data and integrity checks](native-vault-export.md) |
+| `report` | [Portable offline evidence dashboard](native-dashboard.md) |
 
-`donor` consumes a JSON array of `DonorPair` records with optional expected output
-values. It retains the full dataset, donor/base identities and native responses.
-`--match-semantics KEY ...` checks supplied donor eligibility labels. Cross-split
-access requires `--allow-cross-split` and is recorded. Python reference callbacks
-are available through the library API, not executable code in these JSON files.
+Run `nmn research native COMMAND --help` for required inputs. Research JSON
+examples live under `examples/research/`; the table links to supported formats
+and scope limits. `collect --no-derivatives` avoids costly Jacobian/Hessian data.
+`path` gate order follows the module order returned by `inspect`. Dataset split,
+group and semantic metadata are declarations, not evidence of independence or
+semantic discovery. See [the vault-driven requirements map](research-data-requirements.md)
+for capabilities that remain unimplemented.
 
-`path` takes one comma-separated scalar gate per module, in the order shown by
-`inspect`. `--split` restricts the measured population. It exports actual endpoint
-effects and numerical path predictions; none is presented as a sound certificate.
+Exit status 0 normally means an artifact was produced, not a scientific hypothesis
+passed. Read the record's outcome: selection can fail validation, semantic tests
+can disagree, and budgeted coalitions can be inconclusive. `replay` is the exception:
+exit 0 means a numerical match and exit 1 means a written mismatch report. Status 2
+means invalid input, unavailable backend or execution/write failure.
 
-Exit status 0 means the requested artifact was produced; it does not mean a
-research hypothesis passed. Status 2 indicates invalid input, missing PyTorch or
-an execution/write error. Model content hashes detect accidental parameter or
-configuration changes, not malicious replacement of a whole file and its hash.
-Historical expanded-distance snapshots are rejected instead of silently changing
-their curvature semantics.
-
-For Python integrations, `nmn.torch.research.model_from_snapshot` restores a native
-model from validated JSON parameter/configuration identity. The CLI uses this same
-API. See [datasets and donor studies](native-donor-studies.md),
-[gate-path analysis](native-gate-paths.md), and
-[native models and data](native-interpretable-torch.md).
-
-
-`nmn research native diagnose --model native-model.json --dataset dataset.json
---module y --output diagnostics.json` exposes scoped kernel and sensor measurements.
-See [kernel diagnostics](native-kernel-diagnostics.md) for the supported layer
-settings and finite-data interpretation.
-
-
-`nmn research native benchmark` compares saved models under one declared dataset
-and edit contract. See [baseline comparisons](native-baseline-comparisons.md).
-
-
-`nmn research native train` is an explicit bounded optimization command;
-`native checkpoint` extracts a selected model for later research commands. See
-[training protocols](native-training.md). Read-only commands never invoke training.
-
-
-`nmn research native export record.json --output vault/new-run` writes an Obsidian
-note beside the untouched JSON and file hashes. `native verify-export vault/new-run`
-checks stored integrity without model replay; neither requires PyTorch. See
-[native vault export](native-vault-export.md).
-
-`native protect` executes declared classification tasks and preserves per-example
-damage, repairs and eligible counts; see [protection studies](native-protection.md).
-`native coalitions` measures module-subset interactions under explicit budgets;
-see [coalition studies](native-coalitions.md). `native donor --read-slots` patches
-selected reads of receiving graph modules; see [donor studies](native-donor-studies.md).
-
-`native replay record.json --output replay.json` recomputes supported native
-measurements. Exit 1 denotes a saved numerical mismatch; see
-[native replay](native-replay.md) for fields compared and tolerance semantics.
-`native report SOURCES... --output dashboard` creates a portable offline index;
-see [the dashboard](native-dashboard.md).
-
-`native suffix` compares supplied intermediate graph states with the unchanged boundary state and executes the remaining network. See [suffix studies](native-suffix.md). These records support native replay and Obsidian export.
-
-`native semantics` checks supplied finite reference tables and variable-to-module correspondences. See [semantic studies](native-semantics.md); successful ordinary predictions do not imply counterfactual agreement.
-
-`native select` evaluates candidate edits on one split, freezes a feasible winner and measures it on another. See [edit selection](native-selection.md); this is empirical selection without a population guarantee.
-
-`native response-space` fits a finite edit-coordinate basis on one split and measures reconstruction error on another. See [response-space measurements](native-response-space.md).
+File integrity, numerical reproduction and scientific validity are separate.
+Hashes detect accidental content changes; replacing both data and hashes is not
+prevented. Replay never silently launches training. Only `train` performs model
+optimization; response-space fitting is explicitly a numerical SVD on observations.
