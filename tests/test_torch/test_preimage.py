@@ -47,3 +47,37 @@ def test_unattainable_target_retains_residual_without_certification():
     assert record["selected_step"] == 0
     assert record["feature_residuals"] == [[1.0]]
     assert record["status"] == "step-budget-completed"
+
+
+def test_dataset_study_uses_module_inputs_and_exact_target_population():
+    import pytest
+
+    from nmn.research.datasets import ResearchDataset, ResearchSample
+    from nmn.torch.preimage import preimage_study
+
+    dataset = ResearchDataset(
+        [
+            ResearchSample("a", (1.0, 1.0), "evaluation", "a"),
+            ResearchSample("b", (0.0, 0.0), "fit", "b"),
+        ],
+        name="population",
+        provenance="synthetic",
+    )
+    model = ThreeNeuronYat.reference(dtype=torch.float64)
+    kwargs = dict(
+        module_name="y",
+        lower=[0.0, 1.0],
+        upper=[1.0, 1.0],
+        provenance="fixture",
+        max_steps=0,
+        max_seconds=1.0,
+        learning_rate=0.1,
+        split="evaluation",
+    )
+    record = preimage_study(model, dataset, targets={"a": [0.5]}, **kwargs)
+    assert record["sample_ids"] == ["a"]
+    assert record["search"]["inputs"] == [[1.0, 1.0]]
+    assert record["proposed_inputs"] == {"a": [1.0, 1.0]}
+    assert record["dataset_sha256"] == dataset.sha256
+    with pytest.raises(ValueError, match="exactly"):
+        preimage_study(model, dataset, targets={"a": [0.5], "b": [0.5]}, **kwargs)

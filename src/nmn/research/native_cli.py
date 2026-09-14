@@ -264,7 +264,24 @@ def main(argv=None) -> int:
     donor.add_argument("--protected", nargs="*", default=[])
     donor.add_argument("--match-semantics", nargs="*", default=[])
     donor.add_argument("--allow-cross-split", action="store_true")
+    preimage = commands.add_parser(
+        "preimage",
+        help="search bounded native inputs for supplied kernel-feature targets",
+    )
+    preimage.add_argument("--module", required=True)
+    preimage.add_argument("--targets", type=Path, required=True)
+    preimage.add_argument(
+        "--bounds",
+        type=Path,
+        required=True,
+        help="JSON with lower and upper input-coordinate bounds",
+    )
+    preimage.add_argument("--max-steps", type=int, required=True)
+    preimage.add_argument("--max-seconds", type=float, required=True)
+    preimage.add_argument("--learning-rate", type=float, required=True)
+    preimage.add_argument("--provenance", required=True)
     for command in (
+        preimage,
         collect,
         path,
         donor,
@@ -285,6 +302,7 @@ def main(argv=None) -> int:
         command.add_argument("--dataset", type=Path, required=True)
         command.add_argument("--output", type=Path, required=True)
     for command in (
+        preimage,
         collect,
         path,
         diagnose,
@@ -619,6 +637,25 @@ def main(argv=None) -> int:
                     rank=args.rank,
                     fit_split=args.fit_split,
                     evaluation_split=args.evaluation_split,
+                )
+            elif args.command == "preimage":
+                from ..torch.preimage import preimage_study
+
+                bounds = _read(args.bounds)
+                if not isinstance(bounds, dict) or set(bounds) != {"lower", "upper"}:
+                    raise ValueError("bounds must contain exactly lower and upper")
+                result = preimage_study(
+                    model,
+                    dataset,
+                    module_name=args.module,
+                    targets=_read(args.targets),
+                    lower=bounds["lower"],
+                    upper=bounds["upper"],
+                    provenance=args.provenance,
+                    split=args.split,
+                    max_steps=args.max_steps,
+                    max_seconds=args.max_seconds,
+                    learning_rate=args.learning_rate,
                 )
             elif args.command == "search-gates":
                 from ..torch.gate_search import search_gates

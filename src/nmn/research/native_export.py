@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.preimage-study.v1": "Dataset-linked native preimage proposals",
     "nmn.preimage-search.v1": "Bounded finite-kernel preimage search",
     "nmn.nnx-suffix-study.v1": "NNX downstream boundary-state study",
     "nmn.nnx-model.v1": "NNX native model definition",
@@ -168,7 +169,21 @@ def render_native_note(record):
             f"Data/semantic provenance: {_text(ds.get('provenance', 'not recorded'))}.",
             "",
         ]
-    if schema == "nmn.preimage-search.v1":
+    if schema == "nmn.preimage-study.v1":
+        search = record["search"]
+        lines += [
+            "## Dataset-linked preimage proposals",
+            "",
+            f"Module: {_text(record['module'])}; selected samples: {len(record['sample_ids'])}.",
+            "",
+            f"Status: {_text(search['status'])}; selected step: {_text(search['selected_step'])}.",
+            "",
+            f"Maximum absolute feature residual: {_maximum(search['feature_residuals'])}.",
+            "",
+            "Proposed module inputs are keyed by sample ID. This study does not install them as native edits.",
+            "",
+        ]
+    elif schema == "nmn.preimage-search.v1":
         lines += [
             "## Native preimage search",
             "",

@@ -180,3 +180,85 @@ def search_preimages(
     )
     json.dumps(record, allow_nan=False)
     return record
+
+
+def preimage_study(
+    model,
+    dataset,
+    *,
+    module_name,
+    targets,
+    lower,
+    upper,
+    provenance,
+    max_steps,
+    max_seconds,
+    learning_rate,
+    split=None,
+):
+    """Search from actual module inputs on an explicitly selected population.
+
+    Targets map exactly the selected sample IDs to finite-bank feature vectors.
+    Selected input coordinates are proposals, not automatically installed edits.
+    A parent model/dataset snapshot links the frozen bank to its executed inputs.
+    """
+    from .graph import YatGraph
+    from .interpretable import ThreeNeuronYat
+    from .research import collect_research_data
+
+    if not isinstance(model, (YatGraph, ThreeNeuronYat)):
+        raise TypeError("preimage studies require a native graph or three-neuron model")
+    if not isinstance(module_name, str) or module_name not in model.state_names:
+        raise ValueError("unknown preimage module")
+    block = (
+        model.blocks[module_name]
+        if isinstance(model, YatGraph)
+        else getattr(model, module_name)
+    )
+    if type(block) is not YatExpansion:
+        raise ValueError(
+            "preimage studies support fixed unbiased YatExpansion modules only"
+        )
+    ids = dataset.sample_ids(split=split)
+    if not ids or not isinstance(targets, dict) or set(targets) != set(ids):
+        raise ValueError("targets must cover exactly the nonempty selected population")
+    json.dumps(targets, allow_nan=False)
+    x = torch.tensor(
+        [dataset.sample(sid).inputs for sid in ids],
+        dtype=block.centers.dtype,
+        device=block.centers.device,
+    )
+    with torch.no_grad():
+        _, trace = model.forward_with_trace(x)
+        points = trace[module_name + ".input"]
+    search = search_preimages(
+        block,
+        points,
+        [targets[sid] for sid in ids],
+        lower=lower,
+        upper=upper,
+        sample_ids=ids,
+        provenance=provenance,
+        max_steps=max_steps,
+        max_seconds=max_seconds,
+        learning_rate=learning_rate,
+    )
+    snapshot = collect_research_data(model, x, sample_ids=ids, derivatives=False)
+    return {
+        "schema": "nmn.preimage-study.v1",
+        "status": search["status"],
+        "model_snapshot": snapshot,
+        "module": module_name,
+        "dataset": dataset.to_dict(),
+        "dataset_sha256": dataset.sha256,
+        "sample_ids": list(ids),
+        "split": split,
+        "targets": targets,
+        "search": search,
+        "proposed_inputs": dict(zip(ids, search["selected_inputs"])),
+        "limitations": [
+            "Selected module inputs are proposals; no native edit is installed by this study.",
+            "No held-out generalization is evaluated: every selected sample is optimized.",
+            "Feature residual does not certify erasure, protection, or preimage impossibility.",
+        ],
+    }
