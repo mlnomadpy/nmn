@@ -20,8 +20,9 @@ local RKHS inner products for the ordinary dot-product kernel. Those norms refer
 to the individual module, not a composed nonlinear graph. The ordinary graph
 interfaces supply gates, replacements, read/edge patches, live derivatives,
 snapshot restore, training, numerical replay and benchmark execution.
-The rational enclosure adapter currently rejects this family explicitly; adding
-a linear module does not silently extend the certification arithmetic contract.
+The rational enclosure adapter supports this family by exact rational factor
+contraction and interval evaluation. Its real-function scope excludes floating
+runtime roundoff; see [the enclosure derivation](native-enclosure.md).
 
 `examples/research/linear-protected-graph.json` is a mixed graph configuration
 accepted by `nmn research native init --graph ...`. Its initialization is random

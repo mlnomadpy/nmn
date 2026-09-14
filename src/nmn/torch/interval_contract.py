@@ -136,7 +136,7 @@ def verify_box(snapshot, contract, *, max_boxes):
         source_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         assurance=ASSURANCE,
         limitations=[
-            "Only fixed Yat/IMQ graphs, constant controls and closed output or output-difference ranges are supported.",
+            "Only fixed Yat/IMQ/linear graphs, constant controls and closed output or output-difference ranges are supported.",
             "Positive denominators make the supported rational expressions globally defined; no additional hidden-state domain constraint is asserted.",
             "Interval overestimation yields subdivision or inconclusive status, never a counterexample by itself.",
             "This record requires partition/enclosure checking; a saved status string is not trusted.",

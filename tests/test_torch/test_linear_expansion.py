@@ -1,6 +1,5 @@
 """Explicit linear graph modules retain geometry, gradients and replay."""
 
-import pytest
 import torch
 
 from nmn.torch import LinearExpansion, YatGraph, YatModuleSpec
@@ -27,7 +26,7 @@ def test_linear_expansion_matches_effective_map_and_norm():
     torch.testing.assert_close(gradient, module.effective_weight.sum(0)[None])
 
 
-def test_linear_graph_replays_but_unsupported_enclosure_rejects():
+def test_linear_graph_replays_and_has_exact_box_image():
     model = YatGraph(
         ["x", "y"],
         ["x"],
@@ -43,5 +42,33 @@ def test_linear_graph_replays_but_unsupported_enclosure_rejects():
         model, x, sample_ids=["a", "b", "c"], derivatives=True
     )
     assert replay_native_record(record)["status"] == "matched"
-    with pytest.raises(ValueError, match="only fixed Yat and IMQ"):
-        enclose_native(record, {"x": [-1, 1]})
+    enclosure = enclose_native(record, {"x": [-1, 1]})
+    assert enclosure["output_bounds"]["y"] == ["-1", "1"]
+    assert enclosure["denominator_bounds"]["identity"] == []
+
+
+def test_linear_enclosure_contracts_factors_without_float_rounding():
+    model = YatGraph(
+        ["x", "y"],
+        ["x"],
+        ["y"],
+        [[YatModuleSpec("a", ["x"], ["y"], family="linear", num_centers=3)]],
+        dtype=torch.float64,
+    )
+    with torch.no_grad():
+        model.blocks["a"].centers.fill_(1.0)
+        model.blocks["a"].coefficients.copy_(
+            torch.tensor([[1e16, 1.0, -1e16]], dtype=torch.float64)
+        )
+    record = collect_research_data(
+        model,
+        torch.zeros(1, 1, dtype=torch.float64),
+        sample_ids=["origin"],
+        derivatives=False,
+    )
+    # In exact real arithmetic the factors sum to 1, even if float contraction
+    # rounds away the middle term. This adapter does not cover runtime roundoff.
+    assert enclose_native(record, {"x": ["-2", "3"]})["output_bounds"]["y"] == [
+        "-2",
+        "3",
+    ]

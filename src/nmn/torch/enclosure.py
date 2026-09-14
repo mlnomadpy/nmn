@@ -7,7 +7,7 @@ from typing import Union, cast
 from ..research import intervals
 from ..research.intervals import RationalInterval as Interval
 from ..research.intervals import rational
-from .baselines import IMQExpansion
+from .baselines import IMQExpansion, LinearExpansion
 from .graph import YatGraph
 from .interpretable import ThreeNeuronYat, YatExpansion
 from .research import model_from_snapshot
@@ -16,7 +16,7 @@ from .research import model_from_snapshot
 def enclose_native(snapshot, box, *, controls=None):
     """Enclose every output for all real inputs in one closed rational box.
 
-    Supports fixed Yat and reciprocal-distance IMQ expansions and residual sums.
+    Supports fixed Yat, reciprocal-distance IMQ, linear expansions and residual sums.
     Stored floating parameters are interpreted as their exact binary rational
     values. This does not enclose floating runtime roundoff. No branch search or
     contract verdict is performed; unsupported operations raise an error.
@@ -35,44 +35,74 @@ def enclose_native(snapshot, box, *, controls=None):
         else {name: getattr(model, name) for name in model.state_names}
     )
     if any(
-        not isinstance(block, (YatExpansion, IMQExpansion)) for block in blocks.values()
+        not isinstance(block, (YatExpansion, IMQExpansion, LinearExpansion))
+        for block in blocks.values()
     ):
-        raise ValueError("enclosure supports only fixed Yat and IMQ expansions")
+        raise ValueError(
+            "enclosure supports only fixed Yat and IMQ expansions or linear modules"
+        )
     trace = {}
     denominators = {}
 
     def execute(name, values):
-        block = cast(Union[YatExpansion, IMQExpansion], blocks[name])
+        block = cast(Union[YatExpansion, IMQExpansion, LinearExpansion], blocks[name])
         centers = block.centers.detach().cpu().tolist()
         coefficients = block.coefficients.detach().cpu().tolist()
-        epsilon = (
-            block.kernel.epsilon if isinstance(block, YatExpansion) else block.epsilon
-        )
-        if Interval.point(epsilon).lower <= 0:
-            raise ValueError("epsilon must be strictly positive")
-        features, ds = [], []
-        for center in centers:
-            denominator = sum(
-                ((value - weight).square() for value, weight in zip(values, center)),
-                Interval.point(epsilon),
-            )
-            numerator = (
+        if isinstance(block, LinearExpansion):
+            # Contract trainable factors as rationals, not rounded tensor products.
+            # A fixed linear form attains box extrema at coordinate endpoints.
+            raw = [
                 sum(
-                    (value * weight for value, weight in zip(values, center)),
+                    (
+                        value
+                        * sum(
+                            (
+                                rational(coefficient) * rational(center[k])
+                                for coefficient, center in zip(row, centers)
+                            ),
+                            rational(0),
+                        )
+                        for k, value in enumerate(values)
+                    ),
                     Interval.point(0),
-                ).square()
+                )
+                for row in coefficients
+            ]
+            ds: list[Interval] = []  # Linear modules contain no denominator.
+        else:
+            epsilon = (
+                block.kernel.epsilon
                 if isinstance(block, YatExpansion)
-                else Interval.point(1)
+                else block.epsilon
             )
-            features.append(numerator * denominator.positive_reciprocal())
-            ds.append(denominator)
-        raw = [
-            sum(
-                (feature * weight for feature, weight in zip(features, row)),
-                Interval.point(0),
-            )
-            for row in coefficients
-        ]
+            if Interval.point(epsilon).lower <= 0:
+                raise ValueError("epsilon must be strictly positive")
+            features, ds = [], []
+            for center in centers:
+                denominator = sum(
+                    (
+                        (value - weight).square()
+                        for value, weight in zip(values, center)
+                    ),
+                    Interval.point(epsilon),
+                )
+                numerator = (
+                    sum(
+                        (value * weight for value, weight in zip(values, center)),
+                        Interval.point(0),
+                    ).square()
+                    if isinstance(block, YatExpansion)
+                    else Interval.point(1)
+                )
+                features.append(numerator * denominator.positive_reciprocal())
+                ds.append(denominator)
+            raw = [
+                sum(
+                    (feature * weight for feature, weight in zip(features, row)),
+                    Interval.point(0),
+                )
+                for row in coefficients
+            ]
         control = controls.get(name, {})
         if set(control) - {"gate", "replacement"}:
             raise ValueError("only gate and replacement controls are supported")
@@ -165,7 +195,9 @@ def enclose_native_difference(snapshot, box, *, controls=None, reference_control
     if isinstance(model, YatGraph):
         dependencies = model.dependencies()
         widths = {
-            name: cast(Union[YatExpansion, IMQExpansion], block).out_features
+            name: cast(
+                Union[YatExpansion, IMQExpansion, LinearExpansion], block
+            ).out_features
             for name, block in model.blocks.items()
         }
     else:

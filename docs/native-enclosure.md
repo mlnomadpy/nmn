@@ -57,3 +57,25 @@ checks exercise the implementation; they are not peer review or a runtime-roundo
 certificate. Large rational denominators and wide/deep graphs can be expensive.
 
 `enclose --reference-controls reference.json` and `enclose_native_difference` bound edited-minus-reference outputs with shared inputs and parameters. Exact structural zeros are explained in [difference contracts](native-interval-contract.md#continuous-output-difference-protection).
+
+## Linear modules and mixed graphs
+
+Fixed `family="linear"` modules are supported alongside Yat/IMQ/linear. For each output
+row the adapter first contracts the factors exactly as rationals:
+`A[j,k] = sum_i coefficient[j,i] * center[i,k]`. It then encloses
+`sum_k A[j,k] * input[k]` using signed interval multiplication and addition.
+There is no denominator; the module's denominator-bounds list is empty.
+
+Each stored floating coefficient is interpreted as its exact binary rational
+value. Factor contraction uses rational arithmetic, not a rounded tensor matrix
+product. This retains cancellation between factors sharing an input coordinate.
+For an independent input box the linear-form endpoint range is exact. When
+incoming graph-state coordinates are correlated, their enclosing box may still
+produce overestimation. The existing layer-state and residual-sum induction then
+propagates a valid enclosure through mixed graphs.
+
+`verify-box` and the saved-partition checker use this extended arithmetic subset.
+Structural output-dependency checks can still return exact zero for intervention
+differences on unaffected paths. These remain real-function certificates: no
+floating-point runtime-roundoff guarantee, semantic identification or learned
+population guarantee is added by supporting linear modules.
