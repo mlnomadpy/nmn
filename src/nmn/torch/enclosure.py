@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Union, cast
 
 from ..research import intervals
-from ..research.intervals import RationalInterval as I
+from ..research.intervals import RationalInterval as Interval
 from ..research.intervals import rational
 from .baselines import IMQExpansion
 from .graph import YatGraph
@@ -28,7 +28,7 @@ def enclose_native(snapshot, box, *, controls=None):
     names = model.input_names if isinstance(model, YatGraph) else ("u", "v")
     if set(box) != set(names):
         raise ValueError("box must contain exactly the model input names")
-    inputs = {name: I(*box[name]) for name in names}
+    inputs = {name: Interval(*box[name]) for name in names}
     blocks = (
         dict(model.blocks.items())
         if isinstance(model, YatGraph)
@@ -48,27 +48,28 @@ def enclose_native(snapshot, box, *, controls=None):
         epsilon = (
             block.kernel.epsilon if isinstance(block, YatExpansion) else block.epsilon
         )
-        if I.point(epsilon).lower <= 0:
+        if Interval.point(epsilon).lower <= 0:
             raise ValueError("epsilon must be strictly positive")
         features, ds = [], []
         for center in centers:
             denominator = sum(
                 ((value - weight).square() for value, weight in zip(values, center)),
-                I.point(epsilon),
+                Interval.point(epsilon),
             )
             numerator = (
                 sum(
                     (value * weight for value, weight in zip(values, center)),
-                    I.point(0),
+                    Interval.point(0),
                 ).square()
                 if isinstance(block, YatExpansion)
-                else I.point(1)
+                else Interval.point(1)
             )
             features.append(numerator * denominator.positive_reciprocal())
             ds.append(denominator)
         raw = [
             sum(
-                (feature * weight for feature, weight in zip(features, row)), I.point(0)
+                (feature * weight for feature, weight in zip(features, row)),
+                Interval.point(0),
             )
             for row in coefficients
         ]
@@ -81,7 +82,7 @@ def enclose_native(snapshot, box, *, controls=None):
         if len(values_control) != len(raw):
             raise ValueError("control must be scalar or one value per module write")
         effective = [
-            I.point(v) if replacement is not None else r * v
+            Interval.point(v) if replacement is not None else r * v
             for r, v in zip(raw, values_control)
         ]
         trace.update({name + ".input": values, name + ".raw": raw, name: effective})
@@ -94,7 +95,7 @@ def enclose_native(snapshot, box, *, controls=None):
         y = execute("y", [h[0], inputs["v"]])
         outputs = [y[0], p[0]]
     else:
-        state = {slot: inputs.get(slot, I.point(0)) for slot in model.slots}
+        state = {slot: inputs.get(slot, Interval.point(0)) for slot in model.slots}
         trace["state.0"] = [state[slot] for slot in model.slots]
         for index, layer in enumerate(model.layer_specs):
             updates = [
@@ -104,7 +105,7 @@ def enclose_native(snapshot, box, *, controls=None):
             for spec, values in updates:
                 for slot, value in zip(spec.writes, values):
                     state[slot] = state[slot] + value
-            trace[f"state.{index+1}"] = [state[slot] for slot in model.slots]
+            trace[f"state.{index + 1}"] = [state[slot] for slot in model.slots]
         outputs = [state[name] for name in model.output_names]
     return dict(
         schema="nmn.rational-enclosure.v1",
