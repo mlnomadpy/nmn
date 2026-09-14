@@ -1,7 +1,7 @@
 # Native NMN research workflow
 
 Install `nmn[torch]` for model execution. Native CLI execution uses CPU float64;
-replay follows saved float32/float64 precision. Help, export, integrity checking
+replay follows saved float32/float64 precision. Help, extraction, export, integrity checking
 and offline reports work without a PyTorch installation. All output paths must
 be new so saved evidence is never overwritten.
 
@@ -36,6 +36,8 @@ curvature semantics silently.
 | `diagnose` | [Kernel and sensor measurements](native-kernel-diagnostics.md) |
 | `protect` | [Classification accuracy, damage, repairs and eligibility](native-protection.md) |
 | `coalitions` | [Budgeted module-subset interaction measurements](native-coalitions.md) |
+| `reduce`, `fit-reduction` | [Supplied and learned affine summaries, with held-out residuals](native-reduction.md) |
+| `probe` | [Frozen and refitted internal-state decoding comparisons](native-probes.md) |
 | `suffix` | [Supplied intermediate states and downstream responses](native-suffix.md) |
 | `semantics` | [Supplied references and counterfactual correspondence checks](native-semantics.md) |
 | `select` | [Candidate selection followed by frozen-winner validation](native-selection.md) |
@@ -44,6 +46,7 @@ curvature semantics silently.
 | `train`, `checkpoint` | [Explicit bounded optimization and selected checkpoint extraction](native-training.md) |
 | `replay` | [Numerical reproduction with declared tolerances](native-replay.md) |
 | `export`, `verify-export` | [Obsidian notes, raw data and integrity checks](native-vault-export.md) |
+| `extract` | Reusable model/dataset/maps and embedded study extraction with source receipts |
 | `report` | [Portable offline evidence dashboard](native-dashboard.md) |
 
 Run `nmn research native COMMAND --help` for required inputs. Research JSON
@@ -62,13 +65,9 @@ means invalid input, unavailable backend or execution/write failure.
 
 File integrity, numerical reproduction and scientific validity are separate.
 Hashes detect accidental content changes; replacing both data and hashes is not
-prevented. Replay never silently launches training. Only `train` performs model
-optimization; response-space fitting is explicitly a numerical SVD on observations.
-
-`nmn research native reduce` evaluates supplied affine state summaries and one-layer reduced dynamics. `native fit-reduction` fits PCA/ridge maps on one split and measures frozen-map errors on another. See [state-summary data](native-reduction.md) for the map contract, residuals and replay/export workflow.
-
-`nmn research native probe` fits a linear classifier on a selected internal trace and measures frozen decoding on held-out baseline/edited inputs. See [internal-state probes](native-probes.md).
-
+prevented. Replay never silently launches training. Only `train` optimizes native model parameters. Summary/response-space fitting
+uses numerical decompositions and probe fitting uses linear solves. Probe replay
+explicitly refits its saved linear protocol, without optimizing the native network.
 
 `nmn research native extract record.json` lists reusable components without a
 backend. Add `--component model|dataset|maps|fit|evaluation|evaluation-model` and
@@ -78,3 +77,25 @@ backend. Add `--component model|dataset|maps|fit|evaluation|evaluation-model` an
 on the record schema; probe result tables are not standalone probe loaders.
 Extraction selects stored JSON, checks embedded model identities and preserves
 source linkage. It neither executes the model nor validates scientific claims.
+
+
+## Self-contained observability example
+
+From the repository with `nmn[torch]` installed:
+
+```bash
+python examples/research/native_observability.py --output /tmp/nmn-observability
+```
+
+When using source directly, prefix that command with `PYTHONPATH=src`.
+The example constructs a fixed two-module Yat graph and declared fit/evaluation
+populations, fits a one-dimensional summary and linear label probe, compares
+frozen and refitted decoding under negation/deletion, and performs numerical
+replay. It saves complete JSON, Obsidian notes, reusable components and a portable
+source list, then builds `dashboard/index.html`. No prior model file, downloads,
+cloud compute or native-network optimizer training is required.
+
+This is an arithmetic example of the data workflow, not a research benchmark.
+Inputs, labels, feature, rank and ridge are explicit in the example source.
+Output must be a new directory. Failures leave partial evidence for inspection;
+replay mismatches or unavailable report records fail the command.
