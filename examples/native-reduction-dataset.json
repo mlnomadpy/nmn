@@ -1,0 +1,52 @@
+{
+  "schema": "nmn.research-dataset.v1",
+  "name": "Summary fitting arithmetic fixture",
+  "provenance": "Supplied scalar inputs, not a research benchmark",
+  "samples": [
+    {
+      "sample_id": "s0",
+      "inputs": [
+        0.0
+      ],
+      "split": "tuning",
+      "group_id": "s0",
+      "semantics": {}
+    },
+    {
+      "sample_id": "s1",
+      "inputs": [
+        0.5
+      ],
+      "split": "tuning",
+      "group_id": "s1",
+      "semantics": {}
+    },
+    {
+      "sample_id": "s2",
+      "inputs": [
+        1.0
+      ],
+      "split": "tuning",
+      "group_id": "s2",
+      "semantics": {}
+    },
+    {
+      "sample_id": "s3",
+      "inputs": [
+        2.0
+      ],
+      "split": "validation",
+      "group_id": "s3",
+      "semantics": {}
+    },
+    {
+      "sample_id": "s4",
+      "inputs": [
+        3.0
+      ],
+      "split": "validation",
+      "group_id": "s4",
+      "semantics": {}
+    }
+  ]
+}

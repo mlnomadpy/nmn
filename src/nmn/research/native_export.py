@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.fitted-reduction.v1": "Fitted state summary and held-out residuals",
     "nmn.reduction-study.v1": "State summaries and reduced dynamics",
     "nmn.rational-difference.v1": "Rational intervention-difference enclosure",
     "nmn.interval-certificate.v1": "Rational box range certificate",
@@ -269,6 +270,43 @@ def render_native_note(record):
             ),
             "",
             "Agreement checks a supplied table and does not identify a unique mechanism.",
+            "",
+        ]
+    elif schema == "nmn.fitted-reduction.v1":
+        lines += [
+            "## Fit-only summary and frozen evaluation",
+            "",
+            f"Protocol: {_text(record['protocol'])}.",
+            "",
+            _table(
+                [
+                    "Population",
+                    "Samples",
+                    "State residual",
+                    "Summary transition residual",
+                    "Output prediction residual",
+                ],
+                [
+                    [
+                        name,
+                        len(record[name]["sample_ids"]),
+                        _maximum(
+                            record[name]["observations"][
+                                "state_reconstruction_residual"
+                            ]
+                        ),
+                        _maximum(
+                            record[name]["observations"]["summary_transition_residual"]
+                        ),
+                        _maximum(
+                            record[name]["observations"]["prediction_output_residual"]
+                        ),
+                    ]
+                    for name in ("fit", "evaluation")
+                ],
+            ),
+            "",
+            "Maps are fitted on the declared fit population and frozen before evaluation. Embedded records retain every sample and support frozen-map numerical replay; fitting itself is not replayed.",
             "",
         ]
     elif schema == "nmn.reduction-study.v1":

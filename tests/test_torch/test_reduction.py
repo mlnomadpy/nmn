@@ -59,3 +59,57 @@ def test_summary_closure_does_not_imply_output_preservation():
         reduction_study(
             model, dataset, start_layer=1, maps=invalid, provenance="fixture"
         )
+
+
+def test_fitting_excludes_evaluation_and_keeps_model_fixed():
+    from nmn.torch.reduction import fit_reduction_study
+
+    model = YatGraph(
+        ["x", "h", "y"],
+        ["x"],
+        ["y"],
+        [[YatModuleSpec("a", ["x"], ["h"])], [YatModuleSpec("b", ["h"], ["y"])]],
+        dtype=torch.float64,
+    )
+    with torch.no_grad():
+        for block in model.blocks.values():
+            block.centers.fill_(1)
+            block.coefficients.fill_(1)
+    before = {name: value.detach().clone() for name, value in model.named_parameters()}
+
+    def population(evaluation):
+        return ResearchDataset(
+            [
+                ResearchSample(f"fit{i}", [x], "tuning", f"fit{i}", {})
+                for i, x in enumerate([0.0, 0.5, 1.0])
+            ]
+            + [ResearchSample("eval", [evaluation], "validation", "eval", {})],
+            name="fit-only fixture",
+            provenance="arithmetic inputs",
+        )
+
+    result = fit_reduction_study(
+        model, population(2.0), start_layer=1, rank=1, ridge=0.01
+    )
+    shifted = fit_reduction_study(
+        model, population(20.0), start_layer=1, rank=1, ridge=0.01
+    )
+    assert result["maps"] == shifted["maps"]
+    assert result["fitting"] == shifted["fitting"]
+    assert result["fit"]["observations"] == shifted["fit"]["observations"]
+    assert result["evaluation"]["observations"] != shifted["evaluation"]["observations"]
+    assert replay_native_record(result["evaluation"])["status"] == "matched"
+    for name, value in model.named_parameters():
+        torch.testing.assert_close(value, before[name])
+        assert value.grad is None
+    with pytest.raises(ValueError, match="distinct"):
+        fit_reduction_study(
+            model,
+            population(2.0),
+            start_layer=1,
+            rank=1,
+            ridge=0.01,
+            evaluation_split="tuning",
+        )
+    with pytest.raises(ValueError, match="strictly positive"):
+        fit_reduction_study(model, population(2.0), start_layer=1, rank=1, ridge=0)

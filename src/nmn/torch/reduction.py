@@ -151,3 +151,174 @@ def reduction_study(model, dataset, *, start_layer, maps, provenance, split=None
             ],
         )
     )
+
+
+def fit_reduction_study(
+    model,
+    dataset,
+    *,
+    start_layer,
+    rank,
+    ridge,
+    fit_split="tuning",
+    evaluation_split="validation",
+):
+    """Fit centered PCA and an affine ridge transition on one declared split.
+
+    The decoder is the transpose PCA basis plus the joint boundary-state mean.
+    The transition minimizes mean squared summary error plus ``ridge * ||A||²``;
+    its intercept is unpenalized. All maps are frozen before evaluation inputs
+    are executed. No model parameters, rank or hyperparameters are optimized.
+    """
+    import math
+
+    if not isinstance(model, YatGraph):
+        raise ValueError("reduction fitting requires YatGraph")
+    if type(start_layer) is not int or not 0 <= start_layer < len(model.layer_specs):
+        raise ValueError("start_layer must identify a layer with a successor state")
+    if type(rank) is not int or not 1 <= rank <= len(model.slots):
+        raise ValueError("rank must be a positive integer no larger than state width")
+    if (
+        isinstance(ridge, bool)
+        or not isinstance(ridge, (int, float))
+        or not math.isfinite(ridge)
+        or ridge <= 0
+    ):
+        raise ValueError("ridge must be finite and strictly positive")
+    if (
+        not all(isinstance(s, str) and s for s in (fit_split, evaluation_split))
+        or fit_split == evaluation_split
+    ):
+        raise ValueError("fit and evaluation splits must be distinct named populations")
+    fit_ids = dataset.sample_ids(split=fit_split)
+    evaluation_ids = dataset.sample_ids(split=evaluation_split)
+    if len(fit_ids) < 2 or not evaluation_ids:
+        raise ValueError(
+            "supply at least two fit samples and a nonempty evaluation split"
+        )
+    parameter = next(model.parameters())
+    if parameter.dtype not in (torch.float32, torch.float64):
+        raise ValueError("summary fitting requires float32 or float64 model parameters")
+    inputs = torch.tensor(
+        [dataset.sample(sid).inputs for sid in fit_ids],
+        dtype=parameter.dtype,
+        device=parameter.device,
+    )
+    with torch.no_grad():
+        _, trace = model.forward_with_trace(inputs)
+        before = trace[f"state.{start_layer}"]
+        after = trace[f"state.{start_layer + 1}"]
+        joint = torch.cat((before, after))
+        if not bool(torch.isfinite(joint).all()):
+            raise ValueError("fit boundary states must be finite")
+        mean = joint.mean(0)
+        centered = joint - mean
+        _, singular_values, right = torch.linalg.svd(centered, full_matrices=False)
+        threshold = (
+            max(centered.shape) * torch.finfo(parameter.dtype).eps * singular_values[0]
+        )
+        numerical_rank = int((singular_values > threshold).sum().item())
+        if rank > numerical_rank:
+            raise ValueError(
+                "requested rank exceeds numerical rank of fit boundary states"
+            )
+        basis = right[:rank].T.contiguous()
+        # Canonicalize column signs for readable snapshots, not unique eigenspaces.
+        pivots = basis.abs().argmax(dim=0)
+        signs = basis[pivots, torch.arange(rank, device=basis.device)].sign()
+        basis = basis * signs
+        summary = (before - mean) @ basis
+        next_summary = (after - mean) @ basis
+        mean_summary, mean_next = summary.mean(0), next_summary.mean(0)
+        x, y = summary - mean_summary, next_summary - mean_next
+        regularizer = torch.as_tensor(
+            ridge, dtype=parameter.dtype, device=parameter.device
+        )
+        if not bool(torch.isfinite(regularizer)) or regularizer.item() <= 0:
+            raise ValueError(
+                "ridge is not representable as positive finite model arithmetic"
+            )
+        gram = x.T @ x / len(fit_ids)
+        matrix = torch.linalg.solve(
+            gram
+            + regularizer
+            * torch.eye(rank, dtype=parameter.dtype, device=parameter.device),
+            x.T @ y / len(fit_ids),
+        )
+        intercept = mean_next - mean_summary @ matrix
+        maps = _json_value(
+            {
+                "encoder": {"weight": basis, "bias": -mean @ basis},
+                "decoder": {"weight": basis.T, "bias": mean},
+                "transition": {"weight": matrix, "bias": intercept},
+            }
+        )
+    # Frozen JSON maps are formed before either measurement pass. In particular,
+    # no evaluation state participates in PCA centering, directions or regression.
+    provenance = "Fitted on split " + fit_split + "; frozen before evaluation"
+    fit = reduction_study(
+        model,
+        dataset,
+        start_layer=start_layer,
+        maps=maps,
+        provenance=provenance,
+        split=fit_split,
+    )
+    evaluation = reduction_study(
+        model,
+        dataset,
+        start_layer=start_layer,
+        maps=maps,
+        provenance=provenance,
+        split=evaluation_split,
+    )
+    return _json_value(
+        dict(
+            schema="nmn.fitted-reduction.v1",
+            status=(
+                "observed"
+                if all(s["status"] == "observed" for s in (fit, evaluation))
+                else "nonfinite-observation"
+            ),
+            model_snapshot=fit["model_snapshot"],
+            dataset=dataset.to_dict(),
+            dataset_sha256=dataset.sha256,
+            maps=maps,
+            protocol=dict(
+                start_layer=start_layer,
+                rank=rank,
+                ridge=regularizer.item(),
+                fit_split=fit_split,
+                evaluation_split=evaluation_split,
+                fit_sample_ids=fit_ids,
+                evaluation_sample_ids=evaluation_ids,
+                method="joint-boundary centered PCA + affine ridge transition",
+                transition_objective="mean squared summary error + ridge * squared Frobenius weight norm; unpenalized intercept",
+                frozen_before_evaluation=True,
+            ),
+            fitting=dict(
+                joint_state_mean=mean,
+                singular_values=singular_values,
+                numerical_rank=numerical_rank,
+                rank_threshold=threshold,
+                fit_state_count=len(joint),
+            ),
+            fit=fit,
+            evaluation=evaluation,
+            cost=dict(
+                fitting_full_forwards=1,
+                measurement_full_forwards=4,
+                measurement_suffix_forwards=6,
+                svd_calls=1,
+                linear_solves=1,
+            ),
+            source_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            limitations=[
+                "PCA optimizes sampled state reconstruction, not semantic meaning or downstream utility.",
+                "Rank and ridge are supplied; repeated evaluation-guided choices can leak evaluation information.",
+                "Split/group labels are checked structurally, not proven statistically independent.",
+                "Degenerate singular subspaces are not uniquely identified; no closure or uniform error bound is established.",
+                "Replay the embedded fit/evaluation reduction records to check frozen-map execution; fitting itself has no replay adapter.",
+            ],
+        )
+    )

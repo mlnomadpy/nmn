@@ -66,3 +66,58 @@ compares every observation and trace at explicit tolerances. Export and dashboar
 commands only summarize saved data. Neither establishes semantic equivalence,
 realizability of decoded states, continuous-domain closure, controlled dynamics,
 nor propagation bounds through further layers.
+
+## Fit a summary before evaluating it
+
+`fit_reduction_study` and `nmn research native fit-reduction` learn affine maps
+from a declared fit population. They leave the native model parameters unchanged.
+Rank and a strictly positive ridge penalty are explicit inputs, not selected using
+evaluation results.
+
+```bash
+nmn research native fit-reduction --model graph.json --dataset dataset.json \
+  --start-layer 1 --rank 1 --ridge 0.01 --fit-split tuning \
+  --evaluation-split validation --output fitted-summary.json
+nmn research native export fitted-summary.json --output vault/fitted-summary
+```
+
+The algorithm executes only fit inputs to collect the states immediately before
+and after the selected layer. It centers their concatenation, computes an SVD,
+and uses the requested leading directions as the encoder. The decoder is the
+transpose basis plus the joint mean. Rank exceeding the fit matrix's numerical
+rank is rejected; the saved threshold is `max(matrix.shape) * dtype_eps * s_max`.
+Columns have a canonical sign, but repeated singular values do not define unique
+subspaces. This implementation requires float32 or float64 parameters.
+
+The reduced transition solves affine ridge regression on paired fit summaries:
+`mean_i ||z_i A + b - z_next_i||² + ridge * ||A||_F²`. The intercept is not
+penalized. All maps are frozen into JSON before executing evaluation inputs.
+Neither evaluation values nor their boundary states enter the mean, PCA, or solve.
+At least two fit samples and one evaluation sample are required, with distinct
+split names. Dataset group checks prevent declared groups crossing splits; they
+cannot establish independence or prevent evaluation-guided reruns by callers.
+
+The `nmn.fitted-reduction.v1` record contains fitted maps, singular values, rank
+threshold, source/model/dataset identities, split IDs, and complete `fit` and
+`evaluation` reduction records. Those embedded records can be extracted for
+ordinary numerical replay of the **frozen maps**:
+
+```python
+import json
+from pathlib import Path
+record = json.loads(Path("fitted-summary.json").read_text())
+Path("evaluation-summary.json").write_text(json.dumps(record["evaluation"], allow_nan=False))
+Path("maps.json").write_text(json.dumps(record["maps"], allow_nan=False))
+```
+
+`nmn research native replay evaluation-summary.json --output replay.json` checks
+execution of those maps. Replaying the outer fitted record is unsupported: no
+claim is made that this reruns fitting or validates its provenance. The saved
+maps also work with `native reduce` on further populations.
+
+This is a finite linear baseline for learned summaries. It does not fit neural
+summary encoders, controlled transitions, semantic correspondences or invariant
+domains. It provides the raw data needed to compare these later. The workflow
+uses one fitting forward, four measurement forwards and six suffix forwards,
+plus one SVD and one linear solve; geometry collection is additional work and
+these operation counts are not a wall-time guarantee.

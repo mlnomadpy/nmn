@@ -65,4 +65,4 @@ Hashes detect accidental content changes; replacing both data and hashes is not
 prevented. Replay never silently launches training. Only `train` performs model
 optimization; response-space fitting is explicitly a numerical SVD on observations.
 
-`nmn research native reduce` evaluates supplied affine state summaries and one-layer reduced dynamics. See [state-summary data](native-reduction.md) for the map contract, residuals and replay/export workflow.
+`nmn research native reduce` evaluates supplied affine state summaries and one-layer reduced dynamics. `native fit-reduction` fits PCA/ridge maps on one split and measures frozen-map errors on another. See [state-summary data](native-reduction.md) for the map contract, residuals and replay/export workflow.

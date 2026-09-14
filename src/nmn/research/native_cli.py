@@ -153,6 +153,15 @@ def main(argv=None) -> int:
     semantic.add_argument("--reference", type=Path, required=True)
     semantic.add_argument("--correspondence", type=Path, required=True)
     semantic.add_argument("--tolerance", type=float, default=1e-8)
+    fitted_reduction = commands.add_parser(
+        "fit-reduction",
+        help="fit a state summary then evaluate frozen maps on another split",
+    )
+    fitted_reduction.add_argument("--start-layer", type=int, required=True)
+    fitted_reduction.add_argument("--rank", type=int, required=True)
+    fitted_reduction.add_argument("--ridge", type=float, required=True)
+    fitted_reduction.add_argument("--fit-split", default="tuning")
+    fitted_reduction.add_argument("--evaluation-split", default="validation")
     reduction = commands.add_parser(
         "reduce", help="evaluate supplied state summaries and reduced dynamics"
     )
@@ -201,6 +210,7 @@ def main(argv=None) -> int:
         coalition,
         suffix,
         reduction,
+        fitted_reduction,
         semantic,
         selection,
         response,
@@ -426,6 +436,18 @@ def main(argv=None) -> int:
                     reference=TabulatedReference(_read(args.reference)),
                     correspondence=_read(args.correspondence),
                     tolerance=args.tolerance,
+                )
+            elif args.command == "fit-reduction":
+                from ..torch.reduction import fit_reduction_study
+
+                result = fit_reduction_study(
+                    model,
+                    dataset,
+                    start_layer=args.start_layer,
+                    rank=args.rank,
+                    ridge=args.ridge,
+                    fit_split=args.fit_split,
+                    evaluation_split=args.evaluation_split,
                 )
             elif args.command == "reduce":
                 from ..torch.reduction import reduction_study
