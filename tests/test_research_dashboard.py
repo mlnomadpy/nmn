@@ -54,3 +54,32 @@ def test_bad_record_does_not_prevent_later_records(tmp_path):
     result = build_dashboard([bad, unknown], output)
     assert result["unavailable"] == 2
     assert not list((output / "evidence").glob("*/data.json"))
+
+
+def test_source_list_is_relative_to_its_file(tmp_path, monkeypatch):
+    from nmn.research.dashboard import load_dashboard_sources
+
+    folder = tmp_path / "portable"
+    folder.mkdir()
+    recipe = folder / "sources.json"
+    recipe.write_text(
+        json.dumps({"schema": "nmn.evidence-sources.v1", "sources": ["missing.json"]})
+    )
+    monkeypatch.chdir(tmp_path)
+    sources = load_dashboard_sources(recipe)
+    assert sources == [folder / "missing.json"]
+    result = build_dashboard(sources, tmp_path / "report")
+    assert result["unavailable"] == 1
+    with pytest.raises(ValueError, match="at least one"):
+        build_dashboard([], tmp_path / "empty")
+    assert not (tmp_path / "empty").exists()
+    recipe.write_text(
+        json.dumps(
+            {
+                "schema": "nmn.evidence-sources.v1",
+                "sources": ["https://example.com/evidence.json"],
+            }
+        )
+    )
+    with pytest.raises(ValueError, match="local paths"):
+        load_dashboard_sources(recipe)

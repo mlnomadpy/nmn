@@ -17,7 +17,10 @@ def main(argv=None) -> int:
     dashboard = commands.add_parser(
         "report", help="build an offline evidence dashboard"
     )
-    dashboard.add_argument("sources", nargs="+", type=Path)
+    dashboard.add_argument("sources", nargs="*", type=Path)
+    dashboard.add_argument(
+        "--sources-file", type=Path, help="portable JSON list of local evidence paths"
+    )
     dashboard.add_argument("--output", type=Path, required=True)
     export = commands.add_parser(
         "export", help="write an Obsidian note and exact native data copy"
@@ -243,9 +246,12 @@ def main(argv=None) -> int:
         if hasattr(args, "output") and args.output.exists():
             raise ValueError("output already exists; choose a new evidence path")
         if args.command == "report":
-            from .dashboard import build_dashboard
+            from .dashboard import build_dashboard, load_dashboard_sources
 
-            print(json.dumps(build_dashboard(args.sources, args.output)))
+            sources = list(args.sources)
+            if args.sources_file is not None:
+                sources.extend(load_dashboard_sources(args.sources_file))
+            print(json.dumps(build_dashboard(sources, args.output)))
             return 0
         if args.command == "verify-export":
             from .native_export import verify_native_export

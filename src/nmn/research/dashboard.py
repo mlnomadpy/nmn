@@ -12,6 +12,27 @@ from .native_export import SCHEMAS, export_native_record, verify_native_export
 FINITE = "nmn.finite-contract-evidence.v1"
 
 
+def load_dashboard_sources(path):
+    """Read explicit local evidence paths relative to a portable source-list file."""
+    path = Path(path)
+    record = json.loads(path.read_text(encoding="utf-8"))
+    if (
+        not isinstance(record, dict)
+        or record.get("schema") != "nmn.evidence-sources.v1"
+    ):
+        raise ValueError("unsupported dashboard source-list schema")
+    sources = record.get("sources")
+    if (
+        not isinstance(sources, list)
+        or not sources
+        or any(not isinstance(p, str) or not p.strip() for p in sources)
+    ):
+        raise ValueError("source list requires nonempty local path strings")
+    if any("://" in p for p in sources):
+        raise ValueError("source lists support local paths only")
+    return [path.parent / source for source in sources]
+
+
 def _summary(record, source, now):
     schema = record["schema"]
     execution = record.get("execution", record)
@@ -121,6 +142,8 @@ def build_dashboard(sources, destination):
     destination = Path(destination)
     if destination.exists():
         raise ValueError("dashboard output already exists")
+    if not sources:
+        raise ValueError("supply at least one evidence source")
     files = []
     explicit = set()
     for item in sources:
@@ -253,6 +276,32 @@ def build_dashboard(sources, destination):
                         },
                         "freeze": record["ledger"]["selected"],
                         "interpretation": "Selection status is not a validation-success or population-risk guarantee.",
+                    }
+                elif record["schema"] == "nmn.probe-study.v1":
+                    rows = []
+                    for name, row in record["evaluation"]["edits"].items():
+                        rows.append(
+                            {
+                                "edit": name,
+                                "frozen_accuracy": row["accuracy"],
+                                "refitted_accuracy": row.get("refitted", {})
+                                .get("evaluation", {})
+                                .get("accuracy"),
+                                "conditional_damage": row["conditional_damage"],
+                                "baseline_correct_count": row["baseline_correct_count"],
+                                "damaged_count": row["damaged_count"],
+                                "disagreement": row["disagreement"],
+                            }
+                        )
+                    summary["details"] = {
+                        "protocol": record["protocol"],
+                        "fit_accuracy": record["fit"]["accuracy"],
+                        "evaluation_baseline_accuracy": record["evaluation"][
+                            "baseline"
+                        ]["accuracy"],
+                        "edits_total": len(rows),
+                        "first_25_edits": rows[:25],
+                        "interpretation": "Null refitted accuracy means no refitted comparison. Null conditional damage means no baseline-correct samples. Neither probe establishes erasure.",
                     }
                 elif record["schema"] == "nmn.coalition-study.v1":
                     summary["details"] = {
