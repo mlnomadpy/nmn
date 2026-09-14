@@ -97,3 +97,8 @@ loading an ML backend. Parameter and intervention contracts remain separate.
 [Sampled native contracts](native-sampled-contract.md) bind model/data identities,
 shared action bounds, target references, baseline accuracy and protected changes.
 Their observed outcomes remain separate from finite or continuous certificates.
+
+[Fixed-family Bernoulli calculations](native-risk-validation.md) provide exact
+all-clause/Bonferroni decisions under declared IID and frozen-family assumptions.
+Retrospective data can be calculated in diagnostic-only mode. Prospective protocol
+validation and adaptive acquisition/optional-stopping methods remain open.

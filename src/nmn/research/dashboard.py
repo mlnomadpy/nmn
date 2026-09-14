@@ -70,6 +70,8 @@ def _summary(record, source, now):
             else "floating-point observations"
         )
     )
+    if schema == "nmn.risk-validation.v1":
+        scope = "exact statistical calculation; external assumptions unverified"
     if schema == "nmn.architecture-validation.v1":
         scope = "architecture definition; no numerical execution"
     if schema == "nmn.donor-plan.v1":
@@ -502,6 +504,16 @@ def build_dashboard(sources, destination):
                             "case_budget",
                             "protected_violations_observed",
                             "counterexample",
+                        )
+                    }
+                elif record["schema"] == "nmn.risk-validation.v1":
+                    summary["details"] = {
+                        k: record[k]
+                        for k in (
+                            "results",
+                            "rule_passes",
+                            "accepted_under_declared_assumptions",
+                            "bonferroni_threshold",
                         )
                     }
                 elif record["schema"] == "nmn.sampled-contract-evidence.v1":

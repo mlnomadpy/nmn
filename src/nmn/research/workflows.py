@@ -141,6 +141,7 @@ def workflow_catalog(family=None):
         schema="nmn.research-workflows.v1",
         workflows=records,
         filter_family=family,
+        risk_command="nmn research risk --plan PLAN.json --observations OBSERVATIONS.json",
         architecture_commands=[
             "nmn research architecture",
             "nmn research architecture GRAPH.json",

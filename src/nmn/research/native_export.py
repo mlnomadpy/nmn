@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.risk-validation.v1": "Fixed-family Bernoulli risk calculation",
     "nmn.sampled-contract-evidence.v1": "Sampled native target and protection contract",
     "nmn.architecture-validation.v1": "Validated native graph topology",
     "nmn.curvature-study.v1": "Native directional gate curvature",
@@ -92,6 +93,13 @@ def _table(headers, rows):
 
 def _check_identities(value):
     if isinstance(value, dict):
+        if value.get("schema") == "nmn.risk-validation.v1":
+            from .risk import validate_risk
+
+            if validate_risk(value["plan"], value["observations"]) != value:
+                raise ValueError(
+                    "risk report differs from recomputed exact calculation"
+                )
         if value.get("schema") == "nmn.sampled-contract-evidence.v1":
             digest = hashlib.sha256(
                 json.dumps(value["contract"], sort_keys=True, allow_nan=False).encode()

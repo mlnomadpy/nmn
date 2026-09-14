@@ -30,6 +30,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     commands.add_parser(
         "native", help="native model data, donor studies and gate paths"
     )
+    risk = commands.add_parser(
+        "risk", help="calculate exact fixed-family Bernoulli risk tests"
+    )
+    risk.add_argument("--plan", type=Path, required=True)
+    risk.add_argument("--observations", type=Path, required=True)
     architecture = commands.add_parser(
         "architecture",
         help="emit a graph JSON Schema or validate topology without an ML backend",
@@ -90,7 +95,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     verify.add_argument("--max-cases", type=int)
     args = parser.parse_args(argv)
     try:
-        if args.command == "architecture":
+        if args.command == "risk":
+            from .risk import validate_risk
+
+            result = validate_risk(
+                json.loads(args.plan.read_text()),
+                json.loads(args.observations.read_text()),
+            )
+        elif args.command == "architecture":
             from .architecture import architecture_schema, validate_architecture
 
             result = (
