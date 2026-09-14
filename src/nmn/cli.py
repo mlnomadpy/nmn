@@ -452,7 +452,9 @@ def _build_parser() -> argparse.ArgumentParser:
     sub.add_parser("doctor", help="report which backends import + their versions")
     sub.add_parser("examples", help="where to find runnable examples")
 
-    sub.add_parser("research", help="exact three-neuron reference experiments")
+    sub.add_parser(
+        "research", help="native research workflows and exact reference experiments"
+    )
 
     return parser
 

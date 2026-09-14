@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, cast
 
 from .bundles import create_configured
 from .comparison import compare
@@ -24,12 +24,17 @@ def main(argv: Optional[List[str]] = None) -> int:
     if arguments and arguments[0] == "native":
         from .native_cli import main as native_main
 
-        return native_main(arguments[1:])
+        return cast(int, native_main(arguments[1:]))
     parser = argparse.ArgumentParser(prog="nmn research")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser(
         "native", help="native model data, donor studies and gate paths"
     )
+    workflows = commands.add_parser(
+        "workflows",
+        help="list research inputs, outputs and limitations without an ML backend",
+    )
+    workflows.add_argument("--family", choices=[f"KG{i:02d}" for i in range(1, 8)])
     inspection = commands.add_parser(
         "inspect", help="describe the three-neuron architecture"
     )
@@ -80,7 +85,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     verify.add_argument("--max-cases", type=int)
     args = parser.parse_args(argv)
     try:
-        if args.command == "contract":
+        if args.command == "workflows":
+            from .workflows import workflow_catalog
+
+            result = workflow_catalog(args.family)
+        elif args.command == "contract":
             result = load_contract(args.path) if args.path else default_contract()
         elif args.command == "model":
             result = load(args.path) if args.path else default_model()

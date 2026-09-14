@@ -155,6 +155,8 @@ outputs, trace = model.forward_with_trace(inputs)
 edited = model(inputs, {"h": Intervention(gate=0)})
 ```
 
+Use `nmn research workflows` for a JSON catalog of data inputs, outputs, backend
+scope and limitations; filter with `--family KG01` through `KG07`.
 Use `nmn research native --help` for model initialization, observation collection,
 donor/read-slot studies, protection tasks, coalition effects, joint gate paths, comparisons, explicit training, numerical replay and vault export. See [the native CLI workflow](docs/native-cli.md).
 
