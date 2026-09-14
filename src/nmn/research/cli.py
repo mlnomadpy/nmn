@@ -30,6 +30,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     commands.add_parser(
         "native", help="native model data, donor studies and gate paths"
     )
+    architecture = commands.add_parser(
+        "architecture",
+        help="emit a graph JSON Schema or validate topology without an ML backend",
+    )
+    architecture.add_argument("path", type=Path, nargs="?")
     workflows = commands.add_parser(
         "workflows",
         help="list research inputs, outputs and limitations without an ML backend",
@@ -85,7 +90,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     verify.add_argument("--max-cases", type=int)
     args = parser.parse_args(argv)
     try:
-        if args.command == "workflows":
+        if args.command == "architecture":
+            from .architecture import architecture_schema, validate_architecture
+
+            result = (
+                validate_architecture(json.loads(args.path.read_text()))
+                if args.path
+                else architecture_schema()
+            )
+        elif args.command == "workflows":
             from .workflows import workflow_catalog
 
             result = workflow_catalog(args.family)

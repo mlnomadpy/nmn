@@ -89,3 +89,7 @@ required inputs, raw outputs, backend scope and remaining obligations. Filter wi
 [donor-gradient training](intervention-training.md) and [mixed linear modules](linear-graph-modules.md)
 are implemented data interfaces. Their bounded experiments do not establish a
 source-faithful reproduction of every method in the vault.
+
+[Backend-free graph validation](native-architecture-schema.md) emits the graph JSON
+Schema, checks topology cross references and reports normalized dimensions before
+loading an ML backend. Parameter and intervention contracts remain separate.

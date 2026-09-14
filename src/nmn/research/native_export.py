@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.architecture-validation.v1": "Validated native graph topology",
     "nmn.curvature-study.v1": "Native directional gate curvature",
     "nmn.alignment-study.v1": "Supervised native semantic alignment search",
     "nmn.preimage-execution.v1": "Executed native preimage read interventions",
@@ -90,6 +91,13 @@ def _table(headers, rows):
 
 def _check_identities(value):
     if isinstance(value, dict):
+        if value.get("schema") == "nmn.architecture-validation.v1":
+            from .architecture import validate_architecture
+
+            if validate_architecture(value["configuration"]) != value:
+                raise ValueError(
+                    "architecture validation record differs from recomputed topology"
+                )
         if value.get("schema") == "nmn.preimage-execution.v1":
             digest = hashlib.sha256(
                 json.dumps(value["proposal"], sort_keys=True, allow_nan=False).encode()

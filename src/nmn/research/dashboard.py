@@ -68,6 +68,8 @@ def _summary(record, source, now):
             else "floating-point observations"
         )
     )
+    if schema == "nmn.architecture-validation.v1":
+        scope = "architecture definition; no numerical execution"
     if schema == "nmn.donor-plan.v1":
         scope = "metadata selection; no model execution"
     if schema == "nmn.interval-check.v1":
@@ -499,6 +501,11 @@ def build_dashboard(sources, destination):
                             "protected_violations_observed",
                             "counterexample",
                         )
+                    }
+                elif record["schema"] == "nmn.architecture-validation.v1":
+                    summary["details"] = {
+                        "dimensions": record["dimensions"],
+                        "execution": record["execution"],
                     }
                 elif record["schema"] == "nmn.curvature-study.v1":
                     summary["details"] = {

@@ -134,6 +134,10 @@ def workflow_catalog(family=None):
         schema="nmn.research-workflows.v1",
         workflows=records,
         filter_family=family,
+        architecture_commands=[
+            "nmn research architecture",
+            "nmn research architecture GRAPH.json",
+        ],
         assurance="Capability descriptions, not evidence of source-protocol reproduction",
         unsupported=[
             "sequence-model data adapter and frozen decoding contract",
