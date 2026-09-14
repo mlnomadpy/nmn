@@ -63,3 +63,10 @@ show condition patches and the first 25 output/delta rows for up to 25 condition
 with total counts and output order. Linked JSON retains all rows and traces.
 Intervention labels in replay entries describe their saved executed study; the
 dashboard does not rerun that study or infer semantic meaning from its effects.
+
+Donor-plan entries are metadata selections, with no model backend or architecture.
+They preview selected pairs, inspection decisions, and total/inspected/uninspected
+counts. Budget-stopped plans retain their partial status. Executed studies with
+embedded selection plans expose the saved plan hash, status and coverage; the
+dashboard does not revalidate them. Up to 25 pairs/decisions are previewed, with
+complete records linked. Complete finite selection is not scientific validation.

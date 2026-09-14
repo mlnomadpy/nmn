@@ -102,13 +102,17 @@ def _summary(record, source, now):
                 else "Saved evidence; no computation was replayed by this dashboard"
             )
         ),
-        "architecture": configuration.get(
-            "class",
-            (
-                "three-neuron rational reference"
-                if schema == FINITE
-                else "multiple / embedded"
-            ),
+        "architecture": (
+            "not applicable (selection plan)"
+            if schema == "nmn.donor-plan.v1"
+            else configuration.get(
+                "class",
+                (
+                    "three-neuron rational reference"
+                    if schema == FINITE
+                    else "multiple / embedded"
+                ),
+            )
         ),
         "backend": (
             "none (metadata only)"
@@ -357,6 +361,16 @@ def build_dashboard(sources, destination):
                         "first_25_rows": rows[:25],
                         "null_damage_rate": "No originally correct examples; not zero damage.",
                     }
+                elif record["schema"] == "nmn.donor-plan.v1":
+                    summary["details"] = {
+                        "protocol": record["protocol"],
+                        "coverage": record["coverage"],
+                        "selected_pairs_total": len(record["pairs"]),
+                        "first_25_selected_pairs": record["pairs"][:25],
+                        "decisions_total": len(record["decisions"]),
+                        "first_25_decisions": record["decisions"][:25],
+                        "interpretation": "Saved selection only; no model execution. Uninspected pairs may be eligible and complete selection does not imply scientific validity.",
+                    }
                 elif record["schema"] == "nmn.edge-study.v1":
                     summary["details"] = {
                         "protocol": record["protocol"],
@@ -400,6 +414,13 @@ def build_dashboard(sources, destination):
                             for row in record["rows"][:25]
                         ],
                     }
+                    if "selection_plan" in record:
+                        summary["details"]["selection_plan"] = {
+                            "sha256": record["selection_plan_sha256"],
+                            "status": record["selection_plan"]["status"],
+                            "coverage": record["selection_plan"]["coverage"],
+                            "handling": "Saved plan linkage; not rechecked by the dashboard",
+                        }
                 elif record["schema"] == FINITE:
                     summary["details"] = {
                         key: record.get(key)
