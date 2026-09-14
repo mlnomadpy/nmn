@@ -25,10 +25,11 @@ from nmn.torch.research import (
 from nmn.torch.training import TrainingConfig, train_native
 
 
-def run(destination):
+def run(destination, *, hybrid_comparison=False):
     destination = Path(destination)
     destination.mkdir(parents=True, exist_ok=False)
-    generator = torch.Generator().manual_seed(20260913)
+    dataset_seed = 20260914 if hybrid_comparison else 20260913
+    generator = torch.Generator().manual_seed(dataset_seed)
     samples, labels = [], {}
     for split, count in [("train", 128), ("validation", 32), ("evaluation", 128)]:
         for i, (u, v) in enumerate(
@@ -59,12 +60,21 @@ def run(destination):
         "worked_example": "u=1,v=1 gives target=1.5, protected=1; intended u=0 target=0.5",
     }
     protocol = {
-        "dataset_seed": 20260913,
+        "dataset_seed": dataset_seed,
+        "comparison": (
+            "protected-module ablation"
+            if hybrid_comparison
+            else "homogeneous family comparison"
+        ),
         "initialization_seed": 17,
         "minibatch_seeds": [0, 1, 2],
         "config": asdict(config),
         "contract": contract,
-        "families": ["yat", "imq", "tanh"],
+        "families": (
+            ["yat", "yat-linear-protected"]
+            if hybrid_comparison
+            else ["yat", "imq", "tanh"]
+        ),
         "initialization": "same center/hidden-weight arrays and 1/4 readout coefficients; tanh biases zero",
         "caveats": [
             "Equal width/routing is not equal capacity: tanh has extra biases.",
@@ -82,12 +92,22 @@ def run(destination):
     models, rows, sources = {}, [], []
     for family in protocol["families"]:
         print("Fitting " + family, flush=True)
+        nonlinear_family = "yat" if family == "yat-linear-protected" else family
+        protected_family = "linear" if family == "yat-linear-protected" else family
         specs = [
             [
-                YatModuleSpec("h", ["u"], ["h"], num_centers=4, family=family),
-                YatModuleSpec("p", ["v"], ["protected"], num_centers=4, family=family),
+                YatModuleSpec(
+                    "h", ["u"], ["h"], num_centers=4, family=nonlinear_family
+                ),
+                YatModuleSpec(
+                    "p", ["v"], ["protected"], num_centers=4, family=protected_family
+                ),
             ],
-            [YatModuleSpec("y", ["h", "v"], ["target"], num_centers=4, family=family)],
+            [
+                YatModuleSpec(
+                    "y", ["h", "v"], ["target"], num_centers=4, family=nonlinear_family
+                )
+            ],
         ]
         with torch.random.fork_rng(devices=[]):
             torch.manual_seed(17)
@@ -204,5 +224,10 @@ def run(destination):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path)
+    parser.add_argument(
+        "--hybrid-comparison",
+        action="store_true",
+        help="compare Yat-only with a linear protected path on a new dataset seed",
+    )
     args = parser.parse_args()
-    run(args.output)
+    run(args.output, hybrid_comparison=args.hybrid_comparison)

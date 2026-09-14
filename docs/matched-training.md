@@ -30,3 +30,24 @@ counterfactual for a learned model. Protected-output independence is imposed by
 the shared routing, so observing unchanged protected outputs cannot establish a
 kernel-specific advantage. No population confidence interval or erasure claim is
 made from these three runs.
+
+## Protected-module ablation on fresh data
+
+```bash
+python examples/research/matched_training.py OUTPUT --hybrid-comparison
+```
+
+This mode compares Yat-only routing against the same graph with a linear-kernel
+protected module. Both have 28 parameters and four factors per module. H and Y
+remain Yat in both models; only P changes family. Initial factor arrays and
+coefficients, minibatch seeds, optimizer settings and budgets remain matched.
+The linear path is trained from the common random initialization, not set to an
+identity solution. Dataset seed 20260914 regenerates all three populations,
+separately from the initial family study's seed 20260913. The prior evaluation
+set is not used for selecting follow-up checkpoints.
+
+The architecture decision was motivated by the preceding study, so this is a
+follow-up experiment, not an independent preregistered discovery. The protocol
+is saved before any of these six fits execute. It still evaluates one analytic
+task and varies only minibatch seeds. Generalization to other tasks, data draws,
+initializations and model sizes remains unestablished.
