@@ -103,6 +103,26 @@ class ThreeNeuronYat(nnx.Module):
             module.coefficients[...] = jnp.ones_like(module.coefficients[...])
         return model
 
+    def _evaluate(self, name, inputs, controls, trace):
+        control = controls.get(name, {})
+        if not isinstance(control, dict) or set(control) - {"gate", "replacement"}:
+            raise ValueError("control must contain only gate/replacement")
+        parts = getattr(self, name).contributions(inputs)
+        raw = jnp.sum(parts, axis=-1)
+        replacement = control.get("replacement")
+        value = control.get("gate", 1.0) if replacement is None else replacement
+        value = jnp.broadcast_to(jnp.asarray(value, dtype=raw.dtype), raw.shape)
+        effective = raw * value if replacement is None else value
+        trace.update(
+            {
+                name + ".input": inputs,
+                name + ".contributions": parts,
+                name + ".raw": raw,
+                name: effective,
+            }
+        )
+        return effective
+
     def forward_with_trace(self, x, interventions=None):
         x = jnp.asarray(x)
         if x.ndim < 1 or x.shape[-1] != 2:
@@ -113,29 +133,48 @@ class ThreeNeuronYat(nnx.Module):
         trace = {}
 
         def evaluate(name, inputs):
-            control = controls.get(name, {})
-            if not isinstance(control, dict) or set(control) - {"gate", "replacement"}:
-                raise ValueError("control must contain only gate/replacement")
-            parts = getattr(self, name).contributions(inputs)
-            raw = jnp.sum(parts, axis=-1)
-            replacement = control.get("replacement")
-            value = control.get("gate", 1.0) if replacement is None else replacement
-            value = jnp.broadcast_to(jnp.asarray(value, dtype=raw.dtype), raw.shape)
-            effective = raw * value if replacement is None else value
-            trace.update(
-                {
-                    name + ".input": inputs,
-                    name + ".contributions": parts,
-                    name + ".raw": raw,
-                    name: effective,
-                }
-            )
-            return effective
+            return self._evaluate(name, inputs, controls, trace)
 
         h = evaluate("h", x[..., :1])
         p = evaluate("p", x[..., 1:])
         y = evaluate("y", jnp.concatenate((h, x[..., 1:]), axis=-1))
         return jnp.concatenate((y, p), axis=-1), trace
+
+    def forward_from_state(self, state, *, start_layer, interventions=None):
+        """Execute a suffix from a complete boundary state, preserving gradients.
+
+        Boundaries: 0=(u,v), 1=(h,v,p), 2=(target,protected).
+        At boundary 1 only y executes; controls on skipped h/p are rejected.
+        Boundary 2 is readout identity and accepts no controls. Supplied states
+        need not be reachable from an input; this method does not infer reachability.
+        """
+        if type(start_layer) is not int or start_layer not in (0, 1, 2):
+            raise ValueError("start_layer must be boundary 0, 1 or 2")
+        state = jnp.asarray(state)
+        width = 3 if start_layer == 1 else 2
+        if (
+            state.ndim < 1
+            or state.shape[-1] != width
+            or state.dtype != self.h.centers.dtype
+        ):
+            raise ValueError("state must have the boundary width and model dtype")
+        controls = {} if interventions is None else interventions
+        allowed = (
+            self.state_names
+            if start_layer == 0
+            else (("y",) if start_layer == 1 else ())
+        )
+        if not isinstance(controls, dict) or set(controls) - set(allowed):
+            raise ValueError(
+                "controls must address only modules executed by the suffix"
+            )
+        if start_layer == 0:
+            return self.forward_with_trace(state, controls)
+        trace = {"boundary.input": state}
+        if start_layer == 2:
+            return state, trace
+        y = self._evaluate("y", state[..., :2], controls, trace)
+        return jnp.concatenate((y, state[..., 2:]), axis=-1), trace
 
     def __call__(self, x, interventions=None):
         return self.forward_with_trace(x, interventions)[0]

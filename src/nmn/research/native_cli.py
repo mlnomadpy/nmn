@@ -361,9 +361,9 @@ def main(argv=None) -> int:
 
             print(json.dumps(export_native_record(args.record, args.output)))
             return 0
-        if (
-            args.command == "replay"
-            and _read(args.record).get("schema") == "nmn.nnx-research.v1"
+        if args.command == "replay" and _read(args.record).get("schema") in (
+            "nmn.nnx-research.v1",
+            "nmn.nnx-suffix-study.v1",
         ):
             required_backend = "nnx"
             from ..nnx.replay import replay_native_record as replay_nnx_record
@@ -387,7 +387,7 @@ def main(argv=None) -> int:
         nnx_schema = ("nmn.nnx-model.v1", "nmn.nnx-research.v1")
         nnx_init = args.command == "init" and args.backend == "nnx"
         nnx_saved = (
-            args.command in ("inspect", "collect")
+            args.command in ("inspect", "collect", "suffix")
             and _read(args.model).get("schema") in nnx_schema
         )
         if nnx_init or nnx_saved:
@@ -416,13 +416,25 @@ def main(argv=None) -> int:
                 if args.command == "inspect":
                     print(json.dumps(snapshot_nnx(model_nnx), allow_nan=False))
                     return 0
-                result = collect_nnx(
-                    model_nnx,
-                    NNXDataset.from_dict(_read(args.dataset)),
-                    split=args.split,
-                    edits={} if args.edits is None else _read(args.edits),
-                    derivatives=not args.no_derivatives,
-                )
+                if args.command == "suffix":
+                    from ..nnx.suffix import suffix_study as nnx_suffix_study
+
+                    result = nnx_suffix_study(
+                        model_nnx,
+                        NNXDataset.from_dict(_read(args.dataset)),
+                        states=_read(args.states),
+                        start_layer=args.start_layer,
+                        provenance=args.provenance,
+                        split=args.split,
+                    )
+                else:
+                    result = collect_nnx(
+                        model_nnx,
+                        NNXDataset.from_dict(_read(args.dataset)),
+                        split=args.split,
+                        edits={} if args.edits is None else _read(args.edits),
+                        derivatives=not args.no_derivatives,
+                    )
             with args.output.open("x", encoding="utf-8") as stream:
                 stream.write(json.dumps(result, indent=2, allow_nan=False) + "\n")
             print(

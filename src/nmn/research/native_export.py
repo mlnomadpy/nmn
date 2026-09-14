@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.nnx-suffix-study.v1": "NNX downstream boundary-state study",
     "nmn.nnx-model.v1": "NNX native model definition",
     "nmn.nnx-research.v1": "NNX native kernel observations",
     "nmn.gate-search.v1": "Native gate proposal search and frozen selection",
@@ -145,7 +146,7 @@ def render_native_note(record):
         lines += [
             f"Model identity: `{_text(snapshot['model_sha256'])}`.",
             "",
-            f"Architecture: {_text(snapshot['configuration']['class'])}.",
+            f"Architecture: {_text(snapshot['configuration'].get('class', snapshot['configuration'].get('architecture', 'unknown')))}.",
             "",
         ]
         if "sample_ids" in snapshot:
@@ -444,7 +445,7 @@ def render_native_note(record):
             "Per-example states, summaries, maps and downstream traces are retained in the data. These observations do not certify closure through depth.",
             "",
         ]
-    elif schema == "nmn.suffix-study.v1":
+    elif schema in ("nmn.suffix-study.v1", "nmn.nnx-suffix-study.v1"):
         lines += [
             "## State boundary and downstream effects",
             "",

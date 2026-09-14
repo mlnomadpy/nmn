@@ -156,7 +156,7 @@ def collect_research_data(model, dataset, *, split, edits=None, derivatives=True
             "capabilities": {
                 "complete_graph": True,
                 "cached_execution": False,
-                "suffix_replay": False,
+                "suffix_replay": True,
                 "interval_certificates": False,
                 "arbitrary_external_models": False,
             },

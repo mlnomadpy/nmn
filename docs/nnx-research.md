@@ -42,7 +42,7 @@ Local RKHS products describe individual expansions, not the composed network.
 Complete graph means this fixed architecture's graph is known; it does not make
 its floating-point observations a structural or continuous-domain certificate.
 The collector rejects nonfinite serialized results and has no cached execution.
-Suffix replay, arbitrary external-model conversion, statistical guarantees and
+Arbitrary external-model conversion, statistical guarantees and
 interval certification are unsupported. The native replay command dispatches this schema to JAX without importing Torch.
 
 Run the self-contained four-point fixture, then use the backend-independent
@@ -104,3 +104,28 @@ both NNX definitions and observation records. `extract --component model` expose
 the reusable model record from either schema. Restoring a model still validates
 its identity and strict execution configuration. Unsupported Torch research
 commands have not been ported to JAX by this dispatch.
+
+## Complete-state suffix studies
+
+`model.forward_from_state(state, start_layer=..., interventions=...)` exposes
+three boundaries: 0 uses `(u,v)` inputs, 1 uses `(h,v,p)` after H/P execution,
+and 2 uses `(target,protected)` outputs. Boundary 1 executes only Y; boundary 2
+is identity readout. Controls on skipped modules are rejected. Supplied states
+retain gradients and work under NNX JIT. Their reachability is not inferred.
+
+```bash
+JAX_ENABLE_X64=1 nmn research native suffix --model nnx-model.json --dataset dataset.json --split evaluation --states states.json --start-layer 1 --provenance "supplied decoder outputs" --output suffix.json
+JAX_ENABLE_X64=1 nmn research native replay suffix.json --output suffix-replay.json
+nmn research native export suffix.json --output obsidian-suffix
+```
+
+`states.json` maps variant names to sample-ID vectors covering exactly the selected
+population. The `nmn.nnx-suffix-study.v1` record retains original states, baseline
+and replayed outputs, reconstruction residuals, variant states/deltas, downstream
+outputs/deltas and executed suffix traces. Numeric replay checks these fields.
+No decoder is fitted and no closure or protected-domain certificate is inferred.
+
+New observation records advertise suffix capability. Earlier observations retain
+their historical `suffix_replay: false`; replay can report that capability-field
+mismatch even when numerical measurements agree. Inspect mismatch paths rather
+than interpreting every mismatch as a changed model output.

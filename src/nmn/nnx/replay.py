@@ -102,31 +102,62 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
     dataset = ResearchDataset.from_dict(record["dataset"])
     if dataset.sha256 != record["dataset_sha256"]:
         raise ValueError("dataset identity mismatch")
-    with jax.default_device(jax.devices("cpu")[0]):
-        model = model_from_snapshot(record)
-        actual = collect_research_data(
-            model,
-            dataset,
-            split=record["split"],
-            edits={name: row["controls"] for name, row in record["edits"].items()},
-            derivatives=record["derivatives"] is not None,
-        )
-    fields = [
-        "configuration",
-        "parameters",
-        "model_sha256",
-        "dataset_sha256",
-        "split",
-        "sample_ids",
-        "output_names",
-        "outputs",
-        "trace",
-        "geometry",
-        "edits",
-        "derivatives",
-        "capabilities",
-        "assurance",
-    ]
+    if record.get("schema") == "nmn.nnx-suffix-study.v1":
+        from .suffix import suffix_study
+
+        with jax.default_device(jax.devices("cpu")[0]):
+            model = model_from_snapshot(record["model_snapshot"])
+            actual = suffix_study(
+                model,
+                dataset,
+                start_layer=record["protocol"]["start_layer"],
+                split=record["protocol"]["split"],
+                provenance=record["protocol"]["provenance"],
+                states={
+                    name: dict(zip(record["sample_ids"], row["state"]))
+                    for name, row in record["variants"].items()
+                },
+            )
+        fields = [
+            "model_snapshot",
+            "dataset_sha256",
+            "sample_ids",
+            "protocol",
+            "original_state",
+            "baseline_outputs",
+            "baseline_trace",
+            "baseline_suffix_outputs",
+            "baseline_reconstruction_error",
+            "baseline_suffix_trace",
+            "variants",
+            "limitations",
+        ]
+    else:
+        with jax.default_device(jax.devices("cpu")[0]):
+            model = model_from_snapshot(record)
+            actual = collect_research_data(
+                model,
+                dataset,
+                split=record["split"],
+                edits={name: row["controls"] for name, row in record["edits"].items()},
+                derivatives=record["derivatives"] is not None,
+            )
+        fields = [
+            "configuration",
+            "parameters",
+            "model_sha256",
+            "dataset_sha256",
+            "split",
+            "sample_ids",
+            "output_names",
+            "outputs",
+            "trace",
+            "geometry",
+            "edits",
+            "derivatives",
+            "capabilities",
+            "assurance",
+        ]
     mismatches = []
     checked = 0
     maximum = 0.0
@@ -174,7 +205,9 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
         "source_schema": record["schema"],
         "status": "mismatch" if mismatches else "matched",
         "record_sha256": hashlib.sha256(serialized.encode()).hexdigest(),
-        "model_sha256": actual["model_sha256"],
+        "model_sha256": actual.get(
+            "model_sha256", actual.get("model_snapshot", {}).get("model_sha256")
+        ),
         "compared_fields": fields,
         "tolerances": {
             "atol": atol,
