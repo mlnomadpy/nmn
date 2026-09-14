@@ -47,6 +47,11 @@ def main(argv=None):
     enclosure.add_argument("--model", type=Path, required=True)
     enclosure.add_argument("--box", type=Path, required=True)
     enclosure.add_argument("--controls", type=Path)
+    enclosure.add_argument(
+        "--reference-controls",
+        type=Path,
+        help="bound edited-minus-reference output differences",
+    )
     enclosure.add_argument("--output", type=Path, required=True)
     replay = commands.add_parser(
         "replay", help="recompute supported native records on CPU"
@@ -242,13 +247,20 @@ def main(argv=None):
 
             result = check_box_certificate(_read(args.certificate))
         elif args.command == "enclose":
-            from ..torch.enclosure import enclose_native
+            from ..torch.enclosure import enclose_native, enclose_native_difference
 
-            result = enclose_native(
-                _read(args.model),
-                _read(args.box),
-                controls=None if args.controls is None else _read(args.controls),
+            arguments = dict(
+                controls=None if args.controls is None else _read(args.controls)
             )
+            if args.reference_controls is not None:
+                result = enclose_native_difference(
+                    _read(args.model),
+                    _read(args.box),
+                    reference_controls=_read(args.reference_controls),
+                    **arguments,
+                )
+            else:
+                result = enclose_native(_read(args.model), _read(args.box), **arguments)
         elif args.command == "replay":
             from ..torch.replay import replay_native_record
 

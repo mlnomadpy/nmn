@@ -55,3 +55,5 @@ kernel implementation, zero-crossing arithmetic, exact binary-float conversion,
 positive denominators and an IMQ→Yat residual example with output `1/5`. These
 checks exercise the implementation; they are not peer review or a runtime-roundoff
 certificate. Large rational denominators and wide/deep graphs can be expensive.
+
+`enclose --reference-controls reference.json` and `enclose_native_difference` bound edited-minus-reference outputs with shared inputs and parameters. Exact structural zeros are explained in [difference contracts](native-interval-contract.md#continuous-output-difference-protection).

@@ -149,3 +149,67 @@ def enclose_native(snapshot, box, *, controls=None):
             "Dependency overestimation may make intervals loose; an oversized enclosure is not a counterexample.",
         ],
     )
+
+
+def enclose_native_difference(snapshot, box, *, controls=None, reference_controls=None):
+    """Enclose edited minus reference outputs on the same real input box.
+
+    Both executions use the same fixed parameters. Conservative structural
+    dependencies establish exact zero for outputs unaffected by every changed
+    module control. Other outputs use subtraction of the two valid enclosures.
+    No numerical equality or pointwise sampling is used to infer independence.
+    """
+    reference = enclose_native(snapshot, box, controls=reference_controls)
+    edited = enclose_native(snapshot, box, controls=controls)
+    model = model_from_snapshot(snapshot)
+    if isinstance(model, YatGraph):
+        dependencies = model.dependencies()
+        widths = {
+            name: cast(Union[YatExpansion, IMQExpansion], block).out_features
+            for name, block in model.blocks.items()
+        }
+    else:
+        dependencies = {"target": ["module:h", "module:y"], "protected": ["module:p"]}
+        widths = {name: 1 for name in model.state_names}
+
+    def action(mapping, name):
+        control = mapping.get(name, {})
+        replacement = control.get("replacement")
+        value = replacement if replacement is not None else control.get("gate", "1")
+        values = value if isinstance(value, list) else [value] * widths[name]
+        return ("replacement" if replacement is not None else "gate", tuple(values))
+
+    changed = [
+        name
+        for name in model.state_names
+        if action(reference["controls"], name) != action(edited["controls"], name)
+    ]
+    zero_outputs, bounds = [], {}
+    for name in model.output_names:
+        if not {f"module:{module}" for module in changed} & set(dependencies[name]):
+            bounds[name] = ["0", "0"]
+            zero_outputs.append(name)
+        else:
+            bounds[name] = (
+                Interval(*edited["output_bounds"][name])
+                - Interval(*reference["output_bounds"][name])
+            ).to_list()
+    return dict(
+        schema="nmn.rational-difference.v1",
+        model_snapshot=snapshot,
+        input_box=edited["input_box"],
+        controls=edited["controls"],
+        reference_controls=reference["controls"],
+        output_bounds=bounds,
+        changed_modules=changed,
+        structural_zero_outputs=zero_outputs,
+        dependencies=dependencies,
+        reference_enclosure=reference,
+        edited_enclosure=edited,
+        assurance="exact rational bounds on edited minus reference real-valued outputs for shared inputs and parameters",
+        limitations=[
+            "No floating-point runtime roundoff coverage.",
+            "Affected-output subtraction may overestimate because input correlation is discarded.",
+            "Structural zeros use fixed graph routing, not inferred semantic or empirical independence.",
+        ],
+    )

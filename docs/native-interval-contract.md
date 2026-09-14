@@ -58,6 +58,40 @@ identify the evaluated artifacts, not their authorship.
 The cancellation fixture needs subdivision even though its real output is zero:
 independent interval occurrences lose correlation. Near-boundary or narrow margins
 may require many boxes; no convergence-rate or practical completeness claim is made.
-Output-range predicates are the supported contract language. Relations between two
-models, protected output *differences*, tanh layers and floating-runtime certification
-remain unsupported. Malformed certificates cause an error rather than a checked result.
+Output-range predicates are the supported contract language. Relations between distinct parameter snapshots, tanh layers and floating-runtime certification remain unsupported. The output-difference extension below supports two control settings on one fixed model. Malformed certificates cause an error rather than a checked result.
+
+## Continuous output-difference protection
+
+Including `reference_controls` switches the constrained quantity to
+`f_controls(x) - f_reference_controls(x)` with the same stored parameters and
+same real input `x`. For example:
+
+```json
+{
+  "schema": "nmn.interval-contract.v1",
+  "provenance": "Declared protected-branch contract",
+  "input_box": {"u": ["0", "1"], "v": ["0", "1"]},
+  "controls": {"h": {"gate": "0"}},
+  "reference_controls": {},
+  "outputs": {"protected": ["0", "0"]}
+}
+```
+
+This certifies zero change in the reference network's protected output when `h`
+is disabled. The certificate and checked report explicitly label the quantity
+as `output-difference`. Omitting `reference_controls` retains absolute-output
+range semantics. A reference control may itself be nontrivial.
+
+`enclose_native_difference` first encloses both executions. Subtracting their
+intervals contains their pointwise difference, although it discards correlation.
+For an output whose conservative dependency set contains no changed module,
+it instead returns exactly `[0,0]`. This follows by induction on fixed routing:
+unchanged inputs and unchanged ancestor computations give the same output under
+both controls. Residual dependencies include every overlapping writer; the
+criterion does not rely on sampled equality, parameter cancellation or learned
+semantic independence. Unsupported native operations remain rejected.
+
+Thus unaffected branches can satisfy zero-tolerance protection on a whole box.
+Affected branches may still produce loose difference bounds and inconclusive
+searches. Distinct parameter snapshots, read-slot/path interventions, general
+relations beyond output differences and floating-runtime error remain unsupported.

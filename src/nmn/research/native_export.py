@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.rational-difference.v1": "Rational intervention-difference enclosure",
     "nmn.interval-certificate.v1": "Rational box range certificate",
     "nmn.interval-check.v1": "Rational box certificate check",
     "nmn.rational-enclosure.v1": "Rational real-function enclosure",
@@ -133,11 +134,28 @@ def render_native_note(record):
             f"Data/semantic provenance: {_text(ds.get('provenance', 'not recorded'))}.",
             "",
         ]
-    if schema == "nmn.interval-certificate.v1":
+    if schema == "nmn.rational-difference.v1":
+        lines += [
+            "## Edited minus reference outputs",
+            "",
+            f"Changed modules: {_text(record['changed_modules'])}.",
+            "",
+            f"Structurally zero differences: {_text(record['structural_zero_outputs'])}.",
+            "",
+            _table(
+                ["Output", "Difference lower", "Difference upper"],
+                [[name, *bounds] for name, bounds in record["output_bounds"].items()],
+            ),
+            "",
+            _text(record["assurance"]),
+            "",
+        ]
+    elif schema == "nmn.interval-certificate.v1":
         lines += [
             "## Saved range-contract outcome",
             "",
             f"Saved status: {_text(record['status'])}.",
+            f"Quantity: {_text(record.get('quantity', 'output-difference' if 'reference_controls' in record['contract'] else 'output'))}.",
             "",
             _text(record["assurance"]),
             "",
@@ -151,6 +169,7 @@ def render_native_note(record):
             "## Checked partition outcome",
             "",
             f"Outcome: {_text(record['outcome'])}.",
+            f"Quantity: {_text(record.get('quantity', 'output'))}.",
             "",
             f"Leaf/node counts: {_text(record['counts'])}.",
             "",

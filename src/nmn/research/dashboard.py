@@ -49,7 +49,7 @@ def _summary(record, source, now):
     )
     if schema in ("nmn.interval-certificate.v1", "nmn.interval-check.v1"):
         scope = "rational real-function range contract"
-    if schema == "nmn.rational-enclosure.v1":
+    if schema in ("nmn.rational-enclosure.v1", "nmn.rational-difference.v1"):
         scope = "exact rational real-function enclosure"
         status = "enclosed"
     if schema == "nmn.native-replay.v1":
@@ -202,7 +202,10 @@ def build_dashboard(sources, destination):
                         )
                         if key in record
                     }
-                elif record["schema"] == "nmn.rational-enclosure.v1":
+                elif record["schema"] in (
+                    "nmn.rational-enclosure.v1",
+                    "nmn.rational-difference.v1",
+                ):
                     summary["details"] = {
                         key: record[key]
                         for key in (

@@ -7,7 +7,7 @@ from collections import deque
 from pathlib import Path
 
 from ..research.intervals import RationalInterval, rational
-from .enclosure import enclose_native
+from .enclosure import enclose_native, enclose_native_difference
 
 ASSURANCE = "real-valued range contract over the entire input box; exact rational enclosures; no runtime-roundoff coverage"
 
@@ -18,9 +18,18 @@ def _contract(snapshot, contract):
         raise ValueError("unsupported interval contract schema")
     if not isinstance(contract.get("provenance"), str) or not contract["provenance"]:
         raise ValueError("contract provenance is required")
-    initial = enclose_native(
-        snapshot, contract["input_box"], controls=contract.get("controls")
-    )
+    if "reference_controls" in contract:
+        initial = enclose_native_difference(
+            snapshot,
+            contract["input_box"],
+            controls=contract.get("controls"),
+            reference_controls=contract["reference_controls"],
+        )
+        contract["reference_controls"] = initial["reference_controls"]
+    else:
+        initial = enclose_native(
+            snapshot, contract["input_box"], controls=contract.get("controls")
+        )
     limits = contract["outputs"]
     if not limits or not set(limits) <= set(initial["output_bounds"]):
         raise ValueError("contract must constrain declared model outputs")
@@ -30,6 +39,17 @@ def _contract(snapshot, contract):
     }
     contract["controls"] = initial["controls"]
     return contract, initial
+
+
+def _evaluate(snapshot, box, contract):
+    if "reference_controls" in contract:
+        return enclose_native_difference(
+            snapshot,
+            box,
+            controls=contract["controls"],
+            reference_controls=contract["reference_controls"],
+        )
+    return enclose_native(snapshot, box, controls=contract["controls"])
 
 
 def _covered(bounds, limits):
@@ -67,11 +87,7 @@ def verify_box(snapshot, contract, *, max_boxes):
     witness_found = False
     while pending and regions < max_boxes:
         path, box = pending.popleft()
-        bound = (
-            initial
-            if not path
-            else enclose_native(snapshot, box, controls=contract["controls"])
-        )
+        bound = initial if not path else _evaluate(snapshot, box, contract)
         regions += 1
         node = {"box": box}
         nodes[path] = node
@@ -82,7 +98,7 @@ def verify_box(snapshot, contract, *, max_boxes):
             name: [str((rational(pair[0]) + rational(pair[1])) / 2)] * 2
             for name, pair in box.items()
         }
-        evaluated = enclose_native(snapshot, midpoint, controls=contract["controls"])
+        evaluated = _evaluate(snapshot, midpoint, contract)
         points += 1
         if not _covered(evaluated["output_bounds"], contract["outputs"]):
             node.update(
@@ -109,6 +125,7 @@ def verify_box(snapshot, contract, *, max_boxes):
     )
     return dict(
         schema="nmn.interval-certificate.v1",
+        quantity="output-difference" if "reference_controls" in contract else "output",
         status=status,
         model_snapshot=snapshot,
         contract=contract,
@@ -119,7 +136,7 @@ def verify_box(snapshot, contract, *, max_boxes):
         source_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         assurance=ASSURANCE,
         limitations=[
-            "Only fixed Yat/IMQ graphs, constant controls and closed output-range predicates are supported.",
+            "Only fixed Yat/IMQ graphs, constant controls and closed output or output-difference ranges are supported.",
             "Positive denominators make the supported rational expressions globally defined; no additional hidden-state domain constraint is asserted.",
             "Interval overestimation yields subdivision or inconclusive status, never a counterexample by itself.",
             "This record requires partition/enclosure checking; a saved status string is not trusted.",
@@ -141,6 +158,9 @@ def check_box_certificate(certificate):
         raise ValueError("unsupported certificate assurance claim")
     snapshot = certificate["model_snapshot"]
     contract, _ = _contract(snapshot, certificate["contract"])
+    quantity = "output-difference" if "reference_controls" in contract else "output"
+    if certificate.get("quantity", quantity) != quantity:
+        raise ValueError("certificate quantity differs from contract")
     nodes = certificate["nodes"]
     queue = deque([("", contract["input_box"])])
     seen = set()
@@ -161,9 +181,7 @@ def check_box_certificate(certificate):
             left, right = _split(box, node["axis"], node["midpoint"])
             queue.extend([(path + "0", left), (path + "1", right)])
         elif kind == "covered":
-            actual = enclose_native(snapshot, box, controls=contract["controls"])[
-                "output_bounds"
-            ]
+            actual = _evaluate(snapshot, box, contract)["output_bounds"]
             if actual != node["output_bounds"] or not _covered(
                 actual, contract["outputs"]
             ):
@@ -184,9 +202,7 @@ def check_box_certificate(certificate):
                 )
             ):
                 raise ValueError("counterexample must be a point inside its leaf")
-            actual = enclose_native(snapshot, point, controls=contract["controls"])[
-                "output_bounds"
-            ]
+            actual = _evaluate(snapshot, point, contract)["output_bounds"]
             if (
                 any(pair[0] != pair[1] for pair in actual.values())
                 or actual != node["output_bounds"]
@@ -217,6 +233,7 @@ def check_box_certificate(certificate):
         raise ValueError("saved outcome disagrees with checked leaves")
     return dict(
         schema="nmn.interval-check.v1",
+        quantity=quantity,
         status="certificate-checked",
         outcome=outcome,
         counts=counts,

@@ -1,0 +1,26 @@
+{
+  "controls": {
+    "h": {
+      "gate": "0"
+    }
+  },
+  "input_box": {
+    "u": [
+      "0",
+      "1"
+    ],
+    "v": [
+      "0",
+      "1"
+    ]
+  },
+  "outputs": {
+    "protected": [
+      "0",
+      "0"
+    ]
+  },
+  "provenance": "Structural protected-branch arithmetic fixture",
+  "reference_controls": {},
+  "schema": "nmn.interval-contract.v1"
+}
