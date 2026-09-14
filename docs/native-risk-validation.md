@@ -45,3 +45,28 @@ No optional stopping, growing candidate family, reused-pool independence,
 distribution-shift assurance, semantic correctness or all-input guarantee is supplied.
 Changing model, reference, criteria or sample counts after looking at outcomes
 requires a new valid protocol. Loose behavioral criteria may pass while being useless.
+
+## Prospective native-model example
+
+`python examples/research/prospective_risk.py MODEL.json OUTPUT` consumes a saved
+model with u,v inputs, target/protected outputs and native h write. It persists
+model identity, two candidate definitions, semantic criteria, fixed trial counts,
+risk thresholds and protocol before generating any validation input. It then
+executes the existing sampled-contract and replay APIs, derives one Boolean failure
+per input/clause, and runs the exact risk calculation. Full raw observations and
+source bindings are retained; no model fitting occurs.
+
+The fixed example uses 256 fresh seed-20260918 inputs, alpha=delta=1/20, candidates
+h=0 and h=1, target/baseline absolute tolerance 0.1, and protected-change tolerance
+1e-12. The reference is ordinary target=u²+0.5v and protected=v; the edited target
+is 0.5v. Clauses require removal accuracy, protected invariance and baseline
+competence simultaneously. The stochastic interpretation assumes IID uniform
+inputs; reproducible PRNG implementation is recorded and not formally certified.
+
+On the saved joint-donor seed-zero hybrid used in the first execution, neither
+candidate passed. h deletion had 148/256 removal-criterion failures, retaining h
+had 185/256, and baseline competence failed on 78/256 for both. Protection never
+failed. The empty accepted set is retained; thresholds are not relaxed after
+seeing the results. Low donor-transfer loss alone did not establish this fixed
+removal contract. This is a bounded synthetic validation example, not a claim
+about all architectures or a reproduction of the source paper's experiments.
