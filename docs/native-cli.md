@@ -108,3 +108,5 @@ replay mismatches or unavailable report records fail the command.
 The optional [NNX research adapter](nnx-research.md) exports live model data from
 JAX experiments. Its dedicated schema works with native `export`, `verify-export`
 and `report`; `replay` dispatches its schema to JAX without importing Torch.
+
+[Explicit linear modules](linear-graph-modules.md) can be mixed with nonlinear families in native PyTorch graph configurations. Their contributions, effective weights and local kernel geometry are retained by the collector.

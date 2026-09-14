@@ -6,7 +6,7 @@ from typing import List, Mapping, Optional, Sequence, cast
 import torch
 from torch import nn
 
-from .baselines import IMQExpansion, TanhMLPBlock
+from .baselines import IMQExpansion, LinearExpansion, TanhMLPBlock
 from .interpretable import Intervention, YatExpansion, _control
 
 
@@ -22,8 +22,8 @@ class YatModuleSpec:
     family: str = "yat"
 
     def __post_init__(self):
-        if self.family not in ("yat", "imq", "tanh"):
-            raise ValueError("family must be yat, imq or tanh")
+        if self.family not in ("yat", "imq", "tanh", "linear"):
+            raise ValueError("family must be yat, imq, tanh or linear")
         object.__setattr__(self, "reads", tuple(self.reads))
         object.__setattr__(self, "writes", tuple(self.writes))
         if not self.name or not self.name.isidentifier():
@@ -93,9 +93,12 @@ class YatGraph(nn.Module):
         for spec in specs:
             if not set(spec.reads + spec.writes) <= set(self.slots):
                 raise ValueError(f"unknown slot in module {spec.name}")
-            factory = {"yat": YatExpansion, "imq": IMQExpansion, "tanh": TanhMLPBlock}[
-                spec.family
-            ]
+            factory = {
+                "yat": YatExpansion,
+                "imq": IMQExpansion,
+                "tanh": TanhMLPBlock,
+                "linear": LinearExpansion,
+            }[spec.family]
             self.blocks[spec.name] = factory(
                 len(spec.reads),
                 len(spec.writes),

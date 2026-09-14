@@ -1,0 +1,63 @@
+{
+  "class": "nmn.torch.YatGraph",
+  "slots": [
+    "u",
+    "v",
+    "h",
+    "target",
+    "protected"
+  ],
+  "input_names": [
+    "u",
+    "v"
+  ],
+  "output_names": [
+    "target",
+    "protected"
+  ],
+  "layers": [
+    [
+      {
+        "name": "h",
+        "reads": [
+          "u"
+        ],
+        "writes": [
+          "h"
+        ],
+        "num_centers": 1,
+        "epsilon": 1.0,
+        "family": "yat"
+      },
+      {
+        "name": "p",
+        "reads": [
+          "v"
+        ],
+        "writes": [
+          "protected"
+        ],
+        "num_centers": 1,
+        "epsilon": 1.0,
+        "family": "linear"
+      }
+    ],
+    [
+      {
+        "name": "y",
+        "reads": [
+          "h",
+          "v"
+        ],
+        "writes": [
+          "target"
+        ],
+        "num_centers": 1,
+        "epsilon": 1.0,
+        "family": "yat"
+      }
+    ]
+  ],
+  "update": "simultaneous-residual-add",
+  "distance_mode": "direct"
+}

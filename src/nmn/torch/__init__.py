@@ -15,7 +15,7 @@ from .attention import (
     yat_attention,
     yat_attention_weights,
 )
-from .baselines import IMQExpansion, TanhMLPBlock
+from .baselines import IMQExpansion, LinearExpansion, TanhMLPBlock
 
 # Import embedding
 from .embed import YatEmbed
@@ -53,6 +53,7 @@ __all__ = [
     "Intervention",
     "YatGraph",
     "IMQExpansion",
+    "LinearExpansion",
     "TanhMLPBlock",
     "YatModuleSpec",
     # YAT Attention
