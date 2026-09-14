@@ -126,6 +126,7 @@ outputs/deltas and executed suffix traces. Numeric replay checks these fields.
 No decoder is fitted and no closure or protected-domain certificate is inferred.
 
 New observation records advertise suffix capability. Earlier observations retain
-their historical `suffix_replay: false`; replay can report that capability-field
-mismatch even when numerical measurements agree. Inspect mismatch paths rather
-than interpreting every mismatch as a changed model output.
+their historical `suffix_replay: false`; replay reports this API availability change
+in `availability_changes`, separately from numerical mismatches. It does not alter
+the saved full-forward computation. Graph completeness and cached-execution flags
+remain compared; malformed capability values and missing fields still fail comparison.

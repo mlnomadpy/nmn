@@ -118,3 +118,19 @@ def test_cli_model_definition_collect_and_inspect(tmp_path, capsys):
         == 2
     )
     capsys.readouterr()
+
+
+def test_api_availability_change_is_separate_from_execution_facts():
+    record = fixture_record()
+    record["capabilities"]["suffix_replay"] = False
+    replay = replay_native_record(record)
+    assert replay["status"] == "matched"
+    assert replay["availability_changes"] == {
+        "/capabilities/suffix_replay": {"saved": False, "current": True}
+    }
+    record["capabilities"]["complete_graph"] = False
+    replay = replay_native_record(record)
+    assert replay["status"] == "mismatch"
+    assert any(
+        row["path"] == "/capabilities/complete_graph" for row in replay["mismatches"]
+    )

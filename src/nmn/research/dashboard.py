@@ -250,6 +250,12 @@ def build_dashboard(sources, destination):
                             "mismatches",
                         )
                     }
+                    summary["details"]["availability_changes"] = record.get(
+                        "availability_changes", {}
+                    )
+                    summary["details"]["ignored_paths"] = record.get(
+                        "ignored_paths", []
+                    )
                 elif record["schema"] == "nmn.nnx-research.v1":
                     summary["details"] = {
                         "sample_ids_first_25": record["sample_ids"][:25],

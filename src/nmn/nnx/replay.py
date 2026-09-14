@@ -161,9 +161,20 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
     mismatches = []
     checked = 0
     maximum = 0.0
+    availability_changes = {}
 
     def compare(saved, current, path):
         nonlocal checked, maximum
+        # Suffix API availability does not alter a saved full-forward execution.
+        # Execution facts such as graph completeness remain normal comparisons.
+        if (
+            path == "/capabilities/suffix_replay"
+            and type(saved) is bool
+            and type(current) is bool
+        ):
+            if saved != current:
+                availability_changes[path] = {"saved": saved, "current": current}
+            return
         checked += 1
         if isinstance(saved, dict) and isinstance(current, dict):
             for key in sorted(set(saved) | set(current)):
@@ -218,7 +229,13 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
         "maximum_absolute_error": maximum,
         "mismatches": mismatches,
         "execution": actual,
-        "ignored_paths": ["/runtime", "/source_sha256", "/elapsed_seconds"],
+        "availability_changes": availability_changes,
+        "ignored_paths": [
+            "/runtime",
+            "/source_sha256",
+            "/elapsed_seconds",
+            "/capabilities/suffix_replay",
+        ],
         "limitations": [
             "CPU numerical replay is not a scientific certificate.",
             "No training, cached execution or external model conversion is replayed.",

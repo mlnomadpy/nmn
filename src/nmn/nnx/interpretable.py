@@ -130,7 +130,7 @@ class ThreeNeuronYat(nnx.Module):
         controls = {} if interventions is None else interventions
         if set(controls) - set(self.state_names):
             raise ValueError("unknown intervention state")
-        trace = {}
+        trace: dict[str, jax.Array] = {}
 
         def evaluate(name, inputs):
             return self._evaluate(name, inputs, controls, trace)

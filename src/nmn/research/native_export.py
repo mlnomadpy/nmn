@@ -539,6 +539,12 @@ def render_native_note(record):
             "The complete data retains mismatch paths and the new execution. Agreement is not a scientific certificate.",
             "",
         ]
+        if record.get("availability_changes"):
+            lines += [
+                "API availability changes (separate from numerical agreement): "
+                + _text(record["availability_changes"]),
+                "",
+            ]
     elif schema == "nmn.coalition-study.v1":
         lines += [
             "## Coalition coverage",
