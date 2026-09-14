@@ -110,3 +110,20 @@ JAX experiments. Its dedicated schema works with native `export`, `verify-export
 and `report`; `replay` dispatches its schema to JAX without importing Torch.
 
 [Explicit linear modules](linear-graph-modules.md) can be mixed with nonlinear families in native PyTorch graph configurations. Their contributions, effective weights and local kernel geometry are retained by the collector.
+
+## Standalone JSON publication
+
+Native Torch/NNX record writers and donor-plan output stage strict JSON in the
+output directory, flush and fsync its contents, then atomically publish the final
+filename without overwriting an existing file or symlink. Concurrent writers to
+the same destination cannot replace the winner. Serialization or pre-publication
+write failures leave the final filename absent; ordinary failures clean up staging
+files. Forced process termination can leave an unreferenced `.nmn-evidence-*.tmp`
+file, which is not treated as the final record.
+
+This requires a filesystem supporting atomic hard-link creation; unsupported
+filesystems fail explicitly rather than using a non-atomic fallback. Parent
+directories must already exist, as before. This is atomic visibility of one JSON
+file, not a transaction covering all files in an export/dashboard, and it does not
+guarantee directory-entry durability after power loss. Evidence manifests and
+numerical replay remain separate checks.

@@ -293,9 +293,9 @@ def collect_research_data(
 
 def save_research_data(data: dict, path):
     """Write a snapshot as strict JSON; refuse to overwrite existing evidence."""
-    encoded = json.dumps(data, indent=2, sort_keys=True, allow_nan=False) + "\n"
-    with Path(path).open("x", encoding="utf-8") as stream:
-        stream.write(encoded)
+    from ..research.io import write_json_exclusive
+
+    write_json_exclusive(data, path, sort_keys=True)
 
 
 def coalition_effects(model: ThreeNeuronYat, inputs: torch.Tensor):

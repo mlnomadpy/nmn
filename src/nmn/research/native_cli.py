@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from typing import cast
 
+from .io import write_json_exclusive
+
 
 def _read(path):
     return json.loads(Path(path).read_text(encoding="utf-8"))
@@ -369,8 +371,7 @@ def main(argv=None) -> int:
                 max_pairs=args.max_pairs,
                 provenance=args.provenance,
             )
-            with args.output.open("x", encoding="utf-8") as stream:
-                stream.write(json.dumps(result, indent=2, allow_nan=False) + "\n")
+            write_json_exclusive(result, args.output)
             print(
                 json.dumps(
                     {
@@ -427,8 +428,7 @@ def main(argv=None) -> int:
             result = replay_nnx_record(
                 _read(args.record), atol=args.atol, rtol=args.rtol
             )
-            with args.output.open("x", encoding="utf-8") as stream:
-                stream.write(json.dumps(result, indent=2, allow_nan=False) + "\n")
+            write_json_exclusive(result, args.output)
             print(
                 json.dumps(
                     {
@@ -491,8 +491,7 @@ def main(argv=None) -> int:
                         edits={} if args.edits is None else _read(args.edits),
                         derivatives=not args.no_derivatives,
                     )
-            with args.output.open("x", encoding="utf-8") as stream:
-                stream.write(json.dumps(result, indent=2, allow_nan=False) + "\n")
+            write_json_exclusive(result, args.output)
             print(
                 json.dumps(
                     {
