@@ -33,4 +33,4 @@ Storage includes all per-edit traces and response arrays. Collection performs
 `2 * (1 + number_of_edits)` batched model forwards plus kernel diagnostics;
 SVD costs depend on fit rows and edit count. Dataset group/split checks do not
 establish statistical independence. Nonfinite responses are rejected. Native
-export/dashboard support this schema; its replay adapter remains unsupported.
+export/dashboard support this schema; native replay compares its projection operator and reconstruction measurements without requiring identical basis signs.

@@ -9,12 +9,14 @@ import torch
 from ..research.datasets import DonorPair, ResearchDataset
 from ..research.native_export import _check_identities
 from ..research.semantics import TabulatedReference
+from .benchmark import benchmark_models
 from .coalitions import coalition_study
 from .graph import YatGraph
 from .interpretable import Intervention, YatExpansion
 from .paths import gate_path
 from .protection import protection_study
 from .research import _json_value, collect_research_data, model_from_snapshot
+from .response_space import response_space_study
 from .selection import select_edit
 from .semantics import semantic_study
 from .studies import donor_study
@@ -40,6 +42,8 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
             raise ValueError("tolerances must be finite nonnegative numbers")
     supported = {
         "nmn.native-research.v1",
+        "nmn.response-space.v1",
+        "nmn.native-benchmark.v1",
         "nmn.edit-selection.v1",
         "nmn.semantic-study.v1",
         "nmn.suffix-study.v1",
@@ -53,9 +57,19 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
     if schema not in supported:
         raise ValueError("unsupported native replay schema")
     _check_identities(record)
-    snapshot = (
-        record if schema == "nmn.native-research.v1" else record["model_snapshot"]
-    )
+    if schema == "nmn.native-benchmark.v1":
+        if len(record["methods"]) < 2 or any(
+            row["status"] != "measured" or "model_snapshot" not in row
+            for row in record["methods"].values()
+        ):
+            raise ValueError(
+                "benchmark replay requires at least two measured methods with snapshots; failed historical methods cannot be reconstructed"
+            )
+        snapshot = next(iter(record["methods"].values()))["model_snapshot"]
+    else:
+        snapshot = (
+            record if schema == "nmn.native-research.v1" else record["model_snapshot"]
+        )
     dtype_name = snapshot["runtime"]["dtype"]
     dtypes = {"torch.float64": torch.float64, "torch.float32": torch.float32}
     if dtype_name not in dtypes:
@@ -70,7 +84,36 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
             for name, mapping in controls.items()
         }
 
-    if schema == "nmn.native-research.v1":
+    if schema == "nmn.native-benchmark.v1":
+        dataset = ResearchDataset.from_dict(record["dataset"])
+        if dataset.sha256 != record["dataset_sha256"]:
+            raise ValueError("dataset content hash mismatch")
+        contract = record["contract"]
+        models = {
+            name: model_from_snapshot(
+                record["methods"][name]["model_snapshot"],
+                dtype=dtypes[
+                    record["methods"][name]["model_snapshot"]["runtime"]["dtype"]
+                ],
+            )
+            for name in record["method_order"]
+        }
+        if set(models) != set(record["methods"]) or len(record["method_order"]) != len(
+            models
+        ):
+            raise ValueError("method order must cover exactly the recorded methods")
+        actual = benchmark_models(
+            models,
+            dataset,
+            edits=edits(contract["edits"]),
+            expected_outputs=contract["expected_outputs"],
+            protected_outputs=contract["protected_outputs"],
+            split=contract["split"],
+            repeats=1,
+            warmup=0,
+        )
+        keys = ["method_order", "sample_ids", "methods"]
+    elif schema == "nmn.native-research.v1":
         actual = collect_research_data(
             model,
             torch.tensor(snapshot["inputs"], dtype=dtypes[dtype_name]),
@@ -156,7 +199,25 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
         if dataset.sha256 != record["dataset_sha256"]:
             raise ValueError("dataset content hash mismatch")
         protocol = record.get("protocol", {})
-        if schema == "nmn.edit-selection.v1":
+        if schema == "nmn.response-space.v1":
+            actual = response_space_study(
+                model,
+                dataset,
+                edits=edits(snapshot["controls"]),
+                rank=protocol["rank"],
+                fit_split=protocol["fit_split"],
+                evaluation_split=protocol["evaluation_split"],
+            )
+            keys = [
+                "protocol",
+                "singular_values",
+                "numerical_rank",
+                "numerical_rank_threshold",
+                "fit",
+                "evaluation",
+                "cost",
+            ]
+        elif schema == "nmn.edit-selection.v1":
             actual = select_edit(
                 model,
                 dataset,
@@ -251,11 +312,33 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
                 "subset_coefficients",
                 "reconstruction_error",
             ]
+
+    def segment(value):
+        return str(value).replace("~", "~0").replace("/", "~1")
+
     ignored_paths = (
         {"/path/source_sha256", "/path/cost/seconds"}
         if schema == "nmn.gate-path-study.v1"
         else set()
     )
+    if schema == "nmn.response-space.v1":
+        ignored_paths.update({"/fit/coordinates", "/evaluation/coordinates"})
+    if schema == "nmn.native-benchmark.v1":
+        for name in record["methods"]:
+            prefix = "/methods/" + segment(name)
+            ignored_paths.update(
+                prefix + "/" + field
+                for field in (
+                    "model_snapshot",
+                    "baseline_cost",
+                    "instrumentation_seconds",
+                    "total_seconds",
+                )
+            )
+            ignored_paths.update(
+                prefix + "/edits/" + segment(name) + "/cost"
+                for name in contract["edits"]
+            )
     mismatches = []
     checked = 0
     maximum_error = 0.0
@@ -269,7 +352,7 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
             if set(saved) != set(current):
                 mismatches.append({"path": path, "reason": "mapping keys differ"})
             for key in sorted(set(saved) & set(current)):
-                compare(saved[key], current[key], path + "/" + str(key))
+                compare(saved[key], current[key], path + "/" + segment(key))
         elif isinstance(saved, list) and isinstance(current, list):
             if len(saved) != len(current):
                 mismatches.append({"path": path, "reason": "array lengths differ"})
@@ -307,7 +390,7 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
     for key in keys:
         compare(record[key], actual[key], "/" + key)
     # Always compare the unchanged population outputs, too, for composite studies.
-    if schema != "nmn.native-research.v1":
+    if schema not in ("nmn.native-research.v1", "nmn.native-benchmark.v1"):
         for field in ("sample_ids", "inputs"):
             compare(
                 snapshot[field],
@@ -319,6 +402,20 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
             actual["model_snapshot"]["observations"]["baseline"],
             "/model_snapshot/observations/baseline",
         )
+    if schema == "nmn.response-space.v1":
+        saved_basis = torch.tensor(record["basis"], dtype=torch.float64)
+        actual_basis = torch.tensor(actual["basis"], dtype=torch.float64)
+        compare(
+            (saved_basis @ saved_basis.T).tolist(),
+            (actual_basis @ actual_basis.T).tolist(),
+            "/subspace_projector",
+        )
+        for field in ("sample_ids", "inputs", "observations"):
+            compare(
+                record["evaluation_snapshot"][field],
+                actual["evaluation_snapshot"][field],
+                "/evaluation_snapshot/" + field,
+            )
     if schema == "nmn.edit-selection.v1":
         saved_validation = record["validation_snapshot"]
         current_validation = actual["validation_snapshot"]
@@ -338,7 +435,17 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
         "record_sha256": hashlib.sha256(
             json.dumps(record, sort_keys=True, allow_nan=False).encode()
         ).hexdigest(),
-        "model_sha256": snapshot["model_sha256"],
+        "model_sha256": (
+            None if schema == "nmn.native-benchmark.v1" else snapshot["model_sha256"]
+        ),
+        "model_identities": (
+            {
+                name: row["model_snapshot"]["model_sha256"]
+                for name, row in record["methods"].items()
+            }
+            if schema == "nmn.native-benchmark.v1"
+            else {}
+        ),
         "tolerances": {
             "atol": atol,
             "rtol": rtol,
@@ -350,6 +457,14 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
             if schema == "nmn.edit-selection.v1"
             else []
         ),
+        "additional_comparisons": (
+            [
+                "subspace_projector",
+                "evaluation_snapshot/{sample_ids,inputs,observations}",
+            ]
+            if schema == "nmn.response-space.v1"
+            else []
+        ),
         "ignored_paths": sorted(ignored_paths),
         "checked_nodes": checked,
         "maximum_absolute_error": maximum_error,
@@ -358,6 +473,8 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
         "limitations": [
             "Numerical agreement with saved observations is not scientific validation or a certificate.",
             "CPU replay may differ from original hardware or runtime versions.",
+            "Benchmark replay uses one forward per condition; timings and historical failed methods are not reproduced.",
+            "Response-space replay compares projection operators, not basis signs or coordinate orientation.",
             "Donor reference expectations are reused as supplied data; reference callbacks are not rerun.",
         ],
     }

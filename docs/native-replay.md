@@ -8,7 +8,7 @@ nmn research native export replay.json --output replay-note
 
 Unlike `verify-export`, this command executes the saved model. It supports
 native observation collections, donor studies (including read-slot patches),
-classification protection, coalition, supplied-semantic, edit-selection, suffix-state, gate-path and kernel diagnostic records. Other schemas are rejected.
+classification protection, coalition, supplied-semantic, edit-selection, suffix-state, response-space, measured benchmark, gate-path and kernel diagnostic records. Other schemas are rejected.
 CPU float32/float64 execution follows the saved dtype. No training, pickle
 loading or executable reference callbacks are invoked.
 
@@ -36,6 +36,10 @@ Replaying an inconclusive coalition record repeats its declared budget and can
 match without completing the lattice. Agreement verifies reproducibility of saved
 measurements; it does not certify a mathematical or population claim.
 
-Path records without a separate dataset can replay their saved snapshot inputs and IDs. If a path/diagnostic dataset is present, replay checks its identity when recorded and verifies selected inputs after conversion to the saved precision. Training and benchmark records remain unsupported; replay never silently launches optimization.
+Path records without a separate dataset can replay their saved snapshot inputs and IDs. If a path/diagnostic dataset is present, replay checks its identity when recorded and verifies selected inputs after conversion to the saved precision. Training records remain unsupported; replay never silently launches optimization.
 
 Edit-selection replay recomputes the declared candidate budget and split sequence. It checks the selected ID, failed/unexecuted outcomes, ledger freeze/event ordering, per-candidate measurements and validation inputs/traces. Validation still cannot select a new winner.
+
+Response-space replay compares projection operators, singular values, responses and reconstruction residuals. It ignores raw basis coordinates, which change under harmless sign/rotation conventions. A rank cutoff through a repeated singular-value group can still produce a different subspace and a mismatch.
+
+Benchmark replay requires at least two measured methods with saved snapshots. It restores all methods and compares parameter counts, predictions, deltas and target errors using one forward per condition. Timing, warmup/repetition costs and diagnostic snapshots are explicitly excluded. Historical failed rows without reconstructible snapshots are rejected, never reported as reproduced.
