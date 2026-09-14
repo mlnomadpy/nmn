@@ -92,3 +92,30 @@ accuracy to 50%, but a refitted probe reaches 100%. Replacing the write with zer
 leaves the refitted probe at 50%. These measurements distinguish two kinds of
 failed decoding in this finite linear comparison. They do not prove information
 erasure across other features, nonlinear decoders or unseen populations.
+
+## Quadratic decoding comparator
+
+`probe --feature-map quadratic` fits the same ridge classifier on a fixed map
+containing the original coordinates followed by all products `x_i*x_j` for
+`i <= j`. Columns use original-coordinate order followed by row-major upper
+triangle order; their coordinate lists are stored in the protocol. Products use
+raw coordinates before fit-only centering. There is no data-dependent feature
+selection or rescaling. `--feature-map linear` remains the default and preserves
+older record/replay behavior.
+
+`--max-expanded-features` (default 1024) rejects an oversized quadratic expansion
+before allocating the expanded feature matrix and ridge Gram matrix. The width
+is `d + d(d+1)/2`; the dense solve can still be expensive below the cap. Nonfinite
+products are rejected. This budget does not constrain the existing linear mode.
+
+Python API: `probe_study(..., feature_map="quadratic", max_expanded_features=1024)`.
+The same fixed transform is applied to fitting, held-out baseline, edited data
+and optional separately refitted probes. Raw features remain available in model
+traces; probe rows contain transformed features. All fitting finishes before
+held-out model evaluation. Native replay reconstructs the transform and solves.
+
+A designed radius-label fixture reaches 100% held-out accuracy with this quadratic
+probe versus 50% with the linear probe. This illustrates a comparator limitation;
+it does not establish erasure, semantic identification or a stable inverse.
+Choosing the feature map or ridge using held-out results would compromise the
+claimed separation; such selection needs its own population contract.

@@ -130,3 +130,43 @@ def test_refitted_probe_recovers_sign_change_but_not_constant_write():
             data,
             **{**kwargs, "edits": {"bad": {"a": Intervention(gate=[0, 1])}}},
         )
+
+
+def test_quadratic_comparator_recovers_radius_and_respects_budget():
+    model = YatGraph(
+        ["x", "h"],
+        ["x"],
+        ["h"],
+        [[YatModuleSpec("a", ["x"], ["h"])]],
+        dtype=torch.float64,
+    )
+    values = [-2.0, -0.5, 0.5, 2.0, -1.8, -0.25, 0.25, 1.8]
+    samples = [
+        ResearchSample(str(i), [x], "tuning" if i < 4 else "validation", str(i))
+        for i, x in enumerate(values)
+    ]
+    dataset = ResearchDataset(samples, name="radius", provenance="designed concept")
+    labels = {str(i): "outer" if abs(x) > 1 else "inner" for i, x in enumerate(values)}
+    kwargs = dict(
+        feature="a.input",
+        labels=labels,
+        classes=["inner", "outer"],
+        provenance="radius fixture",
+        ridge=0.001,
+    )
+    linear = probe_study(model, dataset, **kwargs)
+    quadratic = probe_study(model, dataset, **kwargs, feature_map="quadratic")
+    assert linear["evaluation"]["baseline"]["accuracy"] == 0.5
+    assert quadratic["evaluation"]["baseline"]["accuracy"] == 1.0
+    assert quadratic["protocol"]["feature_map_columns"] == [[0], [0, 0]]
+    assert replay_native_record(quadratic)["status"] == "matched"
+    changed_labels = dict(labels)
+    changed_labels.update({str(i): "inner" for i in range(4, 8)})
+    changed = probe_study(
+        model, dataset, **{**kwargs, "labels": changed_labels}, feature_map="quadratic"
+    )
+    assert changed["probe"] == quadratic["probe"]
+    with pytest.raises(ValueError, match="exceeds"):
+        probe_study(
+            model, dataset, **kwargs, feature_map="quadratic", max_expanded_features=1
+        )

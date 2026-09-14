@@ -286,6 +286,8 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
                 model,
                 dataset,
                 feature=protocol["feature"],
+                feature_map=protocol.get("feature_map", "linear"),
+                max_expanded_features=protocol.get("max_expanded_features", 1024),
                 labels=record["labels"],
                 classes=record["classes"],
                 provenance=protocol["provenance"],

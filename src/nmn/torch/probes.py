@@ -1,4 +1,4 @@
-"""Fit-only linear classification probes of native internal trace tensors."""
+"""Fit-only linear and quadratic classification probes of native trace tensors."""
 
 import hashlib
 import math
@@ -18,12 +18,14 @@ def probe_study(
     classes,
     provenance,
     ridge,
+    feature_map="linear",
+    max_expanded_features=1024,
     edits=None,
     refit_edits=False,
     fit_split="tuning",
     evaluation_split="validation",
 ):
-    """Fit an affine ridge classifier on baseline fit features, then freeze it.
+    """Fit ridge on linear or quadratic baseline features, then freeze it.
 
     Scores regress one-hot labels and are not probabilities. Argmax ties choose
     the first declared class. Edits are evaluated only on the held-out population
@@ -81,6 +83,11 @@ def probe_study(
     edits = {} if edits is None else edits
     if any(not isinstance(name, str) or not name for name in edits):
         raise ValueError("edit names must be nonempty strings")
+    if feature_map not in ("linear", "quadratic"):
+        raise ValueError("feature_map must be linear or quadratic")
+    if type(max_expanded_features) is not int or max_expanded_features < 1:
+        raise ValueError("max_expanded_features must be positive")
+    map_metadata: dict[str, object] = {}
     parameter = next(model.parameters())
     if parameter.dtype not in (torch.float32, torch.float64):
         raise ValueError("probe fitting requires float32 or float64")
@@ -108,6 +115,31 @@ def probe_study(
             or not bool(torch.isfinite(value).all())
         ):
             raise ValueError("probe features must be finite sample-by-feature matrices")
+        if feature_map == "quadratic":
+            width = value.shape[1]
+            expanded = width + width * (width + 1) // 2
+            if expanded > max_expanded_features:
+                raise ValueError(
+                    "quadratic feature expansion exceeds max_expanded_features"
+                )
+            rows, columns = torch.triu_indices(width, width, device=value.device)
+            terms = value[:, rows] * value[:, columns]
+            mapped = torch.cat((value, terms), dim=1)
+            if not bool(torch.isfinite(mapped).all()):
+                raise ValueError(
+                    "quadratic feature expansion produced nonfinite values"
+                )
+            metadata = {
+                "feature_map": "quadratic",
+                "raw_feature_width": width,
+                "max_expanded_features": max_expanded_features,
+                "feature_map_columns": [[i] for i in range(width)]
+                + [[int(i), int(j)] for i, j in zip(rows.tolist(), columns.tolist())],
+            }
+            if map_metadata and map_metadata != metadata:
+                raise ValueError("probe feature dimensions changed between populations")
+            map_metadata.update(metadata)
+            return mapped
         return value
 
     if type(refit_edits) is not bool:
@@ -239,6 +271,7 @@ def probe_study(
                 rule="argmax scores; first declared class wins ties",
                 method="affine ridge regression on one-hot labels; unpenalized intercept",
                 frozen_before_evaluation=True,
+                **map_metadata,
                 **(
                     {
                         "refit_edits": True,
@@ -257,7 +290,7 @@ def probe_study(
             ),
             source_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             limitations=[
-                "Probe accuracy measures decoding by this fitted linear classifier, not semantic causality or a stable inverse.",
+                "Probe accuracy measures decoding by this fitted feature-map classifier, not semantic causality or a stable inverse.",
                 "Scores are uncalibrated ridge outputs, not class probabilities.",
                 "A frozen probe can fail after a representation change while another probe recovers the labels; no erasure is certified.",
                 "Declared split/group separation does not prove independence; feature and ridge selection using evaluation results can leak information.",

@@ -188,6 +188,10 @@ def main(argv=None) -> int:
         help="fit a linear state probe then evaluate frozen decoding under edits",
     )
     probe.add_argument("--feature", required=True)
+    probe.add_argument(
+        "--feature-map", choices=("linear", "quadratic"), default="linear"
+    )
+    probe.add_argument("--max-expanded-features", type=int, default=1024)
     probe.add_argument("--labels", type=Path, required=True)
     probe.add_argument("--classes", nargs="+", required=True)
     probe.add_argument("--provenance", required=True)
@@ -707,6 +711,8 @@ def main(argv=None) -> int:
                     model,
                     dataset,
                     feature=args.feature,
+                    feature_map=args.feature_map,
+                    max_expanded_features=args.max_expanded_features,
                     labels=_read(args.labels),
                     classes=args.classes,
                     provenance=args.provenance,
