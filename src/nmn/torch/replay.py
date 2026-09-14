@@ -261,6 +261,7 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
                 allow_cross_split=protocol["allow_cross_split"],
                 match_semantics=protocol["match_semantics"],
                 read_slots=protocol.get("read_slots"),
+                edge_routes=protocol.get("edge_routes"),
             )
             # Replay supplied expectations, never execute a saved callback name.
             for current, saved in zip(actual["rows"], record["rows"]):

@@ -75,3 +75,37 @@ def test_residual_edge_isolation_uses_current_effective_write():
     altered = copy.deepcopy(record)
     altered["results"]["remove-a-at-b"]["outputs"][0][0] += 1
     assert replay_native_record(altered)["status"] == "mismatch"
+
+    from nmn.research.datasets import DonorPair
+    from nmn.torch.studies import donor_study
+
+    donors = ResearchDataset(
+        [
+            ResearchSample("base", [1.0], "evaluation", "base", {}),
+            ResearchSample("donor", [0.0], "evaluation", "donor", {}),
+        ],
+        name="donor edge fixture",
+        provenance="arithmetic inputs",
+    )
+    routes = {"b": {"h": ["a"]}}
+    transferred = donor_study(
+        model,
+        donors,
+        [DonorPair("pair", "base", "donor", ("b",), {"y": 2.0})],
+        edge_routes=routes,
+        protected_outputs=["p"],
+    )
+    row = transferred["rows"][0]
+    assert row["donor_edges"] == {"b": {"h": {"a": [0.0]}}}
+    assert row["protected_delta"] == {"p": 0.0}
+    assert row["absolute_reference_error"] == {"y": 0.0}
+    assert row["edited_trace"]["b.input"] == [[2.0]]
+    assert replay_native_record(transferred)["status"] == "matched"
+    with pytest.raises(ValueError, match="choose"):
+        donor_study(
+            model,
+            donors,
+            [DonorPair("pair", "base", "donor", ("b",))],
+            edge_routes=routes,
+            read_slots={"b": ["h"]},
+        )

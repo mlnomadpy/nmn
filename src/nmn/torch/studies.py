@@ -26,6 +26,7 @@ def donor_study(
     allow_cross_split: bool = False,
     match_semantics: Sequence[str] = (),
     read_slots: Optional[Mapping[str, Sequence[str]]] = None,
+    edge_routes=None,
 ):
     """Run actual donor replacements and compare supplied reference measurements.
 
@@ -39,6 +40,10 @@ def donor_study(
     are untouched; the receiving module and descendants recompute. Routes must
     cover exactly the modules named across pairs. This is a receiving-slot patch,
     not isolation of a particular producer's contribution to a residual sum.
+
+    With edge_routes, pair modules name receivers and routes identify producer
+    writes to transfer at those receivers. Unchanged donor writes remain fixed;
+    other residual terms survive. Whole-slot and edge routes are mutually exclusive.
 
     Reference callbacks receive data records, never the model or its outputs.
     Supply a stable versioned reference_id; callbacks are not discovered semantic
@@ -85,6 +90,49 @@ def donor_study(
             ):
                 raise ValueError("routes require unique receiving-module read slots")
             routes[name] = tuple(slots)
+    normalized_edges: Optional[dict[str, dict[str, list[str]]]] = None
+    if edge_routes is not None:
+        if read_slots is not None:
+            raise ValueError("choose whole-slot read routes or producer edge routes")
+        if not isinstance(model, YatGraph):
+            raise ValueError("donor edge routing requires YatGraph")
+        specifications = {
+            spec.name: spec for layer in model.layer_specs for spec in layer
+        }
+        layers = {
+            spec.name: i for i, layer in enumerate(model.layer_specs) for spec in layer
+        }
+        if not isinstance(edge_routes, Mapping) or set(edge_routes) != {
+            name for pair in pairs for name in pair.modules
+        }:
+            raise ValueError("edge routes must cover exactly paired receiving modules")
+        normalized_edges = {}
+        for receiver, slots in edge_routes.items():
+            if (
+                not isinstance(slots, Mapping)
+                or not slots
+                or set(slots) - set(specifications[receiver].reads)
+            ):
+                raise ValueError("edge routes must name receiving-module read slots")
+            normalized_edges[receiver] = {}
+            for slot, producers in slots.items():
+                if (
+                    not isinstance(producers, (list, tuple))
+                    or not producers
+                    or any(not isinstance(p, str) for p in producers)
+                    or len(set(producers)) != len(producers)
+                ):
+                    raise ValueError("edge routes require unique producer name lists")
+                for producer in producers:
+                    if (
+                        producer not in specifications
+                        or layers[producer] >= layers[receiver]
+                        or slot not in specifications[producer].writes
+                    ):
+                        raise ValueError(
+                            "edge donor producer must execute earlier and write the receiving slot"
+                        )
+                normalized_edges[receiver][slot] = list(producers)
     parameter = next(model.parameters())
     ids = tuple(
         dict.fromkeys(sid for pair in pairs for sid in (pair.base_id, pair.donor_id))
@@ -116,8 +164,26 @@ def donor_study(
                 )
                 for name in pair.modules
             }
-            read_patches = {}
-            if routes is not None:
+            read_patches: dict[str, dict[str, torch.Tensor]] = {}
+            donor_edges = {}
+            if normalized_edges is not None:
+                controls = {}
+                donor_edges = {
+                    receiver: {
+                        slot: {
+                            producer: population_trace[producer][
+                                d : d + 1, specifications[producer].writes.index(slot)
+                            ].clone()
+                            for producer in producers
+                        }
+                        for slot, producers in normalized_edges[receiver].items()
+                    }
+                    for receiver in pair.modules
+                }
+                edited, trace = model.forward_with_trace(
+                    inputs[b : b + 1], edge_patches=donor_edges
+                )
+            elif routes is not None:
                 controls = {}
                 for name in pair.modules:
                     read_patches[name] = {
@@ -178,6 +244,11 @@ def donor_study(
                         name: control.replacement for name, control in controls.items()
                     },
                     "edited_trace": trace,
+                    **(
+                        {"donor_edges": donor_edges}
+                        if normalized_edges is not None
+                        else {}
+                    ),
                 }
             )
     return _json_value(
@@ -202,11 +273,20 @@ def donor_study(
                 "allow_cross_split": allow_cross_split,
                 "match_semantics": list(match_semantics),
                 "donor_execution": (
-                    "unchanged-model; receiving-module read-slot replacement"
-                    if routes is not None
-                    else "unchanged-model; full module-write replacement"
+                    "unchanged-model; producer-specific residual edge replacement"
+                    if normalized_edges is not None
+                    else (
+                        "unchanged-model; receiving-module read-slot replacement"
+                        if routes is not None
+                        else "unchanged-model; full module-write replacement"
+                    )
                 ),
                 "read_slots": routes,
+                **(
+                    {"edge_routes": normalized_edges}
+                    if normalized_edges is not None
+                    else {}
+                ),
             },
             "rows": rows,
             "limitations": [

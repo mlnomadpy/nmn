@@ -46,7 +46,7 @@ the first producer also changes the other reader. These are distinct experiments
 This API isolates explicit additive residual contributions. It does not discover
 causal edges or implement recursive causal scrubbing. If a producer influences
 another writer upstream of the receiver, that indirect effect remains in the
-other writer's current contribution. Donor selection and recursive path protocols remain separate work. The existing
+other writer's current contribution. Declared donor pairs are supported by [donor edge routes](native-donor-studies.md). Automatic donor selection and recursive path protocols remain separate work. The existing
 donor `--read-slots` option still replaces whole read coordinates. No
 continuous-domain or semantic guarantee is inferred.
 

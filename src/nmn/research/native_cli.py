@@ -229,6 +229,11 @@ def main(argv=None) -> int:
         type=Path,
         help="optional receiving-module to read-slot lists JSON (YatGraph)",
     )
+    donor.add_argument(
+        "--edge-routes",
+        type=Path,
+        help="receiver to slot to producer-name lists for donor edge patching",
+    )
     donor.add_argument("--protected", nargs="*", default=[])
     donor.add_argument("--match-semantics", nargs="*", default=[])
     donor.add_argument("--allow-cross-split", action="store_true")
@@ -610,6 +615,9 @@ def main(argv=None) -> int:
                     allow_cross_split=args.allow_cross_split,
                     read_slots=(
                         None if args.read_slots is None else _read(args.read_slots)
+                    ),
+                    edge_routes=(
+                        None if args.edge_routes is None else _read(args.edge_routes)
                     ),
                 )
             else:

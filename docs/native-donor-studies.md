@@ -105,3 +105,39 @@ Two modules share `h`; transferring a zero donor value into only one reader
 changes its output from one to zero while the other reader still outputs one.
 The self-donor control preserves both outputs. These are finite numerical
 observations, not a general protected-edit guarantee.
+
+## Donor contributions at individual residual edges
+
+Use `--edge-routes` instead of `--read-slots` to transfer selected producer writes
+at a receiver, preserving other contributions to its read coordinate:
+
+```json
+{"b": {"h": ["a"]}}
+```
+
+```bash
+nmn research native donor --model graph.json --dataset dataset.json \
+  --pairs pairs.json --edge-routes edge-routes.json --protected p --output donor-edges.json
+nmn research native replay donor-edges.json --output replay.json
+```
+
+In this mode each pair's `modules` names receiving modules. Routes must cover
+exactly their union. Each receiver maps read slots to nonempty, unique producer
+name lists; producers must write that slot in an earlier layer. The Python API
+is `donor_study(..., edge_routes=routes)` and requires `YatGraph`. Whole-slot and
+edge routes are mutually exclusive.
+
+All donor replacement values come from the unchanged donor execution and remain
+fixed during the base replay. At each receiver the graph subtracts the named
+producer's current effective base write and adds the saved donor value. Other
+producers' writes and other receivers remain unchanged except for downstream
+consequences of recomputation. Indirect effects through other writers are not
+removed. This is not recursive causal scrubbing.
+
+The existing pair split/semantic-match rules and supplied reference expectations
+still apply. Records retain `protocol.edge_routes`, an explicit donor-execution
+mode, and `rows[*].donor_edges`, together with pair identities, complete donor/base
+population traces, edited traces, reference errors and protected deltas. Numerical
+replay recomputes the donor writes and checks every saved row. Self-donor pairs
+provide a useful identity comparison; semantic labels and expectations remain
+supplied rather than inferred.
