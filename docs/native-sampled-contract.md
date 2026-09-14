@@ -50,3 +50,7 @@ certifies an unlisted population. Use the separate finite exact or continuous
 interval contract interfaces for their explicitly supported arithmetic scopes.
 Read/edge edits, parameter edits and input-dependent policies remain unsupported
 by this adapter even where other native APIs can execute them.
+
+Use [component extraction](native-components.md) to recover the bound `contract`
+or reusable `contract-edit` directly from evidence. The former preserves its
+model/data binding; the latter does not carry success or protection guarantees.

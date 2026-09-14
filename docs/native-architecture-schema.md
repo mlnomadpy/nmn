@@ -38,3 +38,6 @@ schema does not establish task competence, interpretability or protected behavio
 The validation report supports `nmn research native export` and `report` without
 an ML backend. Export checks its contents against recomputed topology validation;
 the dashboard labels it as an architecture definition with no numerical execution.
+
+`native extract validation.json --component configuration --output graph-input`
+writes a `data.json` directly consumable by `native init --graph`.

@@ -65,6 +65,18 @@ def _read_components(source):
                     "selected edit does not match its saved candidate and freeze ledger"
                 )
             available["selected-edit"] = {selected: selection["candidates"][selected]}
+    if record["schema"] == "nmn.sampled-contract-evidence.v1":
+        available["contract"] = record["contract"]
+        available["contract-edit"] = {"contract": record["contract"]["controls"]}
+    if record["schema"] == "nmn.architecture-validation.v1":
+        available["configuration"] = record["configuration"]
+    if record["schema"] == "nmn.curvature-study.v1":
+        names = record["direction_names"]
+        directions = record["protocol"]["directions"]
+        if len(set(names)) != len(names) or set(names) != set(directions):
+            raise ValueError("curvature directions do not match recorded order")
+        available["directions"] = {name: directions[name] for name in names}
+        available["background"] = record["protocol"]["background"]
     if record["schema"] == "nmn.donor-plan.v1":
         available["pairs"] = record["pairs"]
     return raw, record, available

@@ -40,3 +40,6 @@ This supplies local interaction data, not path-integrated attributions, sparse
 interaction recovery, source-faithful HVP patching, uniform residual bounds or
 floating-point certification. Use the separate `path` command for numerical gate
 path integration and explicit domain certificates for continuous guarantees.
+
+`native extract` exposes `directions` and `background` as reusable command inputs,
+preserving the saved direction order. See [component extraction](native-components.md).
