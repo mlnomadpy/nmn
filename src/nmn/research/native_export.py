@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.preimage-search.v1": "Bounded finite-kernel preimage search",
     "nmn.nnx-suffix-study.v1": "NNX downstream boundary-state study",
     "nmn.nnx-model.v1": "NNX native model definition",
     "nmn.nnx-research.v1": "NNX native kernel observations",
@@ -85,6 +86,14 @@ def _table(headers, rows):
 
 def _check_identities(value):
     if isinstance(value, dict):
+        if value.get("schema") == "nmn.preimage-search.v1":
+            digest = hashlib.sha256(
+                json.dumps(
+                    value["module_snapshot"], sort_keys=True, allow_nan=False
+                ).encode()
+            ).hexdigest()
+            if value.get("module_sha256") != digest:
+                raise ValueError("preimage module content identity mismatch")
         if value.get("schema") in (
             "nmn.native-model.v1",
             "nmn.native-research.v1",
@@ -159,7 +168,19 @@ def render_native_note(record):
             f"Data/semantic provenance: {_text(ds.get('provenance', 'not recorded'))}.",
             "",
         ]
-    if schema == "nmn.nnx-model.v1":
+    if schema == "nmn.preimage-search.v1":
+        lines += [
+            "## Native preimage search",
+            "",
+            f"Search status: {_text(record['status'])}; selected step: {_text(record['selected_step'])}.",
+            "",
+            f"Maximum absolute feature residual: {_maximum(record['feature_residuals'])}.",
+            "",
+            "Inputs were optimized per example against a fixed finite feature bank.",
+            "Residuals do not prove preimage existence, impossibility, erasure, or downstream protection.",
+            "",
+        ]
+    elif schema == "nmn.nnx-model.v1":
         lines += [
             "## NNX model definition",
             "",
