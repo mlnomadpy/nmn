@@ -48,7 +48,14 @@ _WORKFLOWS = [
     (
         "native-edits",
         ["KG05"],
-        ["donor", "edges", "protect", "preimage", "apply-preimage"],
+        [
+            "donor",
+            "edges",
+            "protect",
+            "preimage",
+            "apply-preimage",
+            "evaluate-contract",
+        ],
         "Model and samples, donor pairs/read-edge routes or feature targets, declared protection tasks",
         "Native intervention traces, per-example target/protection effects, realizability residuals",
         "torch",

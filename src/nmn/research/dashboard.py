@@ -46,6 +46,8 @@ def _summary(record, source, now):
     status = record.get("status", "observed")
     if schema in ("nmn.native-model.v1", "nmn.nnx-model.v1"):
         status = "definition"
+    elif schema == "nmn.sampled-contract-evidence.v1":
+        status = record["assessment"]
     elif schema == "nmn.native-training.v1":
         statuses = {run["status"] for run in record["runs"]}
         status = (
@@ -501,6 +503,11 @@ def build_dashboard(sources, destination):
                             "protected_violations_observed",
                             "counterexample",
                         )
+                    }
+                elif record["schema"] == "nmn.sampled-contract-evidence.v1":
+                    summary["details"] = {
+                        k: record[k]
+                        for k in ("assessment", "coverage", "violations", "rows")
                     }
                 elif record["schema"] == "nmn.architecture-validation.v1":
                     summary["details"] = {

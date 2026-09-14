@@ -176,6 +176,10 @@ def main(argv=None) -> int:
     selection.add_argument("--provenance", required=True)
     selection.add_argument("--selection-split", default="tuning")
     selection.add_argument("--validation-split", default="validation")
+    sampled_contract = commands.add_parser(
+        "evaluate-contract", help="execute a bound sampled target/protection contract"
+    )
+    sampled_contract.add_argument("--contract", type=Path, required=True)
     curvature = commands.add_parser(
         "curvature",
         help="measure directional gate Hessian products and finite edit residuals",
@@ -327,6 +331,7 @@ def main(argv=None) -> int:
         semantic,
         alignment,
         curvature,
+        sampled_contract,
         selection,
         gate_search,
         response,
@@ -716,6 +721,10 @@ def main(argv=None) -> int:
                     selection_split=args.selection_split,
                     validation_split=args.validation_split,
                 )
+            elif args.command == "evaluate-contract":
+                from ..torch.sampled_contract import evaluate_sampled_contract
+
+                result = evaluate_sampled_contract(model, dataset, _read(args.contract))
             elif args.command == "curvature":
                 from ..torch.curvature import curvature_study
 
@@ -1012,6 +1021,10 @@ def main(argv=None) -> int:
             ]
         if args.command == "replay":
             summary["replay_status"] = result["status"]
+        if args.command == "evaluate-contract":
+            summary["assessment"] = result["assessment"]
+            print(json.dumps(summary))
+            return 1 if result["violations"] else 0
         print(json.dumps(summary))
         return 1 if args.command == "replay" and result["status"] == "mismatch" else 0
     except ImportError as exc:

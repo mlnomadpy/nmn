@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.sampled-contract-evidence.v1": "Sampled native target and protection contract",
     "nmn.architecture-validation.v1": "Validated native graph topology",
     "nmn.curvature-study.v1": "Native directional gate curvature",
     "nmn.alignment-study.v1": "Supervised native semantic alignment search",
@@ -91,6 +92,12 @@ def _table(headers, rows):
 
 def _check_identities(value):
     if isinstance(value, dict):
+        if value.get("schema") == "nmn.sampled-contract-evidence.v1":
+            digest = hashlib.sha256(
+                json.dumps(value["contract"], sort_keys=True, allow_nan=False).encode()
+            ).hexdigest()
+            if value.get("contract_sha256") != digest:
+                raise ValueError("sampled contract content identity mismatch")
         if value.get("schema") == "nmn.architecture-validation.v1":
             from .architecture import validate_architecture
 
@@ -357,6 +364,19 @@ def render_native_note(record):
             f"Validation: {_text({k: v for k, v in (record['validation'] or {}).items() if k not in ('trace', 'outputs')})}.",
             "",
             "The frozen winner is never changed using validation outcomes. This is finite empirical selection, not a statistical certificate.",
+            "",
+        ]
+    elif schema == "nmn.sampled-contract-evidence.v1":
+        lines += [
+            "## Sampled contract observations",
+            "",
+            f"Assessment: {_text(record['assessment'])}. Coverage: {_text(record['coverage'])}.",
+            "",
+            f"Violation count: {len(record['violations'])}.",
+            "",
+            "Targets use supplied references; protection uses baseline changes; optional baseline targets measure ordinary accuracy.",
+            "",
+            "Only listed samples are checked. Observed compliance is not a uniform certificate.",
             "",
         ]
     elif schema == "nmn.curvature-study.v1":

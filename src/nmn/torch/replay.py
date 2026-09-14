@@ -22,6 +22,7 @@ from .protection import protection_study
 from .reduction import reduction_study
 from .research import _json_value, collect_research_data, model_from_snapshot
 from .response_space import response_space_study
+from .sampled_contract import evaluate_sampled_contract
 from .selection import select_edit
 from .semantics import semantic_study
 from .studies import donor_study, donor_study_from_plan
@@ -46,6 +47,7 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
         ):
             raise ValueError("tolerances must be finite nonnegative numbers")
     supported = {
+        "nmn.sampled-contract-evidence.v1",
         "nmn.curvature-study.v1",
         "nmn.alignment-study.v1",
         "nmn.preimage-execution.v1",
@@ -243,6 +245,17 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
                 "unexecuted",
                 "validation",
                 "ledger",
+            ]
+        elif schema == "nmn.sampled-contract-evidence.v1":
+            actual = evaluate_sampled_contract(model, dataset, record["contract"])
+            keys = [
+                "status",
+                "assessment",
+                "contract_sha256",
+                "sample_ids",
+                "rows",
+                "violations",
+                "coverage",
             ]
         elif schema == "nmn.curvature-study.v1":
             curvature_protocol = dict(record["protocol"])
@@ -559,6 +572,12 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
                 actual["evaluation_snapshot"][field],
                 "/evaluation_snapshot/" + field,
             )
+    if schema == "nmn.sampled-contract-evidence.v1":
+        compare(
+            record["model_snapshot"]["observations"],
+            actual["model_snapshot"]["observations"],
+            "/model_snapshot/observations",
+        )
     if schema == "nmn.alignment-study.v1":
 
         def measurements(value):
@@ -627,6 +646,11 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
             "rule": "abs(saved-replayed) <= atol + rtol*abs(saved)",
         },
         "compared_fields": keys
+        + (
+            ["model_snapshot/observations"]
+            if schema == "nmn.sampled-contract-evidence.v1"
+            else []
+        )
         + (
             ["selection_executions/measurements", "evaluation_execution/measurements"]
             if schema == "nmn.alignment-study.v1"

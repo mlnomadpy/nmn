@@ -93,3 +93,7 @@ source-faithful reproduction of every method in the vault.
 [Backend-free graph validation](native-architecture-schema.md) emits the graph JSON
 Schema, checks topology cross references and reports normalized dimensions before
 loading an ML backend. Parameter and intervention contracts remain separate.
+
+[Sampled native contracts](native-sampled-contract.md) bind model/data identities,
+shared action bounds, target references, baseline accuracy and protected changes.
+Their observed outcomes remain separate from finite or continuous certificates.
