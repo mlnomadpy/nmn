@@ -30,3 +30,5 @@ protocol. See [the requirements map](research-data-requirements.md) for outstand
 measurement and inference capabilities.
 
 Result previews expose coalition coverage and coefficient availability, donor transfer outcomes, and separate protection accuracy/damage/disagreement rates. Donor/protection previews show at most 25 rows with the full row count; copied JSON retains every row. Replay entries inherit their executed model architecture for filtering.
+
+Certificate rows retain their saved outcome and explicitly state that the dashboard has not checked them. Saved checker reports display the derived contract outcome (including counterexamples and inconclusive coverage) and state that the checker was not rerun. All rational enclosure/certificate types are labeled with an exact-rational backend.

@@ -47,6 +47,8 @@ def _summary(record, source, now):
             else "floating-point observations"
         )
     )
+    if schema == "nmn.interval-check.v1":
+        status = record["outcome"]
     if schema in ("nmn.interval-certificate.v1", "nmn.interval-check.v1"):
         scope = "rational real-function range contract"
     if schema in ("nmn.rational-enclosure.v1", "nmn.rational-difference.v1"):
@@ -59,6 +61,15 @@ def _summary(record, source, now):
         "schema": schema,
         "status": status,
         "scope": scope,
+        "evidence_handling": (
+            "Saved checker outcome; checker was not rerun by this dashboard"
+            if schema == "nmn.interval-check.v1"
+            else (
+                "Saved certificate; not checked by this dashboard"
+                if schema == "nmn.interval-certificate.v1"
+                else "Saved evidence; no computation was replayed by this dashboard"
+            )
+        ),
         "architecture": configuration.get(
             "class",
             (
@@ -69,11 +80,19 @@ def _summary(record, source, now):
         ),
         "backend": (
             "exact rational"
-            if schema in (FINITE, "nmn.rational-enclosure.v1")
+            if schema
+            in (
+                FINITE,
+                "nmn.rational-enclosure.v1",
+                "nmn.rational-difference.v1",
+                "nmn.interval-certificate.v1",
+                "nmn.interval-check.v1",
+            )
             else snapshot.get("runtime", {}).get("torch", "PyTorch record")
         ),
         "contract": record.get(
-            "contract_sha256", execution.get("protocol", "not declared")
+            "contract_sha256",
+            execution.get("contract", execution.get("protocol", "not declared")),
         ),
         "model": snapshot.get(
             "model_sha256", record.get("initial_model_sha256", "multiple / embedded")
@@ -167,7 +186,7 @@ def build_dashboard(sources, destination):
                         "data": relative + "/data.json",
                         "sha256": digest,
                         "integrity": (
-                            "embedded identity checked"
+                            "copied data; any embedded identities checked"
                             if record["schema"] in SCHEMAS
                             else "saved record; not replayed"
                         ),
