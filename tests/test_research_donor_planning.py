@@ -34,7 +34,9 @@ def test_metadata_selection_budget_and_stable_order():
     assert limited["pairs"] == complete["pairs"][:1]
 
     import copy
+
     import pytest
+
     from nmn.research.donor_planning import validate_donor_plan
 
     assert len(validate_donor_plan(limited, data)) == 1
