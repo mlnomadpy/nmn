@@ -102,3 +102,9 @@ This is an arithmetic example of the data workflow, not a research benchmark.
 Inputs, labels, feature, rank and ridge are explicit in the example source.
 Output must be a new directory. Failures leave partial evidence for inspection;
 replay mismatches or unavailable report records fail the command.
+
+## JAX/NNX observations
+
+The optional [NNX research adapter](nnx-research.md) exports live model data from
+JAX experiments. Its dedicated schema works with native `export`, `verify-export`
+and `report`; native Torch `replay` does not support it.

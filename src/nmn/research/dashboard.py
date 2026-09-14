@@ -110,7 +110,7 @@ def _summary(record, source, now):
                 (
                     "three-neuron rational reference"
                     if schema == FINITE
-                    else "multiple / embedded"
+                    else configuration.get("architecture", "multiple / embedded")
                 ),
             )
         ),
@@ -127,7 +127,11 @@ def _summary(record, source, now):
                     "nmn.interval-certificate.v1",
                     "nmn.interval-check.v1",
                 )
-                else snapshot.get("runtime", {}).get("torch", "PyTorch record")
+                else (
+                    "JAX " + snapshot.get("runtime", {}).get("jax", "unknown")
+                    if schema == "nmn.nnx-research.v1"
+                    else snapshot.get("runtime", {}).get("torch", "PyTorch record")
+                )
             )
         ),
         "contract": record.get(

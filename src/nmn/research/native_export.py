@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.nnx-research.v1": "NNX native kernel observations",
     "nmn.gate-search.v1": "Native gate proposal search and frozen selection",
     "nmn.donor-plan.v1": "Declared donor selection plan",
     "nmn.edge-study.v1": "Producer-specific residual edge study",
@@ -82,7 +83,11 @@ def _table(headers, rows):
 
 def _check_identities(value):
     if isinstance(value, dict):
-        if value.get("schema") in ("nmn.native-model.v1", "nmn.native-research.v1"):
+        if value.get("schema") in (
+            "nmn.native-model.v1",
+            "nmn.native-research.v1",
+            "nmn.nnx-research.v1",
+        ):
             identity = {key: value[key] for key in ("configuration", "parameters")}
             digest = hashlib.sha256(
                 json.dumps(identity, sort_keys=True, allow_nan=False).encode()
@@ -151,7 +156,18 @@ def render_native_note(record):
             f"Data/semantic provenance: {_text(ds.get('provenance', 'not recorded'))}.",
             "",
         ]
-    if schema == "nmn.rational-difference.v1":
+    if schema == "nmn.nnx-research.v1":
+        lines += [
+            "## NNX observations",
+            "",
+            f"Samples: {len(record.get('sample_ids', []))}; split: {_text(record.get('split'))}.",
+            "Direct squared-distance arithmetic; signed center contributions, local Gram matrices,",
+            "executed edits and optional input/gate derivatives are retained in data.json.",
+            "This adapter supports the strict three-neuron model only. It does not supply",
+            "suffix replay, external-model conversion, or interval/statistical certificates.",
+            "",
+        ]
+    elif schema == "nmn.rational-difference.v1":
         lines += [
             "## Edited minus reference outputs",
             "",
