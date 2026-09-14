@@ -179,6 +179,7 @@ class YatGraph(nn.Module):
         interventions: Optional[Mapping[str, Intervention]] = None,
         *,
         read_patches: Optional[Mapping[str, Mapping[str, torch.Tensor]]] = None,
+        edge_patches=None,
     ):
         if (
             x.ndim < 1
@@ -192,11 +193,21 @@ class YatGraph(nn.Module):
         zero = torch.zeros_like(x[..., 0])
         state = torch.stack([inputs.get(name, zero) for name in self.slots], dim=-1)
         return self.forward_from_state(
-            state, start_layer=0, interventions=interventions, read_patches=read_patches
+            state,
+            start_layer=0,
+            interventions=interventions,
+            read_patches=read_patches,
+            edge_patches=edge_patches,
         )
 
     def forward_from_state(
-        self, state, *, start_layer, interventions=None, read_patches=None
+        self,
+        state,
+        *,
+        start_layer,
+        interventions=None,
+        read_patches=None,
+        edge_patches=None,
     ):
         """Execute a suffix from an explicit residual state and retain its trace.
 
@@ -242,6 +253,37 @@ class YatGraph(nn.Module):
                 raise ValueError(
                     "read patches must name input slots of the receiving module"
                 )
+        edges = {} if edge_patches is None else dict(edge_patches)
+        layers_by_name = {
+            spec.name: i for i, layer in enumerate(self.layer_specs) for spec in layer
+        }
+        if set(edges) - set(specifications):
+            raise ValueError("unknown edge-patch receiver")
+        for receiver, slots in edges.items():
+            if (
+                not isinstance(slots, Mapping)
+                or not slots
+                or set(slots) - set(specifications[receiver].reads)
+            ):
+                raise ValueError("edge patches must name receiving-module read slots")
+            if set(slots) & set(patches.get(receiver, {})):
+                raise ValueError(
+                    "a read slot cannot have both whole-slot and edge patches"
+                )
+            for slot, producers in slots.items():
+                if not isinstance(producers, Mapping) or not producers:
+                    raise ValueError(
+                        "edge patches require producer-to-replacement mappings"
+                    )
+                for producer in producers:
+                    if (
+                        producer not in specifications
+                        or layers_by_name[producer] >= layers_by_name[receiver]
+                        or slot not in specifications[producer].writes
+                    ):
+                        raise ValueError(
+                            "edge producer must execute earlier in this suffix and write the receiving slot"
+                        )
         zero = torch.zeros_like(state[..., 0])
         trace = {f"state.{start_layer}": state}
         for layer_index, layer in enumerate(
@@ -268,6 +310,22 @@ class YatGraph(nn.Module):
                     if replacements
                     else original_read
                 )
+                receiver_edges = edges.get(spec.name, {})
+                if receiver_edges:
+                    adjusted = []
+                    for i, slot in enumerate(spec.reads):
+                        value = read[..., i]
+                        delta = torch.zeros_like(value)
+                        for producer, replacement in receiver_edges.get(
+                            slot, {}
+                        ).items():
+                            write_index = specifications[producer].writes.index(slot)
+                            current = trace[producer][..., write_index]
+                            delta = delta + _control(replacement, current) - current
+                        adjusted.append(value + delta)
+                        if slot in receiver_edges:
+                            trace[f"{spec.name}.edge_delta.{slot}"] = delta
+                    read = torch.stack(adjusted, dim=-1)
                 contributions = cast(
                     YatExpansion, self.blocks[spec.name]
                 ).contributions(read)
@@ -296,5 +354,7 @@ class YatGraph(nn.Module):
         output = state[..., [self._slot_indices[name] for name in self.output_names]]
         return output, trace
 
-    def forward(self, x, interventions=None, *, read_patches=None):
-        return self.forward_with_trace(x, interventions, read_patches=read_patches)[0]
+    def forward(self, x, interventions=None, *, read_patches=None, edge_patches=None):
+        return self.forward_with_trace(
+            x, interventions, read_patches=read_patches, edge_patches=edge_patches
+        )[0]

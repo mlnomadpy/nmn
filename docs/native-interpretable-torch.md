@@ -160,3 +160,5 @@ now use direct squared distances to preserve curvature at prototype matches.
 [Baseline comparisons](native-baseline-comparisons.md) describe IMQ/tanh modules
 and the common replay runner. Baseline feature geometry is labeled separately
 from ⵟ RKHS data in collected observations.
+
+[Producer-specific residual patches](native-edge-patches.md) replace one writer contribution at a receiver while preserving other residual writers/readers. This graph API retains current effective writes and differentiable replacement values.
