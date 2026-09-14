@@ -15,6 +15,7 @@ from .graph import YatGraph
 from .interpretable import Intervention, YatExpansion
 from .paths import gate_path
 from .protection import protection_study
+from .reduction import reduction_study
 from .research import _json_value, collect_research_data, model_from_snapshot
 from .response_space import response_space_study
 from .selection import select_edit
@@ -47,6 +48,7 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
         "nmn.edit-selection.v1",
         "nmn.semantic-study.v1",
         "nmn.suffix-study.v1",
+        "nmn.reduction-study.v1",
         "nmn.gate-path-study.v1",
         "nmn.kernel-diagnostics.v1",
         "nmn.donor-study.v1",
@@ -262,6 +264,16 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
                 if "donor_reads" not in saved:
                     current.pop("donor_reads", None)
             keys = ["rows"]
+        elif schema == "nmn.reduction-study.v1":
+            actual = reduction_study(
+                model,
+                dataset,
+                start_layer=protocol["start_layer"],
+                maps=record["maps"],
+                provenance=protocol["provenance"],
+                split=protocol["split"],
+            )
+            keys = ["status", "sample_ids", "maps", "protocol", "observations", "cost"]
         elif schema == "nmn.suffix-study.v1":
             actual = suffix_study(
                 model,

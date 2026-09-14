@@ -11,7 +11,7 @@ def _read(path):
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def main(argv=None):
+def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="nmn research native")
     commands = parser.add_subparsers(dest="command", required=True)
     dashboard = commands.add_parser(
@@ -153,6 +153,12 @@ def main(argv=None):
     semantic.add_argument("--reference", type=Path, required=True)
     semantic.add_argument("--correspondence", type=Path, required=True)
     semantic.add_argument("--tolerance", type=float, default=1e-8)
+    reduction = commands.add_parser(
+        "reduce", help="evaluate supplied state summaries and reduced dynamics"
+    )
+    reduction.add_argument("--maps", type=Path, required=True)
+    reduction.add_argument("--start-layer", type=int, required=True)
+    reduction.add_argument("--provenance", required=True)
     suffix = commands.add_parser(
         "suffix", help="measure downstream responses to supplied graph states"
     )
@@ -194,6 +200,7 @@ def main(argv=None):
         protection,
         coalition,
         suffix,
+        reduction,
         semantic,
         selection,
         response,
@@ -201,7 +208,7 @@ def main(argv=None):
         command.add_argument("--model", type=Path, required=True)
         command.add_argument("--dataset", type=Path, required=True)
         command.add_argument("--output", type=Path, required=True)
-    for command in (collect, path, diagnose, protection, coalition, suffix):
+    for command in (collect, path, diagnose, protection, coalition, suffix, reduction):
         command.add_argument("--split", help="restrict to one named dataset split")
     args = parser.parse_args(argv)
     try:
@@ -419,6 +426,17 @@ def main(argv=None):
                     reference=TabulatedReference(_read(args.reference)),
                     correspondence=_read(args.correspondence),
                     tolerance=args.tolerance,
+                )
+            elif args.command == "reduce":
+                from ..torch.reduction import reduction_study
+
+                result = reduction_study(
+                    model,
+                    dataset,
+                    start_layer=args.start_layer,
+                    maps=_read(args.maps),
+                    provenance=args.provenance,
+                    split=args.split,
                 )
             elif args.command == "suffix":
                 from ..torch.suffix import suffix_study

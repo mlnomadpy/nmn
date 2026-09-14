@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.reduction-study.v1": "State summaries and reduced dynamics",
     "nmn.rational-difference.v1": "Rational intervention-difference enclosure",
     "nmn.interval-certificate.v1": "Rational box range certificate",
     "nmn.interval-check.v1": "Rational box certificate check",
@@ -268,6 +269,24 @@ def render_native_note(record):
             ),
             "",
             "Agreement checks a supplied table and does not identify a unique mechanism.",
+            "",
+        ]
+    elif schema == "nmn.reduction-study.v1":
+        lines += [
+            "## Supplied summary maps and observed residuals",
+            "",
+            f"Protocol: {_text(record['protocol'])}.",
+            "",
+            _table(
+                ["Residual", "Maximum absolute value"],
+                [
+                    [name, _maximum(value)]
+                    for name, value in record["observations"].items()
+                    if name.endswith("residual")
+                ],
+            ),
+            "",
+            "Per-example states, summaries, maps and downstream traces are retained in the data. These observations do not certify closure through depth.",
             "",
         ]
     elif schema == "nmn.suffix-study.v1":

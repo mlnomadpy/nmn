@@ -1,0 +1,5 @@
+{
+  "encoder": {"weight": [[1], [0], [0], [0]], "bias": [0]},
+  "decoder": {"weight": [[1, 0, 0, 0]], "bias": [0, 0, 0, 0]},
+  "transition": {"weight": [[1]], "bias": [0]}
+}
