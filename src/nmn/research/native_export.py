@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.donor-plan.v1": "Declared donor selection plan",
     "nmn.edge-study.v1": "Producer-specific residual edge study",
     "nmn.probe-study.v1": "Frozen internal-state classification probe",
     "nmn.fitted-reduction.v1": "Fitted state summary and held-out residuals",
@@ -272,6 +273,17 @@ def render_native_note(record):
             ),
             "",
             "Agreement checks a supplied table and does not identify a unique mechanism.",
+            "",
+        ]
+    elif schema == "nmn.donor-plan.v1":
+        lines += [
+            "## Donor selection coverage",
+            "",
+            f"Protocol: {_text(record['protocol'])}.",
+            "",
+            f"Coverage: {_text(record['coverage'])}.",
+            "",
+            "Every inspected decision and selected pair is retained. No model has been executed; uninspected candidates are not ineligible.",
             "",
         ]
     elif schema == "nmn.edge-study.v1":

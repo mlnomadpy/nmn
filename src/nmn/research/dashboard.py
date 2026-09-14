@@ -68,6 +68,8 @@ def _summary(record, source, now):
             else "floating-point observations"
         )
     )
+    if schema == "nmn.donor-plan.v1":
+        scope = "metadata selection; no model execution"
     if schema == "nmn.interval-check.v1":
         status = record["outcome"]
     if schema in ("nmn.interval-certificate.v1", "nmn.interval-check.v1"):
@@ -109,16 +111,20 @@ def _summary(record, source, now):
             ),
         ),
         "backend": (
-            "exact rational"
-            if schema
-            in (
-                FINITE,
-                "nmn.rational-enclosure.v1",
-                "nmn.rational-difference.v1",
-                "nmn.interval-certificate.v1",
-                "nmn.interval-check.v1",
+            "none (metadata only)"
+            if schema == "nmn.donor-plan.v1"
+            else (
+                "exact rational"
+                if schema
+                in (
+                    FINITE,
+                    "nmn.rational-enclosure.v1",
+                    "nmn.rational-difference.v1",
+                    "nmn.interval-certificate.v1",
+                    "nmn.interval-check.v1",
+                )
+                else snapshot.get("runtime", {}).get("torch", "PyTorch record")
             )
-            else snapshot.get("runtime", {}).get("torch", "PyTorch record")
         ),
         "contract": record.get(
             "contract_sha256",

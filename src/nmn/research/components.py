@@ -39,6 +39,8 @@ def _read_components(source):
             if record[name].get("schema") != "nmn.reduction-study.v1":
                 raise ValueError("fitted summary contains an unsupported child record")
             available[name] = record[name]
+    if record["schema"] == "nmn.donor-plan.v1":
+        available["pairs"] = record["pairs"]
     return raw, record, available
 
 

@@ -141,3 +141,39 @@ population traces, edited traces, reference errors and protected deltas. Numeric
 replay recomputes the donor writes and checks every saved row. Self-donor pairs
 provide a useful identity comparison; semantic labels and expectations remain
 supplied rather than inferred.
+
+
+## Plan metadata-matched pairs without running a model
+
+```bash
+nmn research native plan-donors --dataset dataset.json --split evaluation \
+  --modules b --match-semantics category --max-comparisons 100 --max-pairs 10 \
+  --provenance "Declared matching rule before model evaluation" --output plan.json
+nmn research native extract plan.json --component pairs --output selected-pairs
+```
+
+Use `selected-pairs/data.json` as `donor --pairs`, retaining the same dataset and
+`--match-semantics category` in that execution. The Python API is
+`nmn.research.donor_planning.plan_donors`. The planner and extraction need no ML
+backend. It does not validate module names against a model; execution does.
+
+Within one declared split, pairs are inspected in lexicographic base-ID then
+donor-ID order. Self pairs and same-group pairs are excluded. Missing required
+semantic fields and unequal values are excluded, not guessed. Every inspected
+pair retains its reason and missing/mismatched keys. Exclusion counts use the
+first applicable reason in that order. With no matching keys, only identity/group
+restrictions apply. Opposite directions are distinct candidate pairs.
+
+The `nmn.donor-plan.v1` record includes dataset identity, complete protocol,
+selected pairs, inspected decisions, and total/inspected/uninspected counts.
+Either budget can stop inspection; `budget-stopped` means eligible pairs may
+remain. `complete` means the finite declared Cartesian population was inspected,
+not that any semantic or scientific claim passed. Zero selected pairs are retained
+in the plan; donor execution still requires a nonempty pair list.
+
+This policy selects an ID-ordered prefix and can favor earlier base IDs. It is
+not randomized sampling, model-based acquisition, causal-scrubbing equivalence,
+or a population-coverage guarantee. Keep the plan beside its executed study;
+extracting a pair list does not enforce the original dataset identity in later
+commands. The ordinary donor executor still checks its supplied dataset, splits,
+module names and explicit semantic matching rules.

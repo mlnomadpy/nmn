@@ -30,6 +30,7 @@ curvature semantics silently.
 | `init`, `inspect` | [Native models, routing and data](native-interpretable-torch.md) |
 | `collect` | Full traces, kernel geometry, derivatives and executed edit effects |
 | `edges` | [Producer-specific residual replacement studies](native-edge-patches.md) |
+| `plan-donors` | [Budgeted metadata-matched pair selection](native-donor-studies.md) |
 | `donor` | [Declared donor pairs and receiving-module read patches](native-donor-studies.md) |
 | `path` | [Joint gate paths, numerical curvature and quadrature residuals](native-gate-paths.md) |
 | `verify-box`, `check-box` | [Bounded range contracts and partition checking](native-interval-contract.md) |
@@ -71,7 +72,7 @@ uses numerical decompositions and probe fitting uses linear solves. Probe replay
 explicitly refits its saved linear protocol, without optimizing the native network.
 
 `nmn research native extract record.json` lists reusable components without a
-backend. Add `--component model|dataset|maps|fit|evaluation|evaluation-model` and
+backend. Add `--component model|dataset|maps|fit|evaluation|evaluation-model|pairs` and
 `--output <new-directory>` for an available component. The command writes
 `data.json` plus `receipt.json` with source/output hashes. Use `data.json` with
 `--model`, `--dataset`, `--maps`, or replay as appropriate. Availability depends

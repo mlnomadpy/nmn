@@ -22,6 +22,17 @@ def main(argv=None) -> int:
         "--sources-file", type=Path, help="portable JSON list of local evidence paths"
     )
     dashboard.add_argument("--output", type=Path, required=True)
+    planning = commands.add_parser(
+        "plan-donors", help="plan budgeted metadata-matched donor pairs without a model"
+    )
+    planning.add_argument("--dataset", type=Path, required=True)
+    planning.add_argument("--split", required=True)
+    planning.add_argument("--modules", nargs="+", required=True)
+    planning.add_argument("--match-semantics", nargs="*", default=[])
+    planning.add_argument("--max-comparisons", type=int, required=True)
+    planning.add_argument("--max-pairs", type=int, required=True)
+    planning.add_argument("--provenance", required=True)
+    planning.add_argument("--output", type=Path, required=True)
     extract = commands.add_parser(
         "extract", help="list or extract reusable JSON components without a backend"
     )
@@ -271,6 +282,31 @@ def main(argv=None) -> int:
     try:
         if getattr(args, "output", None) is not None and args.output.exists():
             raise ValueError("output already exists; choose a new evidence path")
+        if args.command == "plan-donors":
+            from .datasets import ResearchDataset
+            from .donor_planning import plan_donors
+
+            result = plan_donors(
+                ResearchDataset.from_dict(_read(args.dataset)),
+                split=args.split,
+                modules=args.modules,
+                match_semantics=args.match_semantics,
+                max_comparisons=args.max_comparisons,
+                max_pairs=args.max_pairs,
+                provenance=args.provenance,
+            )
+            with args.output.open("x", encoding="utf-8") as stream:
+                stream.write(json.dumps(result, indent=2, allow_nan=False) + "\n")
+            print(
+                json.dumps(
+                    {
+                        "status": result["status"],
+                        "output": str(args.output),
+                        "coverage": result["coverage"],
+                    }
+                )
+            )
+            return 0
         if args.command == "extract":
             from .components import extract_native_component, list_native_components
 
