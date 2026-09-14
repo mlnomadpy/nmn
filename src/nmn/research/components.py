@@ -41,6 +41,25 @@ def _read_components(source):
             available[name] = record[name]
     if record["schema"] == "nmn.gate-search.v1":
         available["selection"] = record["selection"]
+    if record["schema"] in ("nmn.gate-search.v1", "nmn.edit-selection.v1"):
+        selection = (
+            record["selection"] if record["schema"] == "nmn.gate-search.v1" else record
+        )
+        if selection.get("schema") != "nmn.edit-selection.v1":
+            raise ValueError("search contains an unsupported selection record")
+        selected = selection.get("selected")
+        if selected is not None:
+            if (
+                not isinstance(selected, str)
+                or selection.get("status") != "selected"
+                or selected not in selection.get("candidates", {})
+                or selection.get("ledger", {}).get("selected", {}).get("candidate_id")
+                != selected
+            ):
+                raise ValueError(
+                    "selected edit does not match its saved candidate and freeze ledger"
+                )
+            available["selected-edit"] = {selected: selection["candidates"][selected]}
     if record["schema"] == "nmn.donor-plan.v1":
         available["pairs"] = record["pairs"]
     return raw, record, available

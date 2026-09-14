@@ -73,7 +73,7 @@ uses numerical decompositions and probe fitting uses linear solves. Probe replay
 explicitly refits its saved linear protocol, without optimizing the native network.
 
 `nmn research native extract record.json` lists reusable components without a
-backend. Add `--component model|dataset|maps|fit|evaluation|evaluation-model|pairs` and
+backend. Add `--component model|dataset|maps|fit|evaluation|evaluation-model|pairs|selection|selected-edit` and
 `--output <new-directory>` for an available component. The command writes
 `data.json` plus `receipt.json` with source/output hashes. Use `data.json` with
 `--model`, `--dataset`, `--maps`, or replay as appropriate. Availability depends

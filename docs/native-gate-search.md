@@ -53,3 +53,23 @@ parameters or their gradient buffers. Changing only validation targets leaves
 proposals and the selected candidate unchanged. These checks establish the data
 flow of this example, not optimality, semantic meaning, statistical independence,
 or uniform protection. Repeated evaluation-guided runs can still leak information.
+
+
+## Reuse the frozen winner
+
+```bash
+nmn research native extract search-result.json --component selected-edit --output winning-edit
+nmn research native collect --model model.json --dataset another-dataset.json \
+  --edits winning-edit/data.json --no-derivatives --output new-observations.json
+```
+
+`selected-edit` is available from a gate search or ordinary edit-selection record
+when a winner exists. It retains the candidate name and controls in the standard
+named-edit format. Extraction checks consistency with the saved candidate and
+freeze-ledger identity; it does not reexecute selection or prove the winner is
+feasible. A no-winner selection has no `selected-edit` component. The extraction
+receipt links the component to its source record.
+
+The reused edit has no automatic protection or target guarantee on a new dataset
+or model. Record new effects and evaluate the relevant task explicitly. Retaining
+the source receipt does not prevent a caller from applying it elsewhere.

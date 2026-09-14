@@ -29,3 +29,28 @@ def test_maps_extraction_and_no_overwrite(tmp_path):
         extract_native_component(source, "evaluation", tmp_path / "missing")
     assert not (tmp_path / "missing").exists()
     assert source.read_bytes() == raw
+
+
+def test_selected_edit_retains_name_and_requires_frozen_candidate(tmp_path):
+    source = tmp_path / "selection.json"
+    record = {
+        "schema": "nmn.edit-selection.v1",
+        "status": "selected",
+        "selected": "winner",
+        "candidates": {"winner": {"h": {"gate": 0.0}}},
+        "ledger": {"selected": {"candidate_id": "winner"}},
+    }
+    source.write_text(json.dumps(record))
+    output = tmp_path / "edit"
+    extract_native_component(source, "selected-edit", output)
+    assert json.loads((output / "data.json").read_text()) == {
+        "winner": {"h": {"gate": 0.0}}
+    }
+    record["ledger"]["selected"]["candidate_id"] = "different"
+    source.write_text(json.dumps(record))
+    with pytest.raises(ValueError, match="freeze ledger"):
+        list_native_components(source)
+    record["selected"] = None
+    record["status"] = "no-feasible-measured-candidate"
+    source.write_text(json.dumps(record))
+    assert "selected-edit" not in list_native_components(source)["components"]
