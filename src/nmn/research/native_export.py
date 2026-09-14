@@ -117,6 +117,17 @@ def render_native_note(record):
         "or establish semantic meaning. Model identity checks cover stored configuration and parameters.",
         "",
     ]
+    if "selection_plan" in record:
+        lines += [
+            "## Executed donor selection plan",
+            "",
+            f"Plan identity: `{_text(record['selection_plan_sha256'])}`.",
+            "",
+            f"Selection status: {_text(record['selection_plan']['status'])}; coverage: {_text(record['selection_plan']['coverage'])}.",
+            "",
+            "The complete plan is embedded in data.json. Export does not recheck or execute it.",
+            "",
+        ]
     snapshot = (
         record
         if schema in ("nmn.native-model.v1", "nmn.native-research.v1")

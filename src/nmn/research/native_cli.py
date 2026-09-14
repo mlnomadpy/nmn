@@ -234,7 +234,13 @@ def main(argv=None) -> int:
     donor = commands.add_parser(
         "donor", help="run declared donor pairs and reference labels"
     )
-    donor.add_argument("--pairs", type=Path, required=True)
+    donor_source = donor.add_mutually_exclusive_group(required=True)
+    donor_source.add_argument("--pairs", type=Path)
+    donor_source.add_argument(
+        "--plan",
+        type=Path,
+        help="verify and execute a saved donor plan against its dataset",
+    )
     donor.add_argument(
         "--read-slots",
         type=Path,
@@ -641,21 +647,45 @@ def main(argv=None) -> int:
                     strata=args.strata,
                 )
             elif args.command == "donor":
-                pairs = [DonorPair(**pair) for pair in _read(args.pairs)]
-                result = donor_study(
-                    model,
-                    dataset,
-                    pairs,
-                    protected_outputs=args.protected,
-                    match_semantics=args.match_semantics,
-                    allow_cross_split=args.allow_cross_split,
-                    read_slots=(
-                        None if args.read_slots is None else _read(args.read_slots)
-                    ),
-                    edge_routes=(
-                        None if args.edge_routes is None else _read(args.edge_routes)
-                    ),
-                )
+                if args.plan is not None:
+                    from ..torch.studies import donor_study_from_plan
+
+                    if args.allow_cross_split or args.match_semantics:
+                        raise ValueError(
+                            "a donor plan supplies its split and semantic rules; omit overrides"
+                        )
+                    result = donor_study_from_plan(
+                        model,
+                        dataset,
+                        _read(args.plan),
+                        protected_outputs=args.protected,
+                        read_slots=(
+                            None if args.read_slots is None else _read(args.read_slots)
+                        ),
+                        edge_routes=(
+                            None
+                            if args.edge_routes is None
+                            else _read(args.edge_routes)
+                        ),
+                    )
+                else:
+                    pairs = [DonorPair(**pair) for pair in _read(args.pairs)]
+                    result = donor_study(
+                        model,
+                        dataset,
+                        pairs,
+                        protected_outputs=args.protected,
+                        match_semantics=args.match_semantics,
+                        allow_cross_split=args.allow_cross_split,
+                        read_slots=(
+                            None if args.read_slots is None else _read(args.read_slots)
+                        ),
+                        edge_routes=(
+                            None
+                            if args.edge_routes is None
+                            else _read(args.edge_routes)
+                        ),
+                    )
             else:
                 ids = dataset.sample_ids(split=args.split)
                 if not ids:

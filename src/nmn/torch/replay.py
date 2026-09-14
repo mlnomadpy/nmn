@@ -22,7 +22,7 @@ from .research import _json_value, collect_research_data, model_from_snapshot
 from .response_space import response_space_study
 from .selection import select_edit
 from .semantics import semantic_study
-from .studies import donor_study
+from .studies import donor_study, donor_study_from_plan
 from .suffix import suffix_study
 
 
@@ -249,26 +249,37 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
             )
             keys = ["status", "baseline", "cases", "coverage"]
         elif schema == "nmn.donor-study.v1":
-            pairs = [
-                DonorPair(**{**row["pair"], "expected": row["expected"]})
-                for row in record["rows"]
-            ]
-            actual = donor_study(
-                model,
-                dataset,
-                pairs,
-                protected_outputs=protocol["protected_outputs"],
-                allow_cross_split=protocol["allow_cross_split"],
-                match_semantics=protocol["match_semantics"],
-                read_slots=protocol.get("read_slots"),
-                edge_routes=protocol.get("edge_routes"),
-            )
-            # Replay supplied expectations, never execute a saved callback name.
-            for current, saved in zip(actual["rows"], record["rows"]):
-                current["pair"]["expected"] = saved["pair"]["expected"]
-                if "donor_reads" not in saved:
-                    current.pop("donor_reads", None)
             keys = ["rows"]
+            if "selection_plan" in record:
+                actual = donor_study_from_plan(
+                    model,
+                    dataset,
+                    record["selection_plan"],
+                    protected_outputs=protocol["protected_outputs"],
+                    read_slots=protocol.get("read_slots"),
+                    edge_routes=protocol.get("edge_routes"),
+                )
+                keys += ["protocol", "selection_plan", "selection_plan_sha256"]
+            else:
+                pairs = [
+                    DonorPair(**{**row["pair"], "expected": row["expected"]})
+                    for row in record["rows"]
+                ]
+                actual = donor_study(
+                    model,
+                    dataset,
+                    pairs,
+                    protected_outputs=protocol["protected_outputs"],
+                    allow_cross_split=protocol["allow_cross_split"],
+                    match_semantics=protocol["match_semantics"],
+                    read_slots=protocol.get("read_slots"),
+                    edge_routes=protocol.get("edge_routes"),
+                )
+                # Reuse supplied expectations, never execute saved callback names.
+                for current, saved in zip(actual["rows"], record["rows"]):
+                    current["pair"]["expected"] = saved["pair"]["expected"]
+                    if "donor_reads" not in saved:
+                        current.pop("donor_reads", None)
         elif schema == "nmn.probe-study.v1":
             actual = probe_study(
                 model,

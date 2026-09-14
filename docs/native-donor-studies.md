@@ -177,3 +177,22 @@ or a population-coverage guarantee. Keep the plan beside its executed study;
 extracting a pair list does not enforce the original dataset identity in later
 commands. The ordinary donor executor still checks its supplied dataset, splits,
 module names and explicit semantic matching rules.
+
+
+### Execute a plan with identity checks
+
+Prefer `donor --plan plan.json` over manually extracting pairs when executing a
+saved plan. `--plan` and `--pairs` are mutually exclusive. The executor requires
+the exact recorded dataset, recomputes the deterministic eligibility decisions,
+and rejects modified coverage, pairs or protocol fields that do not reproduce.
+It inherits the plan's semantic matching rules; omit `--match-semantics` and
+`--allow-cross-split` overrides. Whole-write, `--read-slots`, and `--edge-routes`
+execution modes remain available.
+
+The Python entry point is `donor_study_from_plan(model, dataset, plan, ...)`.
+A nonempty budget-stopped plan is executable as the recorded partial selection;
+it is never relabeled complete. The resulting study embeds the complete
+`selection_plan` and its canonical JSON hash. Numerical replay rechecks the plan
+before execution and compares its linkage and all donor rows. This checks
+consistency, not authenticity or independence: replacing an entire plan and its
+dataset is not prevented. Empty plans are retained by planning but cannot execute.

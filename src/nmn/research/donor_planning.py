@@ -125,3 +125,37 @@ def plan_donors(
             "Same-split/different-group checks do not prove statistical independence; model module names are validated only when executing the plan.",
         ],
     )
+
+
+def validate_donor_plan(plan, dataset):
+    """Recompute a saved finite selection protocol against the exact dataset."""
+    import json
+
+    if not isinstance(plan, dict) or plan.get("schema") != "nmn.donor-plan.v1":
+        raise ValueError("unsupported donor plan schema")
+    if (
+        plan.get("dataset_sha256") != dataset.sha256
+        or plan.get("dataset") != dataset.to_dict()
+    ):
+        raise ValueError("donor plan dataset identity mismatch")
+    expected = plan_donors(
+        dataset,
+        **{
+            key: plan["protocol"][key]
+            for key in (
+                "split",
+                "modules",
+                "match_semantics",
+                "max_comparisons",
+                "max_pairs",
+                "provenance",
+            )
+        },
+    )
+    if json.dumps(plan, sort_keys=True, allow_nan=False) != json.dumps(
+        expected, sort_keys=True, allow_nan=False
+    ):
+        raise ValueError("donor plan does not match recomputed selection decisions")
+    if not plan["pairs"]:
+        raise ValueError("donor plan contains no selected pairs to execute")
+    return [DonorPair(**pair) for pair in plan["pairs"]]

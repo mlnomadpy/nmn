@@ -296,3 +296,31 @@ def donor_study(
             ],
         }
     )
+
+
+def donor_study_from_plan(
+    model, dataset, plan, *, protected_outputs=(), read_slots=None, edge_routes=None
+):
+    """Check and execute the selected prefix of a saved donor planning protocol.
+
+    Budget-stopped plans remain valid partial selections; their status and full
+    eligibility decisions are embedded without promoting coverage to complete.
+    """
+    import json
+
+    from ..research.donor_planning import validate_donor_plan
+
+    pairs = validate_donor_plan(plan, dataset)
+    result = donor_study(
+        model,
+        dataset,
+        pairs,
+        protected_outputs=protected_outputs,
+        match_semantics=plan["protocol"]["match_semantics"],
+        read_slots=read_slots,
+        edge_routes=edge_routes,
+    )
+    encoded = json.dumps(plan, sort_keys=True, allow_nan=False)
+    result["selection_plan"] = json.loads(encoded)
+    result["selection_plan_sha256"] = hashlib.sha256(encoded.encode()).hexdigest()
+    return result

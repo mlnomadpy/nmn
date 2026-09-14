@@ -32,3 +32,17 @@ def test_metadata_selection_budget_and_stable_order():
     assert limited["coverage"]["inspected"] == 2
     assert limited["coverage"]["uninspected"] == 7
     assert limited["pairs"] == complete["pairs"][:1]
+
+    import copy
+    import pytest
+    from nmn.research.donor_planning import validate_donor_plan
+
+    assert len(validate_donor_plan(limited, data)) == 1
+    altered = copy.deepcopy(limited)
+    altered["pairs"][0]["donor_id"] = "c"
+    with pytest.raises(ValueError, match="recomputed"):
+        validate_donor_plan(altered, data)
+    altered = copy.deepcopy(limited)
+    altered["dataset_sha256"] = "different"
+    with pytest.raises(ValueError, match="identity"):
+        validate_donor_plan(altered, data)
