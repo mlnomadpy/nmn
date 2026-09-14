@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import List, Optional, cast
+from typing import List, Optional
 
 from .bundles import create_configured
 from .comparison import compare
@@ -24,7 +24,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     if arguments and arguments[0] == "native":
         from .native_cli import main as native_main
 
-        return cast(int, native_main(arguments[1:]))
+        return native_main(arguments[1:])
     parser = argparse.ArgumentParser(prog="nmn research")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser(
