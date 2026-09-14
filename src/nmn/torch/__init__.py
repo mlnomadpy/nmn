@@ -15,9 +15,12 @@ from .attention import (
     yat_attention,
     yat_attention_weights,
 )
+from .baselines import IMQExpansion, LinearExpansion, TanhMLPBlock
 
 # Import embedding
 from .embed import YatEmbed
+from .graph import YatGraph, YatModuleSpec
+from .interpretable import Intervention, ThreeNeuronYat, YatExpansion
 from .kernel_bank import KernelBank
 from .layers import (
     YatConv1D,
@@ -45,6 +48,14 @@ __all__ = [
     # YAT NMN
     "YatNMN",
     "KernelBank",
+    "YatExpansion",
+    "ThreeNeuronYat",
+    "Intervention",
+    "YatGraph",
+    "IMQExpansion",
+    "LinearExpansion",
+    "TanhMLPBlock",
+    "YatModuleSpec",
     # YAT Attention
     "MultiHeadYatAttention",
     "yat_attention",

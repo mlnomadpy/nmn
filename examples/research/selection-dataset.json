@@ -1,0 +1,27 @@
+{
+  "name": "Frozen edit arithmetic fixture",
+  "provenance": "Supplied split targets; no population claim",
+  "samples": [
+    {
+      "group_id": "t",
+      "inputs": [
+        1.0,
+        1.0
+      ],
+      "sample_id": "t",
+      "semantics": {},
+      "split": "tuning"
+    },
+    {
+      "group_id": "v",
+      "inputs": [
+        1.0,
+        1.0
+      ],
+      "sample_id": "v",
+      "semantics": {},
+      "split": "validation"
+    }
+  ],
+  "schema": "nmn.research-dataset.v1"
+}

@@ -1,0 +1,25 @@
+{
+  "controls": {},
+  "input_box": {
+    "u": [
+      "0",
+      "1"
+    ],
+    "v": [
+      "0",
+      "1"
+    ]
+  },
+  "outputs": {
+    "protected": [
+      "0",
+      "1"
+    ],
+    "target": [
+      "0",
+      "4"
+    ]
+  },
+  "provenance": "Arithmetic range fixture",
+  "schema": "nmn.interval-contract.v1"
+}

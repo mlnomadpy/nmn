@@ -1,0 +1,26 @@
+{
+  "schema": "nmn.three-neuron-model.v1",
+  "epsilon": "1",
+  "neurons": {
+    "h": {
+      "center": [
+        "1"
+      ],
+      "coefficient": "1"
+    },
+    "p": {
+      "center": [
+        "1"
+      ],
+      "coefficient": "1"
+    },
+    "y": {
+      "center": [
+        "1",
+        "1"
+      ],
+      "coefficient": "1"
+    }
+  },
+  "protected_leak": "0"
+}

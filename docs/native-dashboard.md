@@ -1,0 +1,83 @@
+# Offline evidence dashboard
+
+Build a portable research index from saved NMN records:
+
+```bash
+nmn research native report experiments/ another-run.json --output evidence-dashboard
+```
+
+Open `evidence-dashboard/index.html` in a browser. No server, network, PyTorch
+installation or publication is required. Move the entire directory to keep links
+working. The output directory must be new; reports never overwrite evidence.
+
+Filter by architecture, backend, contract, scope and status, or search records.
+Select a result to inspect identity, coverage, limitations and available data.
+Each recognized record has a byte-preserved JSON copy and an Obsidian Markdown
+note. `catalog.json` exposes the index to other tools. Directory scans skip
+unrelated JSON schemas; missing, malformed or unsupported explicit inputs appear
+as unavailable. Identical evidence bytes are indexed once.
+
+Supported inputs are the native model/research schemas and
+`nmn.finite-contract-evidence.v1`. Native model identities and supplied native
+export manifests are checked. Exact finite outcomes retain their saved status;
+the dashboard does not replay them or issue certificates. Source modification
+age describes file freshness, not the time the model ran. Training completion
+and numerical observations are not proofs. Invalid records remain visible.
+
+Labels are rendered as text, embedded JSON is escaped, and no remote assets are
+loaded. This report indexes supplied evidence, not every paper's research
+protocol. See [the requirements map](research-data-requirements.md) for outstanding
+measurement and inference capabilities.
+
+Result previews expose coalition coverage and coefficient availability, donor transfer outcomes, and separate protection accuracy/damage/disagreement rates. Donor/protection previews show at most 25 rows with the full row count; copied JSON retains every row. Replay entries inherit their executed model architecture for filtering.
+
+Certificate rows retain their saved outcome and explicitly state that the dashboard has not checked them. Saved checker reports display the derived contract outcome (including counterexamples and inconclusive coverage) and state that the checker was not rerun. All rational enclosure/certificate types are labeled with an exact-rational backend.
+
+## Rebuild from a portable source list
+
+Save a JSON file with paths relative to that file's directory:
+
+```json
+{"schema": "nmn.evidence-sources.v1", "sources": ["run-a/data.json", "run-b/data.json"]}
+```
+
+```bash
+nmn research native report --sources-file evidence-sources.json --output next-dashboard
+```
+
+Explicit positional sources can be combined with this file. Only local paths
+are accepted; no network fetch occurs. Missing evidence files become unavailable
+entries in the report. Invalid source-list syntax/schema is an input error and
+creates no report. A source list is a reusable selection, not an integrity
+manifest or a declaration that every literature requirement is covered.
+
+Probe previews separate baseline, frozen edited, and optionally refitted edited
+accuracy. They retain eligibility counts and conditional damage. Missing refitted
+results are null, not zero accuracy. At most 25 edits are previewed; copied JSON
+retains every edit, score, prediction and trace.
+
+Donor details explicitly label full-write, whole-read-slot and producer-edge
+interventions. Pair previews include their recorded donor writes, reads or edge
+values; absent fields in older records remain empty. Explicit edge-study previews
+show condition patches and the first 25 output/delta rows for up to 25 conditions,
+with total counts and output order. Linked JSON retains all rows and traces.
+Intervention labels in replay entries describe their saved executed study; the
+dashboard does not rerun that study or infer semantic meaning from its effects.
+
+Donor-plan entries are metadata selections, with no model backend or architecture.
+They preview selected pairs, inspection decisions, and total/inspected/uninspected
+counts. Budget-stopped plans retain their partial status. Executed studies with
+embedded selection plans expose the saved plan hash, status and coverage; the
+dashboard does not revalidate them. Up to 25 pairs/decisions are previewed, with
+complete records linked. Complete finite selection is not scientific validation.
+
+NNX observation previews show output order, sample IDs, baseline/edit outputs,
+recorded derivative availability and capability metadata. NNX suffix previews
+show boundary protocol, reconstruction residuals and supplied-state effects.
+Backend labels derive from the saved architecture configuration, including nested
+NNX suffix models; missing runtime versions remain explicitly unknown.
+
+Preimage previews distinguish bounded input proposals from executed receiver-read
+interventions. Proposals show the selected iterate and feature residuals;
+executions show their proposal identity, receiving module/slots and output deltas.
+Previews retain at most 25 samples or variants; copied records remain complete.

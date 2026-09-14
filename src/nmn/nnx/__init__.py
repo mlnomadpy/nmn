@@ -72,6 +72,7 @@ Quick Start
 # YAT Attention Functions
 # Multi-Head Attention Module
 from . import _dependency as _dependency
+from .interpretable import ThreeNeuronYat, YatExpansion
 from .layers import (  # Layers; Utilities
     ATTENTION_DEFAULT_CONSTANT_ALPHA,
     CONV_DEFAULT_CONSTANT_ALPHA,
@@ -159,6 +160,8 @@ MultiHeadYatAttention = MultiHeadAttention
 # =============================================================================
 
 __all__ = [
+    "ThreeNeuronYat",
+    "YatExpansion",
     # -------------------------------------------------------------------------
     # Core Layers
     # -------------------------------------------------------------------------

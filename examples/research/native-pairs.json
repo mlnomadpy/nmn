@@ -1,0 +1,13 @@
+[
+  {
+    "pair_id": "transfer-h",
+    "base_id": "base",
+    "donor_id": "donor",
+    "modules": [
+      "h"
+    ],
+    "expected": {
+      "target": 0.5
+    }
+  }
+]
