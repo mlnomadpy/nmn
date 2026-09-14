@@ -68,3 +68,26 @@ which module reads, inputs or state slots the experiment author intends to edit.
 Every selected sample participates in optimization; there is no held-out
 validation population or trained mapper in this study. The outer search is not
 yet supported by the numerical replay command.
+
+## Execute graph receiver-read proposals
+
+```bash
+nmn research native apply-preimage preimage.json --output executed-preimage.json
+nmn research native replay executed-preimage.json --output executed-replay.json
+```
+
+For a `YatGraph` proposal, `execute_preimage_study(record)` maps each selected
+coordinate to the chosen receiver's declared read-slot order. It replaces those
+reads for that receiver, recomputes its write and descendants, and leaves the
+shared state and other readers' incoming values intact. The mapping is explicitly
+a complete receiver-read intervention, not a parameter update or global state edit.
+The fixed three-neuron architecture is rejected by this automatic mapping; use
+its explicit intervention API as shown in the example when appropriate.
+
+Before execution, the adapter checks model/bank/dataset identities, population
+order, initial module inputs, selected-proposal consistency, bounds and measured
+feature agreement. The resulting `nmn.preimage-execution.v1` record preserves the
+full proposal, its hash, read patches, baseline/edited traces, output changes and
+executed feature residuals. `replay` repeats the saved intervention and compares
+these measurements; it does not rerun the optimizer. Changed output measurements
+produce mismatches. The execution record supports Obsidian export and dashboards.

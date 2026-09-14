@@ -81,3 +81,55 @@ def test_dataset_study_uses_module_inputs_and_exact_target_population():
     assert record["dataset_sha256"] == dataset.sha256
     with pytest.raises(ValueError, match="exactly"):
         preimage_study(model, dataset, targets={"a": [0.5], "b": [0.5]}, **kwargs)
+
+
+def test_proposals_execute_only_selected_reader_and_replay():
+    import copy
+
+    import pytest
+
+    from nmn.research.datasets import ResearchDataset, ResearchSample
+    from nmn.torch import YatGraph, YatModuleSpec
+    from nmn.torch.preimage import execute_preimage_study, preimage_study
+    from nmn.torch.replay import replay_native_record
+
+    model = YatGraph(
+        ("x", "h", "y", "p"),
+        ("x",),
+        ("y", "p"),
+        [
+            [YatModuleSpec("a", ("x",), ("h",))],
+            [YatModuleSpec("b", ("h",), ("y",)), YatModuleSpec("c", ("h",), ("p",))],
+        ],
+        dtype=torch.float64,
+    )
+    with torch.no_grad():
+        for p in model.parameters():
+            p.fill_(1.0)
+    dataset = ResearchDataset(
+        [ResearchSample("a", (1.0,), "evaluation", "a")],
+        name="reader fixture",
+        provenance="synthetic",
+    )
+    proposal = preimage_study(
+        model,
+        dataset,
+        module_name="b",
+        targets={"a": [0.0]},
+        lower=[0.0],
+        upper=[1.0],
+        provenance="zero bank target",
+        max_steps=100,
+        max_seconds=10.0,
+        learning_rate=0.1,
+    )
+    result = execute_preimage_study(proposal)
+    assert result["outputs"] == [[0.0, 1.0]]
+    assert result["trace"]["c.input"] == [[1.0]]
+    assert replay_native_record(result)["status"] == "matched"
+    result["output_delta"][0][1] = 2.0
+    assert replay_native_record(result)["status"] == "mismatch"
+    altered = copy.deepcopy(proposal)
+    altered["proposed_inputs"]["a"] = [0.5]
+    with pytest.raises(ValueError, match="selected inputs"):
+        execute_preimage_study(altered)

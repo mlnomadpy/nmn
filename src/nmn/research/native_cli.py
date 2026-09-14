@@ -264,6 +264,11 @@ def main(argv=None) -> int:
     donor.add_argument("--protected", nargs="*", default=[])
     donor.add_argument("--match-semantics", nargs="*", default=[])
     donor.add_argument("--allow-cross-split", action="store_true")
+    apply_preimage = commands.add_parser(
+        "apply-preimage", help="execute saved proposals as explicit receiver reads"
+    )
+    apply_preimage.add_argument("record", type=Path)
+    apply_preimage.add_argument("--output", type=Path, required=True)
     preimage = commands.add_parser(
         "preimage",
         help="search bounded native inputs for supplied kernel-feature targets",
@@ -479,7 +484,11 @@ def main(argv=None) -> int:
         from ..torch.studies import donor_study
         from .datasets import DonorPair, ResearchDataset
 
-        if args.command == "verify-box":
+        if args.command == "apply-preimage":
+            from ..torch.preimage import execute_preimage_study
+
+            result = execute_preimage_study(_read(args.record))
+        elif args.command == "verify-box":
             from ..torch.interval_contract import verify_box
 
             result = verify_box(

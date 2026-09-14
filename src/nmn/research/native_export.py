@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.preimage-execution.v1": "Executed native preimage read interventions",
     "nmn.preimage-study.v1": "Dataset-linked native preimage proposals",
     "nmn.preimage-search.v1": "Bounded finite-kernel preimage search",
     "nmn.nnx-suffix-study.v1": "NNX downstream boundary-state study",
@@ -87,6 +88,12 @@ def _table(headers, rows):
 
 def _check_identities(value):
     if isinstance(value, dict):
+        if value.get("schema") == "nmn.preimage-execution.v1":
+            digest = hashlib.sha256(
+                json.dumps(value["proposal"], sort_keys=True, allow_nan=False).encode()
+            ).hexdigest()
+            if value.get("proposal_sha256") != digest:
+                raise ValueError("preimage proposal content identity mismatch")
         if value.get("schema") == "nmn.preimage-search.v1":
             digest = hashlib.sha256(
                 json.dumps(
@@ -169,7 +176,20 @@ def render_native_note(record):
             f"Data/semantic provenance: {_text(ds.get('provenance', 'not recorded'))}.",
             "",
         ]
-    if schema == "nmn.preimage-study.v1":
+    if schema == "nmn.preimage-execution.v1":
+        lines += [
+            "## Executed receiver-read intervention",
+            "",
+            f"Receiver: {_text(record['module'])}; slots: {_text(record['read_slots'])}.",
+            "",
+            f"Maximum absolute output change: {_maximum(record['output_delta'])}.",
+            "",
+            f"Maximum absolute feature residual: {_maximum(record['feature_residuals'])}.",
+            "",
+            "Complete baseline and edited traces remain in data.json. Other readers retain their original shared-state inputs.",
+            "",
+        ]
+    elif schema == "nmn.preimage-study.v1":
         search = record["search"]
         lines += [
             "## Dataset-linked preimage proposals",

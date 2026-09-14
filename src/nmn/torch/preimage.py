@@ -262,3 +262,128 @@ def preimage_study(
             "Feature residual does not certify erasure, protection, or preimage impossibility.",
         ],
     }
+
+
+def execute_preimage_study(record):
+    """Apply proposals as complete reads of one declared graph receiver.
+
+    Shared state and other readers keep their original values. Recompute the
+    chosen receiver and downstream graph; this is a read intervention, not a
+    claim that the proposed state is globally reachable or that erasure occurred.
+    """
+    from ..research.datasets import ResearchDataset
+    from ..research.native_export import _check_identities
+    from .graph import YatGraph
+    from .research import collect_research_data, model_from_snapshot
+
+    if record.get("schema") != "nmn.preimage-study.v1":
+        raise ValueError("expected a dataset-linked preimage study")
+    serialized = json.dumps(record, sort_keys=True, allow_nan=False)
+    _check_identities(record)
+    dataset = ResearchDataset.from_dict(record["dataset"])
+    if dataset.sha256 != record["dataset_sha256"]:
+        raise ValueError("preimage dataset identity mismatch")
+    ids = list(dataset.sample_ids(split=record["split"]))
+    search = record["search"]
+    if not ids or ids != record["sample_ids"] or ids != search["sample_ids"]:
+        raise ValueError("preimage sample order mismatch")
+    if record["proposed_inputs"] != dict(zip(ids, search["selected_inputs"])):
+        raise ValueError("proposals differ from the recorded selected inputs")
+    if (
+        set(record["targets"]) != set(ids)
+        or [record["targets"][sid] for sid in ids] != search["target_features"]
+    ):
+        raise ValueError("preimage target mapping mismatch")
+    snapshot = record["model_snapshot"]
+    dtypes = {"torch.float32": torch.float32, "torch.float64": torch.float64}
+    dtype = dtypes.get(snapshot["runtime"]["dtype"])
+    if dtype is None:
+        raise ValueError("execution supports saved float32/float64 models")
+    model = model_from_snapshot(snapshot, device="cpu", dtype=dtype)
+    if not isinstance(model, YatGraph):
+        raise ValueError("automatic read execution requires an explicit YatGraph")
+    name = record["module"]
+    if name not in model.state_names or type(model.blocks[name]) is not YatExpansion:
+        raise ValueError("proposal receiver must be a strict YatExpansion")
+    block = model.blocks[name]
+    current_bank = _json_value(
+        {
+            "centers": block.centers,
+            "coefficients": block.coefficients,
+            "epsilon": block.kernel.epsilon,
+            "dtype": str(dtype),
+            "distance_mode": "direct",
+        }
+    )
+    if current_bank != search["module_snapshot"]:
+        raise ValueError("search bank differs from parent model receiver")
+    spec = next(
+        spec for layer in model.layer_specs for spec in layer if spec.name == name
+    )
+    x = torch.tensor([dataset.sample(sid).inputs for sid in ids], dtype=dtype)
+    if snapshot["sample_ids"] != ids or snapshot["inputs"] != x.tolist():
+        raise ValueError("parent snapshot population differs from the proposal")
+    selected = torch.tensor(search["selected_inputs"], dtype=dtype)
+    expected_shape = (len(ids), len(spec.reads))
+    if selected.shape != expected_shape or not bool(torch.isfinite(selected).all()):
+        raise ValueError("proposals must have one finite coordinate per receiver read")
+    lo, hi = torch.tensor(search["lower"], dtype=dtype), torch.tensor(
+        search["upper"], dtype=dtype
+    )
+    if (
+        not bool(torch.isfinite(lo).all())
+        or not bool(torch.isfinite(hi).all())
+        or lo.shape != selected.shape
+        or hi.shape != selected.shape
+        or bool(((selected < lo) | (selected > hi)).any())
+    ):
+        raise ValueError("proposals must satisfy recorded bounds")
+    with torch.no_grad():
+        baseline, baseline_trace = model.forward_with_trace(x)
+        if baseline_trace[name + ".input"].tolist() != search["inputs"]:
+            raise ValueError(
+                "search initialization differs from baseline receiver inputs"
+            )
+        patches = {name: {slot: selected[:, i] for i, slot in enumerate(spec.reads)}}
+        output, trace = model.forward_with_trace(x, read_patches=patches)
+        features = block._features(trace[name + ".input"])
+        expected = torch.tensor(search["target_features"], dtype=dtype)
+        if expected.shape != features.shape:
+            raise ValueError("target feature shape differs from receiver features")
+        saved_features = torch.tensor(search["selected_features"], dtype=dtype)
+        if saved_features.shape != features.shape or not torch.allclose(
+            features, saved_features, atol=1e-10, rtol=1e-8
+        ):
+            raise ValueError("executed features disagree with the recorded proposal")
+    result = _json_value(
+        {
+            "schema": "nmn.preimage-execution.v1",
+            "proposal_sha256": hashlib.sha256(serialized.encode()).hexdigest(),
+            "proposal": record,
+            "model_snapshot": collect_research_data(
+                model, x, sample_ids=ids, derivatives=False
+            ),
+            "dataset": dataset.to_dict(),
+            "dataset_sha256": dataset.sha256,
+            "sample_ids": ids,
+            "module": name,
+            "read_slots": list(spec.reads),
+            "read_patches": patches,
+            "baseline_outputs": baseline,
+            "baseline_trace": baseline_trace,
+            "outputs": output,
+            "output_delta": output - baseline,
+            "trace": trace,
+            "executed_features": features,
+            "feature_residuals": features - expected,
+            "protocol": "replace complete reads of the selected receiver; shared state unchanged",
+            "source_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            "limitations": [
+                "Read interventions do not imply a globally reachable state.",
+                "Per-example proposals do not define a learned input-to-input mapper.",
+                "No target success or protected-output certificate is inferred.",
+            ],
+        }
+    )
+    json.dumps(result, allow_nan=False)
+    return result

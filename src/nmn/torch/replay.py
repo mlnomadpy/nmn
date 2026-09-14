@@ -44,6 +44,7 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
         ):
             raise ValueError("tolerances must be finite nonnegative numbers")
     supported = {
+        "nmn.preimage-execution.v1",
         "nmn.native-research.v1",
         "nmn.response-space.v1",
         "nmn.native-benchmark.v1",
@@ -303,6 +304,25 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
                 "fit",
                 "evaluation",
                 "cost",
+            ]
+        elif schema == "nmn.preimage-execution.v1":
+            from .preimage import execute_preimage_study
+
+            actual = execute_preimage_study(record["proposal"])
+            keys = [
+                "proposal_sha256",
+                "sample_ids",
+                "module",
+                "read_slots",
+                "read_patches",
+                "baseline_outputs",
+                "baseline_trace",
+                "outputs",
+                "output_delta",
+                "trace",
+                "executed_features",
+                "feature_residuals",
+                "protocol",
             ]
         elif schema == "nmn.edge-study.v1":
             actual = edge_study(
