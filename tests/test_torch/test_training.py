@@ -128,3 +128,45 @@ def test_budget_stops_and_failed_seeds_remain_in_report(monkeypatch):
     )
     assert [run["status"] for run in record["runs"]] == ["failed", "failed"]
     assert all("injected optimizer failure" in run["error"] for run in record["runs"])
+
+
+def test_joint_donor_gradient_reaches_donor_only_parameters():
+    snapshot, _, contract = fixture()
+    data = ResearchDataset(
+        [
+            ResearchSample("a", (0.0, 0.0), "train", "a"),
+            ResearchSample("b", (1.0, 0.0), "train", "b"),
+            ResearchSample("v", (1.0, 0.0), "validation", "v"),
+        ],
+        name="gradient route",
+        provenance="zero base isolates donor gradient",
+    )
+    from nmn.torch.research import model_from_snapshot
+
+    coefficients = []
+    for detached in (True, False):
+        record = train_native(
+            snapshot,
+            data,
+            {"a": [0.0, 0.0], "b": [1.0, 0.0], "v": [1.0, 0.0]},
+            config=TrainingConfig(
+                max_steps=1,
+                batch_size=1,
+                evaluate_every=1,
+                learning_rate=0.01,
+                intervention_weight=1.0,
+                separate_pair_rng=True,
+                detach_donor=detached,
+            ),
+            architecture_contract=contract,
+            target_provenance="gradient fixture",
+            seeds=[0],
+            pairs=[DonorPair("pair", "a", "b", ("h",), {"target": 1.0})],
+        )
+        result = record["runs"][0]
+        assert result["status"] == "completed" and result["best_step"] == 1
+        fitted = model_from_snapshot(result["selected_checkpoint"])
+        coefficients.append(float(fitted.h.coefficients.detach().item()))
+        assert record["configuration"]["detach_donor"] is detached
+    assert coefficients[0] == 1.0
+    assert coefficients[1] > coefficients[0]

@@ -21,10 +21,11 @@ from nmn.torch.studies import donor_study
 from nmn.torch.training import TrainingConfig, train_native
 
 
-def run(destination):
+def run(destination, *, gradient_comparison=False):
     destination = Path(destination)
     destination.mkdir(parents=True, exist_ok=False)
-    generator = torch.Generator().manual_seed(20260915)
+    data_seed = 20260916 if gradient_comparison else 20260915
+    generator = torch.Generator().manual_seed(data_seed)
     samples, targets = [], {}
     for split, count in [("train", 128), ("validation", 32), ("evaluation", 128)]:
         for i, (u, v) in enumerate(
@@ -37,8 +38,12 @@ def run(destination):
             targets[sid] = [u * u + 0.5 * v, v]
     dataset = ResearchDataset(
         samples,
-        name="Detached donor supervision ablation",
-        provenance="Fresh analytic polynomial task, deterministic seed 20260915",
+        name=(
+            "Donor gradient comparison"
+            if gradient_comparison
+            else "Detached donor supervision ablation"
+        ),
+        provenance=f"Fresh analytic polynomial task, deterministic seed {data_seed}",
     )
 
     def pairs(split):
@@ -98,6 +103,11 @@ def run(destination):
         "guarantee_scope": "empirical task and supplied donor correspondence; no causal or population certificate",
         "worked_example": "base=(1,1), donor=(0,-1): expected transferred target=0.5",
     }
+    conditions = (
+        [("detached-donor", 1.0, True), ("joint-donor", 1.0, False)]
+        if gradient_comparison
+        else [("task-only", 0.0, True), ("task-plus-donor", 1.0, True)]
+    )
     configs = {
         name: TrainingConfig(
             max_steps=300,
@@ -107,14 +117,18 @@ def run(destination):
             max_seconds=60.0,
             intervention_weight=weight,
             separate_pair_rng=True,
+            detach_donor=detach,
         )
-        for name, weight in [("task-only", 0.0), ("task-plus-donor", 1.0)]
+        for name, weight, detach in conditions
     }
     save_research_data(
         {
             "configs": {k: asdict(v) for k, v in configs.items()},
             "contract": contract,
-            "data_seed": 20260915,
+            "data_seed": data_seed,
+            "comparison": (
+                "donor-gradient" if gradient_comparison else "donor-supervision"
+            ),
             "initialization_seed": 17,
             "seeds": [0, 1, 2],
             "selection": "checkpoint by ordinary validation MSE only; no donor evaluation access",
@@ -196,4 +210,6 @@ def run(destination):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path)
-    run(parser.parse_args().output)
+    parser.add_argument("--gradient-comparison", action="store_true")
+    args = parser.parse_args()
+    run(args.output, gradient_comparison=args.gradient_comparison)

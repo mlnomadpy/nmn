@@ -502,6 +502,12 @@ def build_dashboard(sources, destination):
                     }
                 elif record["schema"] == "nmn.native-training.v1":
                     summary["details"] = {
+                        "protocol": record.get("protocol", "not recorded"),
+                        "configuration": record.get("configuration", {}),
+                        "seed_scope": record.get("seed_scope", "not recorded"),
+                        "architecture_contract": record.get(
+                            "architecture_contract", {}
+                        ),
                         "runs": [
                             {
                                 key: run.get(key)
@@ -515,7 +521,7 @@ def build_dashboard(sources, destination):
                                 )
                             }
                             for run in record["runs"]
-                        ]
+                        ],
                     }
                 elif record["schema"] == "nmn.native-benchmark.v1":
                     summary["details"] = {

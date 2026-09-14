@@ -23,7 +23,7 @@ paths. Artifact creation is not itself training success: inspect each run's
 
 `training.json` configures `max_steps` (required), `max_seconds` (default 60 per
 seed), `batch_size`, `learning_rate`, `evaluate_every`, `train_split`,
-`validation_split`, and `intervention_weight`. Adam and CPU float64 are currently
+`validation_split`, `intervention_weight`, `separate_pair_rng`, and `detach_donor`. Adam and CPU float64 are currently
 fixed. The wall-time limit is checked between steps and does not preempt a slow
 step. Optimizer timing excludes initialization and checkpoint instrumentation.
 `targets.json` maps exactly the training and checkpoint-selection sample IDs to
@@ -46,9 +46,11 @@ study is selected or launched by this implementation work.
 
 For intervention-supervised training, supply `--pairs pairs.json` and a positive
 `intervention_weight`. Every pair must use training samples and provide expected
-named outputs. Donor writes come from the current model with donor gradients
-stopped; native base descendants recompute and carry gradients. This specific
-protocol is labeled separately from ordinary training and is not claimed to
+named outputs. Donor writes come from the current model. By default
+`detach_donor=true` stops donor gradients; set it to `false` to train through the
+donor representation too. Native base descendants recompute and carry gradients
+in both modes. The saved protocol distinguishes these objectives from ordinary
+training. Neither is claimed to
 reproduce a published interchange-intervention-training algorithm. Correspondence
 and counterfactual labels are supplied, not inferred.
 

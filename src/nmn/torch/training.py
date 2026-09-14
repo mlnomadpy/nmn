@@ -24,8 +24,11 @@ class TrainingConfig:
     max_seconds: float = 60.0
     intervention_weight: float = 0.0
     separate_pair_rng: bool = False
+    detach_donor: bool = True
 
     def validate(self):
+        if type(self.detach_donor) is not bool:
+            raise ValueError("detach_donor must be a boolean")
         if type(self.separate_pair_rng) is not bool:
             raise ValueError("separate_pair_rng must be a boolean")
         for name in ("max_steps", "batch_size", "evaluate_every"):
@@ -64,8 +67,8 @@ def train_native(
     Seeds govern minibatch/pair sampling, not initialization: every run starts
     from the SAME supplied parameter snapshot. Validation is checkpoint-selection
     data, not final held-out evidence. Donor-supervised loss uses current donor
-    writes detached from autograd and recomputes base descendants; this declared
-    protocol is not an automatic reproduction of a published IIT algorithm.
+    writes with an explicit detached/joint gradient policy and recomputes base
+    descendants; this declared protocol is not an automatic reproduction of a published IIT algorithm.
 
     Requires declared architecture/semantic/intervention/scope/example references.
     Those declarations are retained, not independently proved by this function.
@@ -207,13 +210,17 @@ def train_native(
                         base = x_train[
                             train_index[pair.base_id] : train_index[pair.base_id] + 1
                         ]
-                        with torch.no_grad():
+                        with torch.set_grad_enabled(not config.detach_donor):
                             _, donor_trace = model.forward_with_trace(donor)
                         prediction = model(
                             base,
                             {
                                 name: Intervention(
-                                    replacement=donor_trace[name].detach()
+                                    replacement=(
+                                        donor_trace[name].detach()
+                                        if config.detach_donor
+                                        else donor_trace[name]
+                                    )
                                 )
                                 for name in pair.modules
                             },
@@ -301,7 +308,13 @@ def train_native(
             "train_ids": train_ids,
             "checkpoint_selection_ids": validation_ids,
             "protocol": (
-                "task-only" if not pairs else "task-and-detached-donor-supervision"
+                "task-only"
+                if not pairs
+                else (
+                    "task-and-detached-donor-supervision"
+                    if config.detach_donor
+                    else "task-and-joint-donor-supervision"
+                )
             ),
             "donor_pairs": [asdict(pair) for pair in pairs],
             "seed_scope": (

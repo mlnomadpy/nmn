@@ -33,3 +33,17 @@ checkpoint-selection rule. This does not reproduce a published IIT algorithm or
 show that intervention supervision generally fails. A revised objective or
 selection strategy needs a fresh evaluation protocol rather than tuning against
 these held-out outcomes.
+
+## Donor gradient policy
+
+`TrainingConfig(detach_donor=False)` enables gradients through both the donor
+representation and the recomputed base suffix. The default `True` preserves
+detached donor writes. The saved configuration and protocol distinguish these
+objectives, which can produce different learning signals even with identical
+forward losses. Neither setting establishes semantic correspondence by itself.
+
+Run `python examples/research/intervention_training.py OUTPUT --gradient-comparison`
+to compare detached and joint donor gradients on fresh dataset seed 20260916.
+Both conditions use donor loss weight one, the same initialization, task and pair
+minibatches, and the same budgets above. The protocol is saved before fitting;
+checkpoint selection still uses ordinary validation loss only.
