@@ -382,8 +382,11 @@ def render_native_note(record):
             "",
         ]
     elif schema == "nmn.donor-study.v1":
+        donor_execution = record.get("protocol", {}).get(
+            "donor_execution", "not declared"
+        )
         lines += [
-            f"Donor execution: {_text(record.get("protocol", {}).get("donor_execution", "not declared"))}.",
+            f"Donor execution: {_text(donor_execution)}.",
             "",
         ]
         rows = [
