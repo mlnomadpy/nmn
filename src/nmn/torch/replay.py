@@ -275,6 +275,7 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
                 classes=record["classes"],
                 provenance=protocol["provenance"],
                 ridge=protocol["ridge"],
+                refit_edits=protocol.get("refit_edits", False),
                 fit_split=protocol["fit_split"],
                 evaluation_split=protocol["evaluation_split"],
                 edits=edits(record["evaluation_snapshot"]["controls"]),
@@ -454,6 +455,11 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
                 "/evaluation_snapshot/" + field,
             )
     if schema == "nmn.probe-study.v1":
+        compare(
+            snapshot["observations"],
+            actual["model_snapshot"]["observations"],
+            "/model_snapshot/observations",
+        )
         for field in ("model_sha256", "sample_ids", "inputs", "observations"):
             compare(
                 record["evaluation_snapshot"][field],

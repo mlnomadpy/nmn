@@ -163,6 +163,11 @@ def main(argv=None) -> int:
     probe.add_argument("--provenance", required=True)
     probe.add_argument("--ridge", type=float, required=True)
     probe.add_argument("--edits", type=Path)
+    probe.add_argument(
+        "--refit-edits",
+        action="store_true",
+        help="also fit a separate probe on each edited fit population",
+    )
     probe.add_argument("--fit-split", default="tuning")
     probe.add_argument("--evaluation-split", default="validation")
     fitted_reduction = commands.add_parser(
@@ -462,6 +467,7 @@ def main(argv=None) -> int:
                     classes=args.classes,
                     provenance=args.provenance,
                     ridge=args.ridge,
+                    refit_edits=args.refit_edits,
                     edits={
                         name: {
                             module: Intervention(**control)

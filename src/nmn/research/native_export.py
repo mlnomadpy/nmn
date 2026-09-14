@@ -289,8 +289,16 @@ def render_native_note(record):
                     ],
                 ]
                 + [
-                    ["evaluation edit: " + name, row["accuracy"]]
+                    ["evaluation frozen edit: " + name, row["accuracy"]]
                     for name, row in record["evaluation"]["edits"].items()
+                ]
+                + [
+                    [
+                        "evaluation refitted edit: " + name,
+                        row["refitted"]["evaluation"]["accuracy"],
+                    ]
+                    for name, row in record["evaluation"]["edits"].items()
+                    if "refitted" in row
                 ],
             ),
             "",
