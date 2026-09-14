@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.erasure-study.v1": "Fitted finite-bank covariance-removal projection",
     "nmn.risk-validation.v1": "Fixed-family Bernoulli risk calculation",
     "nmn.sampled-contract-evidence.v1": "Sampled native target and protection contract",
     "nmn.architecture-validation.v1": "Validated native graph topology",
@@ -201,7 +202,20 @@ def render_native_note(record):
             f"Data/semantic provenance: {_text(ds.get('provenance', 'not recorded'))}.",
             "",
         ]
-    if schema == "nmn.preimage-execution.v1":
+    if schema == "nmn.erasure-study.v1":
+        lines += [
+            "## Fit-only finite-bank projection",
+            "",
+            f"Module: {_text(record['module'])}; removed rank: {record['projection']['removed_rank']}.",
+            "",
+            f"Fit covariance norm after projection: {record['fit']['covariance_after_norm']}.",
+            "",
+            f"Evaluation covariance norm after projection: {record['evaluation']['covariance_after_norm']}.",
+            "",
+            "Projection targets require separate native execution. Covariance removal is not nonlinear erasure or utility protection.",
+            "",
+        ]
+    elif schema == "nmn.preimage-execution.v1":
         lines += [
             "## Executed receiver-read intervention",
             "",

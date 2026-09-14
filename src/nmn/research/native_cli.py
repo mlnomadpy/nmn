@@ -299,6 +299,15 @@ def main(argv=None) -> int:
     donor.add_argument("--protected", nargs="*", default=[])
     donor.add_argument("--match-semantics", nargs="*", default=[])
     donor.add_argument("--allow-cross-split", action="store_true")
+    erasure = commands.add_parser(
+        "erase", help="fit a finite-bank covariance-removal projection"
+    )
+    erasure.add_argument("--module", required=True)
+    erasure.add_argument("--labels", type=Path, required=True)
+    erasure.add_argument("--rtol", type=float, required=True)
+    erasure.add_argument("--provenance", required=True)
+    erasure.add_argument("--fit-split", default="tuning")
+    erasure.add_argument("--evaluation-split", default="validation")
     apply_preimage = commands.add_parser(
         "apply-preimage", help="execute saved proposals as explicit receiver reads"
     )
@@ -321,6 +330,7 @@ def main(argv=None) -> int:
     preimage.add_argument("--learning-rate", type=float, required=True)
     preimage.add_argument("--provenance", required=True)
     for command in (
+        erasure,
         preimage,
         collect,
         path,
@@ -680,6 +690,19 @@ def main(argv=None) -> int:
                     dataset,
                     edits=edits,
                     rank=args.rank,
+                    fit_split=args.fit_split,
+                    evaluation_split=args.evaluation_split,
+                )
+            elif args.command == "erase":
+                from ..torch.erasure import erasure_study
+
+                result = erasure_study(
+                    model,
+                    dataset,
+                    module_name=args.module,
+                    labels=_read(args.labels),
+                    provenance=args.provenance,
+                    rtol=args.rtol,
                     fit_split=args.fit_split,
                     evaluation_split=args.evaluation_split,
                 )

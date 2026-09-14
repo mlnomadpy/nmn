@@ -309,6 +309,24 @@ def build_dashboard(sources, destination):
                         "feature_residuals_first_25": search["feature_residuals"][:25],
                         "interpretation": "Proposals only; native effects require a separate execution record.",
                     }
+                elif record["schema"] == "nmn.erasure-study.v1":
+                    summary["details"] = {
+                        "module": record["module"],
+                        "protocol": record["protocol"],
+                        "removed_rank": record["projection"]["removed_rank"],
+                        "populations": {
+                            name: {
+                                k: record[name][k]
+                                for k in (
+                                    "covariance_before_norm",
+                                    "covariance_after_norm",
+                                    "distortion_mse",
+                                )
+                            }
+                            for name in ("fit", "evaluation")
+                        },
+                        "interpretation": "Finite-bank targets only; no native execution or nonlinear erasure guarantee.",
+                    }
                 elif record["schema"] == "nmn.preimage-execution.v1":
                     summary["details"] = {
                         "proposal_sha256": record["proposal_sha256"],

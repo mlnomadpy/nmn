@@ -91,3 +91,7 @@ full proposal, its hash, read patches, baseline/edited traces, output changes an
 executed feature residuals. `replay` repeats the saved intervention and compares
 these measurements; it does not rerun the optimizer. Changed output measurements
 produce mismatches. The execution record supports Obsidian export and dashboards.
+
+## Learn feature targets
+
+[Finite-bank covariance removal](native-erasure.md) now fits a projection on a separate population and exports evaluation targets for this search. Projected-feature diagnostics and executed native effects remain separate measurements.

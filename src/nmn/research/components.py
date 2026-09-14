@@ -77,6 +77,8 @@ def _read_components(source):
             raise ValueError("curvature directions do not match recorded order")
         available["directions"] = {name: directions[name] for name in names}
         available["background"] = record["protocol"]["background"]
+    if record["schema"] == "nmn.erasure-study.v1":
+        available["erasure-targets"] = record["targets"]
     if record["schema"] == "nmn.donor-plan.v1":
         available["pairs"] = record["pairs"]
     return raw, record, available

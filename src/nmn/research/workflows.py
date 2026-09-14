@@ -52,6 +52,7 @@ _WORKFLOWS = [
             "donor",
             "edges",
             "protect",
+            "erase",
             "preimage",
             "apply-preimage",
             "evaluate-contract",
