@@ -22,6 +22,12 @@ def main(argv=None) -> int:
         "--sources-file", type=Path, help="portable JSON list of local evidence paths"
     )
     dashboard.add_argument("--output", type=Path, required=True)
+    extract = commands.add_parser(
+        "extract", help="list or extract reusable JSON components without a backend"
+    )
+    extract.add_argument("record", type=Path)
+    extract.add_argument("--component", help="omit to list available components")
+    extract.add_argument("--output", type=Path)
     export = commands.add_parser(
         "export", help="write an Obsidian note and exact native data copy"
     )
@@ -243,8 +249,26 @@ def main(argv=None) -> int:
         command.add_argument("--split", help="restrict to one named dataset split")
     args = parser.parse_args(argv)
     try:
-        if hasattr(args, "output") and args.output.exists():
+        if getattr(args, "output", None) is not None and args.output.exists():
             raise ValueError("output already exists; choose a new evidence path")
+        if args.command == "extract":
+            from .components import extract_native_component, list_native_components
+
+            if args.component is None:
+                if args.output is not None:
+                    raise ValueError("--output requires --component")
+                print(json.dumps(list_native_components(args.record)))
+            else:
+                if args.output is None:
+                    raise ValueError("--component requires a new --output directory")
+                print(
+                    json.dumps(
+                        extract_native_component(
+                            args.record, args.component, args.output
+                        )
+                    )
+                )
+            return 0
         if args.command == "report":
             from .dashboard import build_dashboard, load_dashboard_sources
 

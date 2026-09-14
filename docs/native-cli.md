@@ -68,3 +68,13 @@ optimization; response-space fitting is explicitly a numerical SVD on observatio
 `nmn research native reduce` evaluates supplied affine state summaries and one-layer reduced dynamics. `native fit-reduction` fits PCA/ridge maps on one split and measures frozen-map errors on another. See [state-summary data](native-reduction.md) for the map contract, residuals and replay/export workflow.
 
 `nmn research native probe` fits a linear classifier on a selected internal trace and measures frozen decoding on held-out baseline/edited inputs. See [internal-state probes](native-probes.md).
+
+
+`nmn research native extract record.json` lists reusable components without a
+backend. Add `--component model|dataset|maps|fit|evaluation|evaluation-model` and
+`--output <new-directory>` for an available component. The command writes
+`data.json` plus `receipt.json` with source/output hashes. Use `data.json` with
+`--model`, `--dataset`, `--maps`, or replay as appropriate. Availability depends
+on the record schema; probe result tables are not standalone probe loaders.
+Extraction selects stored JSON, checks embedded model identities and preserves
+source linkage. It neither executes the model nor validates scientific claims.

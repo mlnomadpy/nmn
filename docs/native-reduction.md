@@ -102,15 +102,13 @@ threshold, source/model/dataset identities, split IDs, and complete `fit` and
 `evaluation` reduction records. Those embedded records can be extracted for
 ordinary numerical replay of the **frozen maps**:
 
-```python
-import json
-from pathlib import Path
-record = json.loads(Path("fitted-summary.json").read_text())
-Path("evaluation-summary.json").write_text(json.dumps(record["evaluation"], allow_nan=False))
-Path("maps.json").write_text(json.dumps(record["maps"], allow_nan=False))
+```bash
+nmn research native extract fitted-summary.json
+nmn research native extract fitted-summary.json --component evaluation --output extracted-evaluation
+nmn research native extract fitted-summary.json --component maps --output extracted-maps
 ```
 
-`nmn research native replay evaluation-summary.json --output replay.json` checks
+`nmn research native replay extracted-evaluation/data.json --output replay.json` checks
 execution of those maps. Replaying the outer fitted record is unsupported: no
 claim is made that this reruns fitting or validates its provenance. The saved
 maps also work with `native reduce` on further populations.
