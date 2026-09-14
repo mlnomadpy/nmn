@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 SCHEMAS = {
+    "nmn.probe-study.v1": "Frozen internal-state classification probe",
     "nmn.fitted-reduction.v1": "Fitted state summary and held-out residuals",
     "nmn.reduction-study.v1": "State summaries and reduced dynamics",
     "nmn.rational-difference.v1": "Rational intervention-difference enclosure",
@@ -270,6 +271,30 @@ def render_native_note(record):
             ),
             "",
             "Agreement checks a supplied table and does not identify a unique mechanism.",
+            "",
+        ]
+    elif schema == "nmn.probe-study.v1":
+        lines += [
+            "## Fit-only classifier and held-out decoding",
+            "",
+            f"Protocol: {_text(record['protocol'])}.",
+            "",
+            _table(
+                ["Population/condition", "Accuracy"],
+                [
+                    ["fit", record["fit"]["accuracy"]],
+                    [
+                        "evaluation baseline",
+                        record["evaluation"]["baseline"]["accuracy"],
+                    ],
+                ]
+                + [
+                    ["evaluation edit: " + name, row["accuracy"]]
+                    for name, row in record["evaluation"]["edits"].items()
+                ],
+            ),
+            "",
+            "All features, scores, confusion counts and individual predictions are saved. Probe failure does not establish concept erasure.",
             "",
         ]
     elif schema == "nmn.fitted-reduction.v1":

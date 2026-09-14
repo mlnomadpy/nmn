@@ -45,3 +45,5 @@ Response-space replay compares projection operators, singular values, responses 
 Benchmark replay requires at least two measured methods with saved snapshots. It restores all methods and compares parameter counts, predictions, deltas and target errors using one forward per condition. Timing, warmup/repetition costs and diagnostic snapshots are explicitly excluded. Historical failed rows without reconstructible snapshots are rejected, never reported as reproduced.
 
 State-summary records (`nmn.reduction-study.v1`) replay the supplied affine maps and compare all per-example states, summaries, downstream traces and residuals. Replay does not fit the maps or verify their provenance.
+
+Probe records (`nmn.probe-study.v1`) explicitly refit the saved affine ridge protocol on fit samples, then compare fitted coefficients, held-out predictions and full evaluation traces. Labels remain supplied; this does not replay a neural training campaign.

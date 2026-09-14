@@ -14,6 +14,7 @@ from .coalitions import coalition_study
 from .graph import YatGraph
 from .interpretable import Intervention, YatExpansion
 from .paths import gate_path
+from .probes import probe_study
 from .protection import protection_study
 from .reduction import reduction_study
 from .research import _json_value, collect_research_data, model_from_snapshot
@@ -49,6 +50,7 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
         "nmn.semantic-study.v1",
         "nmn.suffix-study.v1",
         "nmn.reduction-study.v1",
+        "nmn.probe-study.v1",
         "nmn.gate-path-study.v1",
         "nmn.kernel-diagnostics.v1",
         "nmn.donor-study.v1",
@@ -264,6 +266,29 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
                 if "donor_reads" not in saved:
                     current.pop("donor_reads", None)
             keys = ["rows"]
+        elif schema == "nmn.probe-study.v1":
+            actual = probe_study(
+                model,
+                dataset,
+                feature=protocol["feature"],
+                labels=record["labels"],
+                classes=record["classes"],
+                provenance=protocol["provenance"],
+                ridge=protocol["ridge"],
+                fit_split=protocol["fit_split"],
+                evaluation_split=protocol["evaluation_split"],
+                edits=edits(record["evaluation_snapshot"]["controls"]),
+            )
+            keys = [
+                "status",
+                "labels",
+                "classes",
+                "protocol",
+                "probe",
+                "fit",
+                "evaluation",
+                "cost",
+            ]
         elif schema == "nmn.reduction-study.v1":
             actual = reduction_study(
                 model,
@@ -428,6 +453,13 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
                 actual["evaluation_snapshot"][field],
                 "/evaluation_snapshot/" + field,
             )
+    if schema == "nmn.probe-study.v1":
+        for field in ("model_sha256", "sample_ids", "inputs", "observations"):
+            compare(
+                record["evaluation_snapshot"][field],
+                actual["evaluation_snapshot"][field],
+                "/evaluation_snapshot/" + field,
+            )
     if schema == "nmn.edit-selection.v1":
         saved_validation = record["validation_snapshot"]
         current_validation = actual["validation_snapshot"]
@@ -467,7 +499,11 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
         + (
             ["validation_snapshot/{model_sha256,sample_ids,inputs,observations}"]
             if schema == "nmn.edit-selection.v1"
-            else []
+            else (
+                ["evaluation_snapshot/{model_sha256,sample_ids,inputs,observations}"]
+                if schema == "nmn.probe-study.v1"
+                else []
+            )
         ),
         "additional_comparisons": (
             [
@@ -487,6 +523,7 @@ def replay_native_record(record, *, atol=1e-10, rtol=1e-8):
             "CPU replay may differ from original hardware or runtime versions.",
             "Benchmark replay uses one forward per condition; timings and historical failed methods are not reproduced.",
             "Response-space replay compares projection operators, not basis signs or coordinate orientation.",
+            "Probe replay refits the saved affine ridge classifier on its declared fit population, then evaluates it; this is not a neural-network training run.",
             "Donor reference expectations are reused as supplied data; reference callbacks are not rerun.",
         ],
     }

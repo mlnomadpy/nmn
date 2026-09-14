@@ -1,0 +1,43 @@
+{
+  "schema": "nmn.research-dataset.v1",
+  "name": "Frozen probe arithmetic fixture",
+  "provenance": "Supplied binary labels, not a research benchmark",
+  "samples": [
+    {
+      "sample_id": "f0",
+      "inputs": [
+        0.0
+      ],
+      "split": "tuning",
+      "group_id": "f0",
+      "semantics": {}
+    },
+    {
+      "sample_id": "f1",
+      "inputs": [
+        1.0
+      ],
+      "split": "tuning",
+      "group_id": "f1",
+      "semantics": {}
+    },
+    {
+      "sample_id": "e0",
+      "inputs": [
+        0.0
+      ],
+      "split": "validation",
+      "group_id": "e0",
+      "semantics": {}
+    },
+    {
+      "sample_id": "e1",
+      "inputs": [
+        1.0
+      ],
+      "split": "validation",
+      "group_id": "e1",
+      "semantics": {}
+    }
+  ]
+}

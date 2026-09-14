@@ -153,6 +153,18 @@ def main(argv=None) -> int:
     semantic.add_argument("--reference", type=Path, required=True)
     semantic.add_argument("--correspondence", type=Path, required=True)
     semantic.add_argument("--tolerance", type=float, default=1e-8)
+    probe = commands.add_parser(
+        "probe",
+        help="fit a linear state probe then evaluate frozen decoding under edits",
+    )
+    probe.add_argument("--feature", required=True)
+    probe.add_argument("--labels", type=Path, required=True)
+    probe.add_argument("--classes", nargs="+", required=True)
+    probe.add_argument("--provenance", required=True)
+    probe.add_argument("--ridge", type=float, required=True)
+    probe.add_argument("--edits", type=Path)
+    probe.add_argument("--fit-split", default="tuning")
+    probe.add_argument("--evaluation-split", default="validation")
     fitted_reduction = commands.add_parser(
         "fit-reduction",
         help="fit a state summary then evaluate frozen maps on another split",
@@ -211,6 +223,7 @@ def main(argv=None) -> int:
         suffix,
         reduction,
         fitted_reduction,
+        probe,
         semantic,
         selection,
         response,
@@ -436,6 +449,28 @@ def main(argv=None) -> int:
                     reference=TabulatedReference(_read(args.reference)),
                     correspondence=_read(args.correspondence),
                     tolerance=args.tolerance,
+                )
+            elif args.command == "probe":
+                from ..torch.probes import probe_study
+
+                controls = {} if args.edits is None else _read(args.edits)
+                result = probe_study(
+                    model,
+                    dataset,
+                    feature=args.feature,
+                    labels=_read(args.labels),
+                    classes=args.classes,
+                    provenance=args.provenance,
+                    ridge=args.ridge,
+                    edits={
+                        name: {
+                            module: Intervention(**control)
+                            for module, control in values.items()
+                        }
+                        for name, values in controls.items()
+                    },
+                    fit_split=args.fit_split,
+                    evaluation_split=args.evaluation_split,
                 )
             elif args.command == "fit-reduction":
                 from ..torch.reduction import fit_reduction_study
